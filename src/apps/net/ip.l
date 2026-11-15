@@ -10,13 +10,15 @@
 ;                                 'take (now \ frames)}: (nic-loop) hears itself, (wire-nic w side)
 ;   (net-run w a b now ms done)   a and b over wire w a ms at a time: both pumped, until
 ;                                 (done t) (answers t) or ms pass (answers ())
+;   (net-ask st f)                (f now) run by the pump's next turn, its answer this task's: tasks
+;                                 beside a pump task touch the stack only so. no pump, no answer
 ;   (ip-send st dst proto b now)  an ipv4 packet, held for arp where the mac is not known; to
 ;                                 itself or 127/8 it never reaches the nic. (ip-src st dst) its source
 ;   (udp-bind st port) (udp-unbind st port) (udp-send st dst sport dport b now)
 ;   (udp-recv st port) -> (src sport b) | ()
 ;   (net-ping st dst id seq b now) (net-pongs st) -> ((src id seq b at) ..), oldest first
 ;   (ip-sum s) (ip-pseudo src dst proto n) (quad a b c d) (ip-show q)
-(module (net net-make net-rx net-tx net-tick net-pump net-run nic-loop wire-nic net-rand ip-send
+(module (net net-make net-rx net-tx net-tick net-pump net-run net-ask nic-loop wire-nic net-rand ip-send
          ip-send-from ip-src ip-sum ip-pseudo quad ip-show udp-bind udp-unbind udp-send udp-recv
          net-ping net-pongs arp-mac)
 (borrow '(bytes wire))
@@ -36,7 +38,8 @@
    (net-rand st) (st 'x * 48271 % 2147483647 @ x (pin st 'x x, x))
    (net-make mac ip seed)
     {'mac mac 'ip ip 'x (seed % 2147483646 + 1) 'out () 'arp {} 'pend {} 'udp {} 'pongs ()
-     'proto {} 'ticks () 'id 0 'drops 0 'lo ()}
+     'proto {} 'ticks () 'id 0 'drops 0 'lo ()
+     'asks {} 'told {}}
    (net-tx st) (rev (st 'out) @ fs (pin st 'out (), fs))
    (eth-out st dmac ty b)
     (: f (dmac + st 'mac + wrbe ty 2 + b)
@@ -128,8 +131,15 @@
                          2048 (ip-in st (snip f 14 #f) now)
                          _ (drop st))))
    (net-tick st now) (arp-tick st now, each (st 'ticks) (f \ f st now))
+   ; an ask rides under its task's pid, so posting and answering each pin one key
+   (net-ask st f)
+    (: me (myself ()) told (st 'told)
+       _ (pin (st 'asks) me f)
+       (go _) (peep told me told @ r (r == told ? (rest 1, go 0) (pull told me 0, r)))
+       (go 0))
    (net-pump st nic now)
-    (each (net-tx st) (f \ (nic 'put) f now),
+    (each (sort (keys (st 'asks))) (k \ pull (st 'asks) k () @ f (pin (st 'told) k (f now))),
+     each (net-tx st) (f \ (nic 'put) f now),
      each ((nic 'take) now) (f \ net-rx st f now),
      rev (st 'lo) @ ps (pin st 'lo (), each ps (p \ ip-in st p now)),
      net-tick st now)

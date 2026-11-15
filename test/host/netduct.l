@@ -20,13 +20,15 @@
 ; a connection's both ends as ducts
 ; f true within about 20 s of the clock, or 0
 (: (wait-for f) (:- (go 20000) (go n) (f () ? 1 (n = 0 ? 0 (rest 1, go (n - 1))))))
+; every call that changes the stack goes by net-ask, run in the pump's turn
+(: (ask f) (net-ask st f))
 (: (pair port)
-    (: l (sock-listen st port (pk 't))
-       c (sock-connect st ['tcp "127.0.0.1" port] (pk 't))
+    (: l (ask (sock-listen st port))
+       c (ask (sock-connect st ['tcp "127.0.0.1" port]))
        _ (wait-for (_ \ sock-readable? l))
-       s (sock-accept l (pk 't))
+       s (ask (sock-accept l))
        _ (wait-for (_ \ sock-writable? c))
-       [(sock-port c) (sock-port s) l c s]))
+       [(ask (_ \ sock-port c)) (ask (_ \ sock-port s)) l c s]))
 ; a port read to its end: see parks while dry, chug takes the run
 (: (drain p) (:- (go ()) (go acc) (see p @ -1 (join "" (rev acc)) ch (go (chug p . string ch . acc)))))
 (: (pour p s) (:- (go 0) (go i) (i < #s ? (say p (snip s i (min #s (i + 9000))), go (i + 9000)) (flush p))))
@@ -77,8 +79,17 @@
 
 ; a reset reaches the program as its end, and its writes fail quietly
 (: q (pair 7103) cp (q 0) sp (q 1) c (q 3) s (q 4)
-   _ (tcp-abort st (s 't) (pk 't))
+   _ (ask (tcp-abort st (s 't)))
    (test (drain cp = "") (wait-for (_ \ sock-err c = 'econnreset))))
+
+; tasks sending at once, each datagram landing: 12 senders of 40 to one bound port
+(: rx (ask (_ \ sock-bind st ['udp 7200]))
+   (send k) (each ^40 (i \ ask (sock-send rx ["127.0.0.1" 7200] (string [k i]))))
+   bs (map (k \ twirl (_ \ send k) 0) ^12)
+   _ (each bs catch)
+   (got n) (ask (_ \ sock-recv rx) @ [_ b] (got (n + 1)) _ n)
+   (test (wait-for (_ \ two? (peep (st 'udp) 7200 ()) && 480 <= #(peep (st 'udp) 7200 ())))
+         (got 0 = 480)))
 
 (: _ (pin pk 'stop 1, catch pumper))
 (test_fin ())

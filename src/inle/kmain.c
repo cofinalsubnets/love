@@ -2333,9 +2333,10 @@ void kmain(void) {
   // pin a no-op for each this seat lacks, retiring as the real nif lands. signal ignores
   r = evals_(r,
    "(: (signal n h) ())"
+   "(: (seal p how) (duct-seal p how))"   // a duct is the only port here that half-closes
    "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
-   "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
+   "       getpid getuid ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
    "       bind accept recv send farend hark tty))");
   // the kore cat through the stream shell, seatless so the whole userland lands. egg lane
   // only: re-loading over a woken image re-pins every sealed verb
