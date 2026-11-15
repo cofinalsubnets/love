@@ -2,3 +2,4 @@
 ; stones reach on this seat calls them
 (module 'posix 0)
 (module 'window 0)
+(module 'gpu 0)

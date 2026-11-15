@@ -67,23 +67,23 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              n  (net (map (hlink1 exe dir) ws))
              (hnote ("underlay " + show n + " names on " + exe),
               n)))))
-   ; --- the scatter: the carried tree, inflated into RAM -----------------------
+   ; --- the extract: the carried tree, inflated into RAM -----------------------
    ; inle's ramfs is this tree (k_untar); a hosted pid 1 lays it too. paths re-home below the
    ; tar's top, as a checkout reads; a love linked without its source carries none
    ; the tar's top dropped: the top entry has no slash and re-homes to nothing
    (hbelow nom)
     (nom @ (_ + "/" + b) b "")
-   (hscatter root)
+   (hextract root)
     (tree-tar 0 @ a
-       (? !(string? a) (hnote "scatter: this love carries no source", 0)
+       (? !(string? a) (hnote "extract: this love carries no source", 0)
           (tar-unpack a @ t
-             (atom? t ? (hnote "scatter: the carried tree is torn", 0)
+             (atom? t ? (hnote "extract: the carried tree is torn", 0)
                 (: es (filter (e \ (0 < #(tar-get e 'nom "")))
                               (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
                    _  (umkdirs root 493)
-                   w  (tar-scatter root es)
-                   (atom? w ? (hnote ("scatter: can't write " + root), 0)
-                      (hnote ("scatter " + show <>w + " files under " + root),
+                   w  (tar-extract root es)
+                   (atom? w ? (hnote ("extract: can't write " + root), 0)
+                      (hnote ("extract " + show <>w + " files under " + root),
                        <>w)))))))
    (helm-pid1 _)
     (getpid 0 @ me
@@ -93,8 +93,9 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            hmount1 "sysfs"    "/sys"  "sysfs",
            hmount1 "devtmpfs" "/dev"  "devtmpfs",
            hmount1 "tmpfs"    "/tmp"  "tmpfs",
+           hmount1 "tmpfs"    "/run"  "tmpfs",
            hunderlay "/usr/bin",
-           hscatter "/",
+           hextract "/",
            1)))
 
    ; --- helm run --------------------------------------------------------------

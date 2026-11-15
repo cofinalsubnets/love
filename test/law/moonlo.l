@@ -75,6 +75,11 @@
       ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
       (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
          @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
+      ; x64's park in r3 and its unpark to r10 fold to one mov only when r3 is dead past them
+      (: hd ['(label f) '(push r4) '(mov r4 sp) '(sub sp sp 24) '(st r4 -8 r3) '(call g)]
+         tl ['(ld r3 r4 -8) '(mov sp r4) '(pop r4)]
+         (elem '(mov r3 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3) '(cmp r3 0) '(br eq L) '(mov r0 r3) '(label L)] + tl + ['(ret)])) &&
+          elem '(mov r10 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3)] + tl + ['(jmpr r10)]))))
       ; what a diagnosis refuses
       (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"

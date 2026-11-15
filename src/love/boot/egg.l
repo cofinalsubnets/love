@@ -1,5 +1,7 @@
 (\ egg post (:
- (sit e z a) (? (two? a) (sit e (e (cap a)) (cup a)) z)
+ ; a text read form by form, each after the one before it has run; the first sound lays
+ ; the residue as a charlist, each later one answers its tail
+ (sit e z t) (: r (sound t) (? (two? r) (sit e (e (cap r)) (cup r)) (== r 'torn) (scare 'unfinished-form ()) z))
  now (clock 0)
  ev (sit (sit ev () egg) () egg)
  _ (pin book 'ev ev)

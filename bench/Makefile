@@ -113,7 +113,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm ccloops ccraster korebench $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm ccloops ccraster korebench proofbench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -232,6 +232,13 @@ MB ?= 8
 KOREBENCH := $(BDIR)/korebench.txt
 korebench: $(GL)
 	@RAW=$(KOREBENCH) ./korebench.sh $(MB) $(SAMPLES)
+
+# proofbench.sh: uu's kernel beside rocqchk and leanchecker, on the terms uu2coq and uu2lean
+# export, a workload at a time. not cached and not a gate; needs coqc, rocqchk, lean and
+# leanchecker, and the stdlib test_uugen builds. heavy: the corpus compiles take gigabytes
+PROOFBENCH := $(BDIR)/proofbench.txt
+proofbench: $(GL)
+	@RAW=$(PROOFBENCH) ./proofbench.sh $(SAMPLES)
 
 # Self-contained results page: bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button

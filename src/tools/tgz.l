@@ -25,7 +25,7 @@
 
    (tgz-x arch dir)
     (: es (tgz-open arch)
-       w (tar-scatter dir es)
+       w (tar-extract dir es)
        _ (!w && tgz-die ("cannot write under " + dir))
        (say out $ "tgz: " + show <>w + " entries -> " + dir + "\n", 0))
 

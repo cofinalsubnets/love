@@ -52,7 +52,7 @@
 ; --- a promise at every byte: tokens, texts and comments read as the string does, in linear time
 (: (rdr-drip s i) (i < #s ? (s i . (u \ rdr-drip s (i + 1))))
    (rdr-dripped s) (<(sound (rdr-drip s 0)) = <(sound s))
- (test (rdr-dripped "abc-def 7") (rdr-dripped "2?<>x") (rdr-dripped "\"a \\x41\\u{e9} \\(1 + 2) b\" 3")
+ (test (rdr-dripped "abc-def 7") (rdr-dripped "<>x") (rdr-dripped "\"a \\x41\\u{e9} \\(1 + 2) b\" 3")
        (rdr-dripped "\"\"\"raw \" text\"\"\"") (rdr-dripped "; a comment\n(a . b)")
        (rdr-dripped "#!/usr/bin/env love\n(a b)")
        (test-linear-words (n \ sound (rdr-drip ("a" * n) 0)) 16000)
@@ -158,3 +158,14 @@
  ('(\ (list a b)) = rdr "'[a b]")                   ; ' is not a constructor: it quotes the form
  ('(\ (tuple 1 2)) = rdr "'@(1 2)")                 ; sigil over sigil still stacks
  ('torn = rdr "@["))
+
+; --- the operator bytes are the table's: each byte of a row's all-punct name. a grip moves
+; them, and the grammar's own bytes stay its own whatever the table spells ---
+(test
+ ("!#$%&*+-./:<=>?@\\^|~" = string (filter op-byte? (jot 256)))
+ (: b (nom "`") w (grip 0 b tally) r (rdr "`x") s (op-byte? 96)
+    (grip 0 b w, s && r = ['mono [b 'x]] && !(op-byte? 96) && nom "`x" = rdr "`x"))
+ (: w (grip 0 '# ()) r (rdr "#x") s (op-byte? 35)
+    (grip 0 '# w, !s && r = nom "#x" && op-byte? 35 && '(mono (# x)) = rdr "#x"))
+ (: b (nom "(") w (grip 0 b tally) r (rdr "(x)") s (op-byte? 40)
+    (grip 0 b w, s && r = '(x))))
