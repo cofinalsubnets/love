@@ -41,6 +41,7 @@
      ["" ["test/gate/lanes.sh"] ["test_lanesremote"] ""]
      ["" ["src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["" ["src/love/snap.c"] ["test_boards"] ", whose links bake their own images through it"]
+     ["" ["test/boards/*" "src/inle/port.mk"] ["test_boards"] ""]
      ["" ["src/apps/caja/*" "test/caja/*" "test/gate/caja.sh"] ["test_caja"] ""]
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
