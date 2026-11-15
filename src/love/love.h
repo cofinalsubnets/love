@@ -690,8 +690,17 @@ extern union u const numap_drive[], obin_drive[];          // [ap; swap; ret0], 
 lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox; // the data sentinels (+ ap)
 // the sentinels tile one section at data_stride in enum d order from lvm_sym: the slot is the kind
 #if data_section
+#if data_stride == 16
+#define data_shift 4
+#elif data_stride == 128
+#define data_shift 7
+#else
+#error "data_stride: give data_shift its log2"
+#endif
+// a slot exactly: the offset rotated by the grain is the kind, any other word lands high
 static love_inline bool in_data(void *a) {
- return (uintptr_t) ((char*) a - (char*) lvm_sym) < (uintptr_t) (data_n * data_stride); }
+ uintptr_t o = (uintptr_t) ((char*) a - (char*) lvm_sym);
+ return (o >> data_shift | o << (8 * sizeof o - data_shift)) < data_n; }
 static love_inline enum d love_typ(union u *o) {
  return (enum d) ((uintptr_t) ((char*) o->ap - (char*) lvm_sym) / data_stride); }
 #else
