@@ -295,7 +295,7 @@ struct g {
  uint16_t yield_ctr,   // cycles since the last yield
           sweep_ctr;   // fairness yields since the last parked sweep
  int next_wait_fd,     // -1 none
-     next_wait_events; // wait_in, or wait_out (connect's handshake)
+     next_wait_events; // wait_in, or wait_out (connect's handshake); negated, the fd or the clock wakes it (heed)
  // the one scratch word: a port refill, a write's count, a Have's ask. set it as the last
  // act before the return that hands it back
  word b;
@@ -759,7 +759,7 @@ lvm_t lvm_kcall,
  lvm_argtwocond,                                  // load + predicate + cond
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_twirl, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_deadlock,
- lvm_await,
+ lvm_await, lvm_heed,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,

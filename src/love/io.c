@@ -65,10 +65,10 @@ bool bio_rpending(struct bio *b) {
 static love_inline bool bio_wpending(struct bio *b) {
  return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
 
-// the scheduler's half of the park law. only these two ops park with a port at Sp[0], so
+// the scheduler's half of the park law. only these ops park with a port at Sp[0], so
 // the ap guard is what makes reading x legal
 bool wait_buffered(struct g *g, lvm_t *ap, word x, int fd) {
- return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
+ return (ap == lvm_fgetc || ap == lvm_await || ap == lvm_heed) && iop(x)
      && io_fd((struct io*) x) == fd
      && bio_rpending(rbio_of(g, (struct io*) x)); }
 
