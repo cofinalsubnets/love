@@ -660,22 +660,37 @@
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
    (loch g a) (sal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
+   ; a span of 16 words or more zeroes four words a turn of a loop, from the top down, the
+   ; words past the last four and the bytes past the last word straight after
    (lozero g off span)
     (lomk g @ z
-       (: w (wsize g)
+       (: w (wsize g) b (4 * w) n (span < 16 * w ? 0 (span - span % b))
           (go o rem) (? (w <= rem) (['st 'r4 o z] . go (o + w) (rem - w))
                         (0 < rem) (['st1 'r4 o z] . go (o + 1) (rem - 1))
                         ())
-          (['li z 0] . go off span)))
-   ; the zeroing, less each store the fill lays over whole, when the fill reads nothing of the frame
-   ; and calls nothing that might
+          loop (n = 0 ? ()
+                  (lomk g @ q (lomk g @ c (lomk g @ a (nlab g ".z" @ l1 (nlab g ".z" @ l2
+                     [['lea q 'r4 off] ['li c n] ['label l1] ['cmp c 0] ['br 'eq l2] ['sub c c b] ['mov a q] ['add a a c]
+                      ['st a 0 z] ['st a w z] ['st a (2 * w) z] ['st a (3 * w) z] ['jmp l1] ['label l2]]))))))
+          (['li z 0] . loop + go (off + n) (span - n))))
+   ; the zeroing, less each store the fill lays over whole, and the fill less each zero it stores
+   ; where no other of its stores lands, when the fill reads nothing of the frame and calls
+   ; nothing that might
    (lozfill g off span fs)
     (: sw {'st 8 'stsd 8 'st4 4 'stss 4 'st2 2 'st1 1}
        (st? f) (two? f && peep sw <f 0 > 0 && f 1 = 'r4 && cint? (f 2))
        (rd? f) (two? f && (elem <f '(call callr asm fix) || !(st? f) && elem 'r4 >f))
-       cov (foldl (t \ f \ (st? f ? (foldl (t2 \ b \ pin t2 (f 2 + b) 1) t ^(sw <f)) t)) {} fs)
+       ; a register holding 0: set once, by an li of 0
+       defs (foldl (t \ f \ (two? f && !(st? f) ? (pin t (f 1) (peep t (f 1) 0 + 1)) t)) {} fs)
+       (zero? r) (defs r = 1 && any (f \ f = ['li r 0]) fs)
+       (zst? f) (st? f && elem <f '(st st4 st2 st1) && zero? (f 3))
+       (cover l) (foldl (t \ f \ (foldl (t2 \ b \ pin t2 (f 2 + b) 1) t ^(sw <f))) {} (filter st? l))
+       nz (cover (filter (f \ !(zst? f)) fs))
+       (dead? f) (zst? f && all (b \ nz (f 2 + b) = ()) ^(sw <f))
+       fs2 (filter (f \ !(dead? f)) fs)
+       cov (cover fs2)
        (over? f) (st? f && all (b \ cov (f 2 + b) != ()) ^(sw <f))
-       (any rd? fs ? (lozero g off span + fs) (filter (f \ !(over? f)) (lozero g off span) + fs)))
+       (any rd? fs ? (lozero g off span + fs) (filter (f \ !(over? f)) (lozero g off span) + fs2)))
    (lostr g off text) (lomk g @ t (catmap (i \ [['li t (text i)] ['st1 'r4 (off + i) t]]) ^#text))
    (lofill g env off ty ini0)
     (unelide g env ty ini0 @ ini

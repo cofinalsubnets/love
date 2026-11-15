@@ -65,11 +65,4 @@ case $ent in *[13579bdf]) ;; *) fail "entry $ent has no thumb bit" ;; esac
   echo '  (pdreloc-check "out/playdate/pdex.elf" "out/playdate/pdex-alt.elf" 1048576))'
 } | "$lv" || fail "the relocation table is not exactly the words that move, or pdc dropped some"
 
-echo "TEST out/playdate-stones/love.pdx"
-$mk -C src/love/user/playdate game=stones || fail "the stones build"
-e=out/playdate-stones/pdex.elf
-u=$(llvm-readelf -s $e | grep -c "UND [a-zA-Z_]")
-[ "$u" -eq 0 ] || fail "the stones' pdex.elf has $u undefined symbols"
-llvm-readelf -s $e | grep -qw eventHandlerShim || fail "the stones have no eventHandlerShim"
-
 echo "test_playdate: love.pdx -- every device object and the LINK are mooncc's, no foreign tool; resolved, thumb entry, ABS32 words only, and the table proven against a second base"

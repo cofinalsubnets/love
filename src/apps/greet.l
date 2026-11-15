@@ -1,7 +1,7 @@
 ; greet -- a terminal's greeter: a login box over a lore saver, then the session chosen as a
 ; child, started as login starts a shell (utmp, the tty, setids, the environment, exec); when
 ; it ends, its logout recorded and the box again.
-;   love greet [-r ROOT] [-s SAVER] [TTY]   ROOT for /etc and /var, SAVER the one behind (life)
+;   love greet [-r ROOT] [-s SAVER] [TTY]   ROOT for /etc and /var, SAVER the one behind (pom)
 ; tab or up and down move between the fields, left and right turn the session, enter goes on
 ; or tries. a failure waits as login's do; the greeter ends only at the end of its input
 (module (greet greet-main greet-usage greet-new greet-box greet-key greet-sessions)
@@ -52,12 +52,16 @@
         ()))
  ; --- the terminal ---
  (gr-host _) (uname 0 @ u (two? u && 1 < #u ? (u 1) "localhost"))
+ ; a linux console's own font has no half blocks; ttyN takes quay's, which does
+ (digits? s) (: (go i) (i = #s || 48 <= s i <= 57 && go (i + 1)) (0 < #s && go 0))
+ (gr-font line) (line @ ("tty" + (n && digits? n)) (uname 0 @ u (two? u && u 0 = "Linux" ? (vtfont 0) 0)) _ 0)
  (gr-try g root line ss)
   (: w (login-auth root (g 'user) (g 'pass))
      (? (two? w) (: se (ss (g 'sess % #ss))
                     (ttygive ['hide], say out "\e[2J\e[H", flush out,
                      login-session root w line (se 1) (se 2),
                      line = "" ? 0 (openfd ("/dev/" + line) 6 @ fd (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, close fd) 0)),
+                     gr-font line,
                      pins g 'user "" 'pass "" 'focus 0 'msg "" 'fails 0 'hold 0,
                      ttytake ['hide], 'back))
         (: n (g 'fails)
@@ -78,17 +82,17 @@
          keys (: (take acc) (cue? 0 ? (edkey in @ k (k = -7 ? (rev (k . acc)) (take (k . acc)))) (rev acc)) (take ()))
          ; a session ended takes the screen: the saver starts over
          back (foldl (a \ k \ (? (k = -7) (uleave 0) (greet-key g k #ss = 'try) (gr-try g root line ss) a)) () keys)
-         ; short rests, so a key waits a few ms and not a frame
-         _ (two? keys ? (pin s2 'dirty 1) (rest (max 1 (min 10 (s2 'next - clock 0)))))
+         ; until the next step, or a key
+         _ (two? keys ? (pin s2 'dirty 1) (heed 0 (max 1 (s2 'next - clock 0))))
          (go (back == 'back ? (fresh (ttysize 1 1) (clock 0)) s2)))
-     (ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
+     (gr-font line, ttytake ['hide], go (fresh (ttysize 1 1) (clock 0))))
  (greet-main as)
   (: (opt as root nm tty) (? (atom? as) [root nm tty]
                              (<as = "-r" && two? >as) (opt >>as <>as nm tty)
                              (<as = "-s" && two? >as) (opt >>as root <>as tty)
                              (two? >as || (0 < #<as && <as 0 = 45)) (udie 2 greet-usage)
                              (opt >as root nm <as))
-     o (opt as "" "life" "")
+     o (opt as "" "pom" "")
      _ (elem (o 1) saver-names ? 0 (udie 2 ("greet: no saver " + o 1)))
      tty (o 2 = "" || o 2 0 = 47 ? (o 2) ("/dev/" + o 2))
      _ (tty = "" ? 0 (: fd (openfd tty 6) (charm? fd ? (dup2 fd 0, dup2 fd 1, dup2 fd 2, setsid 1) (udie 1 ("greet: " + tty + ": " + show fd)))))
