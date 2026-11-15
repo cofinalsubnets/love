@@ -22,4 +22,8 @@
   ([3 0 1 5] = map (x \ (charm? x && 3)) [7 "s"] + map (x \ (two? x || 5)) [[1] 2])
   (!cp || "(\\ a (+ a 1))" = show (s \ (: q s (q + 1))))          ; a local's alias reads as it
   ([6 5] = [((s \ (: q s ((\ s (q + s)) 5))) 1) ((s \ (: q s (: s 4 (q + s + s - 4)))) 1)])  ; hidden, the alias stays
-  (7 = ((s \ (: q s f (\ _ q) s 9 ((f 0) + s - 3))) 1))))            ; a sibling's s is no alias
+  (7 = ((s \ (: q s f (\ _ q) s 9 ((f 0) + s - 3))) 1))              ; a sibling's s is no alias
+  (!cp || "(\\ a 5)" = show (x \ (? 0 x 1 5 9)))                      ; a constant test keeps its live arm
+  ([() () 5] = [((x \ (? x 5)) 0) ((x \ (? (nil? x) 5)) 3) ((x \ (? (nil? x) 5)) ())])   ; no else: ()
+  ([2 1 1] = [((x \ (? (nil? x) 1 2)) 3) ((x \ (? (nil? x) 1 2)) ())
+              ((x \ (: (nil? y) 7 (? (nil? x) 1 2))) 3)])))                  ; a local nil? is no flip

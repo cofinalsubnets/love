@@ -83,9 +83,10 @@
 (:- (x \ evk (opfix x) 0)
   lvm_cur (pick 0 (+))
   lvm_ret0 (pick 1 cap)
-  ; the nil? nif for cflip's head test: opfix's glued lane splices the value, so `!e` reaches
+  ; the nil? nif for aco's flipped test: opfix's glued lane splices the value, so `!e` reaches
   ; the peephole unnamed
   nilv (gv 'nil? ())
+  nilop (lvm_ret0 == pick 1 nilv ? (pick 0 nilv) -1)
   ; npow's test and products, spliced as values so no local of either name can catch them
   numv (gv 'numeric? ())
   mulv (gv '* ())
@@ -183,7 +184,7 @@
     (: h <x (h @
      ^x x
      '\ (atom? >>x ? x (wxl1 c x (lp x) bnd))
-     '? (atom? >x ? '? (keep x (wxc >x bnd) '?))
+     '? (atom? >x ? '? (keep x (mapi (e \ wx e bnd) >x) '?))
      ': (? (atom? >x) ':
            (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
            (: cr (census (lflat >x) bnd) bs <cr rows >cr    ; boxfix rides the census
@@ -252,13 +253,6 @@
      (keep3 bs <nd (wxd >nd bnd fr) (wxb >>bs bnd fr))))
    (wxd d bnd fr) (!(lambp d) ? (wx d bnd)                        ; a lambda def walks under its let's frame
                      (push c 'fr fr, (: w (wx d bnd) (pop c 'fr, w))))
-   (wxc bs bnd) (: fb (cflip bs (elem 'nil? bnd))
-    (? (atom? fb) [()]                           ; clauses ran out: implicit () else
-       (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
-       (: t (wx <fb bnd) k (cst t)
-        (? (atom? k) (keep3 fb t (wx <>fb bnd) (wxc >>fb bnd))   ; unknown -> keep the clause
-           >k   (wxc >>fb bnd)               ; statically false -> drop this clause, try the rest
-                     [(wx <>fb bnd)]))))     ; statically true  -> this result is the cond, drop rest
    (mark y) (tablet? c ? (wx y ()) y)                   ; c 0 answers the lowering unmarked
    (mark (lo ? x (lower x))))
   ; feel's helpers that read nothing of its frame: built once here, not at each compile
@@ -296,17 +290,6 @@
   (mapi f x) (atom? x ? x (mapi2 x (f <x) (mapi f >x)))
   (mapi2 x e r) (e == <x && r == >x ? x (e . r))
   (relam x r b) (b == >r ? x ('\ . <r + [b]))              ; r = (lp x), b the walked body
-  ; cflip: (? (nil? e) c [el]) is (? e [el] c), so drop the nil? wrapper of an exact (nil? e)
-  ; test in a 2- or 3-form clause. the head answers to the value as well as the name, and only
-  ; the name defers to sh, the shadow: a spliced value has no binder to hide it.
-  (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
-  (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
-                  && (<<bs == nilv || (!sh && <<bs == 'nil?)) ?
-   (: e <><bs c <>bs rest >>bs
-    (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
-       (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
-       bs))
-   bs)
   ; cst: kconst re-read as (const? . falsy?), so a folded test prunes its dead branch
   (cst t) (: c (kconst t)
              (? <c (1 . !>c)
@@ -454,7 +437,7 @@
          [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
   ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
   ; var and folds a pure-fn call on constant args; pureset is the fold license and a
-  ; bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc does) and unfolds no
+  ; bnd-shadowed head never folds (the alpha law). it prunes a cond's dead arms and unfolds no
   ; recursion. only an already-constant RHS propagates, so it is letrec-safe, and a
   ; non-constant rebind or a lambda param kills the name.
   (propk? v) <(kconst v)
@@ -487,11 +470,14 @@
                       (two? r && <r != 'head ? [x (r 3) (r 4)]))
   ; se past that test: i 1 where it held, 2 where it failed
   (cpsek n i se) (: k (two? n ? (n i) 0) (k == 0 ? se (pin (pin {} segnar 1) <n [segk k] . se)))
-  ; an arm of ? sees what its test made certain, the arms past a test what its failing did
+  ; an arm of ? sees what its test made certain, the arms past a test what its failing did. a
+  ; constant test keeps its live arm alone, so nothing walks the dead one
   (cpif as se fl op bnd pb) (? (atom? as) as
      (atom? >as) (keep1 as (cprop <as se fl op bnd pb))
-     (: n (cpnar <as se bnd)
-        (keep3 as (cprop <as se fl op bnd pb) (cprop <>as (cpsek n 1 se) fl op bnd pb) (cpif >>as (cpsek n 2 se) fl op bnd pb))))
+     (: n (cpnar <as se bnd) t (cprop <as se fl op bnd pb) k (cst t)
+        (? (atom? k) (keep3 as t (cprop <>as (cpsek n 1 se) fl op bnd pb) (cpif >>as (cpsek n 2 se) fl op bnd pb))
+           >k (atom? >>as ? [()] (cpif >>as se fl op bnd pb))
+           [(cprop <>as se fl op bnd pb)])))
   ; && and ||'s operands, each seeing what the ones before it made certain by reaching it
   (cpops h as se fl op bnd pb) (? (atom? as) as
      (atom? >as) [(cprop <as se fl op bnd pb)]
@@ -673,7 +659,7 @@
    '\ (cplam x se fl op bnd pb)
    ': (ln >x @ ns (: s (sehide ns se) d (cpdead (cpbinds >x s fl op (ns + bnd) (ns + pb)))
                     (atom? >d ? <d (keep x d ':))))
-   '? (keep x (cpif >x se fl op bnd pb) '?)              ; no prune here -- wxc does it
+   '? (cpif >x se fl op bnd pb @ r (two? r && atom? >r ? <r (keep x r '?)))   ; a lone arm is the cond
    h (: e0 (nom? h ? (cpent h se) ())
      (? (two? e0 && <e0 == segal && cpsee <>e0 h se) (cprop (<>e0 . >x) se fl op bnd pb)   ; an alias head reads as its local
      (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
@@ -848,8 +834,9 @@
    ; clauses: t/result pairs then a trailing else. a constant test folds to one branch; else emit
    ; lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
    (clauses b) (?
-    (atom? b) (kim ())                                ; no else
+    (atom? b) (kim () * tojoin)                       ; no else: (), then join
     (atom? >b) (ana c <b * tojoin)            ; trailing else: result, then join
+    ((atom? >>b || atom? >>>b) && two? (nilt c <b)) (clauses [<(nilt c <b) (atom? >>b ? () <>>b) <>b])   ; (nil? e) c el is e el c
     (: test (ana c <b)
        then (ana c <>b)
        rest (clauses >>b)
@@ -859,6 +846,12 @@
             j (then (tojoin k) $ 2 + n)                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
+  ; an exact (nil? e) -> [e], else (): fold's (iop OP e), the nif's value as head, or its name
+  ; where no local binds it
+  (nilt c t) (two? t && two? >t && (? (<t == iop) (3 = #t && <>t == nilop ? [(t 2)])
+                                      (atom? >>t && (<t == nilv || <t == 'nil? && !(aloc? c 'nil?))) [<>t]))
+  (aloc? c x) (? !c 0 (two? (assq x (c 'lam)) || 0 <= sat c x || 0 <= lidx x (c 'imp + c 'arg)) 1
+                 (aloc? (c 'par) x))
   ; recursive-fn ref: a built closure is a constant like any other, through kim's fusion, else
   ; `quote 0` + a backpatch site (lfd . box-of-cell) on the scope for wire to resolve. the cell
   ; rides a box (pin, barriered): a raw poke into tenured data escapes the precise barrier.
