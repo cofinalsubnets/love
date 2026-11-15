@@ -11,6 +11,7 @@ void kq(uint8_t);                      // kmain's input queue, one byte
 void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 int usb_init(void), usb_up(void), usb_rx_ready(void), usb_getc(void);   // usb.c
 void usb_irq(void), usb_tick(void), usb_putc(int);
+uint32_t usb_hwcfg(int);
 
 #define PERI    0x3f000000             // the peripherals, as the arm sees them
 #define AUX     (PERI + 0x215000)      // the mini uart's block
@@ -154,6 +155,8 @@ int k_board(char *b) {
   if (!k_mbox(0x00010005, (v[0] = v[1] = 0, v), 2))
     at = hexrow(b, at, "arm-base", v[0], 8), at = hexrow(b, at, "arm-size", v[1], 8);
   if (!k_mbox(0x00000001, (v[0] = 0, v), 1)) at = hexrow(b, at, "firmware", v[0], 8);
+  at = hexrow(b, at, "otg-hwcfg2", usb_hwcfg(2), 8), at = hexrow(b, at, "otg-hwcfg3", usb_hwcfg(3), 8);
+  at = hexrow(b, at, "otg-hwcfg4", usb_hwcfg(4), 8);
   return at; }
 
 // archinit finds EL1 (the stub dropped from EL2), the MMU, a stack and the HHDM up

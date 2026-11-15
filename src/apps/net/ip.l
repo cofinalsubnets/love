@@ -8,6 +8,8 @@
 ;   (net-pump st nic now)         one turn: frames out to the nic and in from it, packets to
 ;                                 itself delivered, then the tick. a nic is {'put (\ f now ..)
 ;                                 'take (now \ frames)}: (nic-loop) hears itself, (wire-nic w side)
+;   (stream-nic r w)              a nic over ports carrying records, two bytes of length (high
+;                                 first) then the frame: inle's /dev/ecm, read from r, written to w
 ;   (net-run w a b now ms done)   a and b over wire w a ms at a time: both pumped, until
 ;                                 (done t) (answers t) or ms pass (answers ())
 ;   (net-ask st f)                (f now) run by the pump's next turn, its answer this task's: tasks
@@ -18,7 +20,7 @@
 ;   (udp-recv st port) -> (src sport b) | ()
 ;   (net-ping st dst id seq b now) (net-pongs st) -> ((src id seq b at) ..), oldest first
 ;   (ip-sum s) (ip-pseudo src dst proto n) (quad a b c d) (ip-show q)
-(module (net net-make net-rx net-tx net-tick net-pump net-run net-ask nic-loop wire-nic net-rand ip-send
+(module (net net-make net-rx net-tx net-tick net-pump net-run net-ask nic-loop wire-nic stream-nic net-rand ip-send
          ip-send-from ip-src ip-sum ip-pseudo quad ip-show udp-bind udp-unbind udp-send udp-recv
          net-ping net-pongs arp-mac)
 (borrow '(bytes wire))
@@ -145,6 +147,13 @@
      net-tick st now)
    ; a nic that hears what it sends, for a stack alone
    (nic-loop _) (: q {'f ()} {'put (\ f _ (pin q 'f (f . q 'f))) 'take (_ \ rev (q 'f) @ fs (pin q 'f (), fs))})
+   ; a take reads only what is waiting, and keeps a record cut short for the next
+   (stream-nic r w)
+    (: q {'b ""}
+       (cut b fs) (? ((#b < 2) || (#b < 2 + rdbe b 0 2)) (pin q 'b b, rev fs)
+                     (rdbe b 0 2 @ n (cut (snip b (2 + n) #b) (snip b 2 (2 + n) . fs))))
+       (more b) (cue? r ? (see r @ -1 b c (more (b + string c + chug r))) b)
+       {'put (\ f _ (say w (wrbe #f 2 + f), flush w)) 'take (_ \ cut (more (q 'b)) ())})
    (wire-nic w side) {'put (\ f now (wire-put w side f now)) 'take (now \ wire-take w side now)}
    (net-run w a b now ms done)
     (: na (wire-nic w 0) nb (wire-nic w 1)

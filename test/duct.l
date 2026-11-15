@@ -35,7 +35,7 @@
 (: d (duct 64)
    msg (string (map (i \ i * 7 & 255) ^5000))
    w (twirl (_ \ (say d msg, seal d 1, 1)) 0)
-   (take acc) (duct-take d @ b (b = () ? (join "" (rev acc)) (rest 0, take (b . acc))))
+   (take acc) (duct-take d @ () (join "" (rev acc)) "" (rest 1, take acc) b (take (b . acc)))
    got (take ())
    _ (test (catch w) (got = msg))
    r (twirl (_ \ see d @ c (c = -1 ? () (string c + chug d))) 0)

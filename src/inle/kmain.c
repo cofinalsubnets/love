@@ -552,12 +552,14 @@ static char const k_pimg[] = "proc/image";
 // the file the door carried in beside the kernel
 static char const k_pinitrd[] = "proc/initrd";
 // null is the table's empty slot, zero that slot with a read door: entries only for stat and dents
-static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero", k_durandom[] = "dev/urandom";
-// 0 neither, 1 null, 2 zero, 3 urandom
+static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero", k_durandom[] = "dev/urandom",
+                  k_decm[] = "dev/ecm";
+// 0 neither, 1 null, 2 zero, 3 urandom, 4 ecm
 static int k_dev_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_dnull - 1 && !memcmp(p, k_dnull, n)) return 1;
   if (n == sizeof k_dzero - 1 && !memcmp(p, k_dzero, n)) return 2;
   if (n == sizeof k_durandom - 1 && !memcmp(p, k_durandom, n)) return 3;
+  if (n == sizeof k_decm - 1 && !memcmp(p, k_decm, n)) return 4;
   return 0; }
 static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
@@ -570,6 +572,14 @@ static intptr_t k_rand_readn(int fd, unsigned char *dst, uintptr_t n) {
 static intptr_t k_null_writen(int fd, unsigned char const *src, uintptr_t n) {
   return (intptr_t) n; }
 static bool k_dev_ready(int fd) { return true; }
+// a usb ethernet link's frames, each two bytes of length (high first) then the frame, both
+// ways; a machine with no link answers the end at once
+__attribute__((weak)) int k_ecm_ready(void) { return 1; }
+__attribute__((weak)) intptr_t k_ecm_read(unsigned char *dst, uintptr_t n) { (void) dst; (void) n; return -1; }
+__attribute__((weak)) intptr_t k_ecm_write(unsigned char const *src, uintptr_t n) { (void) src; (void) n; return -1; }
+static intptr_t k_ecm_readn(int fd, unsigned char *dst, uintptr_t n) { return k_ecm_read(dst, n); }
+static intptr_t k_ecm_writen(int fd, unsigned char const *src, uintptr_t n) { return k_ecm_write(src, n); }
+static bool k_ecm_ok(int fd) { return k_ecm_ready() != 0; }
 
 // 0 neither, 1 fg, 2 bg, 3 the glyph scale, 4 the lift, 5 the font
 static int k_vt_slot(char const *p, uintptr_t n) {
@@ -601,7 +611,7 @@ static intptr_t k_hosted(char const *cp, uintptr_t cn) {
 
 // a move or a removal leaves these be: a special row, and every directory above one
 static char const *const k_pins[] = { k_vtfg, k_vtbg, k_vtscale, k_vtfont, k_plift,
-                                      k_pmem, k_pcmd, k_pboard, k_dnull, k_dzero, k_durandom, k_mnt };
+                                      k_pmem, k_pcmd, k_pboard, k_dnull, k_dzero, k_durandom, k_decm, k_mnt };
 // one entry per baked row, growing with create and mkdir. the cwd is canonical ("" the root)
 static struct vfs k_fs = { .cwd = "home", .cwd_n = 4, .ro = k_tree, .pins = k_pins,
                            .npins = countof(k_pins), .grab = k_grab, .drop = k_drop, .now = k_clock_ms };
@@ -626,6 +636,7 @@ static bool k_fs_init(void) {
     { k_pmem, NULL, 0444, false },                                    // filled at each open
     { k_dnull, NULL, 0666, false }, { k_dzero, NULL, 0666, false },   // always empty (k_dev_slot)
     { k_durandom, NULL, 0444, false },
+    { k_decm, NULL, 0666, false },
     { k_pboard, NULL, 0444, false },                                   // filled at each open
     { "usr/bin", NULL, 0755, true },
     { k_vtscale, NULL, 0644, false },                                  // the glyph scale
@@ -916,6 +927,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       // null has no readn (k_row_read answers the end) but says ready, or its reader parks for good
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
           : dv == 3 ? (struct k_source) { .readn = k_rand_readn, .ready = k_dev_ready }
+          : dv == 4 ? (struct k_source) { .readn = k_ecm_readn, .writen = k_ecm_writen, .ready = k_ecm_ok }
                     : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
   int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
