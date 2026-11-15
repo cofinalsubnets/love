@@ -1,6 +1,6 @@
 # FIXME shrink the comments in this file and then also shrink the contents as much as possible
-# src/inle/port.mk -- the shape every bare-metal port shares. Included by src/inle/<x>/Makefile,
-# each of which is run from its own folder (`make -C src/inle/<x>`); $(R) is the project root,
+# src/inle/port.mk -- the shape every bare-metal port shares. Included by src/inle/<x>/Makefile
+# and test/boards/<x>/Makefile, each run from its own folder (`make -C src/inle/<x>`); $(R) is the project root,
 # and mooncc's system include dir is CWD-relative, so every compile cd's to $(R) first.
 #
 # Set before including: p_tgt (mooncc's -t backend) and p_be (the holo backend .l the lays
@@ -15,6 +15,8 @@ R := ../../..
 # restating it, since nothing in a makefile can see that a list has grown.
 include $(R)/common.mk
 p_dir = $(notdir $(CURDIR))
+# the port's folder from the root, src/inle/<x> or test/boards/<x>
+p_src = $(patsubst $(abspath $(R))/%,%,$(CURDIR))
 o = out/$(p_dir)
 # mooncc is love's own verb. MOONCC is the command as run FROM $(R); lv is the file it
 # needs, which is the baked artifact -- out/love is that file now, where a stamp stood in.
@@ -148,7 +150,7 @@ $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(borrow 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(borrow 'kore)"; \
-	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) src/inle/$$(p_dir)/$2.l; \
+	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) $$(p_src)/$2.l; \
 	  echo '($2 $3)'; } | out/love
 endef
 

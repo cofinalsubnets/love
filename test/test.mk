@@ -609,19 +609,19 @@ test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   sh test/gate/skip.sh gate-skip "test_nucleo446: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
-	  $(MAKE) -C src/inle/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C test/boards/nucleo446 || { echo "FAIL nucleo446 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nucleo446: firmware (all-mooncc thumb2sp), OUR linker and flatten, no linker script, boot image verified"
 # test_nrf52840 -- the xiao nrf52840: mooncc, xlink.l, ocopy.l, uf2.l; arm-none-eabi-gcc only for its libgcc.a
 test_nrf52840: host
 	@echo TEST out/nrf52840/firm.uf2
 	@if ! command -v arm-none-eabi-gcc >/dev/null 2>&1; then \
 	   sh test/gate/skip.sh gate-skip "test_nrf52840: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
-	  $(MAKE) -C src/inle/nrf52840 || { echo "FAIL nrf52840 build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C test/boards/nrf52840 || { echo "FAIL nrf52840 build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_nrf52840: firmware (all-mooncc thumb2sp), OUR linker, flatten and uf2, boot image verified"
 # test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
-	@$(MAKE) -C src/inle/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
+	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
 # the boards' batteries on silicon, flashed over swd on a host with the board's cap
 test_rp2040_board: test_rp2040

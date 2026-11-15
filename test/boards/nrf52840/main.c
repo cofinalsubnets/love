@@ -1,12 +1,11 @@
-// Nucleo-F446RE firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
-// not love (128 KB SRAM): the toolchain on silicon, a self-check battery over the ST-LINK VCP.
-// -D QSMOKE exits through qemu semihosting with the tally (100+n the first miss, 98 a fault),
-// booted by hand (`make -C src/inle/nucleo446 smoke`); the device blinks slow green, fast a miss
+// xiao nrf52840 firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
+// not love (256 KB SRAM): the toolchain on silicon, nucleo446's self-check battery over UART0
+// on D6/D7; the LED blinks slow green all green, fast red a miss. a line `uf2` on the UART
+// reboots into the bootloader's drive
 #include <stdint.h>
-#include "nucleo446.h"
-#include "../bput.h"
+#include "nrf52840.h"
+#include "../../../src/inle/bput.h"
 #include <stdarg.h>
-
 static void puts_(const char *s) {
   for (; *s; s++) { if (*s == '\n') serial_putc('\r'); serial_putc(*s); } }
 
@@ -79,20 +78,23 @@ static int run(void) {
 
 int main(void) {
   // first light: a board that dies later still shows crt0 and the clocks worked
-  led_init(); led_put(1);
+  led_init(); led_put(LED_BLUE, 1);
   timer_init();
-  puts_("\n; mooncc/nucleo446\n; core ");
-  putu(clock_mhz());
-  puts_(" MHz\n");
+  puts_("\n; mooncc/nrf52840\n; core 64 MHz, ");
+  puts_(clock_xtal() ? "crystal\n" : "rc -- no crystal\n");
   int r = run();
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));
   puts_(r <= 100 ? "/28 green\n" : "\n");
-#ifdef QSMOKE
-  sh_exit((uint32_t)r);
-#endif
-  // slow blink green, fast a miss; the button holds it solid
-  uint32_t half = r <= 100 ? 500u : 120u;
-  for (;;) {
-    led_put(1); { uint32_t t = clock_ms(); while (clock_ms() - t < half && !btn_get()) {} }
-    led_put(0); { uint32_t t = clock_ms(); while (clock_ms() - t < half && !btn_get()) {} } } }
+  led_put(LED_BLUE, 0);
+  puts_("; send uf2 for the bootloader's drive\n");
+  uint32_t pin = r <= 100 ? LED_GREEN : LED_RED, half = r <= 100 ? 500u : 120u;
+  uint32_t last = 0;                                // the line's last three bytes
+  for (int on = 1;; on = !on) {
+    led_put(pin, on);
+    for (uint32_t t = clock_ms(); clock_ms() - t < half; ) {
+      if (!serial_rx_ready()) continue;
+      int c = serial_getc();
+      if ((c == '\r' || c == '\n') && last == ('u' << 16 | 'f' << 8 | '2')) {
+        puts_("\n; to the uf2 drive\n"); reboot_uf2(); }
+      last = c == '\r' || c == '\n' ? 0 : (last << 8 | (uint32_t) c) & 0xFFFFFFu; } } }
