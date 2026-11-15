@@ -86,6 +86,7 @@
   ; the nil? nif for aco's flipped test: opfix's glued lane splices the value, so `!e` reaches
   ; the peephole unnamed
   nilv (gv 'nil? ())
+  nilop (lvm_ret0 == pick 1 nilv ? (pick 0 nilv) -1)
   ; npow's test and products, spliced as values so no local of either name can catch them
   numv (gv 'numeric? ())
   mulv (gv '* ())
@@ -658,7 +659,7 @@
    '\ (cplam x se fl op bnd pb)
    ': (ln >x @ ns (: s (sehide ns se) d (cpdead (cpbinds >x s fl op (ns + bnd) (ns + pb)))
                     (atom? >d ? <d (keep x d ':))))
-   '? (keep x (cpif >x se fl op bnd pb) '?)
+   '? (cpif >x se fl op bnd pb @ r (two? r && atom? >r ? <r (keep x r '?)))   ; a lone arm is the cond
    h (: e0 (nom? h ? (cpent h se) ())
      (? (two? e0 && <e0 == segal && cpsee <>e0 h se) (cprop (<>e0 . >x) se fl op bnd pb)   ; an alias head reads as its local
      (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
@@ -835,7 +836,7 @@
    (clauses b) (?
     (atom? b) (kim () * tojoin)                       ; no else: (), then join
     (atom? >b) (ana c <b * tojoin)            ; trailing else: result, then join
-    (nilt? c <b && (atom? >>b || atom? >>>b)) (clauses [<><b (atom? >>b ? () <>>b) <>b])   ; (nil? e) c el is e el c
+    ((atom? >>b || atom? >>>b) && two? (nilt c <b)) (clauses [<(nilt c <b) (atom? >>b ? () <>>b) <>b])   ; (nil? e) c el is e el c
     (: test (ana c <b)
        then (ana c <>b)
        rest (clauses >>b)
@@ -845,8 +846,10 @@
             j (then (tojoin k) $ 2 + n)                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
-  ; an exact (nil? e): the head the nif's value, or its name where no local binds it
-  (nilt? c t) (two? t && two? >t && atom? >>t && (<t == nilv || <t == 'nil? && !(aloc? c 'nil?)))
+  ; an exact (nil? e) -> [e], else (): fold's (iop OP e), the nif's value as head, or its name
+  ; where no local binds it
+  (nilt c t) (two? t && two? >t && (? (<t == iop) (3 = #t && <>t == nilop ? [(t 2)])
+                                      (atom? >>t && (<t == nilv || <t == 'nil? && !(aloc? c 'nil?))) [<>t]))
   (aloc? c x) (? !c 0 (two? (assq x (c 'lam)) || 0 <= sat c x || 0 <= lidx x (c 'imp + c 'arg)) 1
                  (aloc? (c 'par) x))
   ; recursive-fn ref: a built closure is a constant like any other, through kim's fusion, else
