@@ -28,8 +28,9 @@ struct g *cats_egg(struct g *g) {
   alloc(e, 0), alloc(r, 0), alloc(o, 0);
   return g; }
 
-// the arch's holo, scan riding it; every other module registers as post is sat
+// kanren and uu, then the arch's holo, scan riding it; post's modules registered with post
 struct g *cats_lib(struct g *g) {
+  g = CatEval(g, cat_mods_z);
 #ifdef LvCatModsH
   g = CatEval(g, cat_lib_h_z);
 #endif

@@ -164,6 +164,12 @@
    (wasm? {'tgt 'wasm}) 1          ; ..which wasm rides whole; it differs only where its machine lacks an op
    (gtgt g) (wasm? g ? 'rv64 (peep g 'tgt 'x64))   ; the ABI name the asm dialect and the lane rosters read
    (x64? g) (peep g 'tgt 'x64 = 'x64)
+   ; a loop head, a label a later jmp or br goes back to, at 16: a short loop then spans no 64-byte
+   ; line, which zen's op cache takes at half speed
+   (lheads r) (: seen {} hd {}
+                 _ (map (f \ (two? f ? (? (<f = 'label) (pin seen <>f 1)
+                                           (elem <f '(jmp br)) (f (#f - 1) @ l (seen l ? (pin hd l 1) 0))))) r)
+                 (catmap (f \ (two? f && <f = 'label && hd <>f ? [['align 16] f] [f])) r))
    (a8? g) (a64? g || rv64? g)                        ; a64 + riscv share the AAPCS64 shapes
    (gchar g) (drop 6 (peep g 'mo ()) @ r (two? r && charm? <r ? (<r = 1 ? 'cchar 'char)   ; plain char, as parse.l's pchar: the driver's
                 (elem (peep g 'tgt 'x64) '(a64 rv64 rv32 xtensa thumb1 thumb2 thumb2sp arm) ? 'cchar 'char)))
@@ -4970,6 +4976,7 @@
                      ; on xtensa, whose call0 reaches words alone
                      an (peep (g 'aligns) nm 2 @ a (max (max a (xt? g ? 4 2)) (falgn g)))
                      pf (pfeof g nm)
+                     r (x64? g ? (lheads r) r)
                      fm (['align an] . pfepre g nm pf + al2 + pfepost g nm pf (lpad? g ? (btiat nm r) r)
                           + (wasm? g ? () (catmap (a \ [['label (fn-end a)] ['label (fn-type a)]]) (nm . map (f \ <>f) al2))))   ; elf's size and type
                      ; a fn that named its section leaves .text for that stream, its align riding out as the section's grain

@@ -10,6 +10,15 @@
  (defn il3 (ilist nat) (icons nat 1 (icons nat 2 (icons nat 3 (inil nat)))))
  (3 = vof 0 '(ilen nat il3))
  (6 = vof 0 '(ilen nat (iapp nat il3 il3)))
+ ; a hypothesis read only under a lambda is a memo cell, one read twice under a branch is run
+ ; once, and one never read is skipped
+ (defn inth (pi A UU d A l (ilist A) k nat A)
+   (lam A d l (ilist_rect A (lam q (pi k nat A)) (lam k d) (lam x t ih (lam k (nat_rect (lam q A) x (lam j r (ih j)) k))) l)))
+ (2 = vof 0 '(inth nat 0 il3 1)) (3 = vof 0 '(inth nat 0 il3 2)) (0 = vof 0 '(inth nat 0 il3 5))
+ (defn idbl (pi A UU l (ilist A) nat) (lam A l (ilist_rect A (lam q nat) 1 (lam x t ih (bool_rect (lam b nat) (add ih ih) 0 true)) l)))
+ (8 = vof 0 '(idbl nat il3))
+ (defn iconst (pi A UU l (ilist A) nat) (lam A l (ilist_rect A (lam q nat) 1 (lam x t ih 7) l)))
+ (7 = vof 0 '(iconst nat il3)) (1 = vof 0 '(iconst nat (inil nat)))
  (defq iappnil (pi A UU l (ilist A) (paths (ilist A) (iapp A (inil A) l) l)) (lam A l (idpath l)))
  (defq iappr (pi A UU l (ilist A) (paths (ilist A) (iapp A l (inil A)) l))
    (lam A l (ilist_rect A (lam q (paths (ilist A) (iapp A q (inil A)) q))

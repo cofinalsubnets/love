@@ -316,7 +316,7 @@
    sng (hn ? (apartment-song-new hn (wheel (clock 0))))
    pace (pacer ())
    (feed! _) (horn-lag hn < song-lead-of (pace! pace) ? (apartment-song-feed sng) (rest 5))
-   (idle _) (sng ? (feed! ()) (rest 30))
+   (idle _) (sng ? (feed! ()) (heed 0 30))
    ; escape at a standing sign takes the sign down and nothing else; the talk is left,
    ; not ended, and a bump opens it again
    (turn k) (rove-press g k 'fled (g \ pins g 'sign () 'talk ()) apartment-turn)

@@ -105,8 +105,18 @@
    ; a form nests on the heap, never the C stack: far past the deepest in the tree
    rd-deep (: (depth x n) (two? x ? (depth <x (n + 1)) n)
               (19999 = depth <(sound (rd-rep "(" 20000 + rd-rep ")" 20000)) 0))
+   ; the operator bytes are the table's, sealed partway into prel: every form read before the
+   ; seal reads the same with none, and the rest does not (an unmopped egg boot keeps seal-hook)
+   rd-pre (: q "(: _ (borrow 'posix) t (slurp (open \"src/love/boot/prel.l\" \"r\"))
+                   full (string (map (c \\ op-byte? c ? 1 0) (jot 256))) none (string (map (c \\ 0) (jot 256)))
+                   a (sounds t) _ (seal-hook 10 none) b (sounds t) _ (seal-hook 10 full)
+                   (has x) (two? x ? (has <x || has >x) (x == 'op-seal))
+                   (upto l) (two? l ? (has <l ? [<l] (<l . upto >l)) ())
+                   _ (putx [(upto a = upto b ? 1 0) (a = b ? 1 0) (1 < #(upto a) ? 1 0)]) (quit 0))"
+              r (hark ["env" "LOVE_NO_IMAGE=1" "LOVE_NO_MOP=1" "out/love" "-e" q])
+              (two? r && <r = 0 && >r = "(1 0 1)"))
    _ (puts ("rdiff: flows bad=" + show rd-fbad + " texts bad=" + show rd-sbad + " oracle=" + show rd-fp1
-            + " port=" + show rd-port + " sealed=" + show rd-sealed + " long=" + show rd-long
+            + " port=" + show rd-port + " sealed=" + show rd-sealed + " long=" + show rd-long + " pre=" + show rd-pre
             + " deep=" + show rd-deep + "\n")))
 
 (test
@@ -116,7 +126,7 @@
  (0 = peep rd-clean 'bad 0)
  ; the rig can go red
  (0 < peep rd-hurtn 'bad 0)
- (0 = rd-fbad) rd-fp1 rd-port rd-sealed rd-long
+ (0 = rd-fbad) rd-fp1 rd-port rd-sealed rd-long rd-pre
  (0 = rd-sbad) rd-storn
  rd-deep)
 

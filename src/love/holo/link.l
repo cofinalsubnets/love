@@ -244,8 +244,9 @@
     (starts? nm ".eh_frame" || starts? nm ".ARM.exidx" || starts? nm ".ARM.extab")
    ; the lanes the linker knows by name; anything else allocated is a named lane
    ld-lanes '(text rodata data nifs bss image note boot tdata tbss)
-   ; an allocated progbits or nobits section of another name is its own lane, laid contiguous
-   (ld-any nm ty fl) (elem ty '(1 8) && 0 < fl & 2 ? (name nm))
+   ; an allocated progbits or nobits section of another name is its own lane, laid contiguous;
+   ; gcc's init_array, fini_array and preinit_array types are progbits here
+   (ld-any nm ty fl) (elem ty '(1 8 14 15 16) && 0 < fl & 2 ? (name nm))
    ; and travels with the known lane its flags name: exec text, write data, nobits bss,
    ; else rodata
    (ld-home lane fl ty)
@@ -290,7 +291,7 @@
         (shnum <= i ? ()
            (: h (sec i) nm <h ty (h 1) fl (h 2) off (h 3) sz (h 4)
               ; a note with a lane (.note.pvh) is placed like progbits
-              (? (elem ty '(1 8) || ty = 7 && ld-lane nm ty fl)
+              (? (elem ty '(1 8 14 15 16) || ty = 7 && ld-lane nm ty fl)
                    ; a nobits section's sh_offset is a placeholder
                    (ld-lane nm ty fl @ lane
                       (? lane (pin secs i [lane (ty = 8 ? 0 off) sz (h 5) (ld-home lane fl ty)],
@@ -341,7 +342,9 @@
    ; relocation that would read one refuses by its kind
    ldsynth '("__start_love_nifs" "__stop_love_nifs" "__start_love_rela" "__stop_love_rela"
              "__data_start__" "__data_end__" "__data_load__"
-             "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_")
+             "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
+             "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
+             "__preinit_array_start" "__preinit_array_end")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us)
@@ -463,7 +466,19 @@
           (ldlay1 lane (go cur (peep (peep ob 'lanes 0) lane ())) >os)))
 
    ; the named lanes of a set that travel with `home`, first-seen order: layout and emit both walk it
+   ; the constructor and destructor arrays each laid as one, a priority's .NNNNN first in
+   ; order, the plain one last; every other named lane as first seen
+   (ld-arr nm) (: s (show nm)
+                  (? (starts? s ".init_array") 1 (starts? s ".fini_array") 2 ()))
+   (ld-arrkey nm) (: s (show nm) (#s = 11 ? "~" (snip s 11 #s)))
    (ld-nlanes objs home)
+    (: ls (ld-nlanes0 objs home)
+       srt (sort (map (l \ [(ld-arr l) (ld-arrkey l) l]) (filter ld-arr ls)))
+       (filter (l \ !(ld-arr l)) ls + map (r \ r 2) srt))
+   ; the arrays' brackets, over every lane of the kind (k 1 or 2) -> (start end) | ()
+   (ld-arrx xt k)
+    (foldl (\ a l (ld-arr l = k ? (xt l @ v (atom? a ? v [(min <a <v) (max <>a <>v)])) a)) () (keys xt))
+   (ld-nlanes0 objs home)
     (: seen {}
        (nhome ob l) (peep (peep ob 'secs 0) <(peep (peep ob 'lanes 0) l ()) () 4)
        (go os acc)
@@ -555,6 +570,11 @@
           (nm = "__stop_love_rela") r1
           (elem nm '("__bss_start__" "__bss_end__"))
            (xt "__bss" @ v (two? v ? (nm = "__bss_start__" ? <v <>v) (scare 'link-undef nm)))
+          ; the constructor and destructor arrays, an absent one empty; preinit is always empty
+          (elem nm '("__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
+                     "__preinit_array_start" "__preinit_array_end"))
+           (ld-arrx xt (starts? nm "__init" ? 1 2) @ v
+              (two? v && !(starts? nm "__pre") ? (ends? nm "start" ? <v <>v) n0))
           (: x (nm @ ("__start_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<v]))
                      ("__stop_" + (s && 0 < #s)) (xt (name s) @ v (two? v ? [<>v]))
                      ())
@@ -648,6 +668,19 @@
                               [(rx = 76 ? 73 72) (op = 139 ? 199 129) (192 | ((md >> 3) & 7))]
                               (scare 'link-tls-gottpoff <sy))))
                     ax (peep ld-a64tp k () @ f (two? f ? (ld-a64tls f s (off0 + ro) (s64 (ld-u64 (sa - tp))) <sy)))
+                    ; a -shared import's address is its got slot's word: x64's lea of it a mov from
+                    ; the slot (ld's relaxation run backward), a64's adrp the slot's page and the add
+                    ; after it a load from the slot. the symbol's own address only: no offset rides
+                    gs (charm? ix ? (peep relbox 'got 0 + 8 * (ix - 1)))
+                    dx (? (charm? gs && k == 'pc32 && ad = -4)
+                          (: o (off0 + ro) rx (s (o - 3)) op (s (o - 2)) md (s (o - 1))
+                             (pos <= o - 3 && elem rx '(72 76) && op = 141 && (md & 199) = 5 ? [rx 139 md])))
+                    da (? (charm? gs && k == 'addlo12 && ad = 0)
+                          (: wd (rle32 s (off0 + ro)) lo ((gs + ad) & 4095)
+                             ((wd & 4290772992) = 2432696320 && (lo & 7) = 0 ?
+                                (le32 (4181721088 | ((lo >> 3) << 10) | (wd & 1023))))))
+                    gk (two? dx || two? da || charm? gs && k == 'adrp21 && ad = 0)
+                    sg (gk ? (ld-u64 (gs + ad)) sa)
                     ; -pie: record each abs64 site for the startup relocator to add the base.
                     ; -shared: record (site import value) for the loader, an import's addend or
                     ; the link-time value; a weak undefined stays zero.
@@ -655,7 +688,10 @@
                     _ (? (relbox && abs64? && dyn = 1)
                           (wu ? 0 (pin relbox 0 ([(base + ro) ix (ix ? ad sa)] . relbox 0)))
                          (relbox && abs64?) (pin relbox 0 (base + ro . relbox 0))
-                         (charm? ix && nelem kind (relbox 'br)) (scare 'link-import-addr <sy))
+                         (charm? ix && !gk && nelem kind (relbox 'br)) (scare 'link-import-addr <sy)
+                         ; ..riscv's pair kind is a call where a jalr ends it, or a tail's addi then a jump
+                         ; through it (jalr, c.jr, c.jalr); else an address
+                         (charm? ix && rv && kind = 19 && !(ld-rvjump? s (off0 + ro + 4))) (scare 'link-import-addr <sy))
                     ; an abs32 site cannot be slid by a 64-bit base
                     _ (relbox && abs32? ? (scare 'link-abs32-pie <sy))
                     ; ..nor a site in .rodata, which the startup cannot write: a -fno-pie object's
@@ -663,16 +699,18 @@
                     _ (relbox && abs64? && se 4 = 'rodata ? (scare 'link-rodata-pie <sy))
                     _ (ro + w <= sz ? 0 (scare 'link-oob (peep ob 'id 0)))
                     bs (? (two? ax) ax
+                          (two? da) da
                           (k == 'tpoff) (le64 (ld-u64 (sa - tp)))
                           ; GOTTPOFF's addend is the -4 of its rip-relative field, gone with the got
                           (elem k '(tpoff32 gottpoff))
                            (: v (s64 (ld-u64 ((k == 'gottpoff ? sv sa) - tp)))
                               (fits32 v ? 0 (scare 'link-range <sy),
                                le32 (ld-u32 v)))
-                          (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sa (base + ro))
+                          (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sg (base + ro))
                              (two? r ? r (scare 'link-range <sy))))
+                    g3 (two? gx ? gx dx)
                     (go (off0 + ro + w) >es
-                        (? (two? gx) (bs . gx . snip s pos (off0 + ro - 3) . acc)
+                        (? (two? g3) (bs . g3 . snip s pos (off0 + ro - 3) . acc)
                            (bs . snip s pos (off0 + ro) . acc)))))))
        (go off0 (ent (ob 'relas)) ()))
 
@@ -1378,11 +1416,26 @@
                            (le16 (((x >> 8 & 7) << 12) | 3072 | (x & 255)))])
        (catall [(imm 0xf240 (v & 65535)) (imm 0xf2c0 (v >> 16 & 65535))
                 (le16 0x44fc) (le16 0xf8dc) (le16 0xf000) (le16 0xbf00)]))
-   ; a machine's row: the branch kinds that may reach an import, relative / abs64 / glob_dat, the stub, the page
+   ; a riscv pair's second word at o: a jalr, or an addi whose next jumps through it
+   (ld-rvjump? s o)
+    (: w ((s o) & 127) h ((s (o + 4)) | ((s (o + 5)) << 8))
+       rd ((((s o) >> 7) | ((s (o + 1)) << 1)) & 31)
+       jr (((s (o + 4)) & 127) = 103 && ((((s (o + 5)) >> 7) | ((s (o + 6)) << 1)) & 31) = rd)
+       cj ((h & 57471) = 32770 && ((h >> 7) & 31) = rd)
+       (w = 103 || w = 19 && (((s (o + 1)) >> 4) & 7) = 0 && (jr || cj)))
+   ; rv64: auipc t3, got; ld t3, lo(t3); jalr t1, t3; nop
+   (ld-plt-rv stub got)
+    (: d (got - stub) hi ((d + 2048) >> 12) lo (ld-u32 (d - (hi << 12)) & 4095)
+       (catall [(le32 (ld-u32 (hi << 12) | 3607)) (le32 ((lo << 20) | 933379))
+                (le32 918375) (le32 19)]))
+   ; a machine's row: the branch kinds that may reach an import, relative / abs64 / glob_dat, the stub, the page.
+   ; riscv has no glob_dat: its 64 fills the slot
    ld-dyn {183 ['(282 283) 1027 257 1025 ld-plt-a64 65536]
            62 ['(4) 8 1 6 ld-plt-x64 4096]
+           243 ['(19 17) 3 2 2 ld-plt-rv 4096]
            40 ['(10 30) 23 2 21 ld-plt-thm 4096]}
-   (ldshared target soname needed srcs prod)
+   ; ip names an exe's loader: a pie that loads needed and runs, else ()
+   (ldshared target soname needed srcs prod ip)
     (: mach (peep elf-machines target 0)
        dm (ld-dyn mach)
        w32 (mach = 40) wz (w32 ? 4 8) symz (w32 ? 16 24) relz (w32 ? 8 24) dynz (w32 ? 8 16)
@@ -1397,8 +1450,11 @@
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
        objs (objs0 + [plt])
        pg (dm 5)
-       nph 5                                    ; three loads, dynamic, gnu_stack
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * nph)
+       exe (string? ip)
+       nph (exe ? 7 6)                          ; phdr, interp, three loads, dynamic, gnu_stack
+       phz ((w32 ? 32 56) * nph) eh (w32 ? 52 64)
+       ipo (eh + phz) ipz (exe ? (#ip + 1) 0)
+       hdrsz (ld-align 16 (ipo + ipz))
        lay (ldlay objs 0 hdrsz pg 1)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
        sk ((o0 - t1) + (d0 - o1))
@@ -1411,7 +1467,10 @@
        (soff k) (<>dstr k)
        nn #needed
        nrel (ld-nabs objs)
-       ndy (nn + 11)
+       ; ..the constructor and destructor arrays, for the loader to run
+       ia (ld-arrx (ld-extents objs) 1) fa (ld-arrx (ld-extents objs) 2)
+       arrs ((two? ia ? [[25 <ia] [27 (<>ia - <ia)]] ()) + (two? fa ? [[26 <fa] [28 (<>fa - <fa)]] ()))
+       ndy (nn + (exe ? 12 11) + #arrs)
        dy0 (ld-align 16 end)       got0 (dy0 + dynz * ndy)
        ra0 (got0 + wz * ni)        ds0 (ra0 + relz * (nrel + ni))
        nsym (1 + ni + ne)          hs0 (ds0 + symz * nsym)
@@ -1421,8 +1480,8 @@
        (fo a) (a - sk)
        _ (pin plt 'src (string (catall (map (k \ (dm 4) (p0 + 16 * k) (got0 + wz * k)) ^ni))))
        imp ({} @ t (each ^ni (k \ pin t (imps k) (1 + k)), t))
-       relbox {0 () 'dyn 1 'imp imp 'br <dm}
-       cx [glo n0 end dy0 dy0 relbox () (w32 ? (ld-rel32 mach)) (backends target) (ld-extents objs) ()]
+       relbox {0 () 'dyn 1 'imp imp 'br <dm 'got got0}
+       cx [glo n0 end dy0 dy0 relbox (mach = 243) (w32 ? (ld-rel32 mach)) (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text hdrsz objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs >et))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs >eo))
@@ -1435,8 +1494,11 @@
        nr #rels
        dyn (catall (map (d \ catall [(lew <d) (lew <>d)])
                         (map (k \ [1 (soff (1 + k))]) ^nn
-                         + [[14 (soff 0)] [4 hs0] [5 st0] [6 ds0] [10 #<dstr] [11 symz]
-                            [(w32 ? 17 7) ra0] [(w32 ? 18 8) (relz * nr)] [(w32 ? 19 9) relz] [30 8] [0 0]])))
+                         ; ..an exe's debug slot and pie flag, else the soname
+                         + (exe ? [[21 0]] [[14 (soff 0)]])
+                         + [[4 hs0] [5 st0] [6 ds0] [10 #<dstr] [11 symz]
+                            [(w32 ? 17 7) ra0] [(w32 ? 18 8) (relz * nr)] [(w32 ? 19 9) relz] [30 8]]
+                         + arrs + (exe ? [[0x6ffffffb 0x8000000]] ()) + [[0 0]])))
        dsym (catall ([(ld-zeros symz)]
                      + map (k \ symf (soff (1 + nn + k)) 1 2 0 0 0) ^ni
                      + o-mapi (\ k e (symf (soff (1 + nn + ni + k)) (e 1) (e 2)
@@ -1472,13 +1534,19 @@
                     (shf (snm 12) 3 0 0 stro strz 0 0 1 0)
                     (shf (snm 13) 3 0 0 ssto sstz 0 0 1 0)
                     (shf (snm 14) 1 48 0 cmto cmtz 0 0 1 1)])
-       phs [(phf 1 5 0 0 0 t1 t1 pg)
+       ; ..pt_phdr first: bionic's linker will not run an object without one
+       phs ([(phf 6 4 eh eh eh phz phz wz)] + (exe ? [(phf 3 4 ipo ipo ipo ipz ipz 1)] ())
+            + [(phf 1 5 0 0 0 t1 t1 pg)
             (phf 1 4 t1 o0 o0 (o1 - o0) (o1 - o0) pg)
             (phf 1 6 (fo d0) d0 d0 (dend - d0) (bend - d0) pg)
             (phf 2 6 (fo dy0) dy0 dy0 (dynz * ndy) (dynz * ndy) wz)
-            (phf 0x6474e551 6 0 0 0 0 0 16)]
-       hdr (w32 ? (elf32-hdrn 3 0 mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 0 mach [shto 16 14] phs))
-       (hdr . (>en + pad + [dbytes]
+            (phf 0x6474e551 6 0 0 0 0 0 16)])
+       ; a `_start` makes the object runnable too, through the system loader: its entry
+       ent (glo "_start" @ e (two? e ? <e 0))
+       hdr (w32 ? (elf32-hdrn 3 ent mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
+       ; ..the loader's path after the phdrs, then zeros out to the text
+       ipb [((exe ? (chars ip) ()) + ld-zeros (hdrsz - ipo - (exe ? #ip 0)))]
+       (hdr . (ipb + >en + pad + [dbytes]
                + [(ld-zeros (symo - endf)) <st <>st <shstr cmt
                   (ld-zeros (shto - (cmto + cmtz))) sht])))
 

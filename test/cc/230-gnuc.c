@@ -15,7 +15,7 @@
 #endif
 #ifdef __mooncc__
 /* the ones mooncc would change the code by skipping say no, so a header takes its fallback */
-#if __has_attribute(constructor) || __has_attribute(vector_size) || !__has_attribute(used)
+#if __has_attribute(vector_size) || !__has_attribute(used) || !__has_attribute(constructor)
 #error a refused attribute claimed
 #endif
 #endif

@@ -7,6 +7,7 @@
 #include "love.h"
 #include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include "vfs.h"
+#include "quay/quay.h"  // cleat and the cp437 map, for vtfont
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
 #include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
@@ -19,6 +20,7 @@
 #include <spawn.h>      // posix_spawnp: a kernel with no fork
 #include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ TIOCM* struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
+#include <grp.h>        // setgroups (setids)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
 #include <regex.h>      // regcomp regexec (re's engine)
@@ -221,13 +223,15 @@ static int fd_up(int fd) {
  int h = fcntl(fd, F_DUPFD_CLOEXEC, 10);
  return h < 0 ? fd : (close(fd), h); }
 
-// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
+// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe,
+// 6 read and write (a login's terminal)
 static int openfd_mode(char const *path, intptr_t m) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
+           : m == 6 ? O_RDWR
            : O_RDONLY;
  return fd_up(open(path, flags | O_CLOEXEC, m == 3 ? 0600 : 0644)); }
 
@@ -1031,6 +1035,59 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
 
 LvmWord3(posix_lseek)
 
+// (fdpull fd cask at off n): n bytes of the fd from off into the cask at at; (fdpush fd cask
+// at off n) the cask's into the fd. the count moved, short at the file's end. raw fds only:
+// a shared frame between love and a helper, a tmpfs file both hold, moved whole
+love_noinline static word host_fdmove(struct g *g, word *a, bool in) {
+ word c = a[1];
+ struct str *s = cask_str(c);
+ if (!s || !charmp(a[0]) || !charmp(a[2]) || !charmp(a[3]) || !charmp(a[4])) return badarg(g);
+ intptr_t at = getcharm(a[2]), off = getcharm(a[3]), n = getcharm(a[4]);
+ if (at < 0 || off < 0 || n < 0 || (uintptr_t) at > s->len || (uintptr_t) n > s->len - (uintptr_t) at)
+  return badarg(g);
+ int fd = (int) getcharm(a[0]);
+ if (lseek(fd, (off_t) off, SEEK_SET) < 0) return love_err(g, errno);
+ char *p = (char*) s->bytes + at;
+ intptr_t done = 0;
+ while (done < n) {
+  ssize_t r = in ? read(fd, p + done, (size_t) (n - done)) : write(fd, p + done, (size_t) (n - done));
+  if (r < 0 && errno == EINTR) continue;
+  if (r < 0) return love_err(g, errno);
+  if (r == 0) break;
+  done += r; }
+ return putcharm(done); }
+
+static lvm(lvm_fdpull) { Sp[4] = host_fdmove(g, Sp, true); love_musttail return Nextp(1, 4); }
+static lvm(lvm_fdpush) { Sp[4] = host_fdmove(g, Sp, false); love_musttail return Nextp(1, 4); }
+
+// (fdtray fd off n): n 8-byte words of the fd from off, little-endian and signed, read straight
+// into a fresh int tray, short at the file's end: a helper's frame with no cask between
+static lvm(lvm_fdtray) {
+ if (!charmp(Sp[0]) || !charmp(Sp[1]) || !charmp(Sp[2]) || getcharm(Sp[1]) < 0 || getcharm(Sp[2]) < 0
+     || (uintptr_t) getcharm(Sp[2]) >= words_max / 8) {
+  Sp[2] = badarg(g); love_musttail return Nextp(1, 2); }
+ uintptr_t const n = (uintptr_t) getcharm(Sp[2]), tw = b2w(tray_bytes(love_Z, 1, n));
+ int const wide = love_T[love_Z] == 8;   // ..else a 4-byte word: read past the tray, then narrowed
+ Have(tw + (wide ? 0 : b2w(8 * n)));
+ int const fd = (int) getcharm(Sp[0]);
+ if (lseek(fd, (off_t) getcharm(Sp[1]), SEEK_SET) < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+ struct tray *v = ini_tray((struct tray*) Hp, love_Z, 1);
+ char *p = wide ? (char*) tray_data(v) : (char*) (Hp + tw);
+ uintptr_t done = 0;
+ while (done < 8 * n) {
+  ssize_t k = read(fd, p + done, 8 * n - done);
+  if (k < 0 && errno == EINTR) continue;
+  if (k < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+  if (k == 0) break;
+  done += (uintptr_t) k; }
+ uintptr_t const m = done / 8;
+ for (uintptr_t i = 0; !wide && i < m; i++) {
+  int64_t x; memcpy(&x, p + 8 * i, 8); ((intptr_t*) tray_data(v))[i] = (intptr_t) x; }
+ v->shape[0] = m;
+ Hp += b2w(tray_bytes(love_Z, 1, m));
+ Sp[2] = word(v);
+ love_musttail return Nextp(1, 2); }
+
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
@@ -1077,6 +1134,9 @@ LvDef("birth", posix_birth, 2, "posix");
 LvDef("readdir", posix_readdir, 1, "posix");
 LvDef("unlink", posix_unlink, 1, "posix");
 LvDef("lseek", posix_lseek, 3, "posix");
+LvDef("fdpull", fdpull, 5, "posix");
+LvDef("fdpush", fdpush, 5, "posix");
+LvDef("fdtray", fdtray, 3, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);
@@ -1226,6 +1286,55 @@ static love_noinline word host_posix_setsid(struct g *g, word cw) {
  return putcharm(s); }
 LvmWord1(posix_setsid)
 
+// (setids uid gid groups): a login's drop, groups then gid then uid, and the drop checked:
+// the ids read back, and a uid past 0 cannot take 0 again. groups a list of up to 256 gids
+static love_noinline word host_posix_setids(struct g *g, word uw, word gw, word lw) {
+ gid_t gs[256];
+ size_t n = 0;
+ if (!charmp(uw) || !charmp(gw) || getcharm(uw) < 0 || getcharm(gw) < 0) return badarg(g);
+ for (word p = lw; chainp(p); p = B(p)) {
+  if (n == 256 || !charmp(A(p)) || getcharm(A(p)) < 0) return badarg(g);
+  gs[n++] = (gid_t) getcharm(A(p)); }
+ uid_t u = (uid_t) getcharm(uw);
+ gid_t d = (gid_t) getcharm(gw);
+ if (setgroups(n, gs) || setgid(d) || setuid(u)) return love_err(g, errno);
+ if (getgid() != d || getegid() != d || getuid() != u || geteuid() != u) return love_err(g, EPERM);
+ if (u && !setuid(0)) return love_err(g, EPERM);
+ return ZeroPoint; }
+LvmWord3(posix_setids)
+
+// (vtfont fd): fd's linux console draws quay's cleat, its unicode map cp437's page and fold,
+// that console alone. the kernel's structs, as linux/kd.h lays them
+struct lv_fontop { unsigned op, flags, width, height, charcount; unsigned char *data; };
+struct lv_unipair { unsigned short unicode, fontpos; };
+struct lv_unimapdesc { unsigned short entry_ct; struct lv_unipair *entries; };
+struct lv_unimapinit { unsigned short size, step, level; };
+static love_noinline word host_posix_vtfont(struct g *g, word fw) {
+#if defined(LvHaveMount)
+ unsigned char rows[256 * 32] = {0};          // a glyph's rows at a stride of 32
+ struct lv_unipair map[640];
+ unsigned short n = 0;
+ if (!charmp(fw) || getcharm(fw) < 0) return badarg(g);
+ for (int c = 0; c < 256; c++) {
+  memcpy(rows + 32 * c, cleat_8x16[c], 16);
+  map[n++] = (struct lv_unipair) { (unsigned short) cb_unfold((uint8_t) c), (unsigned short) c }; }
+ for (uint32_t cp = 0x7f; cp < 0x10000 && n < 639; cp++) {
+  int k = cb_437x(cp);
+  if (k >= 0) map[n++] = (struct lv_unipair) { (unsigned short) cp, (unsigned short) k }; }
+ map[n++] = (struct lv_unipair) { 0xfffd, 0xfe };   // the rest wear the ■
+ struct lv_fontop op = { 0, 0, 8, 16, 256, rows };   // KD_FONT_OP_SET
+ struct lv_unimapinit ui = { 0, 0, 0 };
+ struct lv_unimapdesc ud = { n, map };
+ int fd = (int) getcharm(fw);
+ if (ioctl(fd, 0x4B72, &op) || ioctl(fd, 0x4B68, &ui) || ioctl(fd, 0x4B67, &ud)) return love_err(g, errno);
+ return ZeroPoint;
+#else
+ (void) fw;
+ return love_err(g, ENOSYS);
+#endif
+}
+LvmWord1(posix_vtfont)
+
 // (fsync path data): fdatasync when data is truthy
 love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  char const *p = str_c(pw);
@@ -1256,6 +1365,8 @@ LvDef("prio", posix_prio, 2, "posix");
 LvDef("setprio", posix_setprio, 3, "posix");
 LvDef("truncate", posix_truncate, 3, "posix");
 LvDef("setsid", posix_setsid, 1, "posix");
+LvDef("setids", posix_setids, 3, "posix");
+LvDef("vtfont", posix_vtfont, 1, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
 LvDef("hardlink", posix_hardlink, 2, NULL);

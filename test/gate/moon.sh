@@ -293,6 +293,12 @@ moonrun -c "$ho/.sxw.c" -o "$ho/.sxw.o" || fail "mooncc: a narrow int's arithmet
 printf 'int g(long a){ return (int)a; }\n' > "$ho/.sxn.c"
 moonrun -c "$ho/.sxn.c" -o "$ho/.sxn.o" || fail "mooncc: a long narrowed to int"
 [ "$(objdump -d "$ho/.sxn.o" | grep -c movslq)" = 1 ] || fail "a long narrowed to int lost its sign extension"
+# a loop head is 16-aligned: every backward jump's target, here past a 3-byte fn and a loop's own prologue
+printf 'int z(void){ return 0; }\nlong f(long *p, long n){ long s = 0; for (long i = 0; i < n; i++) s += p[i]; return s; }\nvoid g(long *p, long n){ for (long i = 0; i < n; i++) for (long j = 0; j < i; j++) p[j] += i; }\n' > "$ho/.lal.c"
+moonrun -c "$ho/.lal.c" -o "$ho/.lal.o" || fail "mooncc: the loop-head law's loops"
+lal=$(objdump -d --no-show-raw-insn "$ho/.lal.o" | awk '$2 ~ /^j/ && $3 ~ /^[0-9a-f]+$/ { a = strtonum("0x" substr($1, 1, length($1) - 1)); t = strtonum("0x" $3)
+        if (t < a) { n++; if (t % 16) bad++ } } END { print n + 0, bad + 0 }')
+[ "$lal" = "3 0" ] || fail "a loop head is not 16-aligned (backward jumps, misaligned: $lal)"
 # a file-scope asm's own label is a local symbol, as gas lays it (modpost reads the kernel's
 # __export_symbol_ labels); its numbered labels are not
 printf 'int x;\nasm(".section \\".export_symbol\\",\\"a\\"\\n__export_symbol_x:\\n.asciz \\"\\"\\n.balign 8\\n.quad x\\n1: .quad 1b\\n.previous");\n' > "$ho/.esy.c"
@@ -819,7 +825,7 @@ moonrun -std=c23 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "-std=c2
 printf '#include <stdbool.h>\nbool f(void) { return true; }\n' > "$ho/.bool.c"
 moonrun -std=c11 -c -o /dev/null "$ho/.bool.c" > /dev/null 2>&1 || fail "<stdbool.h> did not lay bool under -std=c11"
 # an attribute whose skip changes the code refuses by name
-for a in constructor 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
+for a in 'vector_size(16)' 'mode(DI)' naked 'ifunc("r")'; do
   printf 'int f(void) __attribute__((%s));\n' "$a" > "$ho/.attr.c"
   moonrun -c -o /dev/null "$ho/.attr.c" 2>&1 | grep -q "is not carried out" || fail "__attribute__(($a)) was skipped"
 done
@@ -1817,6 +1823,187 @@ moonrun -shared -o "$ho/libmso.so" "$ho/.so.c" > /dev/null 2>&1 || fail "mooncc 
 $cc_g -o "$ho/.soexe" "$ho/.somain.c" -L"$ho" -lmso -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
   && "$ho/.soexe"; a=$?
 [ $a -eq 42 ] || fail "a -shared object under ld.so: plt import, abs64 import, relative (got $a want 42)"
+# data imports, libc's environ and the exe's knob, reached through their got slots: gcc's own
+# -shared build of the same file is the oracle
+cat > "$ho/.sod.c" <<'EOF'
+extern char **environ;
+extern int knob;
+static char ***pe = &environ;
+int nenv(void) { int n = 0; while (environ[n]) n++; return n; }
+int turn(void) { knob += 5; return knob; }
+int same(void) { return *pe == environ; }
+EOF
+cat > "$ho/.sodmain.c" <<'EOF'
+int knob = 24;
+int nenv(void), turn(void), same(void);
+int main() { return nenv() + turn() + 10 * same(); }
+EOF
+moonrun -shared -o "$ho/libmsod.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -shared: data imports"
+$cc_g -shared -fpic -o "$ho/libgsod.so" "$ho/.sod.c"
+for l in gsod msod; do
+  $cc_g -o "$ho/.sod$l" "$ho/.sodmain.c" -L"$ho" -l$l -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 "$ho/.sod$l"; a=$?
+  [ $a -eq 42 ] || fail "lib$l.so's data imports under ld.so (got $a want 42)"
+done
+[ "$(readelf -rW "$ho/libmsod.so" | awk '$3 == "R_X86_64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "a -shared data import has no glob_dat slot"
+# ..a64's adrp and add of one: the add a load from the slot
+moonrun -t a64 -shared -o "$ho/libmsod64.so" "$ho/.sod.c" > /dev/null 2>&1 || fail "mooncc -t a64 -shared: data imports"
+[ "$(readelf -rW "$ho/libmsod64.so" | awk '$3 == "R_AARCH64_GLOB_DAT" {print $5}' | sort | tr '\n' ' ')" = "environ knob " ] \
+  || fail "an a64 -shared data import has no glob_dat slot"
+if command -v aarch64-linux-gnu-gcc > /dev/null && command -v qemu-aarch64 > /dev/null && [ -d /usr/aarch64-linux-gnu/lib ]; then
+  cp "$ho/libmsod64.so" "$ho/libmsoda.so"
+  aarch64-linux-gnu-gcc -o "$ho/.soda" "$ho/.sodmain.c" -L"$ho" -lmsoda -rdynamic -Wl,-rpath,"$PWD/$ho" > /dev/null 2>&1 \
+    && env -i A=1 B=2 C=3 qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.soda"; a=$?
+  [ $a -eq 42 ] || fail "an a64 -shared object's data imports under ld.so (got $a want 42)"
+fi
+
+# -- -shared with a _start: run by the system loader itself, its libc named exactly
+cat > "$ho/.sorun.c" <<'EOF'
+#include <dlfcn.h>
+#include <stdlib.h>
+int rmain(int argc, char **argv) {
+  unsigned long (*len)(const char *) = (unsigned long (*)(const char *)) dlsym(RTLD_DEFAULT, "strlen");
+  return len ? argc * 20 + (int) len(argv[1]) : 1; }
+__asm__(".globl _start\n_start:\n xor %ebp,%ebp\n mov (%rsp),%rdi\n lea 8(%rsp),%rsi\n and $-16,%rsp\n call rmain\n mov %eax,%edi\n call exit\n hlt\n");
+EOF
+moonrun -shared -o "$ho/.sorun" "$ho/.sorun.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -shared -l:libc.so.6"
+/lib64/ld-linux-x86-64.so.2 "$ho/.sorun" ab; a=$?
+[ $a -eq 42 ] || fail "a -shared object with a _start, run by ld.so: entry, -l:FILE, dlsym (got $a want 42)"
+
+# -- -dynamic-linker: a pie the loader runs, libc's own entry: argv, environ, stdio flushed at exit
+cat > "$ho/.dyn.c" <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int main(int argc, char **argv) {
+  char const *e = getenv("MOONDYN");
+  printf("dyn %d %s %s", argc, argv[argc - 1], e ? e : "-");
+  return argc * 10 + (int) strlen(argv[1]); }
+EOF
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.dyn" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker"
+o=$(MOONDYN=env "$ho/.dyn" ab cd); a=$?
+[ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "a -dynamic-linker exe under ld.so: __libc_start_main, argv, environ, exit's flush (got $a '$o')"
+# ..a64, under qemu-user over a cross glibc where the box has both
+if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 ]; then
+  moonrun -t a64 -dynamic-linker /lib/ld-linux-aarch64.so.1 -o "$ho/.dyn64" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t a64 -dynamic-linker"
+  o=$(MOONDYN=env qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.dyn64" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "an a64 -dynamic-linker exe (got $a '$o')"
+else
+  gate_partly "  (-dynamic-linker on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
+fi
+# ..musl's loader is its libc, and its start takes glibc's leading arguments
+if [ -e /lib/ld-musl-x86_64.so.1 ]; then
+  moonrun -dynamic-linker /lib/ld-musl-x86_64.so.1 -o "$ho/.dynmu" "$ho/.dyn.c" -l:libc.so > /dev/null 2>&1 || fail "mooncc -dynamic-linker musl"
+  o=$(MOONDYN=env "$ho/.dynmu" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "a -dynamic-linker exe under musl (got $a '$o')"
+else
+  gate_partly "  (-dynamic-linker under musl skipped: no /lib/ld-musl-x86_64.so.1)"
+fi
+# ..rv64 likewise, and a -shared object it dlopens: an import called, a table slid, the exe's hook
+cat > "$ho/.dynso.c" <<'EOF'
+#include <string.h>
+int hook(int);
+static int twice(int x) { return x * 2; }
+static int (*tab[2])(int) = {twice, hook};
+int via(char const *s) { return tab[0](tab[1]((int) strlen(s))); }
+EOF
+cat > "$ho/.dynmain.c" <<'EOF'
+#include <dlfcn.h>
+int hook(int x) { return x + 1; }
+int main(int argc, char **argv) {
+  void *h = dlopen(argv[1], RTLD_NOW);
+  int (*via)(char const *) = h ? (int (*)(char const *)) dlsym(h, "via") : 0;
+  return via ? via("abcdefghijklmnopqrst") : 1; }
+EOF
+if command -v qemu-riscv64 > /dev/null && [ -e /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+  rl=/lib/ld-linux-riscv64-lp64d.so.1
+  moonrun -t rv64 -dynamic-linker $rl -o "$ho/.dynrv" "$ho/.dyn.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker"
+  o=$(MOONDYN=env qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.dynrv" ab cd); a=$?
+  [ $a -eq 32 ] && [ "$o" = "dyn 3 cd env" ] || fail "an rv64 -dynamic-linker exe (got $a '$o')"
+  moonrun -t rv64 -shared -o "$ho/libdynrv.so" "$ho/.dynso.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -shared"
+  moonrun -t rv64 -dynamic-linker $rl -o "$ho/.dynrvm" "$ho/.dynmain.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker dlopen"
+  qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.dynrvm" "$PWD/$ho/libdynrv.so"; a=$?
+  [ $a -eq 42 ] || fail "an rv64 -shared object dlopened: plt import, abs64 import, relative (got $a want 42)"
+  printf '#include <string.h>\nint main(void){unsigned long (*q)(char const *) = strlen; return (int) q("ab");}\n' > "$ho/.dynaddr.c"
+  moonrun -t rv64 -dynamic-linker $rl -o /dev/null "$ho/.dynaddr.c" -l:libc.so.6 2>&1 | grep -q "link-import-addr" || fail "an rv64 import's address was not refused"
+else
+  gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
+fi
+moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+
+# -- constructors and destructors: priorities first in order, the plain last; destructors
+# the other way about, after atexit's; static, -pie, a gcc object, every libc, a dlopened object
+cat > "$ho/.ctor.c" <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+static char seen[8];
+static int n;
+__attribute__((constructor(200))) static void c200(void) { seen[n++] = 'b'; }
+__attribute__((constructor)) static void cplain(void) { seen[n++] = 'c'; }
+__attribute__((constructor(101))) static void c101(void) { seen[n++] = 'a'; }
+__attribute__((destructor(101))) static void d101(void) { printf("z"); }
+__attribute__((destructor)) static void dplain(void) { printf("x"); }
+__attribute__((destructor(200))) static void d200(void) { printf("y"); }
+static void ae(void) { printf("w"); }
+int main(void) { atexit(ae); printf("%s ", seen); return 0; }
+EOF
+ctor() { o=$("$@"); [ "$o" = "abc wxyz" ] || fail "constructors and destructors, $ctw (got '$o')"; }
+moonrun -o "$ho/.ctor" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc constructor"
+ctw=static ctor "$ho/.ctor"
+moonrun -pie -o "$ho/.ctorp" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -pie constructor"
+ctw=-pie ctor "$ho/.ctorp"
+$cc_g -O1 -c -o "$ho/.ctorg.o" "$ho/.ctor.c"
+moonrun -o "$ho/.ctorg" "$ho/.ctorg.o" > /dev/null 2>&1 || fail "mooncc linking gcc's init_array"
+ctw="gcc's object" ctor "$ho/.ctorg"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.ctord" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker constructor"
+ctw=glibc ctor "$ho/.ctord"
+if [ -e /lib/ld-musl-x86_64.so.1 ]; then
+  moonrun -dynamic-linker /lib/ld-musl-x86_64.so.1 -o "$ho/.ctorm" "$ho/.ctor.c" -l:libc.so > /dev/null 2>&1 || fail "mooncc musl constructor"
+  ctw=musl ctor "$ho/.ctorm"
+else
+  gate_partly "  (constructors under musl skipped: no /lib/ld-musl-x86_64.so.1)"
+fi
+if command -v qemu-aarch64 > /dev/null && [ -e /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 ]; then
+  moonrun -t a64 -o "$ho/.ctora" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -t a64 constructor"
+  ctw="a64 static" ctor qemu-aarch64 "$ho/.ctora"
+  moonrun -t a64 -dynamic-linker /lib/ld-linux-aarch64.so.1 -o "$ho/.ctorad" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t a64 -dynamic-linker constructor"
+  ctw="a64 glibc" ctor qemu-aarch64 -L /usr/aarch64-linux-gnu "$ho/.ctorad"
+else
+  gate_partly "  (constructors on a64 skipped: no qemu-aarch64 or /usr/aarch64-linux-gnu)"
+fi
+if command -v qemu-riscv64 > /dev/null && [ -e /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 ]; then
+  moonrun -t rv64 -o "$ho/.ctorr" "$ho/.ctor.c" > /dev/null 2>&1 || fail "mooncc -t rv64 constructor"
+  ctw="rv64 static" ctor qemu-riscv64 "$ho/.ctorr"
+  moonrun -t rv64 -dynamic-linker /lib/ld-linux-riscv64-lp64d.so.1 -o "$ho/.ctorrd" "$ho/.ctor.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -t rv64 -dynamic-linker constructor"
+  ctw="rv64 glibc" ctor qemu-riscv64 -L /usr/riscv64-linux-gnu "$ho/.ctorrd"
+else
+  gate_partly "  (constructors on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
+fi
+# ..a -shared object's: at dlopen and at dlclose
+cat > "$ho/.ctorso.c" <<'EOF'
+#include <stdio.h>
+__attribute__((constructor)) static void up(void) { printf("up "); }
+__attribute__((destructor)) static void down(void) { printf("down "); }
+int val(void) { return 42; }
+EOF
+cat > "$ho/.ctorsom.c" <<'EOF'
+#include <dlfcn.h>
+#include <stdio.h>
+int main(int argc, char **argv) {
+  void *h = dlopen(argv[1], RTLD_NOW);
+  int (*v)(void) = h ? (int (*)(void)) dlsym(h, "val") : 0;
+  printf("%d ", v ? v() : -1);
+  if (h) dlclose(h);
+  printf("closed");
+  return 0; }
+EOF
+moonrun -shared -o "$ho/libctor.so" "$ho/.ctorso.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -shared constructor"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o "$ho/.ctorsom" "$ho/.ctorsom.c" -l:libc.so.6 > /dev/null 2>&1 || fail "mooncc -dynamic-linker dlopen"
+o=$("$ho/.ctorsom" "$PWD/$ho/libctor.so")
+[ "$o" = "up 42 down closed" ] || fail "a -shared object's constructor at dlopen, destructor at dlclose (got '$o')"
+printf '__attribute__((constructor)) static void f(void) {}\nint main(void) { return 0; }\n' > "$ho/.ctorw.c"
+moonrun -t wasm -c -o /dev/null "$ho/.ctorw.c" 2>&1 | grep -q "constructor" || fail "a constructor on wasm was not refused"
 
 # -- weak overriding
 cat > "$ho/.wklib.c" <<'EOF'

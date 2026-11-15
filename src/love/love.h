@@ -283,6 +283,7 @@ enum hook {
  hook_cats,      // cats over a list no fast lane takes (prel's foldr of +)
  hook_obin,      // an object tray's cells no C lane takes: a tray, a coin, a twin (prel's)
  hook_opfixp,    // the factor pass over a macro's (expansion . operands), the operands kept whole
+ hook_opc,       // the reader's operator bytes: a 256-byte text, nonzero where the operator table's names spell
  hook_inport,    // not lisp: the buffered stdin port, once taken; rides no image
  hook_n };
 
@@ -294,7 +295,7 @@ struct g {
  uint16_t yield_ctr,   // cycles since the last yield
           sweep_ctr;   // fairness yields since the last parked sweep
  int next_wait_fd,     // -1 none
-     next_wait_events; // wait_in, or wait_out (connect's handshake)
+     next_wait_events; // wait_in, or wait_out (connect's handshake); negated, the fd or the clock wakes it (heed)
  // the one scratch word: a port refill, a write's count, a Have's ask. set it as the last
  // act before the return that hands it back
  word b;
@@ -521,6 +522,11 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
          inflate_shared(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, void*);
 uintptr_t inflate_tabs_size(void);
 int inflate_tabs_load(unsigned char const*, uintptr_t, void*), inflate_shared_is(unsigned char const*, uintptr_t);
+uintptr_t zstde_dict(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t const*, uintptr_t, int, unsigned char*, uintptr_t),
+          zstde_with(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, int, unsigned char*, uintptr_t),
+          zstde_cap(uintptr_t), zstd_dict_size(void);
+int zstd_dict_load(void*, unsigned char const*, uintptr_t);
+intptr_t zstd_dict_into(void const*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
@@ -758,7 +764,7 @@ lvm_t lvm_kcall,
  lvm_argtwocond,                                  // load + predicate + cond
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_twirl, lvm_wait,
  lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_deadlock,
- lvm_await,
+ lvm_await, lvm_heed,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound, lvm_sounds,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,

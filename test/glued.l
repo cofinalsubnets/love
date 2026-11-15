@@ -1,24 +1,21 @@
-; multi-char glued sigils, digit-led ones (0? 1? 2?) too. the factor walk runs right
-; to left, longest first. the reader half is `sound`, the factor half opfix
+; multi-char glued sigils. the factor walk runs right to left, longest first. the reader
+; half is `sound`, the factor half opfix
 (: (rdr s) (sound s @ (r . _) r r r))
 
 (test
- ; --- the reader: the run is cut one past the token's last sigil, digits and all
- ('(mono (2?<> x)) = (rdr "2?<>x"))
- ('(mono (1? x)) = (rdr "1?x"))
- ('(mono (2?<> (list 1 2))) = (rdr "2?<>[1 2]"))     ; and it fuses with the next datum
- ('(mono (2? -5)) = (rdr "2?-5"))                    ; a `-` before a digit still sheds
- ('2?<> = (rdr "2?<>"))                              ; nothing glued after it: the plain symbol
- ; the numeral lane is asked first, so a number is never a run
+ ; --- the reader: a run glued to a datum wraps it, and fuses with the next datum
+ ('(mono (<> x)) = (rdr "<>x"))
+ ('(mono (<> (list 1 2))) = (rdr "<>[1 2]"))
+ ('(mono (! -5)) = (rdr "!-5"))                      ; a `-` before a digit sheds as its sign
+ ('<> = (rdr "<>"))                                  ; nothing glued after it: the plain symbol
+ ; a token is a numeral or a name to its end: neither a digit nor a name lead cuts at a sigil
  (1.5 = (rdr "1.5")) (0.5 = (rdr "0.5")) (0.0015 = (rdr "1.5e-3")) (31 = (rdr "0x1f"))
- ; a name-led token keeps its sigils
- ('a<>b = (rdr "a<>b"))
+ ('a<>b = (rdr "a<>b")) ('2?<>x = (rdr "2?<>x"))
 
  ; --- the factor pass, and the value
- ('(two? (cap (cup x))) = unglue (opfix '2?<>x))
- ('(atom? (cup x)) = unglue (opfix '1?>x))
- ('(two? -5) = unglue (opfix '2?-5))
- (1 = 2?[7 8]) (0 = 2?5) (0 = 2?<>[[1 2] 9]) (1 = 1?<>[[1 2] 9]) (1 = 0?[]) (0 = 0?[7]))
+ ('(cap (cup x)) = unglue (opfix '<>x))
+ ('(nil? (cup x)) = unglue (opfix '!>x))
+ (2 = <>[1 2 3]) (1 = !>[7]) (0 = !>[7 8]))
 
 ; --- right to left: two rows overlapping mid-run, the walk takes >| then <
 (test
@@ -30,11 +27,7 @@
  (: w1 (grip 0 '|< 'tally) w2 (grip 0 '&| 'net)
     tree (unglue (opfix '&|<x))
     (grip 0 '|< w1, grip 0 '&| w2,
-     tree = '(net (cap x))))
- ; which keeps `grip 0` composable: coining ?< must not silently unfactor 2?<x
- ('(two? (cap x)) = unglue (opfix '2?<x))
- (: w (grip 0 '?< 'tally) tree (unglue (opfix '2?<x))
-    (grip 0 '?< w, tree = '(two? (cap x)))))        ; ?< is preferred and cannot complete, so it yields
+     tree = '(net (cap x)))))
 
 ; --- the shadow law: a glued row factors to a value, so `<x` is cap wherever it is
 ; written and a binding of `cap` is just a binding; a nom row resolves at the use site ---
@@ -42,7 +35,7 @@
  (1 = (: cap 5 ((v \ <v) '(1 2 3))))                ; <v stays cap
  (5 = (: cap 5 cap))                                ; ..and the binding still stands
  (6 = (: net 'not-a-fn ((l \ +l) '(1 2 3))))         ; a love-closure row is reached the same way
- (1 = (: two? 0 ((l \ 2?l) '(1))))                   ; ..and one that is another nif's alias
+ (1 = (: nil? 0 ((l \ !l) ())))                      ; ..and one that is a nif's
  (2 = ((l \ (: cap <l cup >l (cap + tally cup))) '(1 2)))) ; the two names bound and the sigils used, one form
 
 ; --- opnom / unglue: the words back from value heads, for readers of post-opfix source ---
