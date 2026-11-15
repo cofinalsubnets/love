@@ -419,8 +419,9 @@
     (ag '(: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))
                (ck t) (? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0)
                (ck (mk 8))) 255) ; depth 8 = 2^8-1 = 255 nodes
-    ; chain-lane soundness: a cap feeding arithmetic is rejected, stays interpreted
-    (agd '(: (g t) (+ (cap t) 0) (g (. 7 8)))) ; not rewritten (rejected) -> == interp
+    ; chain-lane soundness: a cap feeding arithmetic reads a fixnum car, and any other car deopts
+    (ag '(: (g t) (+ (cap t) 0) (g (. 7 8))) 7)
+    (agt '(: (g t) (+ (cap t) 0) (g (. 2.5 8))))                ; rewritten, == interp
     ; partial lift: the read-only `scan` hoists to a top-level sibling threading (n h); tested via
     ; base-ev, since plift is not on the autogroup chain
     (: rpl '(: (hash-run n)
