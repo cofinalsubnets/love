@@ -23,6 +23,16 @@ UF2 bootloader's softdevice, flattened and packed by src/tools/uf2.l (family
 `make flash` copies firm.uf2 onto the bootloader's drive (double tap reset); gate
 test_nrf52840 builds it and verifies the boot surface. qemu has no nRF52 machine.
 
+## microbit/
+
+BBC micro:bit v2 (nRF52833, Cortex-M4F @ 64 MHz, 128 KB SRAM -- firmware only, no
+love). The battery (../battery.h, nucleo446's and nrf52840's too) through `mooncc -t
+thumb2sp`, linked at flash 0: no bootloader on the target, the DAPLink beside it writes
+flash. UART0 console on P0.06/P1.08, the DAPLink's VCP; the matrix's centre LED blinks.
+`make flash` copies firm.hex onto the DAPLink's drive; test_microbit builds it and
+verifies the boot surface, test_microbit_board flashes it over the DAPLink's CMSIS-DAP
+on a host with microbit-daplink and reads the battery.
+
 ## rp2040/
 
 Raspberry Pi Pico (RP2040, Cortex-M0+ @ 125 MHz, 264 KB SRAM -- firmware
