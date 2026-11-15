@@ -48,3 +48,12 @@ this ISA actually runs. arm-none-eabi-ld still binds it (thumb relocations
 are not in src/love/holo/link.l); `make bin` writes the raw flash image, which
 src/tools/uf2.l packs as a UF2 (family 0xE48BFF56).
 
+
+## esp32c6/
+
+Espressif ESP32-C6 (RV32IMAC @ 160 MHz, 512 KB HP SRAM -- firmware only, no love). The
+battery through `mooncc -t rv32`, soft float, compiled and linked by mooncc alone at
+0x40800000 with no crt0: src/tools/esprom.l lays the image through the ROM loader on the
+chip's own USB-Serial-JTAG and jumps to `_start`, and the battery answers on endpoint 1.
+RAM only, the flash never written. test_esp32c6 builds it and verifies where it loads,
+test_esp32c6_board runs it on a host with esp32c6-usb and resets the chip into its app.
