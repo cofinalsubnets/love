@@ -21,9 +21,10 @@ case $cap in
     ocd='-f interface/stlink.cfg -c "transport select hla_swd" -f target/stm32f4x.cfg -c "reset_config srst_only srst_nogate connect_assert_srst"'
     at=0x08000000 con='/dev/serial/by-id/*STLink*' ;;
   microbit-daplink)
-    # the daplink is the probe and the vcp; its serial, out of the host's tty fact, picks it
+    # the daplink is the probe and the vcp; its serial, out of the host's tty fact, picks it,
+    # over usb bulk: the hid backend overflows on a serial this long
     pre='sn=${BEE_TTY##*CMSIS-DAP_} sn=${sn%-if*}'
-    ocd='-f interface/cmsis-dap.cfg -c "adapter serial $sn" -f target/nrf52.cfg'
+    ocd='-f interface/cmsis-dap.cfg -c "cmsis_dap_backend usb_bulk" -c "adapter serial $sn" -f target/nrf52.cfg'
     at=0x00000000 con='/dev/serial/by-id/*micro:bit*-if01*' ;;
   teensy41-usb) ;;
   *) echo "FAIL $t: no board known for $cap" >&2; exit 1 ;;
