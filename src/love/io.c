@@ -10,8 +10,7 @@ static bool
  bio_wpending(struct bio *b),
  is_dec_int(char const *s, uintptr_t n),
  is_hex_int(char const *s, uintptr_t n),
- is_oct_int(char const *s, uintptr_t n),
- lam_head(struct g *g, word a);
+ is_oct_int(char const *s, uintptr_t n);
 static intptr_t
  ci_readn(struct g *g, unsigned char *dst, uintptr_t n);
 static struct g
@@ -65,10 +64,10 @@ bool bio_rpending(struct bio *b) {
 static love_inline bool bio_wpending(struct bio *b) {
  return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
 
-// the scheduler's half of the park law. only these two ops park with a port at Sp[0], so
+// the scheduler's half of the park law. only these ops park with a port at Sp[0], so
 // the ap guard is what makes reading x legal
 bool wait_buffered(struct g *g, lvm_t *ap, word x, int fd) {
- return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
+ return (ap == lvm_fgetc || ap == lvm_await || ap == lvm_heed) && iop(x)
      && io_fd((struct io*) x) == fd
      && bio_rpending(rbio_of(g, (struct io*) x)); }
 
@@ -514,12 +513,6 @@ lvm(lvm_nifnom) {
  memcpy(txt(s), nm, n);
  love_musttail return Answer(word(s)); }
 
-static love_inline bool lam_head(struct g *g, word a) {        // is a the symbol \ ?
- struct str *nm;
- return (nm = nom_str(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
-
-bool lam_isp(struct g *g, word x) {         // (\ b.. body): >=2 operands
- return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
 // (fgetc port): a non-port reads EOF, so a misused loop ends. a charm is a raw fd, no pushback
 lvm(lvm_fgetc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);

@@ -47,8 +47,6 @@ unsigned char const *vfs_bake_bytes(struct vfs *v, int i);
 unsigned char const *vfs_blob(struct vfs *v, int i, uintptr_t *len);
 uintptr_t vfs_size(struct vfs const *v, int i);
 
-// a path against the cwd into out (cap 256) -> its canonical length, -1 too long
-intptr_t vfs_canon(struct vfs const *v, char const *p, uintptr_t pn, char *out);
 // links followed at every component, the last only when leaf -> the canonical length,
 // -ENAMETOOLONG or -ELOOP
 intptr_t vfs_walk(struct vfs const *v, char const *p, uintptr_t pn, char *out, bool leaf);

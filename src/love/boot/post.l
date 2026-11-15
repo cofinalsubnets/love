@@ -1977,7 +1977,7 @@
    (edkey p) (see p @ c
                 (? (c = -1) -7
                    (c != 27) c
-                   !(rest 1, cue? p) 27
+                   !(heed p 25) 27   ; a sequence's next byte inside 25 ms, else escape alone
                    (see p @ c2
                       (? (c2 = 91) (edcsi p)
                          (c2 = 79) (peep arrow (see p) 0)    ; SS3: application cursor mode's arrows, home, end

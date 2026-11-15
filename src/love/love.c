@@ -442,6 +442,20 @@ static lvm(lvm_key) {
           || ready((int) io_fd(i), wait_in)) ? putcharm(1) : zero;
  Ip += 1;
  love_musttail return Continue(); }
+// (heed p ms): cue? that waits: 1 once p has input, 0 when ms pass first. the task parks on
+// p's fd and the deadline both, so a peer runs meanwhile; a re-run finds the deadline negated
+// in the ms slot. a non-port asks stdin, a negative ms answers at once
+lvm(lvm_heed) {
+ Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &love_stdin);
+ struct io *i = (struct io*) Sp[0];
+ intptr_t fd = io_fd(i), ms = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
+ if (getcharm(i->ungetc_buf) != EOF || io_pending(g, i) || ready((int) fd, wait_in))
+  love_musttail return Answerp(1, putcharm(1));
+ uintptr_t now = love_clock(), due = ms < 0 ? (uintptr_t) -ms : now + (uintptr_t) ms;
+ if (due <= now) love_musttail return Answerp(1, zero);
+ Sp[1] = putcharm(-(intptr_t) due);
+ g->next_wait_fd = (int) fd, g->next_wait_events = -wait_in, g->next_wake_at = due;
+ love_musttail return Ap(lvm_yield_sw, g); }
 
 // ===== str =====
 struct g *str0(struct g *g, uintptr_t len) {
@@ -608,16 +622,6 @@ static lvm(lvm_casknew) {
  cask(k)->str = s;
  tagthread(k, Width(struct cask));
  love_musttail return Answer(word(k)); }
-
-union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear) {
- uintptr_t sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
- struct g *g = *gp = have(*gp, sreq + breq);
- if (!ok(g)) return NULL;
- struct str *s = ini_str(bump(g, sreq), n);
- memset(s->bytes, 0, clear);
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- return tagthread(k, Width(struct cask)); }
 
 union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
  uintptr_t sreq = str_width(n), breq = Width(struct state) + Width(struct tag);

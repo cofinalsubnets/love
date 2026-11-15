@@ -280,7 +280,7 @@
         'gm "block" 'cw 8 'ch 16 'deep (cite 'kore 'im-deep 0) 'cache {}
         'cheap 65536 'cap 33554432 'budget 1000 'owe 0 'shown "")
  ; a key within k ms: 1, else ()
- (mc-rest k) (? (k < 1) () (cue? 0) 1 (rest 10, mc-rest (k - 10)))
+ (mc-rest k) (k < 1 ? () (heed 0 k ? 1 ()))
 ; an owed thumbnail waits for the keys to rest, then decodes one a beat
  (mc-loop s)
   (: g (ttysize 7 19)

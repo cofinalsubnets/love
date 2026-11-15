@@ -165,7 +165,8 @@
       (nif_subidx        "subidx"        3 lvm_subidx)
       (nif_cats          "cats"          1 lvm_cats)
       (nif_bitlen        "bitlen"        1 lvm_bitlen)
-      (nif_arena         "arena"         1 lvm_arena))
+      (nif_arena         "arena"         1 lvm_arena)
+      (nif_heed          "heed"          2 lvm_heed))
 
    ; --- the instructions: jumped to, not applied, so the C symbol is the only spelling
    nif-insts
