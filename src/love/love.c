@@ -623,16 +623,6 @@ static lvm(lvm_casknew) {
  tagthread(k, Width(struct cask));
  love_musttail return Answer(word(k)); }
 
-union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear) {
- uintptr_t sreq = str_width(n), breq = Width(struct cask) + Width(struct tag);
- struct g *g = *gp = have(*gp, sreq + breq);
- if (!ok(g)) return NULL;
- struct str *s = ini_str(bump(g, sreq), n);
- memset(s->bytes, 0, clear);
- union u *k = bump(g, breq);
- cask(k)->ap = lvm_cask, cask(k)->str = s;
- return tagthread(k, Width(struct cask)); }
-
 union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
  uintptr_t sreq = str_width(n), breq = Width(struct state) + Width(struct tag);
  struct g *g = *gp = have(*gp, sreq + breq);

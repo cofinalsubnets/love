@@ -47,13 +47,6 @@ void cb_attr(struct cb *c, uint32_t fg, uint32_t bg) {
   c->def_fg = fg, c->def_bg = bg;
   c->cur_fg = c->cur_bg = cb_ink(cb_def, 0), c->cur_face = 0; }
 
-// a raw cp437 glyph in the current pen, uninterpreted, and step the cursor
-void cb_stamp(struct cb *c, uint8_t i) {
-  uint32_t r = c->wpos / c->cols;
-  cb_pen(c, cb_unfold(i), &c->cb[c->wpos]);
-  cb_dirt(c, r, r);
-  if (++c->wpos == (uint32_t) c->rows * c->cols) c->wpos = 0; }
-
 void cb_open(struct cb *c, uint16_t rows, uint16_t cols, uint32_t sn) {
   c->wpos = c->spos = 0;
   c->rows = rows, c->cols = cols, c->cw = 8, c->ch = 16, c->pgen = 0;
