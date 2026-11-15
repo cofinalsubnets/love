@@ -1,4 +1,4 @@
-; src/inle/nucleo446/mkboot.l -- lay boot.o for the Nucleo-F446RE: the vector table at flash
+; test/boards/nucleo446/mkboot.l -- lay boot.o for the Nucleo-F446RE: the vector table at flash
 ; base, crt0, the fault shim and the helpers C cannot say. vectors take addend 0, since obj.l
 ; sets the thumb bit on every FUNC symbol; sp arrives through a general register (MOVW/MOVT
 ; cannot name it). runs after holo/{elf,obj}.l with the thumb2 backend spliced into holo

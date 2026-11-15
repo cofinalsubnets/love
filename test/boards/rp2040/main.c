@@ -3,7 +3,7 @@
 // LED slow blink all green, fast a miss. console UART0 on GPIO0/1 at 115200 8N1
 #include <stdint.h>
 #include "rp2040.h"
-#include "../bput.h"
+#include "../../../src/inle/bput.h"
 
 static void puts_(const char *s) {
   for (; *s; s++) { if (*s == '\n') serial_putc('\r'); serial_putc(*s); } }

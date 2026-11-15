@@ -1,4 +1,4 @@
-; src/inle/nrf52840/mkboot.l -- lay boot.o for the xiao nrf52840: the vector table at the app
+; test/boards/nrf52840/mkboot.l -- lay boot.o for the xiao nrf52840: the vector table at the app
 ; base, crt0, the fault shim and the helpers C cannot say. nucleo446's shape: vectors take
 ; addend 0, since obj.l sets the thumb bit on every FUNC symbol. runs after holo/{elf,obj}.l
 ; with the thumb2 backend spliced into holo

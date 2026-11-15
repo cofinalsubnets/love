@@ -38,7 +38,7 @@ $(eval $(call p_obj,main,src/inle/teensy41/main.c,main.c teensy41.h $(S)/inle/bp
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. src/inle/mps2/mkstart.l is the same shape with one section,
-# src/inle/rp2040/mkboot2.l the named-section one.
+# test/boards/rp2040/mkboot2.l the named-section one.
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
 # the baked heap image: src/inle/mps2's qemu baker dumps it (a build-time bake), and mkimg.l

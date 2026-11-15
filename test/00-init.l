@@ -27,12 +27,12 @@
  (term_esc string) (do (putc 27) (puts string))
  green_dot "[32m."
  red_x "[31mX"
- reset "[0m"
+ sgr0 "[0m"
  (term_text s)
   (do (putc 27)
      (puts s)
      (putc 27)
-     (puts reset))
+     (puts sgr0))
 
    test_state {}
    (test_set k v) (pin test_state k v)

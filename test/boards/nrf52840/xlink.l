@@ -1,4 +1,4 @@
-; src/inle/nrf52840/xlink.l -- the xiao nrf52840 link: holo's ldbare32 (src/love/holo/link.l),
+; test/boards/nrf52840/xlink.l -- the xiao nrf52840 link: holo's ldbare32 (src/love/holo/link.l),
 ; nucleo446's nlink.l with this board's map. cat it after src/love/holo/{elf,obj,link}.l and run
 ;
 ;   love <cat> OUT OBJ.o..

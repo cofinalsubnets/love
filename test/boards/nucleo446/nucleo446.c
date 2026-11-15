@@ -3,7 +3,7 @@
 // are mkboot.l's
 #include <stdint.h>
 #include "nucleo446.h"
-#include "../bput.h"
+#include "../../../src/inle/bput.h"
 
 // nucleo446.lds's bounds and mkboot.l's vector table
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
