@@ -332,13 +332,13 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  if (!rz_setup(r, &t, p0, p1, p2)) return;
  for (intptr_t y = rz_own(r, t.y0); y < t.y1; y = rz_own(r, y + 1)) rz_row(r, &t, lv, nlv, y); }
 
-// clip space to pixels; snapped to whole ones on request
-static love_inline void rz_project(struct rz const *r, struct rz_v *v) {
- flo_t const q = 1 / v->w;
- v->x = (v->x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W;
- v->y = ((flo_t) 0.5 - v->y * q * (flo_t) 0.5) * (flo_t) r->H;
- v->z = v->z * q;
- if (r->flags & rz_snap) v->x = rz_floor(v->x + (flo_t) 0.5), v->y = rz_floor(v->y + (flo_t) 0.5); }
+// clip space to pixels into v's place, its w and riders left; snapped to whole ones on request
+static love_inline void rz_place(struct rz const *r, flo_t x, flo_t y, flo_t z, flo_t w, struct rz_v *v) {
+ flo_t const q = 1 / w;
+ x = (x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W, y = ((flo_t) 0.5 - y * q * (flo_t) 0.5) * (flo_t) r->H;
+ if (r->flags & rz_snap) x = rz_floor(x + (flo_t) 0.5), y = rz_floor(y + (flo_t) 0.5);
+ v->x = x, v->y = y, v->z = z * q; }
+static love_inline void rz_project(struct rz const *r, struct rz_v *v) { rz_place(r, v->x, v->y, v->z, v->w, v); }
 
 static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) {
  struct rz_v o;
@@ -395,7 +395,7 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
  int n = 3, in = (o0 & o1 & o2 & 64) != 0;
  if (in) {
   struct rz_v s[3];
-  for (int i = 0; i < 3; i++) s[i].x = p[i].x, s[i].y = p[i].y, s[i].z = p[i].z, s[i].w = p[i].w, rz_project(r, s + i);
+  for (int i = 0; i < 3; i++) rz_place(r, P[i][0], P[i][1], P[i][2], P[i][3], s + i);
   struct rz_v const *const S[3] = { s, s + 1, s + 2 };
   if (!rz_may(r, S)) return; }
  flo_t const *vd = vt->type == love_R ? tray_data(vt) : 0;
