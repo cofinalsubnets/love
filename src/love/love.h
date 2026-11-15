@@ -342,8 +342,7 @@ struct g {
    n_resize,                      // gauge[13]
    budget,                     // words (minor + 2*major), 0 unbounded
    walk,                          // the most room a walk under one op wanted past the gap: the op takes it, runs again
-   minor0, major0, ratio,         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
-   push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
+   minor0, major0, ratio;         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
  union {
   intptr_t v0;
   struct {

@@ -283,7 +283,7 @@ static struct g *pushr(struct g *g, uintptr_t m, uintptr_t n, va_list xs) {
  if (ok(g)) *--g->sp = x;
  return g; }
 
-// push may collect: when the stack meets the heap, or on the push a law counted down to
+// push may collect: when the stack meets the heap
 struct g *push(struct g *g, uintptr_t m, ...) {
  if (!ok(g)) return g;
  va_list xs;
@@ -292,7 +292,7 @@ struct g *push(struct g *g, uintptr_t m, ...) {
 #ifdef LvGcStress
  g = pushr(g, m, n, xs);              // push may collect, so under stress every one does, as have does
 #else
- if (avail(g) < m || (g->push_gc && !--g->push_gc)) g = pushr(g, m, n, xs);
+ if (avail(g) < m) g = pushr(g, m, n, xs);
  else for (g->sp -= m; n < m; g->sp[n++] = va_arg(xs, word));
 #endif
  va_end(xs);
