@@ -35,7 +35,7 @@ static uintptr_t stringlen(struct g *g, word x);
 #endif
 word const map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
 struct str0 const str_empty = { .ap = lvm_str, .len = 0 };
-struct mint const mint_zero = { .ap = lvm_sym, .serial = 0 };
+struct mint const mint_zero = { .ap = lvm_sym, .serial = {0} };
 // ===== g =====
 enum status fin(struct g *g) {
  enum status s = code_of(g);

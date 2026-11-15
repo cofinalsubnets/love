@@ -447,7 +447,7 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  if (!datp(x)) return *out = fn_hash(g, x), 0;
  switch (typ(x)) {
    case DChain: break;                            // hash_at spines a chain: a bug here
-   case DMint: return *out = sym(x)->serial, 0;
+   case DMint: { uint64_t s = mint_serial(x); return *out = (uintptr_t) (sizeof(uintptr_t) < 8 ? s ^ s >> 32 : s), 0; }
    case DNom: return *out = nom(x)->dig, 0;        // the spelling's: a serial keys order to intern history
    case DTray: {
     // an object tray's header only: answer 3 and hash_at folds the cells, as = reads through

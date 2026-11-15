@@ -1247,7 +1247,7 @@ static love_inline intptr_t mint_cmp(struct g *g, word a, word b) {
  if (na != nb) return na ? 1 : -1;
  if (na) { struct str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
   return bytes_cmp(txt(sa), len(sa), txt(sb), len(sb)); }
- uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;
+ uint64_t ca = mint_serial(a), cb = mint_serial(b);
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 intptr_t love_mint_cmp(struct g *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
 // two galaxies of equal net, so cmp3 stays antisymmetric: rank, dims, then cells (re, im)

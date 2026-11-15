@@ -696,14 +696,22 @@ static struct g *img_canon_symbols(struct g *g) {
 
 // live serials keep session order, packed 1..k, in the live heap; only the nameless (mints,
 // tablets, pids) carry one. 0 stays ()'s, and a pid charm copied into user data keeps its old number
-static love_inline bool img_serial_at(union u *p, uintptr_t *v) {
- if (in_data(p->ap)) return love_typ(p) == DMint && (*v = sym(p)->serial, true);
+static love_inline bool img_serial_at(union u *p, uint64_t *v) {
+ if (in_data(p->ap)) return love_typ(p) == DMint && (*v = mint_serial((word) p), true);
  return p->ap == lvm_map_lookup && (*v = map_serial((word) p), true); }
 // a serial's rank: its place among the sorted live ones, from 1
-static uintptr_t img_rank(word const *u, uintptr_t k, uintptr_t v) {
+static uint64_t img_rank(uint64_t const *u, uintptr_t k, uint64_t v) {
  uintptr_t lo = 0, hi = k;
- while (lo < hi) { uintptr_t m = (lo + hi) / 2; if ((uintptr_t) u[m] < v) lo = m + 1; else hi = m; }
- return lo + 1; }
+ while (lo < hi) { uintptr_t m = (lo + hi) / 2; if (u[m] < v) lo = m + 1; else hi = m; }
+ return (uint64_t) lo + 1; }
+static void img_sift64(uint64_t *a, uintptr_t i, uintptr_t n) {
+ for (uintptr_t c; (c = 2 * i + 1) < n; i = c) {
+  if (c + 1 < n && a[c] < a[c + 1]) c++;
+  if (a[i] >= a[c]) break;
+  uint64_t t = a[i]; a[i] = a[c], a[c] = t; } }
+static void img_sort64(uint64_t *a, uintptr_t n) {
+ for (uintptr_t i = n / 2; i-- > 0; ) img_sift64(a, i, n);
+ for (uintptr_t k = n; k > 1; ) { uint64_t t = a[0]; a[0] = a[--k], a[k] = t; img_sift64(a, 0, k); } }
 // a tablet's pairs again, in their old slot order, under the hashes their keys have now
 static bool img_rehash(struct g *g, word m, word *pairs) {
  uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
@@ -720,7 +728,8 @@ static bool img_rehash(struct g *g, word m, word *pairs) {
 static struct g *img_canon_serials(struct g *g) {
  word *base = g->major_base, *hp = g->major_hp;
  unsigned char *fzm = hc_fzmap(g, base, hp);
- uintptr_t n = 0, cap = 0, v;
+ uintptr_t n = 0, cap = 0;
+ uint64_t v;
  int fz;
  #define each_obj(p) for (union u *p = cell(base); ptr(p) < hp; p = cell(ptr(p) + hc_stride(g, fzm, base, p, &fz))) if (!fzm[ptr(p) - base])
  if (!fzm) return g->scare = (uintptr_t) (hp - base), encode(g, status_scare);
@@ -729,23 +738,23 @@ static struct g *img_canon_serials(struct g *g) {
   if (p->ap == lvm_map_lookup && map_cap((word) p) > cap) cap = map_cap((word) p); }
  for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) n++;
  for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) n++;
- word *u = alloc(NULL, (n + 1) * sizeof(word)), *pairs = alloc(NULL, (2 * cap + 1) * sizeof(word));
+ uint64_t *u = alloc(NULL, (n + 1) * sizeof(uint64_t));
+ word *pairs = alloc(NULL, (2 * cap + 1) * sizeof(word));
  if (!u || !pairs) { alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0); return g->scare = n + 2 * cap, encode(g, status_scare); }
  uintptr_t k = 0;
- each_obj(p) if (img_serial_at(p, &v) && v) u[k++] = (word) v;
- for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (word) getcharm(t[2].x);
- for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (word) getcharm(t[2].x);
- { struct img_ord o = { img_lt_word, u, 1 };
-   img_sort(&o, k); }
+ each_obj(p) if (img_serial_at(p, &v) && v) u[k++] = v;
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (uint64_t) getcharm(t[2].x);
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (uint64_t) getcharm(t[2].x);
+ img_sort64(u, k);
  uintptr_t nu = 0;
  for (uintptr_t i = 0; i < k; i++) if (!nu || u[nu - 1] != u[i]) u[nu++] = u[i];
  each_obj(p) if (img_serial_at(p, &v) && v) {
-  if (in_data(p->ap)) sym(p)->serial = img_rank(u, nu, v);
-  else tablet(p)->serial = putcharm(img_rank(u, nu, v)); }
+  if (in_data(p->ap)) ini_missing(sym(p), img_rank(u, nu, v));
+  else tablet(p)->serial = putcharm((uintptr_t) img_rank(u, nu, v)); }
  for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m)
-  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm(img_rank(u, nu, (uintptr_t) getcharm(t[2].x)));
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
  for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m)
-  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm(img_rank(u, nu, (uintptr_t) getcharm(t[2].x)));
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
  g->next_serial = nu;
  bool ok = true;
  each_obj(p) if (ok && p->ap == lvm_map_lookup) ok = img_rehash(g, (word) p, pairs);

@@ -224,7 +224,7 @@ struct cask { lvm_t *ap; struct str *str; };
 // a mint: a nameless point, its hot and serial
 struct mint {
  lvm_t *ap;
- uintptr_t serial; };   // the order key; () is serial 0, every fresh mint ++next_serial
+ uintptr_t serial[8 / sizeof(uintptr_t)]; };   // the order key, 64 bits on every word; () is 0, every fresh mint ++next_serial
 // a nom: an interned named point; dig caches the spelling hash, so bucket order is not intern history
 struct nom {
  lvm_t *ap;
@@ -259,6 +259,13 @@ extern const struct str0 { lvm_t *ap; uintptr_t len; char bytes[8]; } str_empty;
 // (): the one serial-0 mint, a const shared by every core so it bakes; serial 0 is never drawn
 extern const struct mint mint_zero;
 #define ZeroPoint ((word) &mint_zero)
+static love_inline uint64_t mint_serial(word x) {
+#if UINTPTR_MAX > 0xffffffffu
+ return sym(x)->serial[0];
+#else
+ return sym(x)->serial[0] | (uint64_t) sym(x)->serial[1] << 32;
+#endif
+}
 
 // --- the core ---
 struct port_vt;
@@ -299,8 +306,8 @@ struct g {
  // the one scratch word: a port refill, a write's count, a Have's ask. set it as the last
  // act before the return that hands it back
  word b;
- uintptr_t next_serial,
-           next_wake_at, // the next snapshot's wake_at; 0 always runnable
+ uint64_t next_serial;  // mints, tablets and pids draw it
+ uintptr_t next_wake_at, // the next snapshot's wake_at; 0 always runnable
            clock_at;     // the last sweep tick's clock
  word symbols;          // the weak intern map
  uintptr_t len;         // main pool words: the core at its base, [end,hp) young
@@ -804,8 +811,12 @@ lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 #define str_type_width (Width(struct str))
 // header, bytes, and the NUL
 #define str_width(n) (str_type_width + b2w((n) + 1))
-static love_inline struct mint *ini_missing(struct mint *y, uintptr_t serial) {
- return y->ap = lvm_sym, y->serial = serial, y; }
+static love_inline struct mint *ini_missing(struct mint *y, uint64_t serial) {
+ y->ap = lvm_sym, y->serial[0] = (uintptr_t) serial;
+#if UINTPTR_MAX <= 0xffffffffu
+ y->serial[1] = (uintptr_t) (serial >> 32);
+#endif
+ return y; }
 static love_inline struct nom *ini_nom(struct nom *y, uintptr_t name, uintptr_t dig) {
  return y->ap = lvm_nom, y->name = name, y->dig = dig, y; }
 static love_inline struct str *ini_str(struct str *s, uintptr_t len) {

@@ -512,7 +512,7 @@ static love_inline word copy_data(struct g *g, struct gcx *X, union u *src, bool
    return word(s->ap = memcpy(d, s, bytes)); }
   case DMint: {
    struct mint *s = sym(src), *d = cbump(g, X, sv, mint_req);
-   ini_missing(d, s->serial);
+   ini_missing(d, mint_serial(word(s)));
    return word(s->ap = (void*) d); }
   case DNom: {
    struct nom *s = nom(src), *d = cbump(g, X, sv, nom_req);
