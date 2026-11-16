@@ -272,11 +272,25 @@
          'sx1 (k \ (k % 256 + 256) % 256 @ z (z < 128 ? z (z - 256)))
          'sx2 (k \ (k % 65536 + 65536) % 65536 @ z (z < 32768 ? z (z - 65536)))
          'sx4 (k \ (k % 4294967296 + 4294967296) % 4294967296 @ z (z < 2147483648 ? z (z - 4294967296)))}
-   (nmlit fs)
-    (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (nmlit (['li t ((nmun op) k)] . u))
-          ((['li t k] . ['shl t2 n] . u) && t = t2 && cint? k && cint? n && 0 <= n < 32 && fits32 (k * n 2)) (nmlit (['li t (k * n 2)] . u))
-          (f . u) (f . nmlit u)
-          _ ())
+   nmsv {'shlv 'shl 'shrv 'shr 'sarv 'sar}
+   ; ..and a shift by a literal count, as the word lays it: a shl past the word's range stays
+   (nmlit g fs)
+    (: bw (8 * wsize g)
+       h ((bw - 1) 2)
+       (sh op k n) (? !(0 <= n && n < bw && 0 - h <= k && k < h) ()
+                      (op = 'sar) [(k >> n)]
+                      (op = 'shr) [((k < 0 ? (k + h + h) k) >> n)]
+                      (k * n 2 @ r (0 - h <= r && r < h ? [r])))
+       (go fs)
+        (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (go (['li t ((nmun op) k)] . u))
+              ((['li t k] . [op t2 n] . u) && t = t2 && cint? k && cint? n && elem op '(shl shr sar) && two? (sh op k n))
+               (go (['li t <(sh op k n)] . u))
+              ; a count lo.l copied to r1 for the one shift after it, known: the immediate shift
+              ((['li 'r1 k] . [op d 'r1] . u) && cint? k && 0 <= k && k < bw && peep nmsv op ())
+               (go ([(nmsv op) d k] . u))
+              (f . u) (f . go u)
+              _ ())
+       (go fs))
 
    ; within a block, a vreg's one def but its declaration's while what it read still holds: copies
    ; read through, an add or lea of a literal moves into the offset, an add of a scaled index into an
@@ -347,12 +361,13 @@
           (go fs)))
 
    (nmround g fs0)
-    (nmwid g (nmlit fs0) @ fs
+    (nmwid g (nmlit g fs0) @ fs
        (nmdn g fs @ dn
           (nmmaps fs dn @ [cp kc]
-             ; the substitution may add defs, so the block pass counts again
-             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
-   ; a multiply by a power of two the fold left is a shift, off x86 through a register;
+             ; the substitution may add defs, so the block pass counts again; a literal it copies
+             ; down folds into the rewrite after it now
+             (nmlit g (nmsub g fs cp kc dn) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+   ; a multiply by a power of two the fold left is a shift, through a register too;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
@@ -362,7 +377,9 @@
        (x86k d a k) (odd k @ m ((m = 1 ? (a = d ? () [['mov d a]]) [['leax d a a (m - 1) 0]]) + (1 < k // m ? [['shl d (lg (k // m))]])))
        (kx86? k) (cint? k && 1 < k && (k & (k - 1) = 0 || elem (odd k) '(3 5 9)))
        (go fs) (fs @ ((['mov d a] . ['imul d2 x k] . u) && d = d2 && d = x && kx86? k) (x86k d a k + go u)
-                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k) _ [f])) + go u)
+                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k)
+                                     (['imul d a k] && lovr? k && p2 (kv k)) ((a = d ? () [['mov d a]]) + [['shl d (lg (kv k))]])
+                                     _ [f])) + go u)
                      ())
        (x86? g ? (go fs)
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))

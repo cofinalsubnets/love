@@ -758,10 +758,20 @@
    (lodivk g op a b)
     (b @ ([_ t0 [['li t1 n]]] && t0 = t1 && cint? n && 0 < n && !(abl? g 'divk))
           (: u (cmpu g (vty a) (vty b)) rt (rbin g (vty a) (vty b)) bw (8 * wsize g) rem (op = '%)
-             (? (u && pow2? n) 'no
+             q (lodivl g rem u a n rt bw)
+             (? (q != 'no) q
+                (u && pow2? n) 'no
                 (pow2? n) (loz g a b @ [_ x fx] (lodivp g rem x fx rt n bw))
                 (t32? g || wasm? g || xt? g || n < 3 || !(n < 1 << (u ? bw (bw - 1)))) 'no
                 (loz g a b @ [_ x fx] (lodivm g rem u x fx rt n bw))))
+         _ 'no)
+   ; a literal by a literal: C's answer, truncated toward zero; an unsigned negative one only at the word
+   (lodivl g rem u a n rt bw)
+    (a @ ([_ t [['li t2 k]]] && t = t2 && cint? k && (!u || 0 <= k || tsz g rt = wsize g))
+          (: W (bw 2)
+             x (u && k < 0 ? (k + W) k)
+             v (rem ? (x % n) (x // n))
+             (lomk g @ d [rt d [['li d (u && W // 2 <= v ? (v - W) v)]]]))
          _ 'no)
    ; C rounds toward zero and sar toward -inf: a negative dividend takes n - 1 first
    (lodivp g rem x fx rt n bw)

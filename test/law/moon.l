@@ -347,6 +347,31 @@
       (atom? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
       (atom? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
 
+; -- constant arithmetic folds whole: a shift, divide or remainder of literals is its literal, a
+; power-of-two multiply a shift however wide, a count known by the fold an immediate
+(: (kfs src) (fnf 'f <>(cgn (src + " int main(int c, char **v) { return (int) f(c); }")))
+   (ops fs l) (filter (f9 \ two? f9 && elem <f9 l) fs)
+   arith '(shr sar shl shrv sarv shlv div udiv rem urem imul mulh umulh)
+   (kk src v) (kfs src @ fs (elem ['li 'r0 v] fs && atom? (ops fs arith)))
+   (test
+      (kk "unsigned long f(long o) { return 5ul >> 1; }" 2)
+      (kk "long f(long o) { return -9l >> 1; }" -5)
+      (kk "unsigned long f(long o) { return (unsigned long) -1 >> 4; }" 1152921504606846975)
+      (kk "unsigned long f(long o) { return 1ul << 40; }" 1099511627776)
+      (kk "unsigned f(long o) { return 3u << 31; }" 2147483648)
+      (kk "unsigned long f(long o) { return 9ul / 3; }" 3)
+      (kk "unsigned f(long o) { return 9u / 4u; }" 2)
+      (kk "int f(long o) { return -7 / 2; }" -3)
+      (kk "int f(long o) { return -7 % 3; }" -1)
+      (kk "unsigned long f(long o) { return 10ul % 3; }" 1)
+      (kk "unsigned long f(long o) { return (unsigned long) -1 / 16; }" 1152921504606846975)
+      (kfs "unsigned long f(unsigned long o) { return o * 0x100000000ul; }" @ fs
+       (atom? (ops fs '(imul)) && elem ['shl 'r0 32] fs))
+      (kfs "unsigned long f(unsigned long o) { return o * (1ul << 40); }" @ fs
+       (atom? (ops fs '(imul)) && elem ['shl 'r0 40] fs))
+      (kfs "unsigned long f(unsigned long o) { return o >> (8 * sizeof o - 1); }" @ fs
+       (atom? (ops fs '(shrv)) && elem ['shr 'r0 63] fs))))
+
 ; --- aggregates: layout to the C rules, members, the new statements ---
 (: (cexpp pre e) (: ast (cast (pre + (" int main() { return " + (e + "; }"))))
                     (last l) (two? >l ? (last >l) <l)
