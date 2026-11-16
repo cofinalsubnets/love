@@ -13,7 +13,6 @@ struct opd {
  int ch;                            // output channels
  int sch, bw, mode, fsize;          // the packet's: coded channels, bandwidth, mode, samples a frame
  int pmode, predund;                // the last frame's mode, and whether it ended on a redundant celt frame
- uint32_t final;                    // the range coder's last state, as the vectors check it
  struct silk sk;
  struct celt ct;
  int16_t spcm[2880 * 2];            // work room: a frame's silk samples
@@ -21,7 +20,6 @@ struct opd {
 };
 
 int op_size(void) { return (int) sizeof(struct opd); }
-uint32_t op_final(const void *b) { return ((const struct opd*) b)->final; }
 
 int op_init(void *b, int ch) {
  struct opd *o = b;
@@ -43,7 +41,6 @@ static void op_fade(const float *a, const float *b, float *out, int n, int ch, c
 static int op_frame(struct opd *o, const uint8_t *p, int len, float *pcm, int n) {
  struct celt *ct = &o->ct;
  int ch = o->ch, mode, size, transition = 0, redund = 0, rbytes = 0, c2s = 0, start = 0;
- uint32_t rrng = 0;
  struct rdec d;
  if (n < 120) return -2;
  if (len <= 1) p = 0, n = n < o->fsize ? n : o->fsize;
@@ -85,8 +82,7 @@ static int op_frame(struct opd *o, const uint8_t *p, int len, float *pcm, int n)
  if (transition && mode != OP_CELT) op_frame(o, 0, 0, o->trans, size < 240 ? size : 240);
  if (redund && c2s) {                               // the celt frame that leads into this silk one
   ct->start = 0;
-  ct_decode(ct, p + len, rbytes, o->red, 240, 0);
-  rrng = ct->s.rng; }
+  ct_decode(ct, p + len, rbytes, o->red, 240, 0); }
  ct->start = start;
  int cret = 0;
  if (mode != OP_SILK) {
@@ -105,7 +101,6 @@ static int op_frame(struct opd *o, const uint8_t *p, int len, float *pcm, int n)
   ct_reset(ct);
   ct->start = 0;
   ct_decode(ct, p + len, rbytes, o->red, 240, 0);
-  rrng = ct->s.rng;
   op_fade(pcm + ch * (n - 120), o->red + ch * 120, pcm + ch * (n - 120), 120, ch, win); }
  if (redund && c2s) {
   memcpy(pcm, o->red, sizeof(float) * (unsigned) (120 * ch));
@@ -115,7 +110,6 @@ static int op_frame(struct opd *o, const uint8_t *p, int len, float *pcm, int n)
    memcpy(pcm, o->trans, sizeof(float) * (unsigned) (120 * ch));
    op_fade(o->trans + ch * 120, pcm + ch * 120, pcm + ch * 120, 120, ch, win); }
   else op_fade(o->trans, pcm, pcm, 120, ch, win); }
- o->final = len <= 1 ? 0 : d.rng ^ rrng;
  o->pmode = mode, o->predund = redund && !c2s;
  return cret < 0 ? cret : size; }
 

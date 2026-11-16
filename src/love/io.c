@@ -10,8 +10,7 @@ static bool
  bio_wpending(struct bio *b),
  is_dec_int(char const *s, uintptr_t n),
  is_hex_int(char const *s, uintptr_t n),
- is_oct_int(char const *s, uintptr_t n),
- lam_head(struct g *g, word a);
+ is_oct_int(char const *s, uintptr_t n);
 static intptr_t
  ci_readn(struct g *g, unsigned char *dst, uintptr_t n);
 static struct g
@@ -643,12 +642,6 @@ lvm(lvm_nifnom) {
  memcpy(txt(s), nm, n);
  love_musttail return Answer(word(s)); }
 
-static love_inline bool lam_head(struct g *g, word a) {        // is a the symbol \ ?
- struct str *nm;
- return (nm = nom_str(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
-
-bool lam_isp(struct g *g, word x) {         // (\ b.. body): >=2 operands
- return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
 // (fgetc port): a non-port reads EOF, so a misused loop ends. a charm is a raw fd, no pushback
 lvm(lvm_fgetc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);

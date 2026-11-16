@@ -10,7 +10,7 @@
 . test/gate/skip.sh
 set -u
 
-ho=$1 t=$2 cap=$3 img=$4
+ho=$1 t=$2 cap=$3 img=$4 pre=
 # a board: its probe and chip for openocd, where its flash starts, and the ports its console may be on
 case $cap in
   rp2040-swd)
@@ -20,6 +20,12 @@ case $cap in
     # its firmware may sleep or take the swd pins, so it is reached under reset
     ocd='-f interface/stlink.cfg -c "transport select hla_swd" -f target/stm32f4x.cfg -c "reset_config srst_only srst_nogate connect_assert_srst"'
     at=0x08000000 con='/dev/serial/by-id/*STLink*' ;;
+  microbit-daplink)
+    # the daplink is the probe and the vcp; its serial, out of the host's tty fact, picks it,
+    # over usb bulk: the hid backend overflows on a serial this long
+    pre='sn=${BEE_TTY##*CMSIS-DAP_} sn=${sn%-if*}'
+    ocd='-f interface/cmsis-dap.cfg -c "cmsis_dap_backend usb_bulk" -c "adapter serial $sn" -f target/nrf52.cfg'
+    at=0x00000000 con='/dev/serial/by-id/*micro:bit*-if01*' ;;
   teensy41-usb) ;;
   *) echo "FAIL $t: no board known for $cap" >&2; exit 1 ;;
 esac
@@ -53,7 +59,8 @@ EOF
 else
 cp "$img" "$sd/firm.bin"
 green='*; all * green*'
-echo "ocd() { openocd $ocd \"\$@\"; }" > "$sd/run.sh"
+echo "$pre" > "$sd/run.sh"
+echo "ocd() { openocd $ocd \"\$@\"; }" >> "$sd/run.sh"
 echo "at=$at con='$con'" >> "$sd/run.sh"
 cat >> "$sd/run.sh" <<'EOF'
 ocd -c "program firm.bin $at verify exit" > flash.log 2>&1 || { tail -5 flash.log; echo "the flash failed"; exit 1; }

@@ -2326,7 +2326,6 @@ void kmain(void) {
   struct g *r = g;
   if (!woke) {
    r = cats_egg(g);
-   r = cats_lib(r);
    r = evals_(r, src_tasks); }
   // seat.l: what this machine is that a host is not, shadowing a woken book's bindings
   r = evals_(r, src_seat);

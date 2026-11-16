@@ -210,6 +210,8 @@ struct _IO_FILE {
 #define NR_umount2         39
 #define NR_mount           40
 #define NR_reboot         142
+#define NR_swapon         224
+#define NR_swapoff        225
 #define NR_ftruncate       46
 #define NR_sync            81
 #define NR_chdir           49
@@ -374,6 +376,8 @@ struct _IO_FILE {
 #define NR_sync            36
 #define NR_mount           21
 #define NR_reboot          88
+#define NR_swapon          87
+#define NR_swapoff        115
 #define NR_umount2         52
 #define NR_getdents64     217
 #define NR_clock_gettime  403   /* clock_gettime64 */
@@ -492,6 +496,8 @@ struct _IO_FILE {
 #define NR_sync            36
 #define NR_mount           21
 #define NR_reboot          88
+#define NR_swapon          87
+#define NR_swapoff        115
 #define NR_umount2         52
 #define NR_getdents64     220
 #define NR_clock_gettime  403   /* clock_gettime64 */
@@ -608,6 +614,8 @@ struct _IO_FILE {
 #define NR_sync           162
 #define NR_mount          165
 #define NR_reboot         169
+#define NR_swapon         167
+#define NR_swapoff        168
 #define NR_umount2        166
 #define NR_getdents64     217
 #define NR_clock_gettime  228

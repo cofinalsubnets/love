@@ -41,6 +41,7 @@
      ["" ["test/gate/lanes.sh"] ["test_lanesremote"] ""]
      ["" ["src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "Makefile" "common.mk" "src/tools/hotbake.sh"] ["test_ccwarn" "test_hdiff" "test_inle"] ""]
      ["" ["src/love/snap.c"] ["test_boards"] ", whose links bake their own images through it"]
+     ["" ["test/boards/*" "src/inle/port.mk"] ["test_boards"] ""]
      ["" ["src/apps/caja/*" "test/caja/*" "test/gate/caja.sh"] ["test_caja"] ""]
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
@@ -82,7 +83,7 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32_board" "test_esp32c6" "test_esp32c6_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
