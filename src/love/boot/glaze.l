@@ -1047,8 +1047,9 @@
              bodyir ((sfq ? ['(label sgo)] ())                                                     ; the self-jump landing
                      + (lp ? (initsir + ['(label top)] + acgt body 0) (acgt body 0)))
              ; the cons-tail loop's end: the hole takes the answer, and the head answers
+             hret (mint 0)
              tlr (!trm ? () (: ep (mint 0)
-                    ([['label 'hret] ['ld T SP hlo] ['test T 1] ['br 'ne ep] ['st SP (spill 0) A]]
+                    ([['label hret] ['ld T SP hlo] ['test T 1] ['br 'ne ep] ['st SP (spill 0) A]]
                      + ahole (spill 0) + [['ld A SP hdo] ['label ep]])))
              epi [['add SP SP fro] ['st SP 0 A]                                                       ; hand-rolled lvm_ret (a drive call clobbered Ip)
                     ['ld IP SP (W * a)] ['st SP (W * a) A] ['add SP SP (W * a)]
@@ -1057,7 +1058,7 @@
                       ['ld X SP budo] ['ld SC X W] ['sub SC SC 2] ['st X W SC]]                     ; budget -= 1 (tagged): a restart is the profitability signal
                   + (!trm ? () (: od (mint 0)                                                          ; a hole: the twin answers the rest, called on our args
                                  ([['ld T SP hlo] ['test T 1] ['br 'ne od] ['ld A SP fro]] + adrive seo
-                                  + catmap (j \ adrivep (fro + W * (j + 1))) ^(a - 1) + [['jmp 'hret] ['label od]])))
+                                  + catmap (j \ adrivep (fro + W * (j + 1))) ^(a - 1) + [['jmp hret] ['label od]])))
                   + [['ld T SP seo] ['add SP SP fro]]                                                 ; d0 entries never count
                   + (a = 1 ? [['mov IP T]] [['lea IP T (2 * W)]])                                      ; a=1: re-apply e; else enter e's body on the saturated frame
                   + [['ld T IP 0] ['jmpr T]])

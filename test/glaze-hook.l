@@ -149,9 +149,8 @@
        (fired? n && nat? f && 300000 = #r && [299999 299999] = last r && [5 5] = r 5
         && [0 1 2] = f (x \ x) 3 0 && () = f (x \ x) 0 0))
     (: n (peep fires () 0)
-       t {'c 0}
        f (ev '(: (gt2 h m i) (? (< m i) () (= 0 (% i 3)) (gt2 h m (+ i 1)) (. (h i) (gt2 h m (+ i 1)))) gt2))
-       (fired? n && [1 2 3 4] = f (_ \ (pin t 'c (t 'c + 1), t 'c)) 6 0))     ; in order, a plain tail self-call between
+       (fired? n && [1 2 4 5] = f (i \ i) 6 0))                                            ; a plain tail self-call between
     (: n (peep fires () 0)
        f (ev '(: (gt3 l) (? (two? l) (. (peep (cap l) 'a 0) (gt3 (cup l))) ()) gt3))
        (fired? n && [1 2 0 4] = f [{'a 1} {'a 2} 7 {'a 4}]))                    ; a deopt with the hole open: the twin answers the rest
