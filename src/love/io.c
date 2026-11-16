@@ -276,7 +276,7 @@ love_noinline static struct g *io_snug(struct g *g) {
  gen_wb(g, (word) b, b->rbuf);
  return g->sp[0] = putcharm(1), g; }
 static lvm(lvm_snug) { LvmCallp(g, 2, io_snug) }
-LvDef("snug", snug, 2, NULL);
+LvDef("snug", snug, 2, "lush");
 
 struct g *io_wflush(struct g *g, struct io *i) { return io_wdrain(g, i); }
 

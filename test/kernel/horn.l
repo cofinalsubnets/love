@@ -5,6 +5,7 @@
 ; 20000 stereo frames is more than the worker's ring holds, so the run wraps it and parks
 ; the writer on a full device on the way -- which is the shape being asked about, not the
 ; length. the wait is the drainer's: it takes them at the rate, so the run is its 417 ms.
+(borrow 'horn)
 (: n 80000
    pcm (string (map (i \ (i % 251)) (jot n)))
    h (horn 48000 2)

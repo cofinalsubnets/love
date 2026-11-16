@@ -2,6 +2,7 @@
 ; the line discipline between (echo, erase/kill/word, ^D, \n out as \r\n), raw, the size,
 ; the foreground group, and tether. kernel corpus only.
 
+(borrow 'task)                          ; pause, resume
 (: (pt-take fd n) (? (n < 1) "" (: c (see fd) (string c + pt-take fd (n - 1)))))
 
 ; three rows, a size from either side; the signal row is no terminal

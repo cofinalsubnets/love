@@ -4,6 +4,7 @@
 ; as a card would; 1024 frames against writes of a few hundred, so every law rides a real push, pull
 ; and wrap. horn_land widens mono to stereo for a device, never for the sink (test/front/horn.l)
 
+(borrow 'horn)
 (: (ramp n) (string (map (i \ i % 251) (jot n))))
 
 ; --- a stereo port goes down as it is ---

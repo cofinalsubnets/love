@@ -1,6 +1,7 @@
 ; the tty apps on a pty, scribed onto a quay screen. the child sizes itself by stty: a fresh
 ; pty is 0x0 and a parent's settty races its first read. no bare ESC: ESC then a key is alt.
 ; tether is not in love0, so no corpus. run: cat test/00-init.l test/host/00-host.l test/host/tty.l | out/love
+(borrow 'quay)
 (: reaped {}
    deadline 20000
    (waitfor pid) (gather pid @ s

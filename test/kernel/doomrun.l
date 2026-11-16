@@ -2,4 +2,5 @@
 ; DOOM=1 kernel. headless it proves the start-up (the sound module says whether the
 ; horn opened); on a framebuffer it is the game, and quitting it from the menu is the
 ; reset, which ends a gate the way all.l's does.
+(borrow 'doom)
 (puts "doomrun: starting\n", flush out, doom (), puts "doomrun: doom quit\n", flush out, reset ())
