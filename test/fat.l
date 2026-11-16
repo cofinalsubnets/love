@@ -104,6 +104,9 @@
             (unlink ip, unlink lp, 1)))
         (puts "  (mtools interop skipped: no mdir here)")))
 
+; the shared device's 34 MB goes with the file
+(: img () dev () f () f2 ())
+
 ; a cluster chain that loops back on itself ends where it loops: a file's, then the root's
 (: lp-im (cask (70000 * 512))
    lp-dev (mkdev lp-im)

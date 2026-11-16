@@ -183,7 +183,8 @@ love_noinline static int call_sock(struct saddr const *a, int how) {
   int one = 1;
   struct stat st;
   if (un) { if (!lstat(ua.sun_path, &st) && S_ISSOCK(st.st_mode)) unlink(ua.sun_path); }  // a dead listener's; anything else stays
-  else setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
+  // a listener's port past its last life; a datagram port keeps one socket, as the stack's door
+  else if (type == SOCK_STREAM) setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof one);
   if (a->ttl && v6) setsockopt(fd, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &one, sizeof one);
   else if (a->ttl && !raw) setsockopt(fd, IPPROTO_IP, IP_RECVTTL, &one, sizeof one);   // linux's number
   if (a->errs && !raw)                          // linux's error queue; a raw socket hears them itself
@@ -270,6 +271,7 @@ static lvm(lvm_accept) {
 
 // (seal s how): shutdown(2), how a SHUT_* number; answers s. a write half lands its run first
 static lvm(lvm_shutdown) {
+ if (iop(Sp[0]) && io_duct((struct io*) Sp[0])) love_musttail return Ap(lvm_duct_seal, g);
  int fd = (int) port_fd(Sp[0]);
  if (fd >= 0 && oddp(Sp[1])) {
   intptr_t how = getcharm(Sp[1]);

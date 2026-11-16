@@ -46,7 +46,7 @@ word io_route(struct g *g, word x) {
  else return x;
  return iop(s) ? s : x; }
 static love_inline bool bio_vt(struct port_vt const *vt) {
- return vt == &love_fd_port_vt || vt == &love_horn_vt; }
+ return vt == &love_fd_port_vt || vt == &love_horn_vt || vt == &love_duct_vt; }
 
 // -1 for a port whose door is not a device
 intptr_t io_fd(struct io const *i) {
@@ -284,6 +284,134 @@ uintptr_t io_wpending(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
  return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
 
+// the duct: a buffered port whose far side is love's, a pump moving the bytes (sock.l's
+// sock-port). in is what the pump fed for the program, out what the program wrote, both
+// fixed: a full out answers writen 0, so the run parks as on a busy fd. st's bits below
+struct duct { struct bio b; word in, ipos, ilen, out, olen, st; };
+#define DuctEnd  1   // the pump fed the end
+#define DuctRd   2   // the program shut its read half
+#define DuctWr   4   // ..its write half, the run landed first
+#define DuctGone 8   // the far side is gone: writes fail
+#define DuctCap  (16 * iobuf)
+bool io_duct(struct io const *i) { return i->vt == &love_duct_vt; }
+static struct duct *duct_of(word x) {
+ return iop(x) && io_duct((struct io*) x) ? (struct duct*) x : NULL; }
+bool duct_ready(struct io const *i) {
+ struct duct const *d = (struct duct const*) i;
+ return getcharm(d->st) & (DuctEnd | DuctRd) || getcharm(d->ipos) < getcharm(d->ilen); }
+void duct_shut(struct io *i, int how) {
+ struct duct *d = (struct duct*) i;
+ d->st = putcharm(getcharm(d->st) | (how != 1 ? DuctRd : 0) | (how != 0 ? DuctWr : 0)); }
+
+static intptr_t duct_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+ struct duct *d = (struct duct*) g->io;
+ intptr_t st = getcharm(d->st);
+ uintptr_t p = getcharm(d->ipos), l = getcharm(d->ilen);
+ if (st & DuctRd) return -1;
+ if (p == l) return st & DuctEnd ? -1 : 0;
+ uintptr_t k = l - p < n ? l - p : n;
+ memcpy(dst, txt(d->in) + p, k);
+ p += k;
+ if (p == l) p = l = 0;
+ d->ipos = putcharm(p), d->ilen = putcharm(l);
+ return (intptr_t) k; }
+
+static struct g *duct_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+ struct duct *d = (struct duct*) g->io;
+ if (getcharm(d->st) & (DuctWr | DuctGone)) return g->b = -1, g;
+ uintptr_t o = getcharm(d->olen), room = len(d->out) - o, k = room < n ? room : n;
+ memcpy(txt(d->out) + o, src, k);
+ d->olen = putcharm(o + k);
+ return g->b = (intptr_t) k, g; }
+
+// (duct n): a new duct, n bytes each way, 0 the default
+love_noinline static struct g *duct_mk(struct g *g) {
+ if (!charmp(g->sp[0])) return g->sp[0] = badarg(g), g;
+ intptr_t n = getcharm(g->sp[0]);
+ n = n <= 0 ? DuctCap : n > (1 << 20) ? (1 << 20) : n;
+ if (!ok(g = str0(g, (uintptr_t) n)) || !ok(g = str0(g, (uintptr_t) n))) return g;
+ uintptr_t const w = Width(struct duct);
+ if (!ok(g = have(g, w + Width(struct tag)))) return g;
+ union u *k = bump(g, w + Width(struct tag));
+ struct duct *d = (struct duct*) k;
+ d->b.f.io.ap = lvm_port_io;
+ d->b.f.io.vt = &love_duct_vt;
+ d->b.f.io.ungetc_buf = putcharm(EOF);
+ d->b.f.fd = putcharm(-1);
+ d->b.rbuf = d->b.wbuf = 0;
+ d->b.rpos = d->b.rlen = d->b.wlen = putcharm(0);
+ d->in = g->sp[1], d->out = g->sp[0];
+ d->ipos = d->ilen = d->olen = d->st = putcharm(0);
+ g->sp[2] = word(tagthread(k, w));
+ return g->sp += 2, g; }
+static lvm(lvm_duct) LvmCall(g, duct_mk)
+
+// (duct-feed d s): bytes for the program, answering how many it took; () feeds the end, a nom
+// the end and the far side gone; -1 once the program shut its read half
+static lvm(lvm_duct_feed) {
+ struct duct *d = duct_of(Sp[0]);
+ word s = Sp[1], r;
+ intptr_t st = d ? getcharm(d->st) : 0;
+ if (!d) r = badarg(g);
+ else if (st & DuctRd) r = putcharm(-1);
+ else if (s == ZeroPoint) d->st = putcharm(st | DuctEnd), r = putcharm(0);
+ else if (!strp(s)) d->st = putcharm(st | DuctEnd | DuctGone), r = putcharm(0);
+ else {
+  uintptr_t p = getcharm(d->ipos), l = getcharm(d->ilen), cap = len(d->in);
+  if (p) memmove(txt(d->in), txt(d->in) + p, l - p), l -= p, p = 0;
+  uintptr_t k = cap - l < len(s) ? cap - l : len(s);
+  memcpy(txt(d->in) + l, txt(s), k);
+  d->ipos = putcharm(0), d->ilen = putcharm(l + k);
+  r = putcharm((intptr_t) k); }
+ Sp[1] = r;
+ love_musttail return Nextp(1, 1); }
+
+// (duct-room d): what a feed would take now, -1 once the program reads no more
+static lvm(lvm_duct_room) {
+ struct duct *d = duct_of(Sp[0]);
+ Sp[0] = !d ? badarg(g) : getcharm(d->st) & DuctRd ? putcharm(-1)
+       : putcharm((intptr_t) (len(d->in) - (getcharm(d->ilen) - getcharm(d->ipos))));
+ love_musttail return Next(1); }
+
+// (duct-take d): what the program wrote, "" for none, () once its write half is shut and spent
+love_noinline static struct g *duct_take(struct g *g) {
+ struct duct *d = duct_of(g->sp[0]);
+ if (!d) return g->sp[0] = badarg(g), g;
+ uintptr_t n = getcharm(d->olen);
+ if (!n && getcharm(d->st) & DuctWr) return g->sp[0] = ZeroPoint, g;
+ if (!ok(g = str0(g, n))) return g;
+ d = (struct duct*) g->sp[1];                    // str0 collects: re-derive
+ memcpy(txt(g->sp[0]), txt(d->out), n);
+ d->olen = putcharm(0);
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }
+static lvm(lvm_duct_take) LvmCall(g, duct_take)
+
+// (duct-seal d how): seal's half-close, how as shutdown(2)'s; a write half lands its run first
+lvm(lvm_duct_seal) {
+ intptr_t how = oddp(Sp[1]) ? getcharm(Sp[1]) : -1;
+ if (!duct_of(Sp[0]) || how < 0 || how > 2) {
+  Sp[1] = badarg(g);
+  love_musttail return Nextp(1, 1); }
+ if (how) {
+  g->io = (struct io*) Sp[0];
+  Pack(g);
+  g = io_wflush(g, g->io);
+  if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
+  if (io_wpending(g, (struct io*) g->sp[0])) {   // park; nothing shut yet
+   Unpack(g);
+   g->next_wake_at = love_clock() + 1;
+   love_musttail return Ap(lvm_yield_sw, g); }
+  Unpack(g); }
+ duct_shut((struct io*) Sp[0], (int) how);
+ Sp[1] = Sp[0];
+ love_musttail return Nextp(1, 1); }
+
+LvDef("duct", duct, 1, NULL);
+LvDef("duct-feed", duct_feed, 2, NULL);
+LvDef("duct-room", duct_room, 1, NULL);
+LvDef("duct-take", duct_take, 1, NULL);
+LvDef("duct-seal", duct_seal, 2, NULL);
+
 struct ci { struct io io; word head; }; // charlist input
 struct to { struct io io; struct str *buf; word i; }; // lisp string output
 static struct g *noop_flush(struct g *g) { return g; }
@@ -325,7 +453,8 @@ struct port_vt const
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  state_vt  = { noop_flush, NULL,      NULL,     NULL },       // a nif's state: no door, and no word opens it
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
- love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
+ love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL },   // PCM out and in: the horn
+ love_duct_vt   = { noop_flush, duct_writen, duct_readn, NULL };              // love at the far side
 
 // (fputc port byte) -> byte. a charm is a raw fd, written unbuffered
 lvm(lvm_fputc) {

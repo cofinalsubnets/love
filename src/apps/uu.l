@@ -14,7 +14,7 @@
 ; the defn/defq/axm macros live in this module's macro table.
 
 ; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig kof lof rejects sugar univ vcs-of vof)
+(module '(uu axm bridge capp chk conv defcx defind defn defq defvc defvcs GLOB HELPC indsig kof lof rejects sugar ucommit ucompact ufresh ule ulive ureset univ vcs-of vof)
 (: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {} IND {} UST {} UPOT {} UOUT {} UORG {} UPOLY {})
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
@@ -154,7 +154,38 @@
               (each (peep log 0 ()) (e \ pin UPOT <e (e 1)),
                each (peep log 1 ()) (e \ pin UOUT <e (e 1)),
                scare 'uu-universe-inconsistency [nm cy]))))
-   (ureset nm) (pin UST 'p (), pin UST 'cur nm, pin UST 'n0 (peep UST 'n 0))
+   ; a commit's vars that nothing keeps go: each path through them from a var that stays
+   ; becomes one edge of its longest weight, so the graph on the rest implies just what it did
+   (ulive _) #(keys UPOT)                        ; the level vars still held
+   (ucompact keep es)
+    (: n0 (peep UST 'n0 0) n (peep UST 'n 0)
+       (dead? k) (charm? k && n0 <= k && !(two? (memq k keep)))
+       (out x) (peep UOUT x ())
+       (dmax t k w) (: o (peep t k ()) (o == () || o < w ? (pin t k w) t))
+       ; longest weights into the dead region along es0, then out of it to the vars that stay
+       (reach es0) (: R {} S {}
+                     (go st) (st @ ([d w] . u)
+                              (: o (peep R d ())
+                               (o != () && w <= o ? (go u)
+                                (pin R d w, go (foldl (\ a e (dead? <e ? ([<e (w + e 1)] . a) a)) u (out d)))))
+                              1)
+                   (go (filter (e \ dead? <e) es0),
+                    each (keys R) (d \ each (out d) (e \ dead? <e ? () (dmax S <e (R d + e 1)))),
+                    S))
+       ; x's edges since ureset, and the list it had then: only the new ones can reach a dead var
+       (since x t) (: (go l a) (? (l == t) [a l] (two? l) (go >l (<l . a)) [a ()]) (go (out x) ()))
+       ; every var has 'z -> it at 0, so a bridge from 'z counts only above 0
+       (bridge x) (: pr (since x (x == 'z ? (peep UST 'z0 ()) ()))
+                     S (reach <pr)
+                     vs (filter (v \ v != x && (x != 'z || S v > 0)) (keys S))
+                     kept (filter (e \ !(dead? <e)) <pr + pr 1)
+                     have (two? vs ? (foldl (\ t e (dmax t <e (e 1))) {} kept) {})
+                   (pin UOUT x (foldl (\ a v (: w (S v) (peep have v () != () && w <= have v ? a ([v w] . a))))
+                                      kept vs)))
+       xs (foldl (\ a e (!(dead? <e) && dead? (e 1) && !(two? (memq <e a)) ? (<e . a) a)) ['z] es)
+     (each xs bridge,
+      each (filter dead? (ujot n0 n)) (k \ (pull UPOT k (), pull UORG k (), pull UOUT k ()))))
+   (ureset nm) (pin UST 'p (), pin UST 'cur nm, pin UST 'n0 (peep UST 'n 0), pin UST 'z0 (peep UOUT 'z ()))
    ; --- polymorphism: a definition's own levels in its type are made fresh at each cite, its
    ; constraints carried as the longest paths its edges imply between them and the rest
    (uvars t acc) (? (two? t) (t @ ['UU ['lv k _]] (two? (memq k acc) ? acc (k . acc)) (foldl (flip uvars) acc t)) acc)
@@ -371,7 +402,7 @@
    (defvc nm T0 t0)
    (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
-     ucommit nm,
+     ucompact () (ucommit nm),
      gpin nm 1,
      nm))
    ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..

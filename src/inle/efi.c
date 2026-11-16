@@ -7,10 +7,13 @@
 #include "k.h"
 void kq(uint8_t);
 
+// a board's own polled keys, where no firmware holds the console
+__attribute__((weak)) void k_kb_board(int room) { (void) room; }
+
 // a guest's keys are ConIn's, the firmware's serial terminal and keyboards alike: a key's
 // unicode as utf-8, an arrow or edit key as the vt sequence the console reads
 void k_kb_sync(int room) {
-  if (!kboot.efi_st) return;
+  if (!kboot.efi_st) { k_kb_board(room); return; }
   void **st = kboot.efi_st, **in = st[6];
   static char const *const scan[24] = {
     [1] = "\033[A", [2] = "\033[B", [3] = "\033[C", [4] = "\033[D", [5] = "\033[H", [6] = "\033[F",
