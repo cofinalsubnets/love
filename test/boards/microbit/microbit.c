@@ -1,5 +1,5 @@
 // micro:bit v2 arch backend, the C half (no sdk): the crystal, the UART0 console through the
-// daplink, TIMER0's microseconds and the 5x5 matrix. vectors, crt0 and the asm helpers are mkboot.l's
+// daplink, TIMER0's microseconds, the 5x5 matrix, the die's temperature and a ble beacon. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "microbit.h"
 #include "../../../src/inle/bput.h"
@@ -126,3 +126,44 @@ void led_scan(uint8_t const *lv) {
       for (int c = 0; c < LED_N; c++) col_put(c, led_gamma[lv[r * LED_N + c]] > s);
       for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
     REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; } }
+
+// --- the die's temperature, in quarter degrees ------------------------------
+int32_t temp_read(void) {
+  REG(TEMP_DATARDY) = 0;
+  REG(TEMP_START) = 1;
+  while (!REG(TEMP_DATARDY)) {}
+  REG(TEMP_DATARDY) = 0;
+  return (int32_t) REG(TEMP_TEMP); }
+
+// --- a ble beacon: ADV_NONCONN_IND on the three advertising channels, transmit only ----
+// the advertising access address 0x8E89BED6, crc 24 bits of 0x65B from 0x555555, whitened
+// by the channel index. the radio rides the crystal clocks_init started
+void ble_init(void) {
+  REG(RADIO_MODE) = 3;                                     // ble 1 Mbit
+  REG(RADIO_TXPOWER) = 0;                                  // 0 dBm
+  REG(RADIO_PCNF0) = 8u | 1u << 8;                         // an 8-bit length after a 1-byte S0
+  REG(RADIO_PCNF1) = (ADV_PDU_MAX - 2) | 3u << 16 | 1u << 25;   // maxlen, 3-byte base, whitened
+  REG(RADIO_BASE0) = 0x89BED600u;
+  REG(RADIO_PREFIX0) = 0x8Eu;
+  REG(RADIO_TXADDRESS) = 0;
+  REG(RADIO_CRCCNF) = 3u | 1u << 8;                        // 3 bytes, the address skipped
+  REG(RADIO_CRCPOLY) = 0x65Bu;
+  REG(RADIO_CRCINIT) = 0x555555u;
+  REG(RADIO_SHORTS) = 1u | 1u << 1; }                     // ready starts, end disables
+
+// a random static address off the factory's, its top two bits set
+void ble_addr(uint8_t *a) {
+  uint32_t lo = REG(FICR_DEVICEADDR0), hi = REG(FICR_DEVICEADDR1);
+  for (int k = 0; k < 4; k++) a[k] = (uint8_t) (lo >> 8 * k);
+  a[4] = (uint8_t) hi, a[5] = (uint8_t) (hi >> 8 | 0xC0u); }
+
+// one advertising event: the pdu (EasyDMA reads it, so it lives in RAM) on 37, 38, 39
+void ble_adv(uint8_t const *pdu) {
+  static uint8_t const freq[3] = { 2, 26, 80 };
+  for (int k = 0; k < 3; k++) {
+    REG(RADIO_FREQUENCY) = freq[k];
+    REG(RADIO_DATAWHITEIV) = 37u + (uint32_t) k;
+    REG(RADIO_PACKETPTR) = (uint32_t) (uintptr_t) pdu;
+    REG(RADIO_DISABLED) = 0;
+    REG(RADIO_TXEN) = 1;
+    while (!REG(RADIO_DISABLED)) {} } }

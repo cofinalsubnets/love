@@ -1,6 +1,7 @@
 // micro:bit v2 firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
 // not love (128 KB SRAM): the toolchain on silicon, the boards' battery over the daplink's
-// vcp; the matrix after it is lore's savers, slop's drift all green, matrix rain a miss
+// vcp; the matrix after it is lore's savers, slop's drift all green, matrix rain a miss, and a
+// ble beacon names the result and the die's temperature
 #include <stdint.h>
 #include "microbit.h"
 #include "../battery.h"
@@ -32,6 +33,36 @@ static void slop(uint8_t *lv, uint32_t t, int8_t const *sn, uint8_t const *rr) {
             + sn[((x + y) * 8u + ph * 4u / 10u) & 63] + sn[(rr[y * LED_N + x] - ph) & 63u];
       lv[y * LED_N + x] = (uint8_t) ((v + 256) * (LED_MAX + 1) / 513); } }
 
+// digits of v at p, answering the end
+static uint8_t *put_u(uint8_t *p, uint32_t v) {
+  uint8_t d[10]; int n = 0;
+  do d[n++] = (uint8_t) ('0' + v % 10); while (v /= 10);
+  while (n) *p++ = d[--n];
+  return p; }
+static uint8_t *put_s(uint8_t *p, char const *s) { while (*s) *p++ = (uint8_t) *s++; return p; }
+
+// the beacon's pdu: ADV_NONCONN_IND from a random address, then flags, the name
+// ("mb 28/28 23.25C", or "mb FAIL 12 .."), and manufacturer data under the test company
+// 0xFFFF: the temperature in quarter degrees (int16), the checks passed, the one failed or 0
+static void adv_pdu(uint8_t *pdu, uint8_t const *addr, int r, int32_t q) {
+  uint8_t *p = pdu + 2;
+  for (int k = 0; k < 6; k++) *p++ = addr[k];
+  *p++ = 2, *p++ = 0x01, *p++ = 0x06;
+  uint8_t *nl = p; p += 2;
+  p = put_s(p, "mb ");
+  if (r <= 100) p = put_u(p, (uint32_t) r), *p++ = '/', p = put_u(p, 28);
+  else p = put_s(p, "FAIL "), p = put_u(p, (uint32_t) (r - 100));
+  *p++ = ' ';
+  uint32_t a = (uint32_t) (q < 0 ? -q : q);
+  if (q < 0) *p++ = '-';
+  p = put_u(p, a / 4), *p++ = '.', *p++ = (uint8_t) ('0' + a % 4 * 25 / 10), *p++ = (uint8_t) ('0' + a % 4 * 5 % 10);
+  *p++ = 'C';
+  nl[0] = (uint8_t) (p - nl - 1), nl[1] = 0x09;
+  *p++ = 7, *p++ = 0xFF, *p++ = 0xFF, *p++ = 0xFF;
+  *p++ = (uint8_t) q, *p++ = (uint8_t) ((uint32_t) q >> 8);
+  *p++ = (uint8_t) (r <= 100 ? r : 0), *p++ = (uint8_t) (r <= 100 ? 0 : r - 100);
+  pdu[0] = 0x42, pdu[1] = (uint8_t) (p - pdu - 2); }
+
 int main(void) {
   // first light: a board that dies later still shows crt0 and the clocks worked
   led_init(); led_put(1);
@@ -48,9 +79,17 @@ int main(void) {
   for (int k = 0; k < LED_N * LED_N; k++) {
     double cx = (double) (k % LED_N - 2), cy = (double) (k / LED_N - 2);
     rr[k] = (uint8_t) (lm_sqrt(cx * cx + cy * cy) * 10); }
+  uint8_t addr[6], pdu[ADV_PDU_MAX];
+  ble_init(); ble_addr(addr);
+  int32_t q = temp_read();
+  adv_pdu(pdu, addr, r, q);
+  puts_("; beacon up\n");
   led_put(0);
-  for (;;) {
+  // the beacon every tenth pass, ~100 ms; the temperature read again each second
+  for (uint32_t n = 0;; n++) {
     uint32_t t = clock_ms();
     if (r <= 100) slop(lv, t, sn, rr);
     else rain(lv, t);
-    led_scan(lv); } }
+    led_scan(lv);
+    if (n % 100 == 0) q = temp_read(), adv_pdu(pdu, addr, r, q);
+    if (n % 10 == 0) ble_adv(pdu); } }
