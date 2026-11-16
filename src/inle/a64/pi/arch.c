@@ -63,8 +63,9 @@ void serial_putc(int c) {
   usb_putc(c);
   k_irq_restore(d); }
 
-// the otg port's bytes in, as far as kq has room; the uart's come by interrupt
-void k_kb_sync(int room) {
+// the otg port's bytes in, as far as kq has room (efi.c's k_kb_sync, no firmware here); the
+// uart's come by interrupt
+void k_kb_board(int room) {
   for (; room > 0 && usb_rx_ready(); room--) kq((uint8_t) usb_getc()); }
 
 // reading the fifo dry clears the receive interrupt
