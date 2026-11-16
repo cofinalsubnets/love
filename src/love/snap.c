@@ -69,7 +69,7 @@ static word
 // lvm_* that appear as an object's ap but are not in love_def1[]
 static lvm_t *const image_extra_aps[] = {
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox,  // data sentinels
- lvm_map_lookup, lvm_map_data, lvm_cask, lvm_coin, lvm_port_io,                       // thread aps
+ lvm_tab, lvm_cask, lvm_coin, lvm_port_io,                                            // ..and thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret,                                         // dispatchers
  // embedded directly by compiled threads; odd on thumb, so else they pass as fixnums
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
@@ -89,7 +89,8 @@ static uintptr_t image_datasize(union u *d, void const *s) {
   case DTwin:  return Width(struct twin);
   case DString:return str_width(((struct str const*) s)->len);
   case DBig:   return b2w(big_bytes((struct big*)(word) s));
-  case DTray:  return b2w(love_tray_bytes((struct tray*)(word) s)); }
+  case DTray:  return b2w(love_tray_bytes((struct tray*)(word) s));
+  case DTab:   return Width(struct tablet); }
  return 0; }
 static uintptr_t image_objsize(struct g *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
@@ -697,8 +698,9 @@ static struct g *img_canon_symbols(struct g *g) {
 // live serials keep session order, packed 1..k, in the live heap; only the nameless (mints,
 // tablets, pids) carry one. 0 stays ()'s, and a pid charm copied into user data keeps its old number
 static love_inline bool img_serial_at(union u *p, uint64_t *v) {
- if (in_data(p->ap)) return love_typ(p) == DMint && (*v = mint_serial((word) p), true);
- return p->ap == lvm_map_lookup && (*v = map_serial((word) p), true); }
+ if (!in_data(p->ap)) return false;
+ return love_typ(p) == DMint ? (*v = mint_serial((word) p), true)
+      : love_typ(p) == DTab && (*v = map_serial((word) p), true); }
 // a serial's rank: its place among the sorted live ones, from 1
 static uint64_t img_rank(uint64_t const *u, uintptr_t k, uint64_t v) {
  uintptr_t lo = 0, hi = k;
@@ -735,7 +737,7 @@ static struct g *img_canon_serials(struct g *g) {
  if (!fzm) return g->scare = (uintptr_t) (hp - base), encode(g, status_scare);
  each_obj(p) {
   if (img_serial_at(p, &v) && v) n++;
-  if (p->ap == lvm_map_lookup && map_cap((word) p) > cap) cap = map_cap((word) p); }
+  if (tabp((word) p) && map_cap((word) p) > cap) cap = map_cap((word) p); }
  for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) n++;
  for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) n++;
  uint64_t *u = alloc(NULL, (n + 1) * sizeof(uint64_t));
@@ -749,15 +751,15 @@ static struct g *img_canon_serials(struct g *g) {
  uintptr_t nu = 0;
  for (uintptr_t i = 0; i < k; i++) if (!nu || u[nu - 1] != u[i]) u[nu++] = u[i];
  each_obj(p) if (img_serial_at(p, &v) && v) {
-  if (in_data(p->ap)) ini_missing(sym(p), img_rank(u, nu, v));
-  else tablet(p)->serial = putcharm((uintptr_t) img_rank(u, nu, v)); }
+  if (love_typ(p) == DMint) ini_missing(sym(p), img_rank(u, nu, v));
+  else serial_set(tablet(p)->serial, img_rank(u, nu, v)); }
  for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m)
   if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
  for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m)
   if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
  g->next_serial = nu;
  bool ok = true;
- each_obj(p) if (ok && p->ap == lvm_map_lookup) ok = img_rehash(g, (word) p, pairs);
+ each_obj(p) if (ok && tabp((word) p)) ok = img_rehash(g, (word) p, pairs);
  #undef each_obj
  alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0);
  return ok ? g : (g->scare = 1, encode(g, status_scare)); }
@@ -799,8 +801,9 @@ static word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
    if (len(r) == len(p) && !memcmp(txt(r), txt(p), len(p))) return q; }
   else if (two(r)->a == two(p)->a && two(r)->b == two(p)->b) return q; } }
 
-// the live finalizer nodes by word offset: headerless, a walk knows one only by address.
-// NULL without scratch, and hc_stride asks the list (quadratic, but right)
+// by word offset, what a walk knows only by address: a live finalizer node 1 (headerless),
+// a tablet's backing 2 (its word 0 any key). NULL without scratch, and hc_stride asks the
+// list (quadratic, but right)
 static unsigned char *hc_fzmap(struct g *g, word const *base, word const *hp) {
  uintptr_t nw = (uintptr_t) (hp - base);
  unsigned char *m = alloc(NULL, nw);
@@ -808,13 +811,18 @@ static unsigned char *hc_fzmap(struct g *g, word const *base, word const *hp) {
  memset(m, 0, nw);
  for (struct fz *z = g->fz; z; z = z->next)
   if ((word const*) z >= base && (word const*) z < hp) m[(word const*) z - base] = 1;
+ for (union u *p = cell(base); ptr(p) < hp; ) {
+  uintptr_t o = (uintptr_t) (ptr(p) - base);
+  if (m[o] != 1 && tabp((word) p) && ptr(map_back((word) p)) >= base && ptr(map_back((word) p)) < hp)
+   m[ptr(map_back((word) p)) - base] = 2;
+  p = cell(ptr(p) + (m[o] == 1 ? Width(struct fz) : image_objsize(g, p))); }
  return m; }
 
 // the object stride, forging a live finalizer node's width (three raw words, no header)
 static uintptr_t hc_stride(struct g *g, unsigned char const *m, word const *base,
                            union u *p, int *fzp) {
  int z;
- if (m) z = m[(word const*) p - base];
+ if (m) z = m[(word const*) p - base] == 1;
  else { struct fz *f = g->fz; while (f && (union u*) f != p) f = f->next; z = !!f; }
  return (*fzp = z) ? Width(struct fz) : image_objsize(g, p); }
 
@@ -908,8 +916,8 @@ static void img_hashcons(struct g *g) {
   memset(h->tab, 0, cap * sizeof(word));
   for (union u *p = cell(base); ptr(p) < hp; ) {
    uintptr_t sz = hc_stride(g, fzm, base, p, &fz), off = (uintptr_t) (ptr(p) - base);
-   if (!fz && sz > 1 && !in_data(p->ap)
-       && p->ap != lvm_map_lookup && p->ap != lvm_map_data && p->ap != lvm_cask
+   if (!fz && sz > 1 && !in_data(p->ap) && fzm && fzm[off] != 2
+       && p->ap != lvm_cask
        && p->ap != lvm_coin && p->ap != lvm_port_io && p->ap != lvm_cur) {
     int parked = 0;
     uintptr_t hv = 1469598103934665603u;
@@ -997,6 +1005,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
    case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
+   case DTab:   blob[off + 1] = img_encode(x, (intptr_t) tablet(p)->back); break;   // serial, len and cap raw
    case DTray:   if (tray(p)->type == love_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -1291,6 +1300,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
    if (sz - 1 >= hi - off) return 0;                                              // no length, or more than is left
    switch (love_typ(p)) {
     case DNom:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // dig rides raw
+    case DTab:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // the backing; the rest raw
     case DTray:  if (tray(p)->type == love_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], d); }
                  break;

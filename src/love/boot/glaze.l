@@ -68,10 +68,13 @@
    (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))
    (asmx ir) (hasm 'x64 ir 'bytes)
    (asmt tgt ir) (hasm tgt ir 'bytes)
+   ; a tablet's raw len and cap: [lvm_tab back serial len cap], the serial 64 bits on every word
+   (tab-len tgt) (wd tgt * (2 + 8 // wd tgt))
+   (tab-cap tgt) (wd tgt * (3 + 8 // wd tgt))
    ; the map probe: map in r0, tagged key in r10, ends branched to hit (match) / miss (gap).
    ; holo r7..r10 are x86 r8..r11. r0 stands for the lane's acc: mreg lays it
    (mprobe-ir tgt) (: W (wd tgt)
-      [['ld 'r7 'r0 W] ['ld 'r8 'r7 (2 * W)] '(shr r8 1) '(dec r8) ['add 'r7 'r7 (3 * W)]    ; r7=backing; r8=cap>>1-1 (mask); r7=&slots
+      [['ld 'r8 'r0 (tab-cap tgt)] '(dec r8) ['ld 'r7 'r0 W]                                ; r8=cap-1 (mask); r7=&slots, the backing
        ['li 'r0 mapmix] '(imul r0 r0 r10) '(rol r0 32) '(and r0 r0 r8) '(mov r9 r0)    ; I = rot(mix*tagkey)&mask -> r9
        '(label loop) '(leax r0 r9 r9 1 0) ['ldx 'r0 'r7 'r0 W 0] '(cmp r0 r10) '(br eq hit)
        '(test r0 1) '(br eq miss) '(inc r9) '(and r9 r9 r8) '(jmp loop)])                 ; gap (even) -> miss
@@ -82,12 +85,13 @@
    (asmx-seed ir nm addr) (: t {nm addr} f (glazeasm 'at)
                              (((lit? f ? f (cite 'holo 'assemble-at)) 'x64 ir t) 'bytes))   ; one pre-bound external label nm->addr
    ; the write tails: insert-or-update. a near-full table wants a grow native cannot do, so it
-   ; deopts through the caller-seeded label; fixnum keys and values, so no write barrier
-   (mput-ir tgt A) (: W (wd tgt) (mreg A (mprobe-ir tgt + [['label 'miss]
-      ['ld 'r0 'r7 (-2 * W)] '(sar r0 1) '(cmp r0 r8) '(br ge deopt)                ; len >= mask -> near-full -> deopt
+   ; deopts through the caller-seeded label; fixnum keys and values, so no write barrier. R
+   ; holds the map, past the probe's registers
+   (mput-ir tgt A R) (: W (wd tgt) (mreg A (mprobe-ir tgt + [['label 'miss]
+      ['ld 'r0 R (tab-len tgt)] '(cmp r0 r8) '(br ge deopt)                         ; len >= mask -> near-full -> deopt
       '(leax r0 r9 r9 1 0) ['stx 'r7 'r0 W 0 'r10]
       '(pop r8) '(leax r8 r8 r8 1 1) ['stx 'r7 'r0 W W 'r8]
-      ['ld 'r0 'r7 (-2 * W)] '(add r0 r0 2) ['st 'r7 (-2 * W) 'r0] '(jmp end)       ; len++ (tagged: +2)
+      ['ld 'r0 R (tab-len tgt)] '(inc r0) ['st R (tab-len tgt) 'r0] '(jmp end)      ; len++
       '(label hit) '(leax r0 r9 r9 1 0) '(pop r8) '(leax r8 r8 r8 1 1) ['stx 'r7 'r0 W W 'r8]
       '(label end)])))
    ; the param-kind probes: how the group body uses P picks the entry guard mkouterir lays for its slot
@@ -849,8 +853,8 @@
               ([['ld T SP cso] ['test T 1] ['br 'ne dr]
                  ['ld X T 0] (reach tgt SC 2) ['cmp X SC] ['br 'ne dr]                                   ; not a map: drive, the key still in A
                  ['st SP (spill d) A]
-                 ['ld T T W] ['ld X T (2 * W)] ['shr X 1] ['dec X]                                            ; backing ; mask
-                 ['ld SC A (2 * W)] ['and SC SC X] ['add T T (3 * W)]                                             ; i = dig & mask ; T = the slots
+                 ['ld X T (tab-cap tgt)] ['dec X] ['ld T T W]                                                ; mask ; T = the slots, the backing
+                 ['ld SC A (2 * W)] ['and SC SC X]                                                           ; i = dig & mask
                  ['label lp] ['leax A SC SC 1 0] ['ldx A T A W 0]
                  ['ld X SP (spill d)] ['cmp A X] ['br 'eq ht]
                  (reach tgt X 11) ['cmp A X] ['br 'eq ms]
@@ -858,7 +862,7 @@
                  ['ld X A 0] (reach tgt A 3) ['cmp X A] ['br 'ne nx]                                  ; another nom of the same dig -> drive
                  ['leax A SC SC 1 0] ['ldx A T A W 0] ['ld A A (2 * W)]
                  ['ld X SP (spill d)] ['ld X X (2 * W)] ['cmp A X] ['br 'eq ld]
-                 ['label nx] ['inc SC] ['ld X T -W] ['shr X 1] ['dec X] ['and SC SC X] ['jmp lp]
+                 ['label nx] ['inc SC] ['ld X SP cso] ['ld X X (tab-cap tgt)] ['dec X] ['and SC SC X] ['jmp lp]
                  ['label ht] ['leax A SC SC 1 0] ['ldx A T A W W] ['jmp en]
                  ['label ms] ['ld A SP gbo] ['jmp en]
                  ['label ld] ['ld A SP (spill d)] ['label dr]]
@@ -1470,7 +1474,7 @@
                (op = 'mget) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mget MAP k d): the raw value, a gap-miss -> d
                   (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mget-ir tgt A (whole? c ? c 0)) lp ht ms en 'deopt)]))
                (op = 'mput) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mput MAP k v): a grow-due miss -> OVF; answers the map
-                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mput-ir tgt A) lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mput-ir's (pop r8) takes
+                  (bcat [(go c) [['push A]] (go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mput-ir tgt A R) lp ht ms en 'OVF) [['mov A R]]]))   ; v pushed as the spill mput-ir's (pop r8) takes
                ())
             (op a)
             (? (op = 'tally) (: R (argregir tgt (argix a ps 0)) [['ld A R (wd tgt)]])       ; the raw len at [STR+w]

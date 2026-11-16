@@ -259,13 +259,21 @@ extern const struct str0 { lvm_t *ap; uintptr_t len; char bytes[8]; } str_empty;
 // (): the one serial-0 mint, a const shared by every core so it bakes; serial 0 is never drawn
 extern const struct mint mint_zero;
 #define ZeroPoint ((word) &mint_zero)
-static love_inline uint64_t mint_serial(word x) {
+// a serial's words, one on 64 bits and two on 32: a mint's and a tablet's
+static love_inline uint64_t serial_get(uintptr_t const *s) {
 #if UINTPTR_MAX > 0xffffffffu
- return sym(x)->serial[0];
+ return s[0];
 #else
- return sym(x)->serial[0] | (uint64_t) sym(x)->serial[1] << 32;
+ return s[0] | (uint64_t) s[1] << 32;
 #endif
 }
+static love_inline void serial_set(uintptr_t *s, uint64_t v) {
+ s[0] = (uintptr_t) v;
+#if UINTPTR_MAX <= 0xffffffffu
+ s[1] = (uintptr_t) (v >> 32);
+#endif
+}
+static love_inline uint64_t mint_serial(word x) { return serial_get(sym(x)->serial); }
 
 // --- the core ---
 struct port_vt;
@@ -694,7 +702,7 @@ static love_inline uintptr_t rot(uintptr_t x) {
 // any value -> its enum q, a tray refined by element tier
 enum q kind(word);
 extern union u const numap_drive[], obin_drive[];          // [ap; swap; ret0], runs (num-ap n x)
-lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox; // the data sentinels (+ ap)
+lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox, lvm_tab; // the data sentinels (+ ap)
 // the sentinels tile one section at data_stride in enum d order from lvm_sym: the slot is the kind
 #if data_section
 #if data_stride == 16
@@ -715,7 +723,7 @@ static love_inline enum d love_typ(union u *o) {
 static love_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
  return p == lvm_chain || p == lvm_nom || p == lvm_str || p == lvm_sym || p == lvm_big
-     || p == lvm_tray || p == lvm_gembox || p == lvm_twinbox; }
+     || p == lvm_tray || p == lvm_gembox || p == lvm_twinbox || p == lvm_tab; }
 static love_inline enum d love_typ(union u *o) {
  lvm_t *p = o->ap;
  return p == lvm_chain  ? DChain
@@ -725,6 +733,7 @@ static love_inline enum d love_typ(union u *o) {
       : p == lvm_big    ? DBig
       : p == lvm_tray   ? DTray
       : p == lvm_gembox ? DGem
+      : p == lvm_tab    ? DTab
       :                   DTwin; }
 #endif
 #define typ(_) love_typ(cell(_))
@@ -800,7 +809,7 @@ love_noinline noicf lvm_t
  lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap1z, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
  // the data sentinels: byte-identical bodies kept apart by address (noicf)
- data_num_apply, data_sym_apply, data_string_apply, data_pair_apply, data_tray_apply,
+ data_num_apply, data_sym_apply, data_string_apply, data_pair_apply, data_tray_apply, data_tab_apply,
  lvm_sym, lvm_nom, lvm_gembox, lvm_twinbox,
  lvm_big, lvm_tray, lvm_str, lvm_chain,
  lvm_addn, lvm_fquotn, lvm_muln,
@@ -812,10 +821,7 @@ lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 // header, bytes, and the NUL
 #define str_width(n) (str_type_width + b2w((n) + 1))
 static love_inline struct mint *ini_missing(struct mint *y, uint64_t serial) {
- y->ap = lvm_sym, y->serial[0] = (uintptr_t) serial;
-#if UINTPTR_MAX <= 0xffffffffu
- y->serial[1] = (uintptr_t) (serial >> 32);
-#endif
+ y->ap = lvm_sym, serial_set(y->serial, serial);
  return y; }
 static love_inline struct nom *ini_nom(struct nom *y, uintptr_t name, uintptr_t dig) {
  return y->ap = lvm_nom, y->name = name, y->dig = dig, y; }
@@ -1026,27 +1032,24 @@ void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
 void bc_step(struct bcast *w);
 
 // --- maps ---
-// a map: a fixed header [lvm_map_lookup, backing, serial, tag] and an open-addressed backing
-// [lvm_map_data, len, cap, k,v.., tag] that growth swaps, so aliases see later inserts. both
-// plain threads, empty slots map_gap. mutable, so the serial is its order, never its contents
-lvm_t lvm_map_lookup, lvm_map_data;
-static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_map_lookup; }
+// a map: a data object [lvm_tab, backing, serial, len, cap], its serial, len and cap raw, over an
+// open-addressed backing [k,v.., tag] that growth swaps, so aliases see later inserts. the
+// backing is a plain thread only its tablet names, its word 0 any key; empty slots map_gap.
+// mutable, so the serial is its order, never its contents
+static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_tab; }
 extern const word map_gap_cell;
 #define map_gap ((word) &map_gap_cell)
 #define map_min_cap 4
-// serial, len and cap are charms, so gc scans both as threads
-struct tablet { lvm_t *ap; word back, serial; };
-struct tablet_back { lvm_t *ap; word len, cap, slot[]; };   // slot: cap k,v pairs
+struct tablet { lvm_t *ap; word back; uintptr_t serial[8 / sizeof(uintptr_t)], len, cap; };
 #define tablet(_) ((struct tablet*)(_))
-#define tablet_back(_) ((struct tablet_back*)(_))
-enum { map_head = sizeof(struct tablet) / sizeof(word) + 1 };   // tag included
-static love_inline uintptr_t map_back_words(uintptr_t cap) { return Width(struct tablet_back) + 1 + 2 * cap; }
+#define tab_req Width(struct tablet)
+static love_inline uintptr_t map_back_words(uintptr_t cap) { return 2 * cap + 1; }   // tag included
 static love_inline word map_back(word m) { return tablet(m)->back; }
-static love_inline uintptr_t map_serial(word m) { return getcharm(tablet(m)->serial); }
-static love_inline word *map_slots(word m) { return tablet_back(map_back(m))->slot; }
-static love_inline uintptr_t map_len(word m) { return getcharm(tablet_back(map_back(m))->len); }
-static love_inline uintptr_t map_cap(word m) { return getcharm(tablet_back(map_back(m))->cap); }
-static love_inline void map_len_set(word m, uintptr_t n) { tablet_back(map_back(m))->len = putcharm(n); }
+static love_inline uint64_t map_serial(word m) { return serial_get(tablet(m)->serial); }
+static love_inline word *map_slots(word m) { return ptr(map_back(m)); }
+static love_inline uintptr_t map_len(word m) { return tablet(m)->len; }
+static love_inline uintptr_t map_cap(word m) { return tablet(m)->cap; }
+static love_inline void map_len_set(word m, uintptr_t n) { tablet(m)->len = n; }
 word
  mapget(struct g*, word, word, word),
  stacklook(struct g*, word, word),
@@ -1109,11 +1112,11 @@ static love_inline bool in_live_pool(struct g *g, word const *p) {
  return p >= g->major_base && p < g->major_base + g->major_len; }
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
-// a tablet's header at h over backing b, tagged: the word callers hold
-static love_inline word ini_tablet(union u *h, word b, word serial) {
+// a tablet's header at h over backing b of cap slots, len of them full
+static love_inline word ini_tablet(union u *h, word b, uint64_t serial, uintptr_t len, uintptr_t cap) {
  struct tablet *t = tablet(h);
- t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
- return word(tagthread(h, Width(struct tablet))); }
+ t->ap = lvm_tab, t->back = b, serial_set(t->serial, serial), t->len = len, t->cap = cap;
+ return word(h); }
 #define topof(g) ((word*)g+g->len)
 struct tag { union u *head; union u end[]; };
 struct tag *ttag(struct g*, union u*);

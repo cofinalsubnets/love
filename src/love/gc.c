@@ -66,7 +66,12 @@ static void evac_data(struct g *g, struct gcx *X) {
   case DString: X->cp += str_width(str(X->cp)->len); return;
   case DBig: X->cp += b2w(big_bytes(big(X->cp))); return;
   case DGem: X->cp += gem_req; return;
-  case DTwin: X->cp += twin_req; return; }
+  case DTwin: X->cp += twin_req; return;
+  case DTab: {
+   struct tablet *t = tablet(X->cp);
+   X->cp += tab_req;
+   t->back = gcp(g, X, t->back);
+   return; } }
  __builtin_trap(); }                            // a hot outside enum d: the object is not what its ap says
 
 // the write barrier: every old->young edge goes through gen_wb into the rem set, so a minor
@@ -120,6 +125,7 @@ static void gen_scan_inplace(struct g *g, struct gcx *X, word obj) {
     for (word *e = ptr(tray_data(v)); ne--; e[ne] = gcp(g, X, e[ne]));
    break; }
   case DNom: nom(p)->name = gcp(g, X, nom(p)->name); break;
+  case DTab: tablet(p)->back = gcp(g, X, tablet(p)->back); break;
   default: break; } }                              // the rest are pointer-free
 
 // a word0 that is this pass's forward: into the tenured it made, or the survivors
@@ -160,9 +166,8 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
  // sized to the survivors, so an image's map is a function of the live set; +1 is intern_reserve's
  while ((n + 1) * 4 >= cap * 3) cap *= 2;
  uintptr_t mask = cap - 1;
- union u *b = map_fill_back(gbump(g, map_back_words(cap)), cap), *hd = gbump(g, map_head);
- ini_tablet(hd, (word) b, tablet(om)->serial);
- word *ns = tablet_back(b)->slot;
+ union u *b = map_fill_back(gbump(g, map_back_words(cap)), cap), *hd = gbump(g, tab_req);
+ word *ns = ptr(b);
  n = 0;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
@@ -173,8 +178,7 @@ static word major_symbols_rebuild(struct g *g, struct gcx *X, word om) {
   uintptr_t i = nom(fwd)->dig & mask;   // the cached spelling hash: hash(g, nk) without the walk
   while (ns[2 * i] != map_gap) i = (i + 1) & mask;
   ns[2 * i] = nk, ns[2 * i + 1] = fwd, n++; }
- b[1].x = putcharm(n);
- return (word) hd; }
+ return ini_tablet(hd, (word) b, map_serial(om), n, cap); }
 
 static void major_run_finalizers(struct g *g, struct gcx *X) {
  struct fz *new_fz = NULL;
@@ -533,7 +537,10 @@ static love_inline word copy_data(struct g *g, struct gcx *X, union u *src, bool
    return word(s->ap = memcpy(d, s, sizeof(struct gem))); }
   case DTwin: {
    struct twin *s = twin(src), *d = cbump(g, X, sv, twin_req);
-   return word(s->ap = memcpy(d, s, sizeof(struct twin))); } }
+   return word(s->ap = memcpy(d, s, sizeof(struct twin))); }
+  case DTab: {
+   struct tablet *s = tablet(src), *d = cbump(g, X, sv, tab_req);
+   return word(s->ap = memcpy(d, s, sizeof(struct tablet))); } }
  __builtin_trap(); }
 
 static love_inline struct tag *ttag2(struct g *g, struct gcx *X, union u *k) {

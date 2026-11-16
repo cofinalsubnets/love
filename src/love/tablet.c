@@ -23,10 +23,6 @@ static love_inline intptr_t tray_off(struct tray *v, word k) {
 #define map_hint_max (1u << 24)        // where (tablet n)'s hint saturates
 static love_noinline struct g *map_grow(struct g *g);
 static love_noinline word mapdel(struct g *g, word m, word k, word dflt);
-// a backing's ap, reached only from a header, never applied: answers () if it ever is
-lvm(lvm_map_data) { // FIXME this just returns const (); can we delete it?
- Ip = cell(*++Sp); *Sp = ZeroPoint; love_musttail return Continue(); }
-
 // k's slot, or the first empty one on its chain: load < 3/4 keeps an empty slot to stop at.
 // a walk that spent the gap answers not found with g->walk set
 uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
@@ -63,10 +59,8 @@ word stacklook_macro(struct g *g, word k) {
 
 // an empty backing of cap slots (a power of two) at b, reserved by the caller
 union u *map_fill_back(union u *b, uintptr_t cap) {
- struct tablet_back *t = tablet_back(b);
- t->ap = lvm_map_data, t->len = putcharm(0), t->cap = putcharm(cap);
- for (uintptr_t i = 0; i < cap; i++) t->slot[2 * i] = map_gap, t->slot[2 * i + 1] = zero;
- return tagthread(b, map_back_words(cap) - 1); }
+ for (uintptr_t i = 0; i < cap; i++) b[2 * i].x = map_gap, b[2 * i + 1].x = zero;
+ return tagthread(b, 2 * cap); }
 
 // double the backing of the map at sp[2]; the header never moves, so aliases hold
 static love_noinline struct g *map_grow(struct g *g) {
@@ -75,7 +69,7 @@ static love_noinline struct g *map_grow(struct g *g) {
  word m = g->sp[2];                                 // after GC
  union u *nb = map_fill_back((union u*) g->hp, ncap);
  g->hp += map_back_words(ncap);
- word *os = map_slots(m), *ns = tablet_back(nb)->slot;
+ word *os = map_slots(m), *ns = ptr(nb);
  uintptr_t ocap = map_cap(m), nlen = 0, nmask = ncap - 1;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
@@ -84,8 +78,7 @@ static love_noinline struct g *map_grow(struct g *g) {
   if (g->walk) return g;                          // a key's walk spent the gap: the old backing stands
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
- tablet_back(nb)->len = putcharm(nlen);
- tablet(m)->back = (word) nb;
+ tablet(m)->back = (word) nb, tablet(m)->len = nlen, tablet(m)->cap = ncap;
  gen_wb(g, m, (word) nb);
  return g; }
 
@@ -140,10 +133,10 @@ static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
 // a fresh empty map onto sp[0], lvm_tablet's shape
 struct g *map_new(struct g *g) {
  uintptr_t cap = map_min_cap, nb = map_back_words(cap);
- if (!ok(g = have(g, nb + map_head))) return g;
+ if (!ok(g = have(g, nb + tab_req))) return g;
  union u *b = map_fill_back(cell(g->hp), cap);
- word h = ini_tablet(cell(g->hp + nb), (word) b, putcharm(++g->next_serial));
- g->hp += nb + map_head;
+ word h = ini_tablet(cell(g->hp + nb), (word) b, ++g->next_serial, 0, cap);
+ g->hp += nb + tab_req;
  return push(g, 1, h); }
 
 // (tablet n): a fresh map presized so n keys never rehash
@@ -153,13 +146,13 @@ lvm(lvm_tablet) {
            cap = map_min_cap;
  while (cap * 3 <= hint * 4) cap *= 2;
  uintptr_t nb = map_back_words(cap);
- Have(nb + map_head);
+ Have(nb + tab_req);
  union u *b = map_fill_back(cell(Hp), cap);
- Sp[0] = ini_tablet(cell(Hp + nb), (word) b, putcharm(++g->next_serial));
- Hp += nb + map_head; love_musttail return Next(1); }
+ Sp[0] = ini_tablet(cell(Hp + nb), (word) b, ++g->next_serial, 0, cap);
+ Hp += nb + tab_req; love_musttail return Next(1); }
 
 // (m k): lookup, () if absent
-lvm(lvm_map_lookup) {
+lvm(data_tab_apply) {
  Pack(g);                                            // packed: the probe's walks take the nursery's free room
  word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a miss is (), not 0
  WalkAgain();
@@ -448,6 +441,7 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  switch (typ(x)) {
    case DChain: break;                            // hash_at spines a chain: a bug here
    case DMint: { uint64_t s = mint_serial(x); return *out = (uintptr_t) (sizeof(uintptr_t) < 8 ? s ^ s >> 32 : s), 0; }
+   case DTab: { uint64_t s = map_serial(x); return *out = (uintptr_t) (sizeof(uintptr_t) < 8 ? s ^ s >> 32 : s), 0; }
    case DNom: return *out = nom(x)->dig, 0;        // the spelling's: a serial keys order to intern history
    case DTray: {
     // an object tray's header only: answer 3 and hash_at folds the cells, as = reads through

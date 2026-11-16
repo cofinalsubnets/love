@@ -1302,7 +1302,7 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
   if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
- if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // mutable: its identity
+ if (tabp(a) && tabp(b)) { uint64_t sa = map_serial(a), sb = map_serial(b);    // mutable: its identity
   return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // orders it, never its contents
  uintptr_t ha = hash(g, a), hb = hash(g, b);
  return ha < hb ? -1 : ha > hb ? 1 : 0; }

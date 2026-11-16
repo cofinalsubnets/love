@@ -14,13 +14,13 @@
    ; the arithmetic lane: every numeric kind routes identically
    mx-numk '(KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
 
-   ; --- the reps: what a heap object's hot says it is; `love_typ` answers these eight only.
+   ; --- the reps: what a heap object's hot says it is; `love_typ` answers these nine only.
    ; one tray rep, refined by element tier into four kinds.
-   mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain)
+   mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain DTab)
    ; each rep's dispatch kind. DTray's entry is never read (kind adds the tier itself).
    ; DBig -> KSun: one boxed integer, limbs in C, `sun` to love.
    mx-repq '((DMint KMint) (DNom KNom) (DGem KGem) (DTwin KTwin)
-             (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain))
+             (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain) (DTab KTablet))
 
    ; --- the rows, (name numk KMint KNom KString KChain KTablet KHot): total by construction.
    ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
