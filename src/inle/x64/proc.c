@@ -461,6 +461,9 @@ static long k_ukin(struct k_uctx const *p, struct k_uctx *c, uint64_t const *t, 
     *d = (e & ~k_upa) | k_pa(to); }
   return 0; }
 
+// sys.c's door: a process here forks and execs
+bool k_proc_forks(void) { return true; }
+
 // sys.c's door: pid a copy of m's process, standing in m's call -- its pages but the lent ones
 // copied, its registers and float file as the call found them -> 0, or -errno
 long k_proc_clone(void *m, long pid) {

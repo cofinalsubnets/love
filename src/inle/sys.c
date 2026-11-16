@@ -255,6 +255,7 @@ __attribute__((weak)) void k_proc_stop(long pid) { (void) pid; }
 __attribute__((weak)) long k_proc_run(void *m) { return (void) m, 0; }
 __attribute__((weak)) void k_proc_drop(void *m) { (void) m; }
 __attribute__((weak)) long k_proc_clone(void *m, long pid) { return (void) m, (void) pid, -ENOSYS; }
+__attribute__((weak)) bool k_proc_forks(void) { return false; }
 
 static struct k_proc *k_proc_of(long pid) {
   for (int i = 0; i < k_procs_n; i++) if (k_procs[i].pid == pid) return &k_procs[i];
@@ -585,8 +586,8 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
     ((int*) a)[0] = (int) r0, ((int*) a)[1] = (int) r1;
     return 0; }
    case NR_ioctl: return kf < 0 ? -EBADF : k_term_ioctl(p->pid, (int) kf, (unsigned long) b, (void*) c);
-   case NR_readlinkat:                               // love's own link names love
-    if (strcmp((char const*) b, k_self)) goto path;
+   case NR_readlinkat:                               // love's own link names love, where it can exec
+    if (!k_proc_forks() || strcmp((char const*) b, k_self)) goto path;
     r = (long) (sizeof k_self - 1 < (uintptr_t) d ? sizeof k_self - 1 : (uintptr_t) d);
     return memcpy((void*) c, k_self, (size_t) r), r;
    case NR_ppoll: {
