@@ -97,17 +97,22 @@
        ioff (ld-align pg (gend - base))   ; .image past the data, __LINKEDIT past that: dyld
        iaddr (ld-align pg bend)           ; wants it last, so a bake that grows the image moves it on
        iend (img? ? (ldlay1 'image iaddr objs) iaddr)
-       ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
-       binds (catall ([[62 81]]                              ; dylib special -2, type pointer
-                      + map (k \ (: n ("_" + macho-dyname (imps k))
-                                     (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 65 a weak import
-                                              [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
-                      + [[0]]))
        loff (ld-align pg (ioff + (iend - iaddr)))
        laddr (ld-align pg iend)
        glo (ldsyms objs)
        p0 (peep (plt 'base) 1 0)
        _ (each ^ni (k \ pin glo (imps k) [(p0 + 16 * k) 0]))
+       ; a "libsys." word an object defines is dyld's to fill, weakly: its code reads it the same
+       ; in every container
+       lsw (filter (n \ starts? n "libsys.") (sort (keys glo)))
+       ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
+       (bind nm a w) (: n ("_" + macho-dyname nm)
+                        (catall [[(w ? 65 64)] (map n ^#n) [0]          ; 65 a weak import
+                                 [115] (macho-uleb (a - d0)) [144]]))
+       binds (catall ([[62 81]]                              ; dylib special -2, type pointer
+                      + map (k \ bind (imps k) (dend + 8 * k) (elem (imps k) wimps)) ^ni
+                      + map (n \ bind n <(glo n) 1) lsw
+                      + [[0]]))
        _ (pin plt 'src (string (catall (map (k \ ld-plt-x64 (p0 + 16 * k) (dend + 8 * k)) ^ni))))
        ent (: e (glo "_start")
               o1 <objs

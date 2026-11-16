@@ -365,10 +365,11 @@ int __love_macat(long n, long *w) {
   if (fl >= 0) w[fl] = (w[fl] & 0xf00) >> 4;
   return 1; }
 
-/* dyld's exe asks xnu through libSystem by name, a weak import each ("libsys." keeps it
- * apart from our own read; macho.l binds the bare name): 0 in a static link, where the raw
- * trap stays. -1 reads errno through __error() and parks as the trap's carry */
-#define LvLs(t, nm, sym, ...) extern t __ls_##nm(__VA_ARGS__) __asm__("libsys." sym) __attribute__((weak))
+/* dyld's exe asks xnu through libSystem by name, a word each that dyld binds weakly ("libsys."
+ * keeps it apart from our own read; macho.l binds the bare name). the code is the same in
+ * every container: 0 outside dyld, where the raw trap stays. -1 reads errno through __error()
+ * and parks as the trap's carry */
+#define LvLs(t, nm, sym, ...) t (*volatile __ls_##nm)(__VA_ARGS__) __asm__("libsys." sym)
 LvLs(int *, error, "__error", void);
 LvLs(void, exit, "_exit", int);
 LvLs(int, fork, "fork", void);
@@ -458,6 +459,8 @@ LvLs(int, kevent, "kevent", int, void const *, int, void *, int, void const *);
 LvLs(int, clock_gettime, "clock_gettime", int, void *);
 LvLs(int, usigaction, "sigaction", int, void const *, void *);
 LvLs(long, slide, "_dyld_get_image_vmaddr_slide", unsigned);
+LvLs(void *, dlopen, "dlopen", char const *, int);   /* horn.c's */
+LvLs(void *, dlsym, "dlsym", void *, char const *);
 
 /* sigaction by libSystem, its own tramp doing the sigreturn: the user's shape both ways */
 long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old) {
