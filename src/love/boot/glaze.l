@@ -59,12 +59,13 @@
    (reach tgt r k) ['ld r (greg tgt 'g) (reach-offset 0 + wd tgt * k)]
    ; the countdown: g's fair takes one per native loop step or call (fairck), or 64 at every 64th step
    ; of a loop counting by one (fairbit, off the counter's bits); at 0 it refills, g's ticks counts it, and
-   ; a peer on the run ring or a parked task takes the lane's yield yl, which falls through. r s scratch;
-   ; fair rides past reach, the ring and the parked are g's words 3 and 4 (love.h asserts all three)
+   ; at every 16th tick, a slice near the interpreter's, a peer on the run ring or a parked task takes the
+   ; lane's yield yl, which falls through. r s scratch; fair rides past reach, the ring and the parked
+   ; are g's words 3 and 4 (love.h asserts all three)
    nreach 14                                                          ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap 12 fair 13 setcup
    (fairo tgt) (reach-offset 0 + nreach * wd tgt)
    (fairtk tgt r s o ok yl) (: G (greg tgt 'g) W (wd tgt) py (mint 0)
-                             ([['li r 64] ['st G o r] ['ld r G (o + W)] ['add r r 1] ['st G (o + W) r]
+                             ([['li r 64] ['st G o r] ['ld r G (o + W)] ['add r r 1] ['st G (o + W) r] ['test r 15] ['br 'ne ok]
                                ['ld r G (3 * W)] ['ld s r 0] ['cmp s r] ['br 'ne py] ['ld r G (4 * W)] ['test r r] ['br 'eq ok]
                                ['label py]] + yl + [['label ok]]))
    (fairck tgt r s yl) (: o (fairo tgt) ok (mint 0) ([['decm (greg tgt 'g) o] ['br 'gt ok]] + fairtk tgt r s o ok yl))
