@@ -192,7 +192,7 @@ lvm(data_pair_apply) {
 // any value -> the kind it dispatches as; a tray dispatches by element tier
 enum q kind(word x) {
  if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KTablet : KHot;
+ if (!datp(x)) return KHot;
  enum d r = typ(x);
  if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
  return kind_of_d[r]; }

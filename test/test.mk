@@ -963,6 +963,10 @@ test_wake: $(ho)/love
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the woken image storms"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
+	@$(ho)/love bake -l test/gate/wakekeys.l $(ho)/wakekeys.image > /dev/null
+	@if $(ho)/love wake $(ho)/wakekeys.image -q -e "(quit (wakekeys 0 ? 0 1))"; \
+	  then echo "test_wake: green (serial keys found after the wake)"; rm -f $(ho)/wakekeys.image; \
+	  else echo "test_wake: FAILED -- a serial key is lost across the bake"; rm -f $(ho)/wakekeys.image; exit 1; fi
 
 # --- the metal gates; kernel build rules stay in the root Makefile ---
 

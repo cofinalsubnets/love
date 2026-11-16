@@ -1247,7 +1247,7 @@ static love_inline intptr_t mint_cmp(struct g *g, word a, word b) {
  if (na != nb) return na ? 1 : -1;
  if (na) { struct str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
   return bytes_cmp(txt(sa), len(sa), txt(sb), len(sb)); }
- uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;
+ uint64_t ca = mint_serial(a), cb = mint_serial(b);
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 intptr_t love_mint_cmp(struct g *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
 // two galaxies of equal net, so cmp3 stays antisymmetric: rank, dims, then cells (re, im)
@@ -1302,7 +1302,7 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
   if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
- if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // mutable: its identity
+ if (tabp(a) && tabp(b)) { uint64_t sa = map_serial(a), sb = map_serial(b);    // mutable: its identity
   return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // orders it, never its contents
  uintptr_t ha = hash(g, a), hb = hash(g, b);
  return ha < hb ? -1 : ha > hb ? 1 : 0; }

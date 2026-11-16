@@ -495,8 +495,7 @@ word fn_meaning(struct g *c, word x) {
  return x; }
 // threads that are carriers, not code: known by identity, never by their words
 bool fn_carrier(union u *k) {
- return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
-     || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
+ return k[0].ap == lvm_cask || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
 // the pools are independent blocks, in any order
 bool in_heap(struct g *c, word x) {

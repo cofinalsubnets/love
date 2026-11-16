@@ -35,7 +35,7 @@ static uintptr_t stringlen(struct g *g, word x);
 #endif
 word const map_gap_cell = 0; // FIXME why do we need 0 as a constant :/
 struct str0 const str_empty = { .ap = lvm_str, .len = 0 };
-struct mint const mint_zero = { .ap = lvm_sym, .serial = 0 };
+struct mint const mint_zero = { .ap = lvm_sym, .serial = {0} };
 // ===== g =====
 enum status fin(struct g *g) {
  enum status s = code_of(g);
@@ -149,7 +149,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->minor0 = love_minor0, g->major0 = love_major0, g->ratio = gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = wait_in;
  // the kind sentinels and drives a native reaches through g: a blob holds no binary address
- g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_map_lookup;
+ g->reach[ReachChain] = (word) lvm_chain, g->reach[ReachStr] = (word) lvm_str, g->reach[ReachMap] = (word) lvm_tab;
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
  g->fair = 64, g->ticks = 0, g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
@@ -918,7 +918,7 @@ love_noinline word intern_checked(struct g *g, struct str *b) {
  if ((map_len(m) + 1) * 4 >= map_cap(m) * 3) {
   uintptr_t ncap = 2 * map_cap(m), nmask = ncap - 1;
   union u *nb = map_fill_back(bump(g, map_back_words(ncap)), ncap);
-  word *os = map_slots(m), *ns = tablet_back(nb)->slot;
+  word *os = map_slots(m), *ns = ptr(nb);
   uintptr_t ocap = map_cap(m), nlen = 0;
   for (uintptr_t j = 0; j < ocap; j++) {
    word k = os[2 * j];
@@ -926,8 +926,8 @@ love_noinline word intern_checked(struct g *g, struct str *b) {
    uintptr_t x = hash(g, k) & nmask;
    while (ns[2 * x] != map_gap) x = (x + 1) & nmask;
    ns[2 * x] = k, ns[2 * x + 1] = os[2 * j + 1], nlen++; }
-  tablet_back(nb)->len = putcharm(nlen);
-  tablet(m)->back = (word) nb, gen_wb(g, m, (word) nb);  // the header keeps its identity
+  tablet(m)->back = (word) nb, tablet(m)->len = nlen, tablet(m)->cap = ncap;
+  gen_wb(g, m, (word) nb);                                 // the header keeps its identity
   i = map_probe(g, m, word(b), &found); }
  struct nom *y = ini_nom(bump(g, Width(struct nom)), word(b), nom_dig(word(b)));
  word *slots = map_slots(m);
@@ -1181,6 +1181,7 @@ DSENT(4,  lvm_big,     data_num_apply)
 DSENT(5,  lvm_tray,    data_tray_apply)
 DSENT(6,  lvm_str,     data_string_apply)
 DSENT(7,  lvm_chain,   data_pair_apply)
+DSENT(8,  lvm_tab,     data_tab_apply)
 #else
 lvm(lvm_tray)   { love_musttail return Ap(data_tray_apply, g); }
 lvm(lvm_big)   { love_musttail return Ap(data_num_apply, g); }
@@ -1190,6 +1191,7 @@ lvm(lvm_nom)   { love_musttail return Ap(data_sym_apply, g); }
 lvm(lvm_chain) { love_musttail return Ap(data_pair_apply, g); }
 lvm(lvm_gembox)   { love_musttail return Ap(data_num_apply, g); }
 lvm(lvm_twinbox)  { love_musttail return Ap(data_num_apply, g); }
+lvm(lvm_tab)      { love_musttail return Ap(data_tab_apply, g); }
 #endif
 
 // snap.c walks def1 to number the aps it serializes
