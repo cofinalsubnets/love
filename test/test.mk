@@ -14,7 +14,7 @@
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
+  test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
@@ -54,7 +54,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
-	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 \
+	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
@@ -564,10 +564,10 @@ test_raw_rv64: host
 test_raw_a64: host
 	@$(raw_env) gate_sentinel='test/a64/callout:.* ok' \
 	  $(gsh) test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
-# test_love_rv64 -- the cross-built rv64 artifact under qemu-user
-test_love_rv64: host $(ho)/.dist-cat.l
-	@$(MAKE) -s xa=rv64 out/x-rv64/love
-	@$(gsh) test/gate/rv64love.sh $(ho) out/x-rv64/love $(ho)/.dist-cat.l $t
+# test_love_rv64, test_love_arm -- the cross-built artifact under qemu-user
+test_love_rv64 test_love_arm: host $(ho)/.dist-cat.l
+	@$(MAKE) -s xa=$(@:test_love_%=%) out/x-$(@:test_love_%=%)/love
+	@$(gsh) test/gate/qlove.sh $(@:test_love_%=%) $(ho) out/x-$(@:test_love_%=%)/love $(ho)/.dist-cat.l $t
 # test_envimage -- an unbaked love keeping its image at LOVE_IMAGE, as an android app does
 test_envimage: host
 	@sh test/gate/envimage.sh $(ho)/love.raw $(ho)/envimage

@@ -898,17 +898,21 @@ static love_inline intptr_t wbig_get(word x) {
  uintptr_t u = 0;
  for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
  return (intptr_t) (sl < 0 ? (uintptr_t) 0 - u : u); }
-// a word past the charm range as a bignum, under Have(wbig_req); never 0, as callers demote
-static love_inline word mk_wbig(word **hpp, intptr_t v) {
+// a word's magnitude m as a bignum, under Have(wbig_req); never 0, as callers demote
+static love_inline word mk_mbig(word **hpp, uintptr_t m, bool neg) {
  struct big *b = (struct big*) *hpp;
- bool neg = v < 0;
- uintptr_t m = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;   // |INTPTR_MIN| survives unsigned
  int n = wlimbs;
  for (int i = 0; i < wlimbs; i++) b->limb[i] = (love_limb) (m >> (limb_bits * i));
  while (n > 1 && b->limb[n-1] == 0) n--;
  ini_big(b, neg ? -n : n);
  *hpp += b2w(sizeof(struct big) + (size_t) n * sizeof(love_limb));
  return word(b); }
+// a word past the charm range as a bignum, under Have(wbig_req)
+static love_inline word mk_wbig(word **hpp, intptr_t v) {
+ return mk_mbig(hpp, v < 0 ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v, v < 0); }   // |INTPTR_MIN| survives unsigned
+// an unsigned word as a number: a fixnum when it fits, else a bignum under Have(wbig_req)
+static love_inline word mk_uword(word **hpp, uintptr_t m) {
+ return m <= (uintptr_t) maxcharm ? putcharm((intptr_t) m) : mk_mbig(hpp, m, false); }
 // love admits no irreflexive value: = reads two NaNs as one
 static love_inline bool same_flo(flo_t a, flo_t b) { return a == b || (a != a && b != b); }
 // truncation toward zero and float remainder, no libm
