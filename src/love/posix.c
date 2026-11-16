@@ -61,6 +61,7 @@
 #if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
 #include <sys/reboot.h>     // reboot(2), linux's commands
+#include <sys/swap.h>       // swapon(2), swapoff(2)
 #if !defined(__moonlibc__)
 #include <sys/syscall.h>    // SYS_reboot, for restart2's argument
 #endif
@@ -673,6 +674,24 @@ static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
+// (swapon path) (swapoff path): a file or part mkswap's rule laid, flags 0
+static lvm(lvm_swapon) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapon(p, 0) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+static lvm(lvm_swapoff) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapoff(p) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+// (ioctl fd req n): linux's ioctl handed one 64-bit word holding n, BLKRRPART's and
+// EXT4_IOC_RESIZE_FS's shape; answers the word after. fd a raw fd or a port
+static lvm(lvm_ioctl) {
+  uint64_t w = charmp(Sp[2]) ? (uint64_t) getcharm(Sp[2]) : 0;
+  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : port_fd(Sp[0]);
+  Sp[2] = fd < 0 || !charmp(Sp[1]) ? badarg(g)
+        : ioctl((int) fd, (unsigned long) getcharm(Sp[1]), &w) < 0 ? love_err(g, errno)
+        : putcharm((intptr_t) w);
+  Sp += 2; love_musttail return Next(1); }
 #if defined(__moonlibc__)
 static int restart2(char const *a) { return reboot2(a); }
 #else
@@ -691,6 +710,9 @@ static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(
 static lvm(lvm_mount) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 static lvm(lvm_mountf) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
 static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapon) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapoff) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_ioctl) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 #endif
 
 static lvm(lvm_chroot) {
@@ -1124,6 +1146,9 @@ LvDef("umount", umount, 1, "posix");
 LvDef("chroot", chroot, 1, "posix");
 LvDef("sync", sync, 1, "posix");
 LvDef("reboot", reboot, 1, "posix");
+LvDef("swapon", swapon, 1, "posix");
+LvDef("swapoff", swapoff, 1, "posix");
+LvDef("ioctl", ioctl, 3, "posix");
 LvDef("mknod", mknod, 3, "posix");
 LvDef("newns", newns, 1, "posix");
 LvDef("stat", posix_stat, 1, "posix");

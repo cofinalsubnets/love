@@ -78,7 +78,7 @@
    home {'holo "src/love/holo/" 'x64 "src/love/holo/" 'a64 "src/love/holo/" 'rv64 "src/love/holo/" 'thumb2 "src/love/holo/"}
    (path n) (peep home n "src/love/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) (close q, s))
-   ; a file's minified text, once: holo rides four blobs
+   ; a file's minified text, once: post and holo ride five blobs
    cache {}
    (file n) (cache n @ s
                (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
@@ -89,20 +89,20 @@
    rows
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
-     ['cat_post_z ['post]]
-     ['cat_mods_z ['kanren " " 'uu]]                   ; every arch's modules past post's
-     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset
-     "#if defined(__x86_64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'x64]]
-     "#elif defined(__aarch64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'a64]]
-     "#elif defined(__riscv)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64]]
+     ; post, then the arch's holo, scan riding it: one text, the egg's last
+     "#if defined(__x86_64__)"
+     ['cat_post_z ['post " " 'holo " " 'x64]]
+     "#elif defined(__aarch64__)"
+     ['cat_post_z ['post " " 'holo " " 'a64]]
+     "#elif defined(__riscv)"
+     ['cat_post_z ['post " " 'holo " " 'rv64]]
+     "#elif defined(__arm__) && defined(__linux__)"
+     ['cat_post_z ['post " " 'holo " " 'thumb2 " " 'scan]]
      ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
-     "#elif defined(__arm__) && defined(__linux__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'thumb2 'scan]]
-     "#elif defined(__wasm__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64]]
+     "#elif defined(__wasm__)"
+     ['cat_post_z ['post " " 'holo " " 'rv64]]
+     "#else"
+     ['cat_post_z ['post]]
      "#endif"
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.

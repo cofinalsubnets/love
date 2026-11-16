@@ -2,7 +2,7 @@
 // TIMER0's microseconds and the RGB LED. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "nrf52840.h"
-#include "../bput.h"
+#include "../../../src/inle/bput.h"
 
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];

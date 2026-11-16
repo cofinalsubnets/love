@@ -81,7 +81,7 @@ case $gate in
              # nothing to wake -- a skip, not a failure
              test -s out/mps2/love.img || {
                gate_skip "$name: empty image (no qemu at bake), skipped"; } ;;
-  nucleo446_smoke) $mk -C src/inle/nucleo446 smoke || fail "nucleo446 smoke build" ;;
+  nucleo446_smoke) $mk -C test/boards/nucleo446 smoke || fail "nucleo446 smoke build" ;;
   virt)      $mk -C src/inle/virt || fail "virt build" ;;
 esac
 

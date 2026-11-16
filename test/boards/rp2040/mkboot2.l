@@ -1,11 +1,11 @@
-; src/inle/rp2040/mkboot2.l -- lay boot2.o for the Pico: the 256-byte second stage the mask ROM
+; test/boards/rp2040/mkboot2.l -- lay boot2.o for the Pico: the 256-byte second stage the mask ROM
 ; copies into SRAM to open the QSPI XIP window. the ROM runs it only if the last 4 bytes are a valid
 ; CRC over the preceding 252, so the stamp is the point of this file. the payload (boot2.bin, the
 ; vendor W25Q080 sequence) is zero-padded to 252, stamped, and handed to holo as one section.
 ; CRC-32/MPEG-2, not zlib's: poly 0x04c11db7, init 0xffffffff, no reflection, xorout 0.
 ; boot2.bin checksums to 0x7a4eb274.
 ; runs after src/love/holo/{elf,obj}.l in a cat with the thumb1 backend spliced into the sealed
-; holo module (src/inle/rp2040/Makefile).
+; holo module (test/boards/rp2040/Makefile).
 (: m32 4294967295
    (crc-step c) (c << 1 & m32 @ c2 (0 < c & 2147483648 ? (c2 ^ 79764919) c2))
    (crc-byte c b) (: (go c i) (i < 1 ? c (go (crc-step c) (i - 1)))

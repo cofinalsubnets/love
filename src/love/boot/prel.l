@@ -714,8 +714,9 @@
     (atom? >bs) (w v <bs bnd u dm)
     (: nd (dsug <bs <>bs) (w v >nd bnd u dm ? 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs before its slot is filled can read it: a read
-   ; from a binding at or before it (for a lambda name only one under no \), or, for a value
-   ; name, a read from anywhere the earlier bindings reach through the let's own names
+   ; from a binding at or before it (for a lambda name, one under no \ or in a value, which no
+   ; sibling's frame holds), or, for a value name, a read from anywhere the earlier bindings
+   ; reach through the let's own names
    (boxset prs es) (: nm (map cap prs)
      ; the first of each, as assoc and lidx find them: a name's position and def, a def's reads
      (firsts l i t) (atom? l ? t (firsts >l (i + 1) (peep t <l -1 < 0 ? (pin t <l i) t)))
@@ -726,15 +727,15 @@
      (reads m) >(peep rd m ())
      (anyname m) (map cap (reads m))
      (lam? v) (lambp >(peep df v ()))
-     ; the earliest binding reading each name: any read, and a read under no lambda
+     ; the earliest binding reading each name: any read, and a read under no lambda or in a value
      (mark t x i) (peep t x -1 < 0 ? (pin t x i) t)
      (seen l i ma mb) (atom? l ? [ma mb]
-                        (: rs (reads <l)
+                        (: rs (reads <l) lv !(lam? <l)
                            (seen >l (i + 1) (foldl (\ t r (mark t <r i)) ma rs)
-                                            (foldl (\ t r (!>r ? (mark t <r i) t)) mb rs))))
+                                            (foldl (\ t r (!>r || lv ? (mark t <r i) t)) mb rs))))
      mm (seen nm 0 (tablet 0) (tablet 0))
-     ; near: a read from a binding at or before v; a lambda name counts only the bare ones,
-     ; since a call comes after the pin
+     ; near: a read from a binding at or before v; a lambda name counts a sibling lambda's only
+     ; bare, since its call comes after the pin
      (near v) (: k (peep at v 0) (0 <= peep (mm (lam? v ? 1 0)) v -1 <= k))
      ; reach: capture, not evaluation order. an earlier closure inherits a later sibling's
      ; captures, so it wants v's slot at construction, before that slot exists. the reached

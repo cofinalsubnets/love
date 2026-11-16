@@ -27,6 +27,14 @@
    _ (test (21 = sw 5) (55 = fib 10) (231 = rot 4) (17 = mix 4))
    0)
 
+; --- a chain walk: atom? tests two?, a car read as an int deopts on any other car ---
+(: (hsh acc l)  (atom? l ? acc (hsh ((acc * 31 + <l) % 1000000007) >l))
+   (nlt k l)    (atom? l ? 0 (<l < k ? (1 + nlt k >l) (nlt k >l)))
+   _ (test (1026 = hsh 0 [1 2 3]) (33 = hsh 0 (1 . 2 . 3)) (5 = hsh 5 ())
+           (33.5 = hsh 0 [1 2.5]) ((hsh 0 [1 99999999999999999999]) = (31 + 99999999999999999999) % 1000000007)
+           (2 = nlt 3 [5 1 2 7]) (2 = nlt 3 [1 "a"]) (0 = nlt 3 ()))
+   0)
+
 ; --- the constant fold passes a pair whose own params spell the constant's name ---
 ; through `ev`, since only a bare top-level letrec meets the fold
 (test
@@ -118,7 +126,7 @@
            named [[two? 'two?] [cap 'cap] [cup 'cup] [(.) '.] [(==) '==] [peep 'peep] [tally 'tally] [long? 'long?]
                   [(+) '+] [(-) '-] [(*) '*] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]
                   [(<) '<] [(<=) '<=] [(>) '>] [(>=) '>=] [(=) '=] [atom? 'atom?] [nil? 'nil?]]
-           wordless '(list && || one? != !== mpeep)
+           wordless '(list && || one? != !==)
            _ (test
               (all (r \ (<>r = gw <r)) named)                                 ; a value answers its word
               ('zz = gw 'zz)                                                   ; a nom is its own word
@@ -224,7 +232,7 @@
 ; itself need not, so the group check takes the first and refuses the second -- answering, never a miss
 (: G (cite 'glaze)
    (? G (: R (G 'jgir-rerun-ok?)
-           (gzro d) (trap (_ \ R d) 0 (a \ _ \ 'scared))
+           (gzro d) (trap (_ \ R d ()) 0 (a \ _ \ 'scared))
            (test (1 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i 65) (+ i 1) n)))])
                  (0 = gzro [(['f 'c 'i 'n] . '(? (= i n) c (f (pin c i (+ 1 (peep c i))) (+ i 1) n)))])))
       0))

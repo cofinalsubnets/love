@@ -107,3 +107,9 @@
 (: closure-fct (: (h n acc) (n < 1 ? acc (h (n - 1) (acc * n))) (n \ h n 1)))
 (: (tl1 _) (: walk (: (kid k) (two? k ? (walk >k) k) kid) (walk '(1 2 3)))
    (test (120 = closure-fct 5) !(tl1 ())))
+
+; --- a value's lambda reaches a later lambda sibling, which no sibling's frame holds for it,
+; so the sibling is boxed: named or defined, glazed or not, as rsv resolves it ---
+(: (tl2 _) (: v (: h (\ _ (gg 1)) h) gg (\ y (y + 1)) (v 0))
+   (tl3 _) (: v (: h (\ _ (gg 1)) h) (gg y) (y + 2) (v 0))
+   (test (2 = tl2 ()) (3 = tl3 ())))

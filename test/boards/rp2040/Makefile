@@ -1,5 +1,5 @@
 # Raspberry Pi Pico (RP2040) build -- Cortex-M0+ / ARMv6-M, compiled by mooncc -t thumb1.
-# No Pico SDK, no CMake, no vendor headers. `make -C src/inle/rp2040` from the project root.
+# No Pico SDK, no CMake, no vendor headers. `make -C test/boards/rp2040` from the project root.
 #
 # NOTHING FOREIGN TOUCHES THIS IMAGE -- no file, no tool. Every .o is mooncc's or holo's
 # (the vector table and crt0 are C in rp2040.c, and boot2 -- the 256-byte stage the mask ROM
@@ -15,7 +15,7 @@
 p_tgt      = thumb1
 p_be       = thumb1
 p_link_be  = thumb1 thumb2
-include ../port.mk
+include ../../../src/inle/port.mk
 
 rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 
@@ -26,12 +26,12 @@ default: bin
 bin: $(R)/$(o)/love.bin
 objs: $(objs)
 
-$(eval $(call p_obj,main,src/inle/rp2040/main.c,main.c rp2040.h $(S)/inle/bput.h $(mc),$(rp_cc)))
-$(eval $(call p_obj,rp2040,src/inle/rp2040/rp2040.c,rp2040.c rp2040.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,main,test/boards/rp2040/main.c,main.c rp2040.h $(S)/inle/bput.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,rp2040,test/boards/rp2040/rp2040.c,rp2040.c rp2040.h $(mc),$(rp_cc)))
 
 # boot2: 240 payload bytes zero-padded to 252 and CRC-stamped, in .boot2. no gas -- the
 # section name IS the interface, and the writer spells it now.
-$(eval $(call p_lay,boot2,mkboot2,"src/inle/rp2040/boot2.bin" "$(o)/boot2.o"))
+$(eval $(call p_lay,boot2,mkboot2,"test/boards/rp2040/boot2.bin" "$(o)/boot2.o"))
 $(R)/$(o)/boot2.o: boot2.bin
 
 # the link is ours: rlink.l drives holo's ldbare32 with the Pico's flash map, in place of

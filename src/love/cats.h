@@ -11,5 +11,4 @@
 
 struct g
  *cats_egg(struct g *g),
- *cats_lib(struct g *g),
  *cats_glaze(struct g *g);

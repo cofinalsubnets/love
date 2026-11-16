@@ -26,7 +26,7 @@
         sort-main sparse split-main srun stat-main strip-main stty-main microcom-main sync-main df-main time-main tac-main tail-main
         tee-main test-main top-main
         touch-main lift-main tr-main true-main truncate-main tsort-main uatoi ubase uclk ucopy udiff udirp ujoin
-        umount-main uname-main unexpand-main uniq-main unlink-main uptime-main
+        umount-main mkswap-main swapon-main swapoff-main uname-main unexpand-main uniq-main unlink-main uptime-main
         users-main uset usignames usplit ustatf utag utty uupsay wc-main who-main whoami-main xargs-main yes-main
         cal-main clear-main dd-main hostname-main logname-main strings-main timeout-main tty-main
         hostid-main dnsdomainname-main setsid-main watch-main pathchk-main mountpoint-main shred-main
@@ -970,6 +970,7 @@
             'getopt getopt-main
             ; the privileged half: what a root the distro builds is filled and entered with
             'chroot chroot-main 'mount mount-main 'umount umount-main
+            'mkswap mkswap-main 'swapon swapon-main 'swapoff swapoff-main
             'sync sync-main 'mkfifo mkfifo-main 'mknod mknod-main
             'whoami whoami-main 'groups groups-main
             ; the host's utmp, read: kore keeps none of its own
@@ -1144,6 +1145,9 @@
     'chroot "usage: chroot DIR [CMD [ARG..]]"
     'mount "usage: mount [-t TYPE] [-o OPTS] SRC TGT   (or bare, to list)"
     'umount "usage: umount TARGET.."
+    'mkswap "usage: mkswap FILE"
+    'swapon "usage: swapon [FILE..]   (bare, to list)"
+    'swapoff "usage: swapoff FILE.."
     'whoami "usage: whoami"
     'who "usage: who [-abdHlmpqrstTuw] [FILE | am i]"
     'users "usage: users [FILE]"
@@ -1255,7 +1259,7 @@
              'groups 'printenv 'which 'realpath 'expr 'free 'ps 'pwdx
              'logname 'users 'who 'pinky 'hostid 'dnsdomainname 'mountpoint 'pathchk
              'stat 'df 'du 'link 'unlink 'mktemp 'mkfifo 'mknod 'sync 'fsync
-             'chown 'chgrp 'truncate 'shred 'mount 'umount 'clear 'lift]
+             'chown 'chgrp 'truncate 'shred 'mount 'umount 'mkswap 'swapon 'swapoff 'clear 'lift]
    ; ..and the readers, safe per call only when every operand is a regular file: stdin,
    ; a fifo or a device need not end, so any other word (an option's argument, a -) forks
    korefiles ['cat 'wc 'tac 'rev 'cksum 'md5sum 'sha1sum 'sha224sum 'sha256sum 'sha384sum
