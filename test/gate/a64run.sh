@@ -29,7 +29,7 @@ a64_jobs() {
   [ -z "${LOVE_GLAZE_HOT-}" ] || echo "export LOVE_GLAZE_HOT=$LOVE_GLAZE_HOT" >> "$a64_batch"   # the gates' glaze, as qemu inherits it
 }
 a64_tree() {
-  LOVE_NO_IMAGE= "$a64_love" -e "(borrow 'posix) (: q (open \"$(dirname "$a64_batch")/tree.tar\" \"w\") (say q (tree-tar 0), close q, quit 0))" || return 1
+  LOVE_NO_IMAGE= "$a64_love" -e "(borrow '(posix tree)) (: q (open \"$(dirname "$a64_batch")/tree.tar\" \"w\") (say q (tree-tar 0), close q, quit 0))" || return 1
   echo 'mkdir tree && tar xf tree.tar -C tree --strip-components=1 && rm tree.tar && mkdir tree/out' >> "$a64_batch"
 }
 a64_job() {

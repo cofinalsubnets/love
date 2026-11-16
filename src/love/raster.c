@@ -719,7 +719,7 @@ love_noinline static struct g *host_lace(struct g *g) {
 static lvm(lvm_lace) { LvmCall(g, host_lace) }
 
 // FIXME namespace these
-LvDef("facets", raster, 8, NULL);
-LvDef("frame-bytes", frame_bytes, 3, NULL);
-LvDef("frame-paint", frame_paint, 5, NULL);
-LvDef("lace", lace, 1, NULL);
+LvDef("facets", raster, 8, "lore");
+LvDef("frame-bytes", frame_bytes, 3, "lore");
+LvDef("frame-paint", frame_paint, 5, "lore");
+LvDef("lace", lace, 1, "lore");

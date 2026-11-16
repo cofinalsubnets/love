@@ -4,7 +4,8 @@
 ; environment and status are its own; the kernel's memory is not, to read or to hand over. all of
 ; it beside a process that computes without a call, which only the timer stops: love's tasks keep
 ; their turns, a C cat in a pipe waits on its writer, and lush as a process keeps answering, a C
-; program on its PATH. a seat with no /proc/initrd skips
+; program on its PATH. a C fork's child runs on a copy of its parent. a seat with no
+; /proc/initrd skips
 (stat "/proc/initrd" @ st
  (!(two? st) ? (puts "uproc: no /proc/initrd here, laws skipped", putc 10, ())
   (: o "/tmp/uproc.out"
@@ -36,6 +37,7 @@
      b (onto (_ \ spawn ["sh" "-c" "cd c && ./hello two 0; echo st $?"] @ p (wait p)))
      c (onto (_ \ proc-main ["/tmp/c/hello" "peek"]))
      d (onto (_ \ proc-main ["/tmp/c/hello" "poke"]))
+     k (onto (_ \ proc-main ["/tmp/c/hello" "fork"]))
      e (onto (_ \ spawn ["sh" "-c" "cd /tmp; echo three four | ./c/hello cat | wc -w; ./c/hello x 0 | ./c/hello cat"] @ p (wait p)))
      _ (open "/tmp/go" "w" @ q (close q))
      g (wait s)
@@ -48,6 +50,8 @@
               (<d != 3) ("the kernel handed to write: status " + show <d + ", not 3")
               (>e != "2\nhello from C: x 0 in /tmp, HELLO=hi\n") ("pipes: wrote " + show >e)
               (<e != 0) ("pipes: status " + show <e + ", not 0")
+              (<k != 0) ("fork: status " + show <k + ", not 0")
+              (>k != "forked: kid 9 mark 1 heap P\n") ("fork: wrote " + show >k)
               (t > 2000) ("beside the spinner, a rest of 30 ms took " + show t)
               (g != 5) ("the spinner: status " + show g + ", not 5")
               (<>h != 4) ("lush as a process: status " + show <>h + ", not 4")
