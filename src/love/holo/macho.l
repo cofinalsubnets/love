@@ -9,10 +9,15 @@
 (borrow '(hashes bytes))
 (: macho-cpus {'x64 [16777223 3]}      ; cpu_type_x86_64, cpu_subtype_x86_64_all
 
-   ; lc_segment_64 with no sections: the kernel maps the segment, not what it holds
-   (macho-seg nm addr vsz off fsz prot)
-    (catall [(le32 25) (le32 72) (map nm ^#nm) (ld-zeros (16 - #nm))
-             (le64 addr) (le64 vsz) (le64 off) (le64 fsz) (le32 prot) (le32 prot) (le32 0) (le32 0)])
+   ; lc_segment_64 and its sections, each (name addr size off align flags): the kernel maps the
+   ; segment, and the sections say what it holds to otool and objdump
+   (macho-name nm) (catall [(map nm ^#nm) (ld-zeros (16 - #nm))])
+   (macho-seg nm addr vsz off fsz prot sects)
+    (catall ([(le32 25) (le32 (72 + 80 * #sects)) (macho-name nm)
+              (le64 addr) (le64 vsz) (le64 off) (le64 fsz) (le32 prot) (le32 prot) (le32 #sects) (le32 0)]
+             + map (x \ catall [(macho-name <x) (macho-name nm) (le64 (x 1)) (le64 (x 2)) (le32 (x 3))
+                                (le32 (x 4)) (le32 0) (le32 0) (le32 (x 5)) (ld-zeros 12)])
+                   sects))
    ; lc_unixthread, x86_thread_state64: 21 words, rip the 17th, the rest zero
    (macho-thread ent)
     (catall [(le32 5) (le32 184) (le32 4) (le32 42) (ld-zeros 128) (le64 ent) (ld-zeros 32)])
@@ -88,7 +93,8 @@
        dycmds (dyn? ? (catall ([macho-dyld] + map macho-dylib ("/usr/lib/libSystem.B.dylib" . dylibs)
                                + [macho-plat (macho-uuid (join " " (imps + dylibs + [(show (map (ob \ ob 'id) objs0))])))])) ())
        nseg (4 + ?img? + ?dyn?)          ; pagezero text rodata data, the image's or the linkedit
-       hdrsz (32 + 72 * nseg + (dyn? ? (24 + 48 + 24 + 80 + 16 + #dycmds) 184))
+       nsect (4 + ?img?)                  ; __text __const __data __bss, and __image
+       hdrsz (32 + 72 * nseg + 80 * nsect + (dyn? ? (24 + 48 + 24 + 80 + 16 + #dycmds) 184))
        lay (ldlay objs base hdrsz pg 0)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
        dend (ld-align 16 end)
@@ -135,12 +141,18 @@
        ssz (ld-align 16 (20 + 88 + #ident + 1 + 32 * ((soff + pg - 1) // pg)))
        lfsz (soff - loff + ssz)
        (up v) (ld-align pg v)
-       cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0)
-                      (macho-seg "__TEXT" base (o0 - base) 0 (o0 - base) 5)   ; dyld wants code's file and memory alike: the pad is in the file
-                      (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) (ro? ? 3 1))
-                      (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3)]
-                     + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3)])
-                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1)])
+       t0 (base + hdrsz)
+       ; section flags: pure and some instructions for code, zerofill for bss
+       cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0 ())
+                      (macho-seg "__TEXT" base (o0 - base) 0 (o0 - base) 5   ; dyld wants code's file and memory alike: the pad is in the file
+                                 [["__text" t0 (t1 - t0) (t0 - base) 4 2147484672]])
+                      (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) (ro? ? 3 1)
+                                 [["__const" o0 (o1 - o0) (o0 - base) 4 0]])
+                      (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3
+                                 [["__data" d0 (gend - d0) (d0 - base) 4 0] ["__bss" gend (bend - gend) 0 4 1]])]
+                     + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3
+                                           [["__image" iaddr (iend - iaddr) ioff 4 0]])])
+                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1 ())])
                      + (dyn? ? [(catall [(le32 2147483682) (le32 48) (le32 (#rbs && loff)) (le32 #rbs)   ; lc_dyld_info_only
                                          (le32 (loff + rsz)) (le32 #binds) (ld-zeros 24)])
                                 (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
