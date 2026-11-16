@@ -155,6 +155,7 @@
              'csrrwi 3 'csrrsi 3 'csrrci 3
              'sx1 1 'sx2 1 'sx4 1 'zx1 1 'zx2 1 'zx4 1
              'frpush 0 'frpop 0              ; a64's frame record: fp and lr as one pair
+             'pushd 1                        ; a64's push filling the whole 16-byte slot
              'cbr 3                          ; a64's cbz/cbnz: (cbr word reg label), the flags untouched
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)

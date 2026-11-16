@@ -172,6 +172,7 @@
 
    (a64-push s) (rn s @ st (le32 (0xF81F0FE0 | st)))      ; str s, [sp, #-16]!
    (a64-pop  d) (rn d @ dt (le32 (0xF84107E0 | dt)))      ; ldr d, [sp], #16
+   (a64-pushd s) (rn s @ st (le32 (0xA9BF03E0 | st << 10 | st)))   ; stp s, s, [sp, #-16]!: both words of the slot are s
    ;; the frame record: fp at [sp], lr at [sp+8], in the 32 bytes of two pushes
    a64-frpush (le32 0xA9BE7BFD)                           ; stp x29, x30, [sp, #-32]!
    a64-frpop  (le32 0xA8C27BFD)                           ; ldp x29, x30, [sp], #32
@@ -601,7 +602,7 @@
           ('sxtb . a64-sxs 1) ('sxth . a64-sxs 2) ('sxtw . a64-sxs 4)
           ('rol . a64-shift 'rol) ('ror . a64-shift 'ror) ('ror4 . a64-shift 'ror4)
           ('lea . a64-lea) ('lean . a64-lea)
-          ('push . a64-push) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr) ('afix . a64-afix)
+          ('push . a64-push) ('pushd . a64-pushd) ('pop . a64-pop) ('frpush . a64-frpush) ('frpop . a64-frpop) ('cbr . a64-cbr) ('tbr . a64-tbr) ('afix . a64-afix)
           ('neg . a64-neg) ('not . a64-not) ('inc . a64-inc) ('dec . a64-dec) ('decm . a64-decm)
           ('jmp . a64-jmp) ('br . a64-br) ('jmpr . a64-jmpr) ('jmpt . a64-jmpt) ('callr . a64-callr)
           ('mulo . a64-mulo) ('mulh . a64-mulh) ('umulh . a64-umulh) ('set . a64-set) ('test . a64-test)

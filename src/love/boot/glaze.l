@@ -1499,7 +1499,7 @@
             '* [['mulo A A T SC 'OVF]]
             ())))
    ; the reg/imm peephole: a param (already in an arg reg) or a small immediate combines with acc directly
-   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= 4095)                      ; an immediate every target adds, subs and compares directly
+   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= (peep gkn 1 0 ? 2047 4095))   ; an immediate every target adds, subs and compares directly, tagged too
    (preg tgt ps x) (elem x ps && argregir tgt (argix x ps 0))
    (garith-r tgt op R) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)
       (? (peep gkn 1 0) (op @ '+ [['sub A A 1] ['adds A A R] '(br vs OVF)]
@@ -1648,27 +1648,37 @@
                  (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
                  (restargsir tgt k) (hrest tgt) ['(ret)]])
        (ls ? (lstag tgt ir) ir))
-   ; the love-stack group (x64, an all-integer group): the machine sp rides love's stack below Sp, so a
+   ; the love-stack group (x64 and a64, an all-integer group): the machine sp rides love's stack below Sp, so a
    ; call keeps call/ret and every frame walks: return addresses are out-of-pool code, and its ints
    ; ride tagged in the registers too (cggir's tg?), so every word it saves is one. lstag unwraps
    ; ('raw x). the depth bound is the heap gap, and a peer waiting parks the group where it stands
    (lsroom tgt) [['lea 'r9 (greg tgt 'hp) (wd tgt * 4096)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
-   (lstag tgt ir) (map (i \ (i @ ('raw x) x i)) ir)
+   (lstag tgt ir) (map (i \ (i @ ('raw x) x  ('push R) (lpush tgt R)  i)) ir)
+   ; a push onto love's stack fills its whole slot, so a 16-byte slot's second word walks too
+   (lpush tgt R) (slotsz tgt = 16 ? ['pushd R] ['push R])
+   ; the switch onto love's stack: sp to Sp aligned down to a slot, the machine sp pushed there, the
+   ; anchor on it; a 16-byte slot keeps Sp's offset below it, tagged, in its second word
+   (lsenter tgt) (: S (greg tgt 'sp)
+      (slotsz tgt = 16 ? [['lea 'r10 'sp 0] ['and 'r9 S -16] ['lea 'sp 'r9 0] (lpush tgt 'r10) ['sub 'r9 S 'r9]
+                           ['leax 'r9 'r9 'r9 1 1] ['st 'sp 8 'r9]]
+                         [['lea 'r10 'sp 0] ['lea 'sp S 0] ['push 'r10]]))
+   (lsorig tgt OV) (: S (greg tgt 'sp)                                              ; Sp again, off the anchor
+      (slotsz tgt = 16 ? [['ld 'r9 OV 8] ['sar 'r9 1] ['lea S OV 16] ['add S S 'r9]] [['lea S OV (wd tgt)]]))
    ; the park: the args tagged, Ip, and the distance to the anchor go on the group's stack, which becomes
    ; the VM's down to the fair resume frame [x, charm(bb - gbase), gbase]; the machine state the outer
    ; saved comes back first. at bb the outer's saves are made again and the anchor found from the distance
    (lsyield tgt k) (: S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) W (wd tgt) OV (govf tgt) bb (mint 0)
                       (raw l) (map (i \ ['raw i]) l)
       (saveargsir tgt k
-      + [['raw ['push IP]] ['lea 'r10 'sp 0] ['mov 'r9 OV] ['sub 'r9 'r9 'r10] ['leax 'r9 'r9 'r9 1 1] ['raw ['push 'r9]]
+      + [['push IP] ['lea 'r10 'sp 0] ['mov 'r9 OV] ['sub 'r9 'r9 'r10] ['leax 'r9 'r9 'r9 1 1] ['push 'r9]
          ['lea S 'sp 0] ['ld 'r10 OV 0] ['lea 'sp 'r10 0]]
       + raw (restargsir tgt 4 + [['pop OV]] + hrest tgt)
       + [['li T 1] ['st S (-3 * W) T] ['lar T bb] ['lar 'r10 'gbase] ['sub T T 'r10] ['leax T T T 1 1]
          ['st S (-2 * W) T] ['st S (-1 * W) 'r10] (reach tgt IP 12) ['sub S S (3 * W)] ['ld T IP 0] ['jmpr T]
          ['label bb] ['add S S W]]
       + raw (hsave tgt + [['push OV]] + saveargsir tgt 4)
-      + [['lea 'r10 'sp 0] ['lea 'sp S 0] ['raw ['pop 'r9]] ['sar 'r9 1] ['lea OV 'sp 0] ['add OV OV 'r9] ['st OV 0 'r10]
-         ['lea S OV W] ['raw ['pop IP]]]
+      + [['lea 'r10 'sp 0] ['lea 'sp S 0] ['pop 'r9] ['sar 'r9 1] ['lea OV 'sp 0] ['add OV OV 'r9] ['st OV 0 'r10]]
+      + lsorig tgt OV + [['pop IP]]
       + restargsir tgt k))
    ; mkouterir: the entry's outer -- anchor = sp, kind-guard and push the args, call H_entry, putfix + Continue.
    ; OVF restores sp from the anchor, abandoning the group's frames, then falls into deopt
@@ -1690,9 +1700,9 @@
        epi (valt ? [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]]
                  [['adds A A A] '(br vs DEOPT) ['or A A 1] ['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]])
        ls (peep gkn 1 0)
-       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) ['push A]]])) () (rangeL 0 k))   ; tagged as they lie
+       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) (lpush tgt A)]])) () (rangeL 0 k))   ; tagged as they lie
        (ls ? (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt 4) (map (i \ ['li (argregir tgt i) 1]) (rangeL 0 4))
-                    [['lea 'r10 'sp 0] ['lea 'sp S 0] ['push 'r10] ['lea OVFR 'sp 0]] lsargs   ; the anchor holds the machine sp
+                    (lsenter tgt) [['lea OVFR 'sp 0]] lsargs                                  ; the anchor holds the machine sp
                     [['call entry] ['add 'sp 'sp (ss * k)] ['ld 'r10 'sp 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
                     [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]]                ; the answer is tagged already
                     [['label 'OVF] ['ld 'r10 OVFR 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
@@ -1802,7 +1812,7 @@
        bufmask (kmask 2)
        cmask (kmask 3)
        pmask (kmask 4)
-       _ (pin gkn 1 (tgt = 'x64 && !(getenv "LOVE_GROUP_MSTACK") && !valt && all (f \ !(hasl (f 2))) parse
+       _ (pin gkn 1 (elem tgt '(x64 a64) && !(getenv "LOVE_GROUP_MSTACK") && !valt && all (f \ !(hasl (f 2))) parse
                      && all (f \ all (j \ !(two? (jgir-kind km <f j))) (rangeL 0 #(f 1))) parse))
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
