@@ -49,6 +49,7 @@ struct zs_st {
  struct zs_fse ll[512], of[256], ml[512];
  struct zs_huf huf[1 << 11];
  struct xx_st x;                                // xxh64 on the way
+ const uint8_t *db; uintptr_t dn;               // a base said before the window, read where it stands
  uint8_t lit[ZS_BMAX + ZS_SLACK]; };
 
 static unsigned zs_hb(uint32_t x) { return x ? 31 - (unsigned) __builtin_clz(x) : 0; }
@@ -381,8 +382,14 @@ static intptr_t zs_seqs(struct zs_st *S, uint8_t *w, const uint8_t *p, uintptr_t
   if (ll > (uintptr_t) (le - lit) || ll + ml > (uintptr_t) (oe - o)) return -1;
   if (lit + ll + 16 <= ls) zs_wild(o, lit, ll); else memcpy(o, lit, ll);
   o += ll, lit += ll;
-  if (!off || off > (uint64_t) (o - w)) return -1;
-  zs_match(o, (uintptr_t) off, ml), o += ml; }
+  uintptr_t have = (uintptr_t) (o - w);
+  if (!off || off > (uint64_t) have + S->dn) return -1;
+  if (off > have) {                              // back past the window, into the base
+   uintptr_t back = (uintptr_t) off - have, k = back < ml ? back : ml;
+   if (back >= k + 16) zs_wild(o, S->db + S->dn - back, k);   // its overread still in the base
+   else memcpy(o, S->db + S->dn - back, k);
+   o += k, ml -= k; }
+  if (ml) zs_match(o, (uintptr_t) off, ml), o += ml; }
  if (zs_left(&r) || (uintptr_t) (le - lit) > (uintptr_t) (oe - o)) return -1;
  memcpy(o, lit, (uintptr_t) (le - lit)), o += le - lit;
  S->rep[0] = r0, S->rep[1] = r1, S->rep[2] = r2;
@@ -419,7 +426,7 @@ static intptr_t zs_block(struct zs_st *S, uint8_t *w, const uint8_t *b, uintptr_
 // a frame whole, when s is one frame that says its size and nothing else, into one buffer: no
 // window slides and no block is copied out alone -> the bytes (n + ZS_SLACK from alloc, *on
 // set) | NULL for any other shape or a fault, which zstd.l's walk then reads and names. base's
-// nb bytes are said already, before the frame's: its dictionary
+// nb bytes are said already, before the frame's: its dictionary, read where it lies
 #define ZS_WHOLE ((uintptr_t) 1 << 30)
 static const uint8_t zs_dn[4] = { 0, 1, 2, 4 }, zs_fz[4] = { 0, 2, 4, 8 };
 // a dictionary's tables, built once, and its content (rfc 8878 5)
@@ -434,12 +441,12 @@ static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, const uint8_t *base, uin
  uint64_t fcs = xx_rd(s + 5 + !ss + dn, fz) + (fz == 2 ? 256 : 0);
  if (fcs > ZS_WHOLE || nb > ZS_WHOLE) return NULL;
  struct zs_st *S = alloc(NULL, sizeof *S);
- uint8_t *w = S ? alloc(NULL, nb + (uintptr_t) fcs + ZS_BMAX + ZS_SLACK) : NULL;
+ uint8_t *w = S ? alloc(NULL, (uintptr_t) fcs + ZS_BMAX + ZS_SLACK) : NULL;
  int good = w != NULL;
  if (good) {
   memset(S, 0, offsetof(struct zs_st, lit));
-  if (nb) memcpy(w, base, nb);
-  S->n = nb, S->cap = nb + (uintptr_t) fcs + ZS_BMAX, S->win = nb + (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
+  S->db = base, S->dn = nb;
+  S->n = 0, S->cap = (uintptr_t) fcs + ZS_BMAX, S->win = (uintptr_t) fcs, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8;
   S->ck = d >> 2 & 1, xx_init(&S->x);
   if (T) {                                       // its tables stand as the last block's
    S->have = T->have, S->hlog = T->hlog, S->lllog = T->lllog, S->oflog = T->oflog, S->mllog = T->mllog;
@@ -448,15 +455,14 @@ static uint8_t *zs_whole(const uint8_t *s, uintptr_t n, const uint8_t *base, uin
  for (int last = 0; good && !last; ) {
   if (n - i < 3) { good = 0; break; }
   uintptr_t bh = (uintptr_t) xx_rd(s + i, 3), k = (bh >> 1 & 3) == 1 ? 1 : bh >> 3;
-  if (n - i - 3 < k || zs_block(S, w, s + i, 3 + k) < 0 || S->n - nb > fcs) { good = 0; break; }
+  if (n - i - 3 < k || zs_block(S, w, s + i, 3 + k) < 0 || S->n > fcs) { good = 0; break; }
   i += 3 + k, last = (int) (bh & 1); }
- if (good && S->n - nb != fcs) good = 0;
+ if (good && S->n != fcs) good = 0;
  if (good && d & 4) good = n - i >= 4 && xx_rd(s + i, 4) == (xx_done(&S->x) & 0xffffffffu), i += 4;
  if (good && i != n) good = 0;                   // frames after it: the walk's
  if (S) alloc(S, 0);
  if (!good) { if (w) alloc(w, 0); return NULL; }
  *on = (uintptr_t) fcs;
- if (nb) memmove(w, w + nb, (uintptr_t) fcs);
  return w; }
 
 #define ZS_DMAGIC 0xec30a437u
