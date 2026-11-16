@@ -325,12 +325,16 @@ static char *k_proc_code(struct k_proc *p, char const *path, uintptr_t pn, uintp
   k_fs_cwd_swap(p->cwd, &p->cwd_n);
   return b; }
 
+// love itself, as a process reads its own link and starts it again: its words follow argv0
+static char const k_self[] = "/proc/self/exe";
+
 // a path to a program runs as itself; anything else, a bare word above all, is love's,
 // woken from /proc/image where there is one
 static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
-  uintptr_t cn = 0, fn = strlen(f);
-  char *code = memchr(f, '/', fn) ? k_proc_code(p, f, fn, &cn) : NULL;
+  bool self = !strcmp(f, k_self);
+  uintptr_t cn = 0, fn = self ? 0 : strlen(f);
+  char *code = !self && memchr(f, '/', fn) ? k_proc_code(p, f, fn, &cn) : NULL;
   if (code) {
     long r = k_proc_start(p->pid, av, an, ev, en, code, cn);
     kfree(code);
@@ -338,10 +342,11 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
   static char const wake[] = "love\0wake\0/proc/image";
   struct k_st st;
   uintptr_t a0 = an ? strlen(av) + 1 : 0,
-            pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake, n = pn + fn + 1 + an - a0;
+            pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake,
+            fw = self ? 0 : fn + 1, n = pn + fw + an - a0;
   char *b = k_grab(n);
   if (!b) return -ENOMEM;
-  memcpy(b, wake, pn), memcpy(b + pn, f, fn + 1), memcpy(b + pn + fn + 1, av + a0, an - a0);
+  memcpy(b, wake, pn), memcpy(b + pn, f, fw), memcpy(b + pn + fw, av + a0, an - a0);
   long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
   k_drop(b);
   return r; }
@@ -354,7 +359,8 @@ long k_proc_pump(void) {
     void *m = k_procs[i].m;
     if (!m) continue;
     long t = k_procs[i].live ? k_proc_run(m) : 0;
-    if (!k_procs[i].live) k_proc_drop(m), k_procs[i].m = NULL;
+    if (k_procs[i].m != m) k_proc_drop(m), t = 2;   // an exec laid a new machine in its place
+    else if (!k_procs[i].live) k_proc_drop(m), k_procs[i].m = NULL;
     else r = r > t ? r : t ? t : 1; }
   return r; }
 
@@ -441,6 +447,31 @@ static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long 
   if (!r) r = k_proc_go(q, w, w + fn, (uintptr_t) (wn - fn), ev, (uintptr_t) en);
   return r ? k_proc_unkin(q, r) : k_pid_next++; }
 
+// execve: p becomes path's program on av and ev, its close-on-exec fds shut. the seat lays
+// the new machine in the old one's place; a refusal leaves the old one running
+static long k_proc_exec(struct k_proc *p, char const *path, char *const *av, char *const *ev) {
+  uintptr_t an = 0, en = 0, o = 0;
+  for (char *const *a = av; *a; a++) an += strlen(*a) + 1;
+  for (char *const *e = ev; e && *e; e++) en += strlen(*e) + 1;
+  if (!an) return -EINVAL;
+  if (strcmp(path, k_self) && memchr(path, '/', strlen(path))) {   // a file, there to run
+    struct k_st st;
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    long r = k_fs_stat(path, strlen(path), &st, true);
+    k_fs_cwd_swap(p->cwd, &p->cwd_n);
+    if (r) return r; }
+  char *b = k_grab(an + en);
+  if (!b) return -ENOMEM;
+  for (char *const *a = av; *a; a++) o += strlen(strcpy(b + o, *a)) + 1;
+  for (char *const *e = ev; e && *e; e++) o += strlen(strcpy(b + o, *e)) + 1;
+  long r = k_proc_go(p, path, b, an, b + an, en);
+  k_drop(b);
+  if (r) return r;
+  for (int i = 0; i < k_proc_fds; i++)
+    if (p->cx >> i & 1 && p->fd[i] >= 0) k_fd_close(p->fd[i]), p->fd[i] = -1;
+  p->cx = 0;
+  return 0; }
+
 // fork: the child the seat's copy of pid's machine (k_proc_clone), standing in the same call
 static long k_proc_fork(long pid) {
   struct k_proc *q;
@@ -484,6 +515,7 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
    case NR_getppid: return p->ppid ? p->ppid : 1;    // an orphan's parent is the kernel
    case NR_inle_spawn:
     return k_proc_spawn(pid, (char const*) a, b, (char const*) c, d, (int const*) e, f);
+   case NR_execve: return k_proc_exec(p, (char const*) a, (char *const*) b, (char *const*) c);
 #ifdef NR_clone
    case NR_clone: return a == 17 && !b && !c && !d && !e ? k_proc_fork(pid) : -ENOSYS;   // SIGCHLD alone
 #endif
@@ -553,6 +585,10 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
     ((int*) a)[0] = (int) r0, ((int*) a)[1] = (int) r1;
     return 0; }
    case NR_ioctl: return kf < 0 ? -EBADF : k_term_ioctl(p->pid, (int) kf, (unsigned long) b, (void*) c);
+   case NR_readlinkat:                               // love's own link names love
+    if (strcmp((char const*) b, k_self)) goto path;
+    r = (long) (sizeof k_self - 1 < (uintptr_t) d ? sizeof k_self - 1 : (uintptr_t) d);
+    return memcpy((void*) c, k_self, (size_t) r), r;
    case NR_ppoll: {
     struct pollfd *q = (struct pollfd*) a;
     long k = 0;
@@ -567,7 +603,7 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
      q[i].revents = rv;
      k += !!rv; }
     return !k && c ? K_RESTART : k; }
-   default:                                          // a path's call, under its own cwd
+   default: path:                                    // a path's call, under its own cwd
     k_fs_cwd_swap(p->cwd, &p->cwd_n);
     r = __love_inle(n, a, b, c, d, e, f);
     k_fs_cwd_swap(p->cwd, &p->cwd_n);

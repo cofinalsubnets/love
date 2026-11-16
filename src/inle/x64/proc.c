@@ -140,6 +140,14 @@ static bool k_ustr(struct k_uctx const *c, uint64_t p) {
     if (memchr((void*) (uintptr_t) va, 0, (size_t) (4096 - (va & 4095)))) return true;
   return false; }
 
+// a NULL-ended vector of c's strings, each in its memory
+static bool k_uvec(struct k_uctx const *c, uint64_t p) {
+  for (;; p += 8) {
+    if (!k_uok(c, p, 8)) return false;
+    uint64_t s = *(uint64_t const*) (uintptr_t) p;
+    if (!s) return true;
+    if (!k_ustr(c, s)) return false; } }
+
 // a call's pointers checked against the process's memory -> 0, or -EFAULT; an unknown call
 // is -ENOSYS, so nothing unchecked reaches k_proc_call
 static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint64_t d,
@@ -162,6 +170,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_readlinkat: ok = k_ustr(c, b) && k_uokw(c, d, e, true); break;
    case NR_renameat: ok = k_ustr(c, b) && k_ustr(c, e); break;
    case NR_chdir: ok = k_ustr(c, a); break;
+   case NR_execve: ok = k_ustr(c, a) && k_uvec(c, b) && (!d || k_uvec(c, d)); break;
    case NR_fchdir: ok = true; break;
    case NR_ioctl:                                          // sys.c's: TCGETS, TCSETS*, TIOC[GS]PGRP
     ok = b == 21505 ? k_uokw(c, d, sizeof(struct termios), true)
@@ -276,7 +285,7 @@ long k_syscall(struct k_sysf *f) {
                                   n == NR_ppoll ? k_clock_ms() < until : (long) f->dx,
                                   (long) f->r10, (long) f->r8, (long) f->r9)) == K_RESTART)
     k_uyield(c, 1);
-  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0) k_uend(c);
+  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0 || (n == NR_execve && !r)) k_uend(c);
   return r; }
 
 // a tick in the running process (timer_isr): its turn spent, the machine goes back
