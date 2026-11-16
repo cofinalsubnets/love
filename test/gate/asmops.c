@@ -105,13 +105,17 @@ uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_tlbi_all();
   k_dc_cvau(p);
   k_ic_ivau(p);
+  k_ic_iallu();
+  k_wr_ttbr0_el1(p);
+  k_wr_tpidr_el1(p);
+  k_el0_open();
   k_sp_to_el1h();
   k_fpen_enable();
   k_brk0();
   k_udf0();
   k_semihost_exit(block);
   k_psci_system_reset();
-  return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1()
+  return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1() + k_rd_ttbr0_el1() + k_rd_tpidr_el1()
        + k_rd_cntfrq_el0() + k_rd_cntpct_el0() + k_at_s1e1w_par(va); }
 void const *const k_asmops_keep[] = {
   (void const*) k_isb,
@@ -125,6 +129,10 @@ void const *const k_asmops_keep[] = {
   (void const*) k_tlbi_all,
   (void const*) k_dc_cvau,
   (void const*) k_ic_ivau,
+  (void const*) k_ic_iallu,
+  (void const*) k_wr_ttbr0_el1,
+  (void const*) k_wr_tpidr_el1,
+  (void const*) k_el0_open,
   (void const*) k_sp_to_el1h,
   (void const*) k_fpen_enable,
   (void const*) k_brk0,
@@ -134,6 +142,8 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_ctr_el0,
   (void const*) k_rd_mair_el1,
   (void const*) k_rd_ttbr1_el1,
+  (void const*) k_rd_ttbr0_el1,
+  (void const*) k_rd_tpidr_el1,
   (void const*) k_rd_cntfrq_el0,
   (void const*) k_rd_cntpct_el0,
   (void const*) k_at_s1e1w_par
