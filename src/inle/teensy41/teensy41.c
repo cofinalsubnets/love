@@ -9,7 +9,7 @@ extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
 
-void te_main(void);   // the face: main.c the board shell, kern.c the kernel, psram-test.c
+void te_main(void);   // kern.c's kernel, or psram-test.c's probe
 
 // the stacked frame from mkboot.l's isr_hardfault (r0), kept where an SWD debugger finds it
 volatile struct fault {

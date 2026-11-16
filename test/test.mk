@@ -614,7 +614,7 @@ test_playdate: host
 # test_teensy41 -- the inle kernel: kmain over the board's drivers and the arm love's objects (-t arm,
 # thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified
 test_teensy41: host
-	@echo TEST out/teensy41/k/love.hex
+	@echo TEST out/teensy41/love.hex
 	@if ! command -v qemu-arm >/dev/null 2>&1; then \
 	   sh test/gate/skip.sh gate-skip "test_teensy41: no qemu-arm to bake the kernel's image, skipped"; exit $$?; fi; \
 	  $(MAKE) -C src/inle/teensy41 kernel || { echo "FAIL teensy41 kernel build (the boot-image verify is inside)"; exit 1; }; \
@@ -686,8 +686,8 @@ test_microbit_board: test_microbit
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
 # test_teensy41_board -- that kernel on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
-	@echo TEST out/teensy41/k/love.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/k/love.bin
+	@echo TEST out/teensy41/love.bin "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
 test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
 	@echo "test_boards: eleven ports build and link -- mooncc and our linker, no emulator"

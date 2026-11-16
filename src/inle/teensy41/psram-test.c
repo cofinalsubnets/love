@@ -12,7 +12,7 @@ static void puts_(const char *s) { bput_s(uart_putc, s); }
 static void puthex(uint32_t v) { bput_x(uart_putc, v, 8); }
 static void putdec(uint32_t v) { bput_n(uart_putc, v, 10); }
 
-// main.c is absent from this build; te_ms is teensy41.c's
+// te_ms is teensy41.c's
 uintptr_t te_ms(void);
 static void sleep_ms(uintptr_t ms) {
   uintptr_t start = te_ms();
