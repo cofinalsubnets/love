@@ -1631,11 +1631,39 @@
    ; a call deeper than gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
    gdepth 262144                                                                   ; well inside inle's 1 MiB kernel stack
    (mkhir tgt syms nm ps body)
-    (: k #ps Lbody (mint 0)
-       (bcat [[['label nm] ['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
-               (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 [['jmp 'OVF]])
-               (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
-               (restargsir tgt k) (hrest tgt) ['(ret)]]))
+    (: k #ps Lbody (mint 0) ls (peep gkn 1 0)
+       ir (bcat [[['label nm]] (ls ? (lsroom tgt) [['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)])
+                 (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 (ls ? (lsyield tgt k) [['jmp 'OVF]]))
+                 (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
+                 (restargsir tgt k) (hrest tgt) ['(ret)]])
+       (ls ? (lstag tgt ir) ir))
+   ; the love-stack group (x64, an all-integer group): the machine sp rides love's stack below Sp, so a
+   ; call keeps call/ret and every frame walks: return addresses are out-of-pool code, every int it
+   ; saves is tagged. lstag tags each push, pop and arg load of the int registers; ('raw x) passes x
+   ; as is. the depth bound is the heap gap, and a peer waiting parks the group where it stands
+   (lsroom tgt) [['lea 'r9 (greg tgt 'hp) (wd tgt * 4096)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
+   (lstag tgt ir) (: rs ([(greg tgt 'acc) (greg tgt 'tmp)] + targets tgt 'args)
+      (cats (map (i \ (i @ ('raw x) [x]
+                            ('push R) (elem R rs ? [['mov 'r10 R] ['adds 'r10 'r10 'r10] '(br vs OVF) ['or 'r10 'r10 1] ['push 'r10]] [i])
+                            ('pop R) (elem R rs ? [i ['sar R 1]] [i])
+                            ('ld R 'sp o) (elem R rs ? [i ['sar R 1]] [i])
+                            _ [i])) ir)))
+   ; the park: the args tagged, Ip, and the distance to the anchor go on the group's stack, which becomes
+   ; the VM's down to the fair resume frame [x, charm(bb - gbase), gbase]; the machine state the outer
+   ; saved comes back first. at bb the outer's saves are made again and the anchor found from the distance
+   (lsyield tgt k) (: S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) W (wd tgt) OV (govf tgt) bb (mint 0)
+                      (raw l) (map (i \ ['raw i]) l)
+      (saveargsir tgt k
+      + [['raw ['push IP]] ['lea 'r10 'sp 0] ['mov 'r9 OV] ['sub 'r9 'r9 'r10] ['leax 'r9 'r9 'r9 1 1] ['raw ['push 'r9]]
+         ['lea S 'sp 0] ['ld 'r10 OV 0] ['lea 'sp 'r10 0]]
+      + raw (restargsir tgt 4 + [['pop OV]] + hrest tgt)
+      + [['li T 1] ['st S (-3 * W) T] ['lar T bb] ['lar 'r10 'gbase] ['sub T T 'r10] ['leax T T T 1 1]
+         ['st S (-2 * W) T] ['st S (-1 * W) 'r10] (reach tgt IP 12) ['sub S S (3 * W)] ['ld T IP 0] ['jmpr T]
+         ['label bb] ['add S S W]]
+      + raw (hsave tgt + [['push OV]] + saveargsir tgt 4)
+      + [['lea 'r10 'sp 0] ['lea 'sp S 0] ['raw ['pop 'r9]] ['sar 'r9 1] ['lea OV 'sp 0] ['add OV OV 'r9] ['st OV 0 'r10]
+         ['lea S OV W] ['raw ['pop IP]]]
+      + restargsir tgt k))
    ; mkouterir: the entry's outer -- anchor = sp, kind-guard and push the args, call H_entry, putfix + Continue.
    ; OVF restores sp from the anchor, abandoning the group's frames, then falls into deopt
    (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: a value-typed entry stores acc as-is, with no putfix
@@ -1655,11 +1683,19 @@
        pushargs (foldl (\ a i (bcat [a (pusharg1 i)])) () (rangeL 0 k))
        epi (valt ? [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]]
                  [['adds A A A] '(br vs DEOPT) ['or A A 1] ['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]])
+       ls (peep gkn 1 0)
+       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) ['push A]]])) () (rangeL 0 k))   ; tagged as they lie
+       (ls ? (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt 4) (map (i \ ['li (argregir tgt i) 0]) (rangeL k 4))
+                    [['lea 'r10 'sp 0] ['lea 'sp S 0] ['push 'r10] ['lea OVFR 'sp 0]] lsargs   ; the anchor holds the machine sp
+                    [['call entry] ['add 'sp 'sp (ss * k)] ['ld 'r10 'sp 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
+                    epi
+                    [['label 'OVF] ['ld 'r10 OVFR 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
+                    [['label 'DEOPT]] (deoptmn tgt (arity > 1))])
        (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt k) [['lea OVFR 'sp 0]] pushargs
               [['call entry] ['add 'sp 'sp (ss * k)]] (restargsir tgt k) [['pop OVFR]] (hrest tgt)   ; on a64 bl clobbers x30, the return address the outer tail-jumps onward with
               epi
               [['label 'OVF] ['lea 'sp OVFR 0]] (restargsir tgt k) [['pop OVFR]] (hrest tgt)
-              [['label 'DEOPT]] (deoptmn tgt (arity > 1))]))
+              [['label 'DEOPT]] (deoptmn tgt (arity > 1))])))
    ; jgir-ok?: does the group lane implement every op at the arity cggir lowers? the backstop for
    ; natjit, which has no recognizer. jgir-arity counts the head too; another arity would drop operands in silence
    jgir-arity {'+ 3 '- 3 '* 3 '// 3 '% 3 '& 3 '| 3 '^ 3 '< 3 '<= 3 '> 3 '>= 3 '= 3 '. 3
@@ -1760,9 +1796,11 @@
        bufmask (kmask 2)
        cmask (kmask 3)
        pmask (kmask 4)
+       _ (pin gkn 1 (tgt = 'x64 && !(getenv "LOVE_GROUP_MSTACK") && !valt && all (f \ !(hasl (f 2))) parse
+                     && all (f \ all (j \ !(two? (jgir-kind km <f j))) (rangeL 0 #(f 1))) parse))
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       (nif (emit (assemble tgt (bcat [outer Hs]) 'bytes)) deopt k))
+       (nif (emit (assemble tgt (bcat [[['label 'gbase]] outer Hs]) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
