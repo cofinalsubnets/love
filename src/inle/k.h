@@ -10,8 +10,8 @@ void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 
 // the higher-half direct map: physical P at khhdm + P; 0 = identity-mapped
 extern uintptr_t khhdm;
-// the image window: physical P runs at k_xw + P. x64 runs high, leaving the low half to a process
-#if defined(__x86_64__)
+// the image window: physical P runs at k_xw + P. x64 and a64 run high, leaving the low half to a process
+#if defined(__x86_64__) || defined(__aarch64__)
 #define k_xw 0xffffff8000000000ull
 #else
 #define k_xw 0ull

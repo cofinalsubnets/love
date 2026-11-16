@@ -8,9 +8,9 @@
 ; past the data copy; the `love kernel` verb projects the running binary.
 
 (: (kparams arch)                       ; target, kernel base, entry symbol, image window
-    ; x64's image runs in the upper half, leaving the lower half to a process; boot stays physical
+    ; x64's and a64's images run in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
-            "a64"  ['a64 0x40200000 "a64boot" 0]
+            "a64"  ['a64 0x40200000 "a64boot" 0xffffff8000000000]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
             "rv64" ['rv64  0x80200000 "rvboot" 0]
             (scare 'kproject-arch arch))
