@@ -236,6 +236,8 @@ test_hook: host
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_NO_IMAGE=1 $m" "glaze-hook: ok" test/glaze-hook.l
 	@echo TEST test/glaze-tail.l "(a native's tail call holds no frame, under a 64 MB budget)"
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_BUDGET_MB=64 $m" "glaze-tail: ok" test/glaze-tail.l
+	@echo TEST test/glaze-yield.l "(a native loop yields to a waiting peer, every lane)"
+	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-yield: ok" test/glaze-yield.l
 # test_glazebench -- each bench, by stdin and by file, beats LOVE_NO_GLAZE=1 by a floor ratio
 test_glazebench: host
 	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"

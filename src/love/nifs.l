@@ -167,8 +167,7 @@
       (nif_bitlen        "bitlen"        1 lvm_bitlen)
       (nif_arena         "arena"         1 lvm_arena)
       (nif_heed          "heed"          2 lvm_heed)
-      (nif_end_offset    "end-offset"    1 lvm_end_offset)
-      (nif_setcup        "setcup"        2 lvm_setcup))
+      (nif_end_offset    "end-offset"    1 lvm_end_offset))
 
    ; --- the instructions: jumped to, not applied, so the C symbol is the only spelling
    nif-insts
