@@ -12,7 +12,7 @@ extern uintptr_t khhdm;
 extern void *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
 extern void kfree(void *p), k_drop(void *p);
 extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f);
-extern void k_kswap(uint64_t *save, uint64_t load), k_ufirst(void);
+extern void k_kswap(uint64_t *save, uint64_t load), k_ufirst(void), k_uforked(void);
 extern void **k_proc_seat(long pid);
 extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the projection
 extern uintptr_t const k_pie_door[18];
@@ -29,23 +29,28 @@ extern uint8_t k_tss[104];                 // ..and the TSS, rsp0 at 4
 #define k_umbase 0x100000000000ull         // where mmap lays the first mapping
 #define k_xw 0xffffff8000000000ull         // k.h's image window: physical P runs at k_xw + P
 #define k_ushared (1ull << 9)              // a page-table entry's own bit: the kernel's page, lent
+#define k_upa 0x000ffffffffff000ull        // an entry's frame
 
-// one process's machine: its pc and stack where k_ufirst reads them, the two kernel stacks a
-// turn trades between, then what the kernel keeps -- its blocks, freed at the end, and its
-// mappings, each its own block, freed when it goes. why: how its last turn ended
+// the syscall frame k_syscall_entry lays, lowest first; its float file the 512 bytes under it
+struct k_sysf { uint64_t nr, di, si, dx, r10, r8, r9, cx, r11, sp, r15, r14, r13, r12, rbp, rbx; };
+
+// one process's machine: its pc and stack where k_ufirst reads them, a fork's child's frame
+// where k_uforked does, the two kernel stacks a turn trades between, then what the kernel
+// keeps -- its blocks, freed at the end, and its mappings, each its own block, freed when it
+// goes. why: how its last turn ended; f: the frame of the call it is in
 struct k_umm { uint64_t lo, hi; void *raw; };
 struct k_uctx {
-  uint64_t cr3, pc, sp, msp, psp, mnext;
+  uint64_t cr3, pc, sp;
+  struct k_sysf fr;
+  uint64_t msp, psp, mnext;
   long pid;
   int why, slice;
   uint8_t *kst;
   uint64_t *pml4;
   void **blk;
   int nblk, cblk, nmm, cmm;
-  struct k_umm *mm; };
-
-// the syscall frame k_syscall_entry lays, lowest first
-struct k_sysf { uint64_t nr, di, si, dx, r10, r8, r9, cx, r11, sp; };
+  struct k_umm *mm;
+  struct k_sysf const *f; };
 
 static uint64_t k_pa(void const *p) { return (uint64_t) (uintptr_t) p - khhdm; }
 static uint64_t *k_va(uint64_t pa) { return (uint64_t*) (uintptr_t) (pa + khhdm); }
@@ -135,6 +140,14 @@ static bool k_ustr(struct k_uctx const *c, uint64_t p) {
     if (memchr((void*) (uintptr_t) va, 0, (size_t) (4096 - (va & 4095)))) return true;
   return false; }
 
+// a NULL-ended vector of c's strings, each in its memory
+static bool k_uvec(struct k_uctx const *c, uint64_t p) {
+  for (;; p += 8) {
+    if (!k_uok(c, p, 8)) return false;
+    uint64_t s = *(uint64_t const*) (uintptr_t) p;
+    if (!s) return true;
+    if (!k_ustr(c, s)) return false; } }
+
 // a call's pointers checked against the process's memory -> 0, or -EFAULT; an unknown call
 // is -ENOSYS, so nothing unchecked reaches k_proc_call
 static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint64_t d,
@@ -157,6 +170,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_readlinkat: ok = k_ustr(c, b) && k_uokw(c, d, e, true); break;
    case NR_renameat: ok = k_ustr(c, b) && k_ustr(c, e); break;
    case NR_chdir: ok = k_ustr(c, a); break;
+   case NR_execve: ok = k_ustr(c, a) && k_uvec(c, b) && (!d || k_uvec(c, d)); break;
    case NR_fchdir: ok = true; break;
    case NR_ioctl:                                          // sys.c's: TCGETS, TCSETS*, TIOC[GS]PGRP
     ok = b == 21505 ? k_uokw(c, d, sizeof(struct termios), true)
@@ -177,6 +191,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_fcntl: ok = b == F_DUPFD || b == F_DUPFD_CLOEXEC || b == F_GETFD || b == F_SETFD
                        || b == F_GETFL || b == F_SETFL; break;
    case NR_exit: case NR_exit_group: case NR_getpid: case NR_getppid: case NR_kill: case NR_close:
+   case NR_clone:
    case NR_lseek: case NR_ftruncate: case NR_dup3: case 32: case 33:    // dup, dup2
     ok = true; break;
    default: return -ENOSYS; }
@@ -256,6 +271,7 @@ static void k_uend(struct k_uctx *c) { for (;;) k_uyield(c, 0); }
 long k_syscall(struct k_sysf *f) {
   struct k_uctx *c = (struct k_uctx*) (uintptr_t) k_cpu[2];
   long n = (long) f->nr, r;
+  c->f = f;
   if (n == NR_mmap || n == NR_munmap || n == NR_mprotect || n == NR_madvise)
     return k_umem(c, n, f->di, f->si, (long) f->dx, (long) f->r10, (long) f->r8, (long) f->r9);
   r = k_uargs(c, n, f->di, f->si, f->dx, f->r10, f->r8, f->r9);
@@ -269,7 +285,7 @@ long k_syscall(struct k_sysf *f) {
                                   n == NR_ppoll ? k_clock_ms() < until : (long) f->dx,
                                   (long) f->r10, (long) f->r8, (long) f->r9)) == K_RESTART)
     k_uyield(c, 1);
-  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0) k_uend(c);
+  if (k_proc_call(c->pid, NR_getpid, 0, 0, 0, 0, 0, 0) < 0 || (n == NR_execve && !r)) k_uend(c);
   return r; }
 
 // a tick in the running process (timer_isr): its turn spent, the machine goes back
@@ -421,3 +437,64 @@ long k_proc_run(void *m) {
 
 // ..and once it is done, or killed between turns
 void k_proc_drop(void *m) { k_ufree(m); }
+
+// the pages under p's table t, at level sh from va: counted in *n where c is NULL (those no
+// mapping holds), else laid in c -- a lent page as it is, a mapping's at its place in c's copy
+// of the mapping, the rest a page each from *b -> 0, or -ENOMEM
+static long k_ukin(struct k_uctx const *p, struct k_uctx *c, uint64_t const *t, int sh,
+                   uint64_t va, uint8_t **b, uint64_t *n) {
+  for (int i = 0; i < (sh == 39 ? 256 : 512); i++) {
+    uint64_t e = t[i], at = va | (uint64_t) i << sh;
+    if (!(e & 1)) continue;
+    if (sh > 12) {
+      long r = k_ukin(p, c, k_va(e & k_upa), sh - 9, at, b, n);
+      if (r) return r;
+      continue; }
+    int j = 0;
+    while (j < p->nmm && !(p->mm[j].lo <= at && at < p->mm[j].hi)) j++;
+    if (!c) { *n += !(e & k_ushared) && j == p->nmm; continue; }
+    uint64_t *d = k_upte(c, at);
+    if (!d) return -ENOMEM;
+    if (e & k_ushared) { *d = e; continue; }
+    uint8_t *to = j < p->nmm ? (uint8_t*) c->mm[j].raw + (at - p->mm[j].lo) : (*b += 4096) - 4096;
+    memcpy(to, k_va(e & k_upa), 4096);
+    *d = (e & ~k_upa) | k_pa(to); }
+  return 0; }
+
+// sys.c's door: a process here forks and execs
+bool k_proc_forks(void) { return true; }
+
+// sys.c's door: pid a copy of m's process, standing in m's call -- its pages but the lent ones
+// copied, its registers and float file as the call found them -> 0, or -errno
+long k_proc_clone(void *m, long pid) {
+  struct k_uctx const *p = m;
+  void **seat = k_proc_seat(pid);
+  if (!seat || !p->f) return -ENOSYS;
+  struct k_uctx *c = k_grab(sizeof *c);
+  if (!c) return -ENOMEM;
+  memset(c, 0, sizeof *c);
+  c->pid = pid, c->mnext = p->mnext, c->fr = *p->f;
+  long r = (c->pml4 = k_ublk(c, 4096)) ? 0 : -ENOMEM;
+  if (!r && p->nmm && !(c->mm = k_grab((uintptr_t) p->nmm * sizeof *c->mm))) r = -ENOMEM;
+  for (int i = 0; !r && i < p->nmm; i++) {
+    c->mm[i] = p->mm[i];
+    if (!k_uraw(p->mm[i].hi - p->mm[i].lo, &c->mm[i].raw)) r = -ENOMEM;
+    else c->nmm = c->cmm = i + 1; }
+  uint64_t n = 0;
+  uint8_t *b = NULL;
+  if (!r) {
+    for (int i = 256; i < 512; i++) c->pml4[i] = p->pml4[i];
+    c->cr3 = k_pa(c->pml4);
+    k_ukin(p, NULL, p->pml4, 39, 0, NULL, &n);
+    if (n && !(b = k_ublk(c, n * 4096))) r = -ENOMEM; }
+  if (!r) r = k_ukin(p, c, p->pml4, 39, 0, &b, &n);
+  if (!r && !(c->kst = k_ublk(c, k_kstack))) r = -ENOMEM;
+  if (r) return k_ufree(c), r;
+  // the first turn's stack as k_proc_start lays it, the float file the parent's, to k_uforked
+  uint64_t *s = (uint64_t*) (c->kst + k_kstack) - 72;
+  memset(s, 0, 576);
+  memcpy(s, (uint8_t const*) p->f - 512, 512);
+  s[67] = (uint64_t) (uintptr_t) c, s[70] = 2, s[71] = (uint64_t) (uintptr_t) k_uforked;
+  c->psp = (uint64_t) (uintptr_t) s;
+  *seat = c;
+  return 0; }
