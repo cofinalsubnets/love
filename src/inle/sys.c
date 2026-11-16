@@ -254,6 +254,7 @@ __attribute__((weak)) long k_proc_start(long pid, char const *av, uintptr_t an,
 __attribute__((weak)) void k_proc_stop(long pid) { (void) pid; }
 __attribute__((weak)) long k_proc_run(void *m) { return (void) m, 0; }
 __attribute__((weak)) void k_proc_drop(void *m) { (void) m; }
+__attribute__((weak)) long k_proc_clone(void *m, long pid) { return (void) m, (void) pid, -ENOSYS; }
 
 static struct k_proc *k_proc_of(long pid) {
   for (int i = 0; i < k_procs_n; i++) if (k_procs[i].pid == pid) return &k_procs[i];
@@ -410,12 +411,9 @@ static long k_proc_acts(struct k_proc *q, int const *op, long n) {
   q->cx = 0;
   return 0; }
 
-// w: the file, then argv -> the child's pid
-static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long en,
-                         int const *op, long on) {
-  if (!w || wn < 1 || w[wn - 1] || (en && (!ev || ev[en - 1]))) return -EINVAL;
-  long fn = (long) strlen(w) + 1;
-  struct k_proc *q = k_proc_slot(), *p = k_proc_of(pid);   // the slot may move the table
+// a new record for pid's child, its cwd and fds pid's -> 0 with it in *qp, or -errno
+static long k_proc_kin(long pid, struct k_proc **qp) {
+  struct k_proc *q = *qp = k_proc_slot(), *p = k_proc_of(pid);   // the slot may move the table
   if (!q) return -ENOMEM;
   *q = (struct k_proc) { .pid = k_pid_next, .ppid = p->pid, .live = 1, .exitw = -1,
                          .cx = p->cx, .nb = p->nb, .cwd_n = p->cwd_n };
@@ -425,10 +423,30 @@ static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long 
     long kf = p->fd[i] < 0 || r ? -1 : k_fd_dup(p->fd[i], 3);
     if (kf < -1) r = kf;
     q->fd[i] = kf < 0 ? -1 : (int) kf; }
+  return r; }
+
+// ..and it gone again, r the answer
+static long k_proc_unkin(struct k_proc *q, long r) {
+  if (q) q->ppid = 1, k_proc_end(q, 0), q->pid = 0;
+  return r; }
+
+// w: the file, then argv -> the child's pid
+static long k_proc_spawn(long pid, char const *w, long wn, char const *ev, long en,
+                         int const *op, long on) {
+  if (!w || wn < 1 || w[wn - 1] || (en && (!ev || ev[en - 1]))) return -EINVAL;
+  long fn = (long) strlen(w) + 1;
+  struct k_proc *q;
+  long r = k_proc_kin(pid, &q);
   if (!r) r = k_proc_acts(q, op, on / 12);
   if (!r) r = k_proc_go(q, w, w + fn, (uintptr_t) (wn - fn), ev, (uintptr_t) en);
-  if (r) { q->ppid = 1, k_proc_end(q, 0), q->pid = 0; return r; }
-  return k_pid_next++; }
+  return r ? k_proc_unkin(q, r) : k_pid_next++; }
+
+// fork: the child the seat's copy of pid's machine (k_proc_clone), standing in the same call
+static long k_proc_fork(long pid) {
+  struct k_proc *q;
+  long r = k_proc_kin(pid, &q);
+  if (!r) r = k_proc_clone(k_proc_of(pid)->m, q->pid);
+  return r ? k_proc_unkin(q, r) : k_pid_next++; }
 
 // the console and a pty keep only raw or cooked and their size
 static long k_term_ioctl(long pid, int kf, unsigned long q, void *arg) {
@@ -466,6 +484,9 @@ long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long 
    case NR_getppid: return p->ppid ? p->ppid : 1;    // an orphan's parent is the kernel
    case NR_inle_spawn:
     return k_proc_spawn(pid, (char const*) a, b, (char const*) c, d, (int const*) e, f);
+#ifdef NR_clone
+   case NR_clone: return a == 17 && !b && !c && !d && !e ? k_proc_fork(pid) : -ENOSYS;   // SIGCHLD alone
+#endif
    case NR_wait4: {                                  // a child, or any; WNOHANG asks without waiting
     bool kids = false;
     for (int i = 0; i < k_procs_n; i++) {
