@@ -1,5 +1,5 @@
 // micro:bit v2 arch backend, the C half (no sdk): the crystal, the UART0 console through the
-// daplink, TIMER0's microseconds and one matrix LED. vectors, crt0 and the asm helpers are mkboot.l's
+// daplink, TIMER0's microseconds and the 5x5 matrix. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "microbit.h"
 #include "../../../src/inle/bput.h"
@@ -87,13 +87,42 @@ void timer_init(void) {
   REG(TIMER_CLEAR) = 1;
   REG(TIMER_START) = 1; }
 
-uint32_t clock_ms(void) {
+uint32_t clock_us(void) {
   REG(TIMER_CAPTURE0) = 1;
-  return REG(TIMER_CC0) / 1000u; }
+  return REG(TIMER_CC0); }
 
-// --- the matrix's centre LED: its column held low, its row drives it ------
+uint32_t clock_ms(void) { return clock_us() / 1000u; }
+
+// --- the matrix: rows high, columns low ----------------------------------
+static uint32_t const row_pin[LED_N] = { 21u, 22u, 15u, 24u, 19u };          // P0
+static uint32_t const col_port[LED_N] = { P0, P0, P0, P1, P0 };
+static uint32_t const col_pin[LED_N] = { 28u, 11u, 31u, 5u, 30u };
+
+static void col_put(int c, int on) {
+  REG(on ? GPIO_OUTCLR(col_port[c]) : GPIO_OUTSET(col_port[c])) = 1u << col_pin[c]; }
+
 void led_init(void) {
-  REG(GPIO_OUTCLR(P0)) = 1u << LED_ROW | 1u << LED_COL;
-  REG(GPIO_DIRSET(P0)) = 1u << LED_ROW | 1u << LED_COL; }
+  for (int k = 0; k < LED_N; k++) {
+    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[k];
+    REG(GPIO_DIRSET(P0)) = 1u << row_pin[k];
+    col_put(k, 0);
+    REG(GPIO_DIRSET(col_port[k])) = 1u << col_pin[k]; } }
 
-void led_put(int on) { REG(on ? GPIO_OUTSET(P0) : GPIO_OUTCLR(P0)) = 1u << LED_ROW; }
+// the centre alone, before the battery runs
+void led_put(int on) {
+  col_put(2, 1);
+  REG(on ? GPIO_OUTSET(P0) : GPIO_OUTCLR(P0)) = 1u << row_pin[2]; }
+
+// a level's share of a row's 32 slices, 32 (v / 8) ** 2.2 so the steps look even; level 1
+// keeps one slice rather than rounding dark
+#define LED_SLICES 32
+static uint8_t const led_gamma[LED_MAX + 1] = { 0, 1, 2, 4, 7, 11, 17, 24, 32 };
+
+// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms
+void led_scan(uint8_t const *lv) {
+  for (int r = 0; r < LED_N; r++) {
+    REG(GPIO_OUTSET(P0)) = 1u << row_pin[r];
+    for (int s = 0; s < LED_SLICES; s++) {
+      for (int c = 0; c < LED_N; c++) col_put(c, led_gamma[lv[r * LED_N + c]] > s);
+      for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
+    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; } }
