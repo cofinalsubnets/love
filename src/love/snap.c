@@ -177,6 +177,8 @@ static intptr_t image_imm_index(word v) {
 #define CodeRow (3 * sizeof(uint64_t))                         // raw offset, coded offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
 #define CodeDict ((uintptr_t) 32 << 10)
+#define CodeDictSpan 1536u                                    // the picker's spans, and the bytes of a shape
+#define CodeDictShape 8u
 #define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
 #ifndef CodeZLevel
 #define CodeZLevel 15
@@ -189,6 +191,8 @@ static intptr_t image_imm_index(word v) {
 #ifndef StreamDict
 #define StreamDict ((uintptr_t) 32 << 10)
 #endif
+#define StreamDictSpan 256u
+#define StreamDictShape 8u
 #ifndef ImageHotChunks
 #define ImageHotChunks 76
 #endif
@@ -1042,14 +1046,14 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (x->ob) alloc(x->ob, 0);
  return Why(0), *Ho = H, *outnw = nw, *cbo = cb, *ncbo = ncb, blob; }
 
-// the chunks' preset dictionary: greedily, the 256-byte spans whose 8-byte shapes the most
+// the chunks' preset dictionary: greedily, the spans whose shapes (sh bytes, 1..8) the most
 // chunks share, each shape spent once in, the best nearest the chunk. answers its length
 #define CdBits 20
-#define CdSpan 256u
-static uint32_t cd_hash(char const *p) { uint64_t v; memcpy(&v, p, 8); return (uint32_t) ((v * 0x9e3779b97f4a7c15ull) >> (64 - CdBits)); }
-static uint64_t cd_score(char const *p, uint32_t const *cnt, uint32_t *stamp, uint32_t st) {
+static uint32_t cd_hash(char const *p, unsigned sh) {
+ uint64_t v; memcpy(&v, p, 8); return (uint32_t) (((v << (64 - 8 * sh)) * 0x9e3779b97f4a7c15ull) >> (64 - CdBits)); }
+static uint64_t cd_score(char const *p, uintptr_t span, unsigned sh, uint32_t const *cnt, uint32_t *stamp, uint32_t st) {
  uint64_t a = 0;
- for (unsigned j = 0; j + 8 <= CdSpan; j++) { uint32_t h = cd_hash(p + j); if (stamp[h] != st) stamp[h] = st, a += cnt[h]; }
+ for (uintptr_t j = 0; j + 8 <= span; j++) { uint32_t h = cd_hash(p + j, sh); if (stamp[h] != st) stamp[h] = st, a += cnt[h]; }
  return a; }
 static void cd_sift(uint64_t *hp, uintptr_t n, uintptr_t i) {
  for (;;) { uintptr_t l = 2 * i + 1, r = l + 1, m = i;
@@ -1057,8 +1061,9 @@ static void cd_sift(uint64_t *hp, uintptr_t n, uintptr_t i) {
   if (r < n && hp[r] > hp[m]) m = r;
   if (m == i) return;
   uint64_t t = hp[i]; hp[i] = hp[m], hp[m] = t, i = m; } }
-static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uintptr_t cap, uintptr_t chunk) {
- uintptr_t ns = n >= 4 * cap ? (n - CdSpan) / (CdSpan / 2) + 1 : 0, nh = 0, got = 0;
+static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uintptr_t cap, uintptr_t chunk,
+                             uintptr_t span, unsigned sh) {
+ uintptr_t ns = n >= 4 * cap ? (n - span) / (span / 2) + 1 : 0, nh = 0, got = 0;
  if (ns >> 24) ns = (uintptr_t) 1 << 24;                        // a span's index rides under its score
  uint32_t *cnt = ns ? alloc(NULL, 2 * sizeof(uint32_t) << CdBits) : NULL, *stamp = cnt + (1u << CdBits), st = 0;
  uint64_t *hp = cnt ? alloc(NULL, ns * sizeof *hp) : NULL;
@@ -1067,20 +1072,20 @@ static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uin
  for (uintptr_t a = 0; a + 8 <= n; a += chunk) {
   uintptr_t e = a + chunk < n - 7 ? a + chunk : n - 7;
   st++;
-  for (uintptr_t i = a; i < e; i++) { uint32_t h = cd_hash(c + i); if (stamp[h] != st) stamp[h] = st, cnt[h]++; } }
- for (uintptr_t k = 0; k < ns; k++) hp[nh++] = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st) << 24 | k;
+  for (uintptr_t i = a; i < e; i++) { uint32_t h = cd_hash(c + i, sh); if (stamp[h] != st) stamp[h] = st, cnt[h]++; } }
+ for (uintptr_t k = 0; k < ns; k++) hp[nh++] = cd_score(c + k * (span / 2), span, sh, cnt, stamp, ++st) << 24 | k;
  for (uintptr_t i = nh / 2; i--; ) cd_sift(hp, nh, i);
- while (nh && got + CdSpan <= cap) {
+ while (nh && got + span <= cap) {
   uintptr_t k = hp[0] & ((1u << 24) - 1);
-  uint64_t sc = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st), kid = nh > 1 ? hp[1] : 0;
+  uint64_t sc = cd_score(c + k * (span / 2), span, sh, cnt, stamp, ++st), kid = nh > 1 ? hp[1] : 0;
   if (nh > 2 && hp[2] > kid) kid = hp[2];
   hp[0] = sc << 24 | k;                                        // rescored: still best, or back in the heap
   if (hp[0] < kid) { cd_sift(hp, nh, 0); continue; }
   hp[0] = hp[--nh], cd_sift(hp, nh, 0);
   if (!sc) break;
-  char const *p = c + k * (CdSpan / 2);
-  got += CdSpan, memcpy(dic + cap - got, p, CdSpan);
-  for (unsigned j = 0; j + 8 <= CdSpan; j++) cnt[cd_hash(p + j)] = 0; }
+  char const *p = c + k * (span / 2);
+  got += span, memcpy(dic + cap - got, p, span);
+  for (uintptr_t j = 0; j + 8 <= span; j++) cnt[cd_hash(p + j, sh)] = 0; }
  alloc(hp, 0), alloc(cnt, 0);
  return memmove(dic, dic + cap - got, got), got; }
 
@@ -1115,7 +1120,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
    if (i == nh) r0 = ra;
    tab[4 * nch] = a, tab[4 * nch + 1] = ra, nch++;
    a = b, ra = rb; }
-  if (nch && dic && ra > r0 && (dn = img_dict_of((char const*) raw + r0, ra - r0, dic, StreamDict, StreamZWords * 2))) {
+  if (nch && dic && ra > r0 && (dn = img_dict_of((char const*) raw + r0, ra - r0, dic, StreamDict, StreamZWords * 2, StreamDictSpan, StreamDictShape))) {
    intptr_t dg = deflate_raw(g, dic, dn, dic + StreamDict, StreamDict + 64);
    if (dg > 0) dnz = (uintptr_t) dg; else dn = 0; }
   for (uintptr_t i = nh; i < nch; i++) {                 // the rest against the dictionary, the hot ones stay out of it
@@ -1208,7 +1213,7 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     if (b > craw) { nch = 0; break; }
     cut[nch + 1] = b, most = b - a > most ? b - a : most; }
    if (cut[nch] != craw) nch = 0; }
-  if (nch && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk))) {
+  if (nch && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
    zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
    dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs);
    intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
