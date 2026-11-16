@@ -419,8 +419,8 @@ static lvm(lvm_resume) {
  Sp[0] = ok ? putcharm(1) : ZeroPoint;
  love_musttail return Next(1); }
 
-LvDef("pause", pause, 1, NULL);
-LvDef("resume", resume, 1, NULL);
+LvDef("pause", pause, 1, "task");
+LvDef("resume", resume, 1, "task");
 
 lvm(lvm_sleep) {
  word n = Sp[0];
