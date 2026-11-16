@@ -749,6 +749,7 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
+	@$(gsh) test/gate/machobind.sh "$m"
 # as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect and decode alongside
 test_as: host
 	@echo TEST test/holo/as.l
