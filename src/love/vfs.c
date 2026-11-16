@@ -98,11 +98,6 @@ uintptr_t vfs_size(struct vfs const *v, int i) {
  struct vfs_ent const *e = &v->ents[i];
  return e->own ? e->len : vfs_bake_row(v, e->bake)->len; }
 
-intptr_t vfs_canon(struct vfs const *v, char const *p, uintptr_t pn, char *out) {
- uintptr_t n = 0;
- if (!(pn && p[0] == '/')) memcpy(out, v->cwd, n = v->cwd_n);
- return path_canon(out, n, p, pn, 256); }
-
 // the mount is nobody's to write: every mutating door refuses it and what lies under
 bool vfs_ro(struct vfs const *v, char const *cp, uintptr_t cn) {
  if (!v->ro) return false;

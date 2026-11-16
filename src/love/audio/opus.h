@@ -31,6 +31,5 @@ uint32_t rd_tellf(const struct rdec *d);                          // eighth bits
 int op_size(void);
 int op_init(void *b, int ch);
 int op_decode(void *b, const uint8_t *p, int len, float *pcm, int n);
-uint32_t op_final(const void *b);                                 // the last packet's final range
 
 #endif

@@ -8,7 +8,7 @@
 # (a double tap of reset brings it up), mounted at UF2_DRIVE.
 p_tgt = thumb2sp
 p_be  = thumb2
-include ../port.mk
+include ../../../src/inle/port.mk
 
 UF2_DRIVE ?= /run/media/$(USER)/XIAO-SENSE
 nrf_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
@@ -19,8 +19,8 @@ objs = $(R)/$(o)/nrf52840.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/
 default: nrf52840
 nrf52840: $(R)/$(o)/firm.uf2
 
-$(eval $(call p_obj,nrf52840,src/inle/nrf52840/nrf52840.c,nrf52840.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
-$(eval $(call p_obj,main,src/inle/nrf52840/main.c,main.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
+$(eval $(call p_obj,nrf52840,test/boards/nrf52840/nrf52840.c,nrf52840.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
+$(eval $(call p_obj,main,test/boards/nrf52840/main.c,main.c nrf52840.h ../battery.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 $(eval $(call p_link,xlink))
 $(eval $(p_ocopy))

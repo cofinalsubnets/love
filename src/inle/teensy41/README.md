@@ -3,7 +3,7 @@
 Bare-metal Teensy 4.1 (NXP i.MX RT1062, Cortex-M7) port of love -- no
 Teensyduino core, no Arduino. A freestanding thumbv7em hard-float build of the
 love runtime booting XIP from the 8 MB FlexSPI NOR flash, with a REPL on a
-hardware serial console. The closest analogue in the tree is `rp2040/`, but the
+hardware serial console. The closest analogue in the tree is `test/boards/rp2040/`, but the
 RT1062 is a far roomier part: a 600 MHz M7 with a double-precision FPU and ~1 MB
 of on-chip SRAM, so unlike the RP2040 (dropped upstream for "not enough RAM")
 the self-hosting double-bake fits comfortably.
