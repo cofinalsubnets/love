@@ -65,7 +65,7 @@ struct port_vt const love_fd_port_vt = { fd_flush, fd_writen, fd_readn, NULL };
 
 #include "../../love/fdrow.h"                       // love_fd_readn / love_fd_say off the two above
 
-// (gpio_init pin)    -- claim a GPIO2 bit (pin 13 also gets its pad muxed); returns the pin
+// (gpio_init pin)    -- claim a board pin (teensy41.c's map: its pad to GPIO); returns the pin
 // (gpio_dir pin out) -- out non-zero => output; returns out
 // (gpio_put pin val) -- val non-zero => high; returns val
 // (gpio_get pin)     -- 1 high, 0 low
@@ -176,7 +176,7 @@ static uintptr_t pool[384 * (1 << 10) / sizeof(uintptr_t)];   // word-typed for 
 
 void te_main(void) {
   // first light before any love runs; gpio_* indexes GPIO2 bits (the pin-13 LED is GPIO2_IO03)
-  gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
+  gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   for (char const *s = "\r\n; inle/teensy41\r\n"; *s; s++)
     uart_putc(*s);
   // the core clock from the live mux state, so a failed retune shows on every boot
@@ -223,7 +223,7 @@ void te_main(void) {
   // a budget, or the collector ooms inside a major; a quarter leaves a resize's two blocks and
   // fragmentation their room
   if (ok(g)) g->budget = arena_words / 4;
-  // the LED: on while baking or waking, off at the prompt, fast blink fatal. 3 is LED_BIT
+  // the LED: on while baking or waking, off at the prompt, fast blink fatal. pin 13 is LED_PIN
 #define TE_TAIL(banner) \
     "   _ (gpio_init 3) _ (gpio_dir 3 1) _ (gpio_put 3 0)" \
     "   _ (putc 10)" \
@@ -256,4 +256,4 @@ void te_main(void) {
   if (code_of(r) == status_scare) scare_face(r);
   fin(r);
   // the blink polls the console, so the loader's 134 baud still reboots it
-  for (;;) gpio_put(LED_BIT, love_clock() / 120 & 1), con_ready(); }
+  for (;;) gpio_put(LED_PIN, love_clock() / 120 & 1), con_ready(); }

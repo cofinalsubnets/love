@@ -98,6 +98,9 @@
    _ (ok ? (close q) 0)
  (test ok r))
 
+; the gpio words answer () for a pin the board lacks: none on qemu, and 99 on any board
+(test (nil? (gpio_init 99)) (nil? (gpio_dir 99 1)) (nil? (gpio_put 99 1)) (nil? (gpio_get 99)))
+
 ; symlinks: k_walk follows one at every component, so a directory can be a link. /bin, /sbin
 ; and /usr/sbin all name /usr/bin
 (: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))

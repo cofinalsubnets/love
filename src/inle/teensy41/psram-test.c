@@ -20,11 +20,11 @@ static void sleep_ms(uintptr_t ms) {
 
 static void blink_forever(uint32_t ms) {
   for (;;) {
-    gpio_put(LED_BIT, 1); sleep_ms(ms);
-    gpio_put(LED_BIT, 0); sleep_ms(ms); } }
+    gpio_put(LED_PIN, 1); sleep_ms(ms);
+    gpio_put(LED_PIN, 0); sleep_ms(ms); } }
 
 void te_main(void) {
-  gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
+  gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   puts_("\r\n; psram probe\r\n");
   uint32_t mb = psram_init();
   puts_("; chip0 id "); puthex(psram_chip_id(0));
@@ -53,7 +53,7 @@ void te_main(void) {
     puts_("; FAIL "); putdec(bad); puts_(" bad words, first @ word ");
     puthex(first_bad); puts_(" want "); puthex(first_want);
     puts_(" got "); puthex(first_got); puts_("\r\n");
-    gpio_put(LED_BIT, 1);
+    gpio_put(LED_PIN, 1);
     for (;;) ; }
   puts_("; PASS "); putdec(mb); puts_(" MB clean\r\n");
   // heartbeat + echo: both wire directions
@@ -66,4 +66,4 @@ void te_main(void) {
       if (te_ms() - last >= 2000) {
         last = te_ms();
         puts_("; tick "); putdec(t++); puts_("\r\n");
-        gpio_put(LED_BIT, t & 1); } } } }
+        gpio_put(LED_PIN, t & 1); } } } }

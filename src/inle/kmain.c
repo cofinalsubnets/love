@@ -2112,6 +2112,19 @@ static lvm(color) {
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
+// a board's pins through k_gpio (op 0 claim, 1 direction, 2 level, 3 read), its answer
+// or below zero where the board has no such pin; main.c's four words over it
+__attribute__((weak)) long k_gpio(int op, unsigned pin, int v) { (void) op, (void) pin, (void) v; return -1; }
+static word kgpio_op(int op, word pin, int v) {
+  long r = charmp(pin) ? k_gpio(op, (unsigned) getcharm(pin), v) : -1;
+  return r < 0 ? ZeroPoint : putcharm(r); }
+// (gpio_init pin) the pin, (gpio_get pin) 1 high or 0 low; () for a pin the board lacks
+static lvm(kgpio_init) { Sp[0] = kgpio_op(0, Sp[0], 0); love_musttail return Next(1); }
+static lvm(kgpio_get) { Sp[0] = kgpio_op(3, Sp[0], 0); love_musttail return Next(1); }
+// (gpio_dir pin out) out non-zero an output, (gpio_put pin val) val non-zero high; each its 0 or 1
+static lvm(kgpio_dir) { Sp[1] = kgpio_op(1, Sp[0], charmp(Sp[1]) && getcharm(Sp[1]) != 0); love_musttail return Nextp(1, 1); }
+static lvm(kgpio_put) { Sp[1] = kgpio_op(2, Sp[0], charmp(Sp[1]) && getcharm(Sp[1]) != 0); love_musttail return Nextp(1, 1); }
+
 // (fault n): a CPU exception for arch.c's ap, n x64's vector numbers; what follows runs only on a miss
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
@@ -2129,6 +2142,10 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
+  nif_gpio_init[] = {{kgpio_init}, {lvm_ret0}},
+  nif_gpio_get[] = {{kgpio_get}, {lvm_ret0}},
+  nif_gpio_dir[] = {{lvm_cur}, {.x = putcharm(2)}, {kgpio_dir}, {lvm_ret0}},
+  nif_gpio_put[] = {{lvm_cur}, {.x = putcharm(2)}, {kgpio_put}, {lvm_ret0}},
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
@@ -2239,7 +2256,12 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"kgrab", {.k = nif_kgrab}},
   // a guest of the firmware's (x64/arch.c)
   {"kexec-initrd", {.k = nif_kexec_initrd}},
-  {"efi-read", {.k = nif_efi_read}} };
+  {"efi-read", {.k = nif_efi_read}},
+  // a board's pins (k_gpio), () where it has none
+  {"gpio_init", {.k = nif_gpio_init}},
+  {"gpio_dir", {.k = nif_gpio_dir}},
+  {"gpio_put", {.k = nif_gpio_put}},
+  {"gpio_get", {.k = nif_gpio_get}} };
 
 // the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =

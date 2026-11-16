@@ -60,16 +60,20 @@ $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
 
 # The .bin is what `make flash` writes and the verification surface: byte offsets ARE flash
 # offsets. The .hex (Intel HEX) is the same image for a loader that wants one.
-$(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
+# both faces' .hex and .bin out of $1/love.elf, and the .bin checked
+define te_flat
 	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
-	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
-	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $1/love.elf $1/love.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $1/love.elf $1/love.bin
+	@python3 -c "import sys,struct; b=open('$(R)/$1/love.bin','rb').read(); \
 	  fcfb=struct.unpack_from('<I',b,0)[0]; ivt=struct.unpack_from('<I',b,0x1000)[0]; \
 	  entry=struct.unpack_from('<I',b,0x1004)[0]; \
 	  ok = fcfb==0x42464346 and ivt==0x432000D1 and (entry&1)==1 and 0x60000000<entry<0x60800000; \
 	  print('boot image: FCFB@0 %08x IVT@1000 %08x entry %08x --'%(fcfb,ivt,entry), 'ok' if ok else 'BAD'); \
 	  sys.exit(0 if ok else 1)" || { echo "FAIL boot image layout"; exit 1; }
+endef
+$(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
+	$(call te_flat,$(o))
 
 # the kernel face: kmain over these drivers, linked from the arm love's own objects (the root's
 # xa=arm lane), so the image that love bakes is the one this wakes. `make kernel`
@@ -108,12 +112,11 @@ $(R)/$(kd)/love.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(
 	@cd $(R) && out/love $(o)/tlink.l $(kd)/love.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
 	   out/x-arm/o/love/noblob.o $$(cat out/rt/arm.list) $$(cat out/rt/arm.list)
 $(R)/$(kd)/love.hex: $(R)/$(kd)/love.elf $(R)/$(o)/ocopy.l
-	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(kd)/love.elf $(kd)/love.hex
+	$(call te_flat,$(kd))
 
-# Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
-flash: $(R)/$(o)/love.hex
-	cd $(R) && out/love src/tools/halfkay.l write $(o)/love.bin
+# flash the kernel to a connected teensy 4.1 (the button, or 134 baud, enters the loader)
+flash: $(R)/$(kd)/love.hex
+	cd $(R) && out/love src/tools/halfkay.l write $(kd)/love.bin
 
 # PSRAM smoke test (bake-free fast iteration): probe + pattern-test the FlexSPI2 PSRAM
 # chips, report over serial. `make psramtest` then `make flashpsram`.

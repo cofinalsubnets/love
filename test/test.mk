@@ -611,12 +611,14 @@ test_virt test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke: test_%: ho
 # test_playdate -- mooncc -t thumb2sp and ldbare32, nothing foreign; the SDK gives headers and pdc
 test_playdate: host
 	@$(gsh) test/gate/playdate.sh "$(MAKE)" $m
-# test_teensy41 -- mooncc, tlink.l, mkimg.l, ocopy.l, the boot image verified out of the .bin
+# test_teensy41 -- the inle kernel: kmain over the board's drivers and the arm love's objects (-t arm,
+# thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified
 test_teensy41: host
-	@echo TEST out/teensy41/love.hex
-	@$(MAKE) -C src/inle/teensy41 || { echo "FAIL teensy41 build (the boot-image verify is inside)"; exit 1; }
-	@test -s out/mps2/love.img || { . test/gate/skip.sh; gate_partly "test_teensy41: no qemu-system-arm to bake the heap image -- the firmware egg-boots, its image wrap untested"; }
-	@echo "test_teensy41: love (all-mooncc thumb2), OUR linker, flatten and boot image -- nothing foreign"
+	@echo TEST out/teensy41/k/love.hex
+	@if ! command -v qemu-arm >/dev/null 2>&1; then \
+	   sh test/gate/skip.sh gate-skip "test_teensy41: no qemu-arm to bake the kernel's image, skipped"; exit $$?; fi; \
+	  $(MAKE) -C src/inle/teensy41 kernel || { echo "FAIL teensy41 kernel build (the boot-image verify is inside)"; exit 1; }; \
+	  echo "test_teensy41: the inle kernel (all-mooncc thumb-2), its image baked under qemu-arm, OUR linker -- nothing foreign"
 # test_nucleo446 -- mooncc, nlink.l, ocopy.l; arm-none-eabi-gcc only for its libgcc.a
 test_nucleo446: host
 	@echo TEST out/nucleo446/firm.hex
@@ -682,10 +684,10 @@ test_nucleo446_board: test_nucleo446
 test_microbit_board: test_microbit
 	@echo TEST out/microbit/firm.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
-# test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
+# test_teensy41_board -- that kernel on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
-	@echo TEST out/teensy41/love.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.bin
+	@echo TEST out/teensy41/k/love.bin "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/k/love.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
 test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
 	@echo "test_boards: eleven ports build and link -- mooncc and our linker, no emulator"
