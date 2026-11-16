@@ -4,7 +4,7 @@
 ;   (lay-vec dst "x64")   the IDT, the ISR tables, exc_stub_0..31, the three IRQ handlers,
 ;                         archinit (IDT + PIC + PIT), k_reset/k_halt
 ;   (lay-vec dst "a64")   the 2 KiB-aligned 16 x 0x80 vector table, the IRQ save/restore path,
-;                         the fault report path
+;                         the fault report path, a process's calls, ticks and faults, k_kswap
 ;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
 ;
 ; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=r8..r15; a64:
@@ -259,11 +259,12 @@
          (cli) (hlt) (jmp k_halt)))
 
    ;; -- a64 -----------------------------------------------------------
-   ;; 16 entries of 0x80 bytes, 2 KiB-aligned. at EL1 on SP_EL1 only the "current EL with
-   ;; SP_ELx" group fires; IRQ goes to k_irq, all else to a_fault, so a surprise reports
+   ;; 16 entries of 0x80 bytes, 2 KiB-aligned. at EL1 on SP_EL1 the "current EL with SP_ELx"
+   ;; group fires, and a process (EL0, src/inle/a64/proc.c) the "lower EL, a64" one; all else
+   ;; goes to a_fault, so a surprise reports
    a-slots '(a_fault a_fault a_fault a_fault      ; current EL, SP_EL0: sync IRQ FIQ SError
              a_fault a_irq   a_fault a_fault      ; current EL, SP_ELx
-             a_fault a_fault a_fault a_fault      ; lower EL, a64
+             a_usync a_uirq  a_fault a_fault      ; lower EL, a64
              a_fault a_fault a_fault a_fault)     ; lower EL, aarch32
    ;; the IRQ path saves the caller-saved x0..x18 plus x29/x30 (k_irq is AAPCS); 176 keeps sp
    ;; 16-aligned. single str/ldr keeps every offset in the scaled imm12, so nothing borrows x16
@@ -277,6 +278,26 @@
            + [['raw (le32 0xD53B4420)] ['st 'sp 688 'r0] ['raw (le32 0xD53B4400)] ['st 'sp 696 'r0]])    ; mrs x0, fpsr / fpcr
    a-pop  ([['ld 'r0 'sp 696] ['raw (le32 0xD51B4400)] ['ld 'r0 'sp 688] ['raw (le32 0xD51B4420)]]       ; msr fpcr / fpsr, x0
            + map (a-q 0x3DC00000) (v-upto 32) + v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save)
+   ;; a process's frame, struct k_aframe (a64/proc.c): x0..x30 at 0, sp_el0 248, elr 256, spsr
+   ;; 264, tpidr_el0 272, q0..q31 at 288, fpsr 800, fpcr 808
+   u-frame 816
+   (u-q base i) ['raw (le32 (base | (18 + i) << 10 | 31 << 5 | i))]
+   u-save (map (i \ name ("r" + show i)) (v-upto 29) + '(fp lr))
+   u-push ([['sub 'sp 'sp u-frame]]
+           + v-mapi (\ i r ['st 'sp (8 * i) r]) u-save
+           + '((mrs r0 sp_el0) (st sp 248 r0) (mrs r0 elr_el1) (st sp 256 r0)
+               (mrs r0 spsr_el1) (st sp 264 r0) (mrs r0 tpidr_el0) (st sp 272 r0))
+           + map (u-q 0x3D800000) (v-upto 32)
+           + [['raw (le32 0xD53B4420)] ['st 'sp 800 'r0] ['raw (le32 0xD53B4400)] ['st 'sp 808 'r0]])    ; mrs x0, fpsr / fpcr
+   u-pop  ([['ld 'r0 'sp 808] ['raw (le32 0xD51B4400)] ['ld 'r0 'sp 800] ['raw (le32 0xD51B4420)]]       ; msr fpcr / fpsr, x0
+           + map (u-q 0x3DC00000) (v-upto 32)
+           + '((ld r0 sp 272) (msr tpidr_el0 r0) (ld r0 sp 264) (msr spsr_el1 r0)
+               (ld r0 sp 256) (msr elr_el1 r0) (ld r0 sp 248) (msr sp_el0 r0))
+           + v-mapi (\ i r ['ld r 'sp (8 * i)]) u-save
+           + [['add 'sp 'sp u-frame] ['eret]])
+   ;; k_kswap's save: x19..x28, fp, lr, d8..d15, daif -- 176 keeps sp 16-aligned
+   (u-d base i) ['raw (le32 (base | (12 + i) << 10 | 31 << 5 | (8 + i)))]
+   s-save '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 fp lr)
    ;; the align rides after each slot, the last included, so the handlers start past the table
    a-text
     (foldl (a \ s \ a + [['jmp s] ['align 128]]) [['label 'vectors]] a-slots
@@ -286,6 +307,30 @@
      + '((call k_irq))
      + a-pop
      + [['add 'sp 'sp a-frame] ['eret]]
+     ;; a process's exception, its frame on the kernel stack its last eret left in SP_EL1: an
+     ;; svc is a call, k_syscall's answer in its x0; any other is a fault, which k_proc_fault
+     ;; answers (an ID register's read) or ends the process at
+     + [['label 'a_usync]] + u-push
+     + '((mrs r0 esr_el1) (shr r0 26) (cmp r0 0x15) (br ne a_ufault)
+         (lea r0 sp 0) (call k_syscall) (st sp 0 r0))
+     ;; ..and every way back to a process: a call's answer, a tick's, a first turn, a fork's child
+     + [['label 'a_uret]] + u-pop
+     + '((label a_ufault) (mrs r0 esr_el1) (lea r1 sp 0) (call k_proc_fault) (jmp a_uret))
+     ;; a tick in a process: k_irq's, then its turn spent, the machine goes back
+     + [['label 'a_uirq]] + u-push
+     + '((call k_irq) (call k_proc_tick) (jmp a_uret))
+     ;; k_kswap(save, load): one kernel stack to another, interrupts masked across it. a turn
+     ;; that starts returns into a_uret, its frame laid above
+     + [['label 'k_kswap] ['sub 'sp 'sp 176]]
+     + v-mapi (\ i r ['st 'sp (8 * i) r]) s-save
+     + map (u-d 0xFD000000) (v-upto 8)
+     + [['raw (le32 0xD53B4229)] ['st 'sp 160 'r9]           ; mrs x9, daif
+        ['raw (le32 0xD5034FDF)]                            ; msr daifset, #0xf
+        '(lea r9 sp 0) '(st r0 0 r9) '(lea sp r1 0)
+        '(ld r9 sp 160) ['raw (le32 0xD51B4229)]]           ; msr daif, x9
+     + map (u-d 0xFD400000) (v-upto 8)
+     + v-mapi (\ i r ['ld r 'sp (8 * i)]) s-save
+     + '((add sp sp 176) (ret))
      ;; the fault path: ESR/ELR/FAR to k_fault, which reports and halts
      + '((label a_fault)
          (mrs r0 esr_el1)
@@ -345,9 +390,9 @@
        "a64"
        (objsecs 'a64
                 [[".text.vectors" 1 6 2048 a-text]]
-                '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
+                '("vectors" "k_kswap" "a_uret")    ; arch.c's VBAR_EL1; a64/proc.c's turns
                 () ()
-                '("a_irq" "a_fault"))
+                '("a_irq" "a_fault" "a_usync" "a_uirq" "a_ufault"))
        "rv64"
        (objsecs 'rv64
                 [[".text" 1 6 16 r-text]]

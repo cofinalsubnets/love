@@ -177,6 +177,7 @@ void archinit(void) {
   // a bootloader may enter at EL1t with FP/SIMD trapping: settle both before anything faults
   k_sp_to_el1h();
   k_fpen_enable();
+  k_el0_open();
   k_wr_vbar_el1((uintptr_t) vectors);
   if (khhdm) mmio_map();
   gic_init();
