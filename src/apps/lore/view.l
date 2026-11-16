@@ -11,6 +11,7 @@
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
+(borrow 'lore)                          ; frame-paint, in C
 (borrow 'posix)    ; close, for the horn
 (:
  esc (string 27)

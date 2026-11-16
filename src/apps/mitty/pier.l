@@ -13,7 +13,7 @@
 (borrow ((cite 'limn) @ m (m ? m "src/apps/mitty/limn.l")))
 (borrow ((cite 'seek) @ m (m ? m "src/apps/seek.l")))
 (borrow 'mooring)                       ; hopen moor waitfor
-(borrow '(posix bytes window cli))
+(borrow '(posix bytes window quay cli))
 (borrow 'mitty)                         ; mw-face, for pier-window
 (:
  ; --- the pier: a tablet holding the whole state (see pier-up), every pane under one plan.

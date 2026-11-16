@@ -57,10 +57,20 @@ static bool on_inle(void) {
 #endif
 }
 
-// on inle a twirled task is a process of the shell's
+// ..and forks where the kernel copies its machine, x64's; elsewhere a shell's own stage is a
+// task in its heap
+static bool inle_tasks(void) {
+#if defined(__x86_64__)
+ return false;
+#else
+ return on_inle();
+#endif
+}
+
+// on inle without fork a twirled task is a process of the shell's
 love_door lvm(lvm_exit) {
  union u *t = g->tasks;
- if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
+ if (t && (t[2].x & 1) && getcharm(t[2].x) && inle_tasks()) love_musttail return Ap(lvm_task_quit, g);
  int rc = (int) getcharm(Sp[0]);
  stdin_give(g), fin(g);                          // as main's end: the finalizers drain each port's residue
  for (;;) exit(rc); }
@@ -267,7 +277,7 @@ LvDef("quit", exit, 1, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
 LvDef("exec", exec, 1, NULL);
-LvDef("fexec", fexec, 2, NULL);
+LvDef("fexec", fexec, 2, "posix");
 LvDef("getenv", getenv, 1, NULL);
 LvDef("getpid", getpid, 1, NULL);
 
@@ -291,7 +301,8 @@ static char const glaze_off[] = "";
 // the session tail of both the egg boot and the image wake, love0's too; the rest is post.l's cli-line
 static struct g *run_program(struct g *g, bool replp) {
   if (replp) (void) raw_mode(1);
-  if (__love_osv > 0 && on_inle()) g = evals_(g, "(task-doors-on 0)");
+  if (__love_osv > 0 && inle_tasks()) g = evals_(g, "(task-doors-on 0)");
+  else if (__love_osv > 0 && on_inle()) g = evals_(g, "(pin (cite 'posix) 'forks 1)");
   g = love_open(g);
   char const *ng = getenv("LOVE_NO_GLAZE");
   if (ng && *ng) g = evals_(g, glaze_off);
@@ -496,7 +507,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "   (raw on) (peep seat-doors 8 0 on)"
     "   (ttyfg pg) (peep seat-doors 9 0 pg)"
     "   (ttypg fd) (peep seat-doors 10 0 fd))");
-  // inle has no fork: a shell's own stage (['thunk f]) runs as a task in its heap
+  // where inle has no fork, a shell's own stage (['thunk f]) runs as a task in its heap
   g = evals_(g, src_tasks);
   g = evals_(g,
     "(: (task-doors-on _)"

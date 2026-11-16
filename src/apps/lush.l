@@ -11,7 +11,7 @@
 (module 'lush
 (borrow 'hashes)
 ; posix doors taken by value: lush's entries run from a foreign chain, where a global
-; name reads the live book. spawn, wait, fork, pipe, dup .. stay global: inle shadows them.
+; name reads the live book. spawn, wait .. stay global: inle shadows them.
 (: chdir (cite 'posix 'chdir)      chmod (cite 'posix 'chmod)
    close (cite 'posix 'close)      cwd (cite 'posix 'cwd)
    fchdir (cite 'posix 'fchdir)
@@ -22,6 +22,10 @@
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
    childign (cite 'posix 'childign)
    umask (cite 'posix 'umask)     rusage (cite 'posix 'rusage)
+   pipe (cite 'posix 'pipe)       fdopen (cite 'posix 'fdopen)
+   dup (cite 'posix 'dup)         dup2 (cite 'posix 'dup2)
+   fork (cite 'posix 'fork)       glean (cite 'posix 'glean)
+   getuid (cite 'posix 'getuid)   setpg (cite 'posix 'setpg)
    rlimit (cite 'posix 'rlimit)   setrlimit (cite 'posix 'setrlimit)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
@@ -1395,8 +1399,8 @@
            0))
    (sh-imgfn S w) (sh-pathfresh S 0, peep (S 'sh-imgc) w 'no @ 'no (sh-imgask S w @ f (pin (S 'sh-imgc) w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
-   ; inle and wasm have no fork: a process there is a task
-   (sh-forkseat? _) (? (elem 'love-os (names ())) !(elem (ev 'love-os) '(inle wasm)) 1)
+   ; inle and wasm fork only in a process whose kernel copies it (posix's forks); elsewhere a stage is a task
+   (sh-forkseat? _) (? (elem 'love-os (names ())) (!(elem (ev 'love-os) '(inle wasm)) || ?(cite 'posix 'forks)) 1)
    ; a .l script's #! line -> the argv it starts under, or () when that is not this
    ; binary (env's love by PATH, a spelled path by stat)
    (sh-shebang S p)
