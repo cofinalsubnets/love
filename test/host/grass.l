@@ -1,6 +1,7 @@
 ; test/host/grass.l -- grass simulator 1988, headless: clock and sky, water, the dance, the words,
 ; the week's end, the song, the frame. a crew module, not in the corpus
 
+(borrow 'quay)
 (borrow 'grass)
 (borrow 'score)   ; the tune's reader, for the song laws
 

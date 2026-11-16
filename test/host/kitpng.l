@@ -2,6 +2,7 @@
 ; one 13x7 picture written by magick every way a PNG is, each pixel held to magick's read:
 ; set where alpha >= half, rgb then exact. skips without magick
 ;   cat test/00-init.l test/host/00-host.l test/host/kitpng.l | out/love
+(borrow 'quay)
 (borrow 'posix)
 (: magick? (open "/usr/bin/magick" "r" @ q (hot? q ? (close q, 1) 0))
    _ (magick? ? 0 (gate-skip "kitpng: ok (no magick, skipped)"))
