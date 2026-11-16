@@ -15,7 +15,7 @@
 ;   (av-patch path at s) -> 0 | why: s laid over the file at byte at, in place
 ;   (av-head-all q f h0), (av-open-all q)  the same, skipping nothing
 (module (av av-codecs av-codec av-open av-open-all av-play av-pcm av-uri av-head av-head-all av-cap av-patch)
-(borrow 'wav)
+(borrow '(wav horn))
 (:
    open (cite 'posix 'open) close (cite 'posix 'close)
    ; cited when asked, so a codec's module may bake after this one. a wav's meta is

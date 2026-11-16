@@ -267,7 +267,7 @@ LvDef("quit", exit, 1, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
 LvDef("exec", exec, 1, NULL);
-LvDef("fexec", fexec, 2, NULL);
+LvDef("fexec", fexec, 2, "posix");
 LvDef("getenv", getenv, 1, NULL);
 LvDef("getpid", getpid, 1, NULL);
 

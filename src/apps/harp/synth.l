@@ -20,7 +20,7 @@
          synth-vols synth-vol0
          synth-pads synth-pad
          synth-prows synth-pwhite synth-pcols synth-pbtns synth-pat synth-finger synth-ppaint synth-wbuf?)
-(borrow '(horn harp play posix window opl ops cli))
+(borrow '(horn quay harp play posix window opl ops cli))
 (:
  esc (string 27)
  ; the pitched voices of harp's kit, each with how long a strike rings

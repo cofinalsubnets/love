@@ -2230,7 +2230,7 @@
    ; this build's name: the version and a short hash of the source it carries, off the
    ; carried tree's section crcs. same source, same name; no source, the version alone
    (love-build _)
-    (tree-head 0 @ () "love \(love-version)"
+    (cite 'tree 'tree-head 0 @ () "love \(love-version)"
        h "love \(love-version) \(snip (cite 'hashes 'sha256 (show (map (s \ [<s (s 2) (s 4)]) h))) 0 8)")
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one

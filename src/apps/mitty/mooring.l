@@ -4,7 +4,7 @@
 ;   (moor-to bx m w dirty)    m through the screen in box bx, replies up w, until m hangs up;
 ;                             dirty (when given) is set at each gulp. moor: w is m
 (module '(mooring hopen hname-of moor moor-to hpour waitfor hbox hmas hpid)
-(borrow 'posix)
+(borrow '(posix quay))
 (:
  (hbox p) <p
  (hmas p) <>p

@@ -3,6 +3,7 @@
 ; lcat.l lays it as one literal; kmain.c runs it on the egg lane, main.c bakes it.
 (: task-grp {} task-ends {} task-died {} task-held {}
    task-close (cite 'posix 'close)
+   task-pause (cite 'task 'pause) task-resume (cite 'task 'resume)
    (task-slot w n) (? !(two? w) () (n = 0) <w (task-slot >w (n - 1)))
    ; a console-numbered fd is the parent's view of it, so 2>&1 follows what the parent wears;
    ; anything higher is duped, the port owning the copy
@@ -48,8 +49,8 @@
    ; signal ends it, closing its ends, wait answering 128+sig. each status is laid before
    ; the task moves (the waiter wakes at once), and an end closes before the task is gone.
    (task-stop t sig)
-     (? (sig = 18) (pull task-held t 0, resume t)
-        (19 <= sig <= 22) (pin task-held t (256 + sig), pause t)
+     (? (sig = 18) (pull task-held t 0, task-resume t)
+        (19 <= sig <= 22) (pin task-held t (256 + sig), task-pause t)
         (pin task-died t (128 + sig), pull task-held t 0, each (task-ends t) task-close,
          pull task-ends t 0, freeze t))
    ; -> the tasks a pid names: a group's live members, or the one task

@@ -7,6 +7,7 @@
 (module '(limn limn-across limn-bars limn-down limn-glyph limn-glyphs limn-go limn-half limn-ink
           limn-pen limn-pics limn-placed limn-row limn-rows limn-run limn-sgr limn-sixel limn-sixes
           limn-spans limn-tile limn-unsix)
+(borrow 'quay)                          ; the screen's cells and pictures, in C
 (:
    ; --- the pen: face | fg << 8 | bg << 34, a colour word being 26 bits. one SGR per pen
    ; change, respecified from zero each time ----------

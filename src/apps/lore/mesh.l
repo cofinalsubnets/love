@@ -7,7 +7,7 @@
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
-(borrow '(view window vec sky json gpu))
+(borrow '(view window vec sky json gpu quay))
 (borrow 'lore)                          ; lamp-light, in C
 (:
  ; a mesh: [vs ts], each vertex [x y z u v nx ny nz r g b], each triangle [a b c tex], tex -1 none
