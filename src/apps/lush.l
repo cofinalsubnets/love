@@ -1395,8 +1395,8 @@
            0))
    (sh-imgfn S w) (sh-pathfresh S 0, peep (S 'sh-imgc) w 'no @ 'no (sh-imgask S w @ f (pin (S 'sh-imgc) w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
-   ; inle and wasm have no fork: a process there is a task
-   (sh-forkseat? _) (? (elem 'love-os (names ())) !(elem (ev 'love-os) '(inle wasm)) 1)
+   ; inle and wasm fork only in a process whose kernel copies it (posix's forks); elsewhere a stage is a task
+   (sh-forkseat? _) (? (elem 'love-os (names ())) (!(elem (ev 'love-os) '(inle wasm)) || ?(cite 'posix 'forks)) 1)
    ; a .l script's #! line -> the argv it starts under, or () when that is not this
    ; binary (env's love by PATH, a spelled path by stat)
    (sh-shebang S p)
