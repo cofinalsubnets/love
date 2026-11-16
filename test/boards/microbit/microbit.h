@@ -26,9 +26,10 @@
 #define GPIO_OUTCLR(p) ((p) + 0x50Cu)
 #define GPIO_DIRSET(p) ((p) + 0x518u)
 #define GPIO_CNF(p, n) ((p) + 0x700u + 4u * (n))
-// the matrix's centre: row 3 high, column 3 low lights it
-#define LED_ROW 15u      // P0
-#define LED_COL 31u      // P0
+// the 5x5 matrix: a row driven high and a column held low light the led between them.
+// rows P0.21 22 15 24 19, columns P0.28 11 31, P1.05, P0.30
+#define LED_N   5
+#define LED_MAX 8        // a cell's level: 0 dark .. LED_MAX full
 
 // --- UART0, the legacy non-dma uart: P0.06 TX, P1.08 RX, the daplink's vcp --
 #define UART0 0x40002000u
@@ -84,4 +85,6 @@ void serial_putc(int c);
 int  serial_rx_ready(void);
 int  serial_getc(void);
 uint32_t clock_ms(void);
+uint32_t clock_us(void);
 void led_put(int on);
+void led_scan(uint8_t const *lv);
