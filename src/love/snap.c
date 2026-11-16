@@ -1178,7 +1178,7 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
  uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
  unsigned char *cz = NULL, *dic = craw ? alloc(NULL, CodeDict + 2 * (CodeDict + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
  if (craw) {
-  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, most = 0, pn = 0;
+  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, pn = 0;
   uintptr_t *cut = dic ? alloc(NULL, (ncap + 1) * sizeof *cut) : NULL;
   if (cut) {
    cut[0] = 0;
@@ -1186,31 +1186,25 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     for (b = a; b < craw && b - a < CodeZChunk; )
      b += (hd + ((uintptr_t const*)(cseg + b))[0] + 1 + 15) & ~(uintptr_t) 15;
     if (b > craw) { nch = 0; break; }
-    cut[nch + 1] = b, most = b - a > most ? b - a : most; }
+    cut[nch + 1] = b; }
    if (cut[nch] != craw) nch = 0; }
-  if (nch && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
+  uintptr_t *ze = nch ? alloc(NULL, nch * sizeof *ze) : NULL;
+  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
    zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
-   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs);
+   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs, cz, craw, ze);
    intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
    if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg; }
   if (!dn) nch = 0;
   uint64_t *tab = nch ? alloc(NULL, 3 * nch * sizeof(uint64_t)) : NULL;
-  uintptr_t oc = zstde_cap(most);
-  unsigned char *one = tab ? alloc(NULL, oc) : NULL;
-  if (one && (cz = alloc(NULL, craw)))
-   for (uintptr_t k = 0; k < nch; k++) {
-    uintptr_t a = cut[k], b = cut[k + 1],
-              got = zstde_with(zd, dn, (unsigned char const*) cseg + a, b - a, CodeZLevel, one, oc);
-    if (!got || got > craw - zn) { nch = 0; break; }
-    memcpy(cz + zn, one, got);
-    tab[3 * k] = a, tab[3 * k + 1] = zn, tab[3 * k + 2] = image_sum(cz + zn, got, 0);
-    zn += got; }
+  if (tab)
+   for (uintptr_t k = 0; k < nch; k++)
+    tab[3 * k] = cut[k], tab[3 * k + 1] = zn, tab[3 * k + 2] = image_sum(cz + zn, ze[k] - zn, 0), zn = ze[k];
   else nch = 0;
   uintptr_t tn = CodeRow * nch;
   unsigned char *t = nch && tn + dnz + zn < craw ? alloc(NULL, tn + dnz + zn) : NULL;   // the table, the dictionary, the chunks
   if (t) memcpy(t, tab, tn), memcpy(t + tn, dz, dnz), memcpy(t + tn + dnz, cz, zn);
   else nch = 0, dn = dnz = 0;
-  if (one) alloc(one, 0);
+  if (ze) alloc(ze, 0);
   if (cz) alloc(cz, 0);
   if (tab) alloc(tab, 0);
   if (cut) alloc(cut, 0);

@@ -690,7 +690,14 @@ struct ze_rt { int lv; uint16_t code[256]; uint8_t len[256]; struct ze_rs s[3]; 
 // a frame's: the tables it starts on, those standing, a block's two ways and a scratch; tal,
 // where given, counts what the blocks code
 struct ze_tal { uint32_t lit[256], ll[36], of[32], ml[53]; };
-struct ze_dx { struct ze_rt init, cur, t0, t1, tmp; struct ze_tal *tal; };
+struct ze_dx { struct ze_rt init, cur, t0, t1, tmp; struct ze_tal *tal;
+              uint32_t *sb; uintptr_t sins; unsigned swlog; int snap, sok;      // the base's tree, kept
+              uint8_t *lg; uintptr_t lgn, lgcap, lgat; int plog; };              // a block's parse, kept (1) or taken (2)
+// the tree back to the base alone: X's copy where this frame may take it, else empty
+static void ze_bt_base(struct lzf *f, struct ze_dx const *X) {
+ uintptr_t hn = ((uintptr_t) 2 << 16) + ((uintptr_t) 1 << f->h4bits);
+ if (X && X->sok) memcpy(f->h2, X->sb, hn * 4), memcpy(f->son, X->sb + hn, 2 * X->sins * 4), f->ins = X->sins;
+ else memset(f->h2, 0, hn * 4), f->ins = 0; }
 // ..and with rt, the tree standing as well, where it holds every byte and comes out shorter
 static uintptr_t ze_lits(const uint8_t *lit, uintptr_t n, uint8_t *o, uintptr_t cap, struct ze_rt *rt) {
  if (!rt) return ze_lits0(lit, n, o, cap, NULL, NULL);
@@ -707,6 +714,25 @@ static uintptr_t ze_lits(const uint8_t *lit, uintptr_t n, uint8_t *o, uintptr_t 
 
 // --- sequences --------------------------------------------------------------------------------
 struct ze_seq { uint32_t ll, ml, ov; };
+// the parse's literals and sequences onto X's log -> 0 out of room
+static int ze_plog_put(struct ze_dx *X, const uint8_t *lit, uintptr_t nl, const struct ze_seq *sq, uintptr_t ns) {
+ uintptr_t need = X->lgn + 2 * sizeof nl + nl + ns * sizeof *sq;
+ if (need > X->lgcap) {
+  uintptr_t c = 2 * need;
+  uint8_t *g = alloc(NULL, c);
+  if (!g) return 0;
+  if (X->lg) memcpy(g, X->lg, X->lgn), alloc(X->lg, 0);
+  X->lg = g, X->lgcap = c; }
+ uint8_t *q = X->lg + X->lgn;
+ memcpy(q, &nl, sizeof nl), memcpy(q + sizeof nl, &ns, sizeof ns), q += 2 * sizeof nl;
+ memcpy(q, lit, nl), memcpy(q + nl, sq, ns * sizeof *sq);
+ X->lgn = need;
+ return 1; }
+static void ze_plog_get(struct ze_dx *X, uint8_t *lit, uintptr_t *nl, struct ze_seq *sq, uintptr_t *ns) {
+ const uint8_t *q = X->lg + X->lgat;
+ memcpy(nl, q, sizeof *nl), memcpy(ns, q + sizeof *nl, sizeof *ns), q += 2 * sizeof *nl;
+ memcpy(lit, q, *nl), memcpy(sq, q + *nl, *ns * sizeof *sq);
+ X->lgat += 2 * sizeof *nl + *nl + *ns * sizeof *sq; }
 static unsigned ze_code(const uint32_t *base, unsigned n, uint32_t v) {   // the last base at or under v
  unsigned lo = 0, hi = n - 1;
  while (lo < hi) { unsigned m = (lo + hi + 1) / 2; if (base[m] <= v) lo = m; else hi = m - 1; }
@@ -932,8 +958,18 @@ static void zo_price(struct zo *Z) {
  zo_set(Z->pml, Z->ml, 53, 12 << 8), zo_set(Z->pof, Z->of, 32, 12 << 8);
  for (unsigned s = 0; s < 256; s++) if (Z->pl[s] < 256) Z->pl[s] = 256;   // a huffman code is a bit at least
  Z->tick = 256; }
-static unsigned zo_llc(uintptr_t ll) { return ll < 64 ? ze_code(zs_llbase, 36, (uint32_t) ll) : zs_hb((uint32_t) ll) + 19; }
-static unsigned zo_mlc(uintptr_t ml) { return ml < 131 ? ze_code(zs_mlbase, 53, (uint32_t) ml) : zs_hb((uint32_t) ml - 3) + 36; }
+// the codes of the short lengths, ze_code's answers laid out: literals under 64, matches 3 to 130
+static const uint8_t zo_llcs[64] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 16, 17,
+ 17, 18, 18, 19, 19, 20, 20, 20, 20, 21, 21, 21, 21, 22, 22, 22, 22, 22, 22, 22, 22, 23, 23, 23, 23, 23,
+ 23, 23, 23, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24 };
+static const uint8_t zo_mlcs[128] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+ 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 32, 33, 33, 34, 34, 35, 35, 36, 36, 36, 36, 37,
+ 37, 37, 37, 38, 38, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40,
+ 40, 40, 40, 40, 40, 40, 40, 40, 40, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 41, 42,
+ 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42, 42,
+ 42, 42, 42, 42, 42 };
+static unsigned zo_llc(uintptr_t ll) { return ll < 64 ? zo_llcs[ll] : zs_hb((uint32_t) ll) + 19; }
+static unsigned zo_mlc(uintptr_t ml) { return ml < 131 ? zo_mlcs[ml - 3] : zs_hb((uint32_t) ml - 3) + 36; }
 static uint32_t zo_lp(struct zo const *Z, uintptr_t ll) { unsigned c = zo_llc(ll); return Z->pll[c] + ((uint32_t) zs_llbits[c] << 8); }
 static uint32_t zo_mp(struct zo const *Z, uintptr_t ml) { unsigned c = zo_mlc(ml); return Z->pml[c] + ((uint32_t) zs_mlbits[c] << 8); }
 static uint32_t zo_op(struct zo const *Z, uint32_t ov) { unsigned c = zs_hb(ov); return Z->pof[c] + (c << 8); }
@@ -1082,12 +1118,14 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
  if (same && n > 3) {
   o[0] = (uint8_t) (n << 3 | 2 | last), o[1] = (uint8_t) (n >> 5), o[2] = (uint8_t) (n >> 13), o[3] = s[a];
   return 4; }
+ if (X && X->plog == 2) ze_plog_get(X, lit, &nl, sq, &ns);   // the parse the tables never steer, kept
+ else {
  if (Z) {
   if (a == m->p0) {                              // the first block twice: its own counts, then a clean tree
    zo_seed(Z, s + a, n);
    zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
-   memset(Z->f.h2, 0, 4u << 16), memset(Z->f.h3, 0, 4u << 16), memset(Z->f.h4, 0, (uintptr_t) 4 << Z->f.h4bits);
-   Z->f.ins = 0, rp[0] = rep[0], rp[1] = rep[1], rp[2] = rep[2], nl = ns = 0;
+   ze_bt_base(&Z->f, X);
+   rp[0] = rep[0], rp[1] = rep[1], rp[2] = rep[2], nl = ns = 0;
    zo_price(Z); }
   zo_parse(Z, s, a, e, rp, lit, &nl, sq, &ns);
   for (uintptr_t i = 0; i < ns; i++) l0 += sq[i].ll + sq[i].ml;
@@ -1124,12 +1162,13 @@ static uintptr_t ze_block(struct ze_mf *m, const struct ze_cfg *cf, uintptr_t a,
    sq[ns].ll = 0, sq[ns].ml = (uint32_t) k, sq[ns].ov = ze_ov(rp, 0, r1), ns++;
    p += k, l0 = p; } }
  memcpy(lit + nl, s + l0, e - l0), nl += e - l0;
+ if (X && X->plog == 1 && !ze_plog_put(X, lit, nl, sq, ns)) return 0; }
  struct ze_rt *rw = X ? &X->t0 : NULL, *rs = X ? &X->t1 : NULL;   // the whole's tables, the split's
  if (X) memcpy(rw, &X->cur, sizeof *rw), memcpy(rs, &X->cur, sizeof *rs);
  if (X && X->tal) ze_tally(X->tal, lit, nl, sq, ns);
  body = ze_comp(lit, nl, sq, ns, cd, n, last, o, cap, X, rw);
  if (body) {
-  uintptr_t cut[ZE_LEAVES], nc = Z ? ze_split(lit, sq, 0, ns, nl, cut, 0, 6) : 0, at = body, li = 0, q = 0, done = 0;
+  uintptr_t cut[ZE_LEAVES], nc = cf->opt ? ze_split(lit, sq, 0, ns, nl, cut, 0, 6) : 0, at = body, li = 0, q = 0, done = 0;
   for (uintptr_t i = 0; nc && i <= nc; i++) {     // beside the whole, kept only if shorter
    uintptr_t j = i < nc ? cut[i] : ns, l = 0, m = 0;
    for (uintptr_t t = q; t < j; t++) l += sq[t].ll, m += sq[t].ll + sq[t].ml;
@@ -1177,28 +1216,36 @@ static uintptr_t ze_frame(const uint8_t *s, uintptr_t n, uintptr_t p0, int lv, u
  if (!ss) o[at++] = (uint8_t) ((cf.wlog - 10) << 3);
  for (unsigned i = 0; i < fz; i++) o[at++] = (uint8_t) (fcs >> 8 * i);
  uintptr_t wsz = (uintptr_t) 1 << cf.wlog;
- int tree = lv >= 13;                            // levels with a tree want no chains
- uintptr_t hn = tree ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree || cf.one ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
+ int tree = lv >= 13, play = X && X->plog == 2;   // levels with a tree want no chains; a kept parse, neither
+ uintptr_t hn = tree || play ? 1 : (uintptr_t) 1 << cf.hlog, cn = tree || play || cf.one ? 1 : cf.fast ? (uintptr_t) 2 << cf.hlog : wsz;   // the fast parse's long table, in chain's room
  struct ze_mf m = { s, n, wsz - 1, 0, alloc(NULL, hn * 4), alloc(NULL, cn * 4), cf.hlog, cf.depth, cf.good, NULL, p0 };
  uint8_t *lit = alloc(NULL, ZS_BMAX), *cd = alloc(NULL, 3 * (ZS_BMAX / 3 + 1));
  struct ze_seq *sq = alloc(NULL, (ZS_BMAX / 3 + 1) * sizeof *sq);
  int good = m.head && m.chain && lit && cd && sq;
  if (good && !tree) memset(m.head, 0, hn * 4);
- if (good && cf.fast && !cf.one) memset(m.chain, 0, cn * 4);
+ if (good && cf.fast && !cf.one && !play) memset(m.chain, 0, cn * 4);
  struct zo *Z = NULL;
  uint32_t *bt = NULL;
  struct lzf F;
- if (good && tree) {
+ if (good && tree && !play) {
   if (cf.opt) Z = alloc(NULL, sizeof *Z);
   bt = alloc(NULL, ze_btn(&cf) * 4);
   good = (!cf.opt || Z) && bt;
   if (good) {
    F = ze_tree(lv, &cf, bt, s, n);
+   if (X) X->sok = 0;
+   if (X && X->snap && p0 > F.nice && n <= wsz) {  // the base indexed once for every frame against it:
+    uintptr_t hn = ((uintptr_t) 2 << 16) + ((uintptr_t) 1 << F.h4bits), si = p0 - F.nice;   // below si a
+    if (X->sb && X->swlog != cf.wlog) alloc(X->sb, 0), X->sb = NULL;                       // walk reads only it
+    if (!X->sb && (X->sb = alloc(NULL, (hn + 2 * si) * 4))) {
+     lzf_ins(&F, si, 65535);
+     memcpy(X->sb, F.h2, hn * 4), memcpy(X->sb + hn, F.son, 2 * si * 4), X->sins = si, X->swlog = cf.wlog; }
+    if ((X->sok = X->sb != NULL)) ze_bt_base(&F, X); }
    if (Z) Z->f = F;
    else m.f = &F; } }
  uint64_t rep[3] = { 1, 4, 8 };
  if (X) memcpy(&X->cur, &X->init, sizeof X->cur);
- if (good && cf.fast)                            // the fast parse's tables take the base; the chains and the tree index it as they go
+ if (good && cf.fast && !play)                   // the fast parse's tables take the base; the chains and the tree index it as they go
   for (uintptr_t t = p0 > wsz ? p0 - wsz : 0; t < p0 && t + 8 <= n; t++) {
    if (cf.one) m.head[ze_hf(ZLD(s + t) << 16, m.hlog)] = (uint32_t) t + 1;
    else ze_fins(&m, t); }
@@ -1255,23 +1302,39 @@ static uintptr_t ze_dlay(struct ze_tal *T, uintptr_t span, const uint8_t *c, uin
  for (int j = 0; j < 3; j++) for (int i = 0; i < 4; i++) o[at + 4 * j + i] = (uint8_t) ((j ? 4u * j : 1u) >> 8 * i);
  memcpy(o + at + 12, c, nc);
  return at + 12 + nc; }
-// c's nc bytes and the pieces of s at cut[0..nch] -> a dictionary in o, cap nc + 1024, its tables
-// what the pieces' frames against c want at level lv | 0
+static intptr_t ze_dread(struct ze_rt *rt, const uint8_t *d, uintptr_t n);
+// c's nc bytes and the pieces of s at cut[0..nch] -> a dictionary in d, cap nc + 1024, its tables
+// what the pieces' frames against c want at level lv, and those frames, no checksum, in z one after
+// another, piece k's ending at ze[k] | 0. a piece in one block is parsed once: no table steers it
 uintptr_t zstde_dict(const uint8_t *c, uintptr_t nc, const uint8_t *s, const uintptr_t *cut, uintptr_t nch, int lv,
-                     uint8_t *o, uintptr_t cap) {
- uintptr_t most = 0, got = 0;
+                     uint8_t *d, uintptr_t dcap, uint8_t *z, uintptr_t zcap, uintptr_t *ze) {
+ uintptr_t most = 0, got = 0, zn = 0;
  for (uintptr_t k = 0; k < nch; k++) if (cut[k + 1] - cut[k] > most) most = cut[k + 1] - cut[k];
  if (!nc || !nch || lv < 1 || lv > 19) return 0;
  struct ze_tal *T = alloc(NULL, sizeof *T);
  struct ze_dx *X = T ? alloc(NULL, sizeof *X) : NULL;
  uint8_t *in = X ? alloc(NULL, nc + most) : NULL, *out = in ? alloc(NULL, ze_cap(most)) : NULL;
- if (out) {
-  memset(T, 0, sizeof *T), memset(&X->init, 0, sizeof X->init), X->tal = T;
+ uintptr_t *at = out ? alloc(NULL, nch * sizeof *at) : NULL;
+ if (at) {
+  memset(T, 0, sizeof *T), memset(X, 0, sizeof *X), X->tal = T, X->snap = 1;
   memcpy(in, c, nc);
-  for (uintptr_t k = 0; k < nch; k++) {
+  int good = 1;
+  for (uintptr_t k = 0; good && k < nch; k++) {
    uintptr_t n = cut[k + 1] - cut[k];
-   memcpy(in + nc, s + cut[k], n), ze_frame(in, nc + n, nc, lv, out, ze_cap(most), X); }
-  got = ze_dlay(T, nc + most, c, nc, o, cap); }
+   at[k] = X->lgn, X->plog = n <= ZS_BMAX;
+   memcpy(in + nc, s + cut[k], n), good = ze_frame(in, nc + n, nc, lv, out, ze_cap(most), X) != 0; }
+  got = good ? ze_dlay(T, nc + most, c, nc, d, dcap) : 0;
+  if (got && ze_dread(&X->init, d, got) < 0) got = 0;
+  X->tal = NULL;
+  for (uintptr_t k = 0; got && k < nch; k++) {
+   uintptr_t n = cut[k + 1] - cut[k], w;
+   X->lgat = at[k], X->plog = n <= ZS_BMAX ? 2 : 0;
+   memcpy(in + nc, s + cut[k], n);
+   if (!(w = ze_frame(in, nc + n, nc, lv, out, ze_cap(most), X)) || w > zcap - zn) got = 0;
+   else memcpy(z + zn, out, w), ze[k] = zn += w; }
+  if (X->sb) alloc(X->sb, 0);
+  if (X->lg) alloc(X->lg, 0); }
+ if (at) alloc(at, 0);
  if (out) alloc(out, 0);
  if (in) alloc(in, 0);
  if (X) alloc(X, 0);
@@ -1300,19 +1363,6 @@ static intptr_t ze_dread(struct ze_rt *rt, const uint8_t *d, uintptr_t n) {
   memcpy(r->norm, norm, ns * sizeof *norm), r->al = al, r->v = 1, i += (uintptr_t) k; }
  if (n - i < 12 || xx_rd(d + i, 4) != 1 || xx_rd(d + i + 4, 4) != 4 || xx_rd(d + i + 8, 4) != 8) return -1;
  return (intptr_t) (i + 12); }
-// s against d, a dictionary of zstde_dict's -> a frame with no checksum in o, cap ze_cap(n) | 0
-uintptr_t zstde_with(const uint8_t *d, uintptr_t nd, const uint8_t *s, uintptr_t n, int lv, uint8_t *o, uintptr_t cap) {
- if (lv < 1 || lv > 19) return 0;
- struct ze_dx *X = alloc(NULL, sizeof *X);
- intptr_t k = X ? ze_dread(&X->init, d, nd) : -1;
- uintptr_t nc = k < 0 ? 0 : nd - (uintptr_t) k, got = 0;
- uint8_t *in = k < 0 ? NULL : alloc(NULL, nc + n + 1);
- if (in) {
-  X->tal = NULL, memcpy(in, d + k, nc), memcpy(in + nc, s, n);
-  got = ze_frame(in, nc + n, nc, lv, o, cap, X);
-  alloc(in, 0); }
- if (X) alloc(X, 0);
- return got; }
 
 // ===== the coder as a stream: one state, fed in pieces, the same blocks as ze_frame's =====
 // the state holds offsets, not pointers, as its string may move between calls. its buffer keeps
