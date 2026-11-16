@@ -226,12 +226,13 @@
        (jmp a64_park))
 
    ;; -- rv64 ------------------------------------------------------------
-   ;; sv39, one table: [0..3] identity gigs, [256..259] the hhdm at 0xffffffc0_00000000.
-   ;; no second level: MMIO is under the first gig and a base PTE carries no memory type.
+   ;; sv39, one table: [0..3] identity gigs, [256..259] the hhdm at 0xffffffc0_00000000, and
+   ;; [384..387] the image window at 0xffffffe0_00000000, identity's twin. no second level:
+   ;; MMIO is under the first gig and a base PTE carries no memory type.
    r-boot ('((label rv_root)) + [['raw (b-zeros 4096)]])
 
-   ;; a leaf PTE for gig i: PPN (i << 30 >> 12) at bit 10 is i << 28. V|R|W|G|A|D, X on the
-   ;; identity window alone (the hhdm is non-executable, as on x86 and a64).
+   ;; a leaf PTE for gig i: PPN (i << 30 >> 12) at bit 10 is i << 28. V|R|W|G|A|D, X on
+   ;; identity and the image window (the hhdm is non-executable, as on x86 and a64).
    (r-pte i x) (i << 28 | (x ? 0xEF 0xE7))
    r-boot-text
     ('((label rvboot)
@@ -239,7 +240,8 @@
        (mov r13 r1)
        (la r0 rv_root))
      + (foldl (\ a i (a + [['li 'r2 (r-pte i 1)] ['st 'r0 (i * 8) 'r2]
-                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]]))
+                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]
+                           ['li 'r2 (r-pte i 1)] ['st 'r0 (3072 + i * 8) 'r2]]))
               () ^4)
      + '(;; satp: sv39 over the root's PPN. the pc is in the identity window, so the next
          ;; fetch tests the map; there is no literal hop.
@@ -256,10 +258,17 @@
 
    r-text
     '((label khop)
-       (la sp kstack_top)                            ; flat: pc-relative IS the linked address
+       ;; boot runs physical: the stack and C are reached through the image window
+       (la sp kstack_top)
+       (li r8 0xffffffe000000000)
+       (add sp sp r8)
        (mov r0 r13)                                ; the tree SBI passed, straight to the door
-       (call dtb_to_kboot)
-       (call kmain)
+       (align 8)
+       (lia r9 dtb_to_kboot)
+       (callr r9)
+       (align 8)
+       (lia r9 kmain)
+       (callr r9)
        (label rv_park)
        (wfi)
        (jmp rv_park))
