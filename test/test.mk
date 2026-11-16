@@ -1074,7 +1074,7 @@ endif
 inle_rv64 = test_kernel_rv64
 inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
-inle_a64 = test_kernel_a64 test_uefi_a64 test_uefi_stay_a64
+inle_a64 = test_kernel_a64 test_kernel_uproc_a64 test_uefi_a64 test_uefi_stay_a64
 test_inle: host
 	@$(MAKE) -s $(src_tree) out/rootfs.tar
 	@rm -rf out/inle && mkdir -p out/inle
