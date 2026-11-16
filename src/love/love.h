@@ -769,6 +769,8 @@ lvm_t lvm_kcall,
  lvm_nifx,        // ..with an extras word at Ip+32, GC-walked, so value[1] stays the plain twin
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes)
  lvm_reach_offset,       // g->reach's byte offset, what the emitter loads from
+ lvm_end_offset,         // g->end's byte offset: the nursery's floor
+ lvm_setcup,             // (setcup c v): a barriered cup store
  lvm_natp,        // (nat? f): code in the arena
  lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated

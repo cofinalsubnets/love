@@ -409,6 +409,16 @@ static lvm(lvm_apof) {
  love_musttail return Continue(); }
 
 lvm(lvm_reach_offset) { love_musttail return Answer(putcharm((intptr_t) offsetof(struct g, reach))); }
+// g->end is the nursery itself, the pool past the struct: its offset is its floor
+lvm(lvm_end_offset) { love_musttail return Answer(putcharm((intptr_t) offsetof(struct g, end))); }
+// (setcup c v): chain c's cup becomes v, barriered. the glaze's cons-tail loop fills its hole
+// here once a collection has moved the hole out of the nursery; anything else answers ()
+lvm(lvm_setcup) {
+ Pack(g);                    // young reads g->hp, which the live Hp may be ahead of
+ if (!chainp(Sp[0]) || !in_live_pool(g, ptr(Sp[0]))) love_musttail return Answerp(1, ZeroPoint);
+ gen_wb(g, Sp[0], Sp[1]);
+ B(Sp[0]) = Sp[1];
+ love_musttail return Answerp(1, Sp[1]); }
 // (nat? f): a native closure, entered directly at arity 1 or through lvm_cur with the code at
 // value[2]; a woken one's entry may still be lvm_lazy, its header naming the code
 lvm(lvm_natp) {
