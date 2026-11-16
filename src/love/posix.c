@@ -1091,7 +1091,7 @@ static lvm(lvm_fdtray) {
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
-LvDef("glean", reapany, 1, NULL);
+LvDef("glean", reapany, 1, "posix");
 LvDef("sigfd", sigfd, 1, "posix");
 LvDef("sigtake", sigtake, 1, "posix");
 LvDef("sigclear", sigclear, 1, "posix");
@@ -1107,16 +1107,16 @@ LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");
 LvDef("sysconf", posix_sysconf, 1, "posix");
-LvDef("pipe", pipe, 1, NULL);
+LvDef("pipe", pipe, 1, "posix");
 LvDef("openfd", openfd, 2, "posix");
 LvDef("spawnio", spawnio, 7, NULL);
-LvDef("fdopen", fdopen, 1, NULL);
+LvDef("fdopen", fdopen, 1, "posix");
 LvDef("spawnmap", spawnmap, 5, NULL);
-LvDef("getuid", getuid, 1, NULL);
+LvDef("getuid", getuid, 1, "posix");
 LvDef("getgid", getgid, 1, "posix");
-LvDef("fork", fork, 1, NULL);
-LvDef("dup2", dup2, 2, NULL);
-LvDef("dup", dup, 1, NULL);
+LvDef("fork", fork, 1, "posix");
+LvDef("dup2", dup2, 2, "posix");
+LvDef("dup", dup, 1, "posix");
 LvDef("mkdir", mkdir, 2, "posix");
 LvDef("mount", mount, 3, "posix");
 LvDef("mountf", mountf, 4, "posix");
@@ -1140,7 +1140,7 @@ LvDef("fdtray", fdtray, 3, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);
-LvDef("setpg", posix_setpg, 2, NULL);
+LvDef("setpg", posix_setpg, 2, "posix");
 LvDef("setenv", posix_setenv, 2, NULL);
 LvDef("environ", posix_environ, 1, NULL);
 // the fs tools' effect ops. (utime path ms): a non-charm ms is now. hardlink is link(2),
@@ -1369,7 +1369,7 @@ LvDef("setids", posix_setids, 3, "posix");
 LvDef("vtfont", posix_vtfont, 1, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
-LvDef("hardlink", posix_hardlink, 2, NULL);
+LvDef("hardlink", posix_hardlink, 2, "posix");
 LvDef("copyfile", posix_copyfile, 2, "posix");
 // the pty wrapper. (tether argv) -> (pid . master-port): hark (main.c) with a pty pair for
 // the stdout pipe; the child's 0/1/2 are the slave. tetherenv sets env's K=V in the child

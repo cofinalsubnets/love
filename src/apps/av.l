@@ -17,7 +17,7 @@
 (module (av av-codecs av-codec av-open av-open-all av-play av-pcm av-uri av-head av-head-all av-cap av-patch)
 (borrow 'wav)
 (:
-   open (cite 'posix 'open) close (cite 'posix 'close)
+   open (cite 'posix 'open) close (cite 'posix 'close) fdopen (cite 'posix 'fdopen)
    ; cited when asked, so a codec's module may bake after this one. a wav's meta is
    ; its own format
    (av-codecs _) [["wav" (cite 'wav 'wav-sniff) (cite 'wav 'wav-meta) (m \ m) (cite 'wav 'wav-pump)]

@@ -11,7 +11,7 @@
 (module 'lush
 (borrow 'hashes)
 ; posix doors taken by value: lush's entries run from a foreign chain, where a global
-; name reads the live book. spawn, wait, fork, pipe, dup .. stay global: inle shadows them.
+; name reads the live book. spawn, wait .. stay global: inle shadows them.
 (: chdir (cite 'posix 'chdir)      chmod (cite 'posix 'chmod)
    close (cite 'posix 'close)      cwd (cite 'posix 'cwd)
    fchdir (cite 'posix 'fchdir)
@@ -22,6 +22,10 @@
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
    childign (cite 'posix 'childign)
    umask (cite 'posix 'umask)     rusage (cite 'posix 'rusage)
+   pipe (cite 'posix 'pipe)       fdopen (cite 'posix 'fdopen)
+   dup (cite 'posix 'dup)         dup2 (cite 'posix 'dup2)
+   fork (cite 'posix 'fork)       glean (cite 'posix 'glean)
+   getuid (cite 'posix 'getuid)   setpg (cite 'posix 'setpg)
    rlimit (cite 'posix 'rlimit)   setrlimit (cite 'posix 'setrlimit)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 

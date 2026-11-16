@@ -7,7 +7,7 @@
    ; a console-numbered fd is the parent's view of it, so 2>&1 follows what the parent wears;
    ; anything higher is duped, the port owning the copy
    (task-port w n f) (? !(charm? f) (task-slot w n) (f < 0) (task-slot w n) (f < 3) (task-slot w f)
-                        (fdopen (dup f)))
+                        (cite 'posix 'fdopen (cite 'posix 'dup f)))
    (task-own fs ps) (? !(two? fs) ()
                        (charm? <fs && 2 < <fs) (<ps . task-own >fs >ps)
                        (task-own >fs >ps))
