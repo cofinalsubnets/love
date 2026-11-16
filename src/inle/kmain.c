@@ -83,8 +83,6 @@ extern struct def const __start_knifs[], __stop_knifs[];
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for x64/proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
-// ..and the door pages' unpatched copy: where, how many, and each page's place in the pie
-uintptr_t const k_pie_door[18] = { 0 };
 
 #include "quay.h"
 #include <stdarg.h>

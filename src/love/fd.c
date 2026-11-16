@@ -25,7 +25,7 @@ static noreturn void console_hangup(void) {
  raise(SIGPIPE);
  _exit(128 + SIGPIPE); }               // unreached unless someone caught it
 
-love_door struct g *love_fd_flush(struct g *g) {
+love_door(struct g *, love_fd_flush, (struct g *g), (g)) {
  if (g->io == &love_stdout.io && fflush(stdout) && errno == EPIPE) console_hangup();
  return g; }
 
@@ -40,7 +40,7 @@ uintptr_t love_fd_write_all(int fd, unsigned char const *src, uintptr_t n) {
 
 // the raw-fd lanes: an fd spelled in love is an absolute row (kmain's law). the port protocol,
 // not read(2)'s: >0 landed, 0 busy, -1 gone
-love_door intptr_t love_fd_readn(struct g *g, int fd, unsigned char *dst, uintptr_t n) {
+love_door(intptr_t, love_fd_readn, (struct g *g, int fd, unsigned char *dst, uintptr_t n), (g, fd, dst, n)) {
  ssize_t k;
  if (fd == STDIN_FILENO && love_inflag) k = read(fd, dst, n);   // the bit is already ours
  else {
@@ -52,7 +52,7 @@ love_door intptr_t love_fd_readn(struct g *g, int fd, unsigned char *dst, uintpt
       : k == 0 ? -1
       : (errno == EAGAIN || errno == EWOULDBLOCK) ? 0 : -1; }
 
-love_door intptr_t love_fd_writen(int fd, unsigned char const *src, uintptr_t n) {
+love_door(intptr_t, love_fd_writen, (int fd, unsigned char const *src, uintptr_t n), (fd, src, n)) {
  int fl = fcntl(fd, F_GETFL), off = fl >= 0 && !(fl & O_NONBLOCK);
  if (off) fcntl(fd, F_SETFL, fl | O_NONBLOCK);
  ssize_t k;
@@ -75,7 +75,7 @@ uintptr_t love_fd_say(int fd, unsigned char const *src, uintptr_t n) {
 // stdout rides stdio, else every print is its own write(2). a static port has nowhere to park
 // a residue, so it blocks; a heap port is nonblocking (io_wdrain re-offers). O_NONBLOCK is per
 // call on an inherited fd, or the shell gets a nonblocking terminal back
-love_door struct g *love_fd_port_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+love_door(struct g *, love_fd_port_writen, (struct g *g, unsigned char const *src, uintptr_t n), (g, src, n)) {
  struct io *io = g->io;
  intptr_t fd = io_fd(io);
  if (io == &love_stdout.io || io == &love_stdin.io || io == &love_stderr.io) {
@@ -85,7 +85,7 @@ love_door struct g *love_fd_port_writen(struct g *g, unsigned char const *src, u
   return g->b = (intptr_t) k, g; }
  return g->b = love_fd_writen((int) fd, src, n), g; }   // >0 landed, 0 busy, -1 gone
 
-love_door intptr_t love_fd_port_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+love_door(intptr_t, love_fd_port_readn, (struct g *g, unsigned char *dst, uintptr_t n), (g, dst, n)) {
  return love_fd_readn(g, (int) io_fd(g->io), dst, n); }
 
 struct port_vt const love_fd_port_vt = { love_fd_flush, love_fd_port_writen, love_fd_port_readn, NULL };
@@ -111,14 +111,14 @@ static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
   if (now >= deadline) return;
   ms = deadline - now; } }
 
-love_door void love_sleep(uintptr_t ms) {
+love_doorv(love_sleep, (uintptr_t ms), (ms)) {
  poll_wait(NULL, 0, ms); }
 
 static love_noinline int poll_wrap(int fd, int events) {
  struct pollfd p = { .fd = fd, .events = (short) events };
  return poll(&p, 1, 0); }
 
-love_door bool ready(int fd, int events) {
+love_door(bool, ready, (int fd, int events), (fd, events)) {
  return fd < 0 || poll_wrap(fd, events) > 0; }
 
 // love.h lays wait_fd as poll(2)'s own struct: nothing copied, no ceiling on the count
@@ -130,19 +130,19 @@ _Static_assert(wait_in == POLLIN && wait_out == POLLOUT,
                "wait_in/out must be this platform's POLLIN/POLLOUT");
 
 // events come in per fd, each task's park direction; poll fills revents for the scheduler
-love_door void wait_fds(struct wait_fd *fds, int n, uintptr_t ms) {
+love_doorv(wait_fds, (struct wait_fd *fds, int n, uintptr_t ms), (fds, n, ms)) {
  if (n <= 0) love_sleep(ms);
  else poll_wait((struct pollfd*) fds, (nfds_t) n, ms); }
 
 // asked, not waited on: one poll for the parked ring. no EINTR retry, it must never block: a
 // signal leaves every revents zero, none ready
-love_door void ready_fds(struct wait_fd *fds, int n) {
+love_doorv(ready_fds, (struct wait_fd *fds, int n), (fds, n)) {
  if (n <= 0) return;
  if (poll((struct pollfd*) fds, (nfds_t) n, 0) >= 0) return;
  for (int i = 0; i < n; i++) fds[i].revents = 0; }
 
 // io_alloc's finalizer calls it for an unreachable heap port
-love_door void love_fd_close(int fd) {
+love_doorv(love_fd_close, (int fd), (fd)) {
  close(fd); }
 
 // the fd under a port, -1 for anything not an fd port

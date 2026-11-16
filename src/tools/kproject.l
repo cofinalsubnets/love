@@ -102,18 +102,12 @@
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)
                    (go (e + 24))))) symo)
-      ; ..and each page holding a door, again and unpatched, past the kernel: a process's text
-      ; is the kernel's but for these
-      dpgs (foldl (\ a v (: p (v - v % 4096) (elem p a ? a (p . a)))) () (sort (map (k \ doors k) (keys doors))))
-      _ (? (16 < #dpgs) (scare 'kproject-doors #dpgs) 0)
-      tv (ld-align 4096 (kend - bias))
-      tcopy ((: (go l i acc)
-                 (? (atom? l) (rev acc)
-                    (: p <l g <(filter (g \ g 0 <= p && p < g 0 + g 2) pls)
-                       (go >l (i + 1) ([(tv + i * 4096) (p - g 0 + g 1) (min 4096 (g 0 + g 2 - p))
-                                        (min 4096 (g 0 + g 2 - p)) 4] . acc)))))
-             (rev dpgs) 0 ())
-      loads2 (loads + [kload] + tcopy)
+      ; each door's slot (love.h's love_door), a word of the image's data: the kernel's body, where
+      ; the copy a process lays from keeps the hosted one
+      slots ({} @ t ((each (keys doors) (\ nm (pie-sym (nm + "__slot") @ v
+                                                (charm? v ? (pin t v <(glo nm)) (scare 'kproject-slot nm))))),
+                     t))
+      loads2 (loads + [kload])
       top ((: (go l m) (? (atom? l) m
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads2 0)
@@ -130,37 +124,25 @@
       ko (ldemitn cx 'rodata kobjs (ldemit cx 'rodata ko0 kobjs (>kt + (gapz <kt ko0))))
       kd (ldemitn cx 'data kobjs (ldemit cx 'data kd0 kobjs (>ko + (gapz <ko kd0))))
       kbytes (foldl (\ a p (a + (string? p ? p (string (cask p))))) "" >kd)
-      ; each door's refusing body takes a jump to the kernel's own; the rest of its word is kept
-      (door-site nm)
-       (: v (doors nm)
-          f (va2off v)
-          rel (<(glo nm) - (bias + v))
-          [v (arch @
-              "x64" (0xe9 + (rel - 5 & 0xffffffff) * 256 + (rle32 pie (f + 5) & 0xffffff) * 1099511627776)
-              "a64" (0x14000000 + (rel // 4 & 0x3ffffff) + rle32 pie (f + 4) * 4294967296)
-              ; rv64: auipc t0, then jalr through it
-              (: lo ((rel + 0x800 & 0xfff) - 0x800)
-                 (0x297 + (rel - lo & 0xfffff000) + (lo & 0xfff) * 1048576 * 4294967296 + 0x28067 * 4294967296)))])
-
-      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base, k_pie_data and
-      ; k_pie_door take the image's far edge (physical), the pie's base, the data copy and the door
-      ; copy with its pages. ascending, for the one-pass splice below
+      ; --- the patch list: love_rela sites slide by bias, but a door's slot takes the kernel's
+      ; body; k_image_top, k_pie_base and k_pie_data take the image's far edge (physical), the
+      ; pie's base and the data copy. ascending, for the one-pass splice below
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
-      sites (foldl (\ a nm (ins (door-site nm) a))
+      sites (foldl (\ a v (ins [v (slots v)] a))
             (ins [(ksym "k_image_top") (top - xw)]
             (ins [(ksym "k_pie_base") bias]
             (ins [(ksym "k_pie_data") (bias + dcopy 0)]
-            (foldl (\ a s (ins s a))
-                   (rev ((: (go k acc)
-                             (? (relz <= k) acc
-                                (: v (rle64 pie (relo + k))
-                                   (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                        0 ()))
-                   ((: (go l i acc) (? (atom? l) acc (go >l (i + 1) ([(ksym "k_pie_door" + 16 + 8 * i) <l] . acc))))
-                    (rev dpgs) 0 [[(ksym "k_pie_door") (bias + tv)] [(ksym "k_pie_door" + 8) #dpgs]])))))
-            (sort (keys doors)))
+            (rev ((: (go k acc)
+                      (? (relz <= k) acc
+                         (: v (rle64 pie (relo + k))
+                            (go (k + 8) (!(nil? (peep slots v ())) ? acc
+                                           ([v (bias + rle64 pie (va2off v))] . acc))))))
+                 0 ())))))
+            (sort (keys slots)))
+      ; a site within a word of the one before would splice its bytes twice
+      _ ((: (go l) (? (atom? >l) 0 (<>l 0 < <l 0 + 8) (scare 'kproject-sites [<l <>l]) (go >l))) sites)
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        (: src (go0 < #pie ? pie kbytes)
