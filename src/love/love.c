@@ -153,6 +153,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  g->reach[ReachNom] = (word) lvm_nom, g->reach[ReachMint] = (word) lvm_sym, g->reach[ReachGem] = (word) lvm_gembox;
  g->reach[ReachCask] = (word) lvm_cask, g->reach[ReachDrive] = (word) callout_drive, g->reach[ReachResume] = (word) callout_resume;
  g->fair = 64, g->ticks = 0, g->reach[ReachCur] = (word) lvm_cur, g->reach[ReachUnc] = (word) lvm_unc, g->reach[ReachGap] = map_gap;
+ g->reach[ReachFair] = (word) callout_fair, g->reach[ReachSetcup] = (word) callout_setcup;
  // book + macro maps, then the main task thread
  if (ok(g = map_new(g)) && ok(g = map_new(g)) && ok(g = have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book
@@ -409,6 +410,8 @@ static lvm(lvm_apof) {
  love_musttail return Continue(); }
 
 lvm(lvm_reach_offset) { love_musttail return Answer(putcharm((intptr_t) offsetof(struct g, reach))); }
+// g->end is the nursery itself, the pool past the struct: its offset is its floor
+lvm(lvm_end_offset) { love_musttail return Answer(putcharm((intptr_t) offsetof(struct g, end))); }
 // (nat? f): a native closure, entered directly at arity 1 or through lvm_cur with the code at
 // value[2]; a woken one's entry may still be lvm_lazy, its header naming the code
 lvm(lvm_natp) {

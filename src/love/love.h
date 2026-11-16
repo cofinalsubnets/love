@@ -328,7 +328,7 @@ struct g {
  struct code *code;
  struct cfree *cfree;
  // binary addresses a native reads off g, as a blob holding one could not ride an image
- word reach[12];
+ word reach[14];
  intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a step
                   // or a call takes one, at 0 it refills
  uintptr_t ticks; // the refills and the vm's fairness yields: work in 64-step units
@@ -377,6 +377,9 @@ struct g {
      // prel's tap/jug poke this layout by index: a word added renumbers there
     } *io; }; }; };
  intptr_t end[]; };
+// the glaze reads these off g by place: fair right past reach, the run ring and the parked at words 3 and 4
+_Static_assert(offsetof(struct g, fair) == offsetof(struct g, reach) + 14 * sizeof(word), "fair rides past reach");
+_Static_assert(offsetof(struct g, tasks) == 3 * sizeof(word) && offsetof(struct g, parked) == 4 * sizeof(word), "the native's peer test");
 
 // --- nif registration ---
 // .k a nif's threaded code, .ap an lvm_, .x a word; every one immortal (defn). m the module,
@@ -794,6 +797,7 @@ lvm_t lvm_kcall,
  lvm_nifx,        // ..with an extras word at Ip+32, GC-walked, so value[1] stays the plain twin
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes)
  lvm_reach_offset,       // g->reach's byte offset, what the emitter loads from
+ lvm_end_offset,         // g->end's byte offset: the nursery's floor
  lvm_natp,        // (nat? f): code in the arena
  lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
@@ -1170,7 +1174,7 @@ static love_inline word *task_io(struct g *g) { return &g->tasks[7].x; }
 // def1 for the image codec; a count, as an extern array has no complete type
 extern struct def const *const love_def1;
 extern uintptr_t const def1_n;
-extern union u const callout_drive[], callout_resume[];
+extern union u const callout_drive[], callout_resume[], callout_fair[], callout_setcup[];
 extern union u const yield_c[];
 struct bio *bio_of(struct g *g, struct io *i);
 char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g *g, char const *src, size_t n),
@@ -1198,7 +1202,7 @@ int nif_cell(union u const *k);
 int love_once(void), ops_fill(void);
 size_t code_len(char *code);
 // g->reach's slots: the emitter's `reach` law names them the same
-enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap };
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap, ReachFair, ReachSetcup };
 union u *fn_base(union u *k, int *nargs);
 struct g
  *eval(struct g *g),
