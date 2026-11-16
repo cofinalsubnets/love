@@ -1014,6 +1014,34 @@
                     go >l (e ? 0 ok))))
        ok (go as 1)
        (flush err, ok ? 0 1))
+   ; mkswap FILE: linux's version 1 header over the file's first page, the rest left as it
+   ; is; FILE already its size and without holes, as swapon wants
+   (mkswap-main as0)
+    (: as (uflags "mkswap" as0 () "" 1)
+       _ (#as = 1 ? () (udie 1 "usage: mkswap FILE"))
+       f <as
+       pg (sysconf () @ (p . _) (charm? p ? p 4096) 4096)
+       n (stat f @ st (two? st ? (<st // pg) 0))
+       _ (10 <= n ? () (udie 1 ("mkswap: " + f + " is under 10 pages")))
+       w (openfd f 4 @ fd (charm? fd ? (fdopen fd @ p
+            (say p (zbytes 1024 + wrle 1 4 + wrle (n - 1) 4 + zbytes (pg - 1042) + "SWAPSPACE2"), close p)) fd))
+       _ (nom? w ? (udie 1 ("mkswap: cannot write " + f + ": " + show w)) ())
+       (say out ("mkswap: " + f + ", " + show (n - 1) + " pages of " + show pg + "\n"), flush out, 0))
+   ; swapon FILE.., or bare the kernel's /proc/swaps; swapoff FILE..
+   (swapon-list _)
+    (uread "/proc/swaps" @ [1 s] (say out s, flush out, 0) (udie 1 "swapon: cannot read /proc/swaps"))
+   (swap-each nm f as0)
+    (: as (uflags nm as0 () "" 1)
+       _ (two? as ? () (udie 1 ("usage: " + nm + " FILE..")))
+       _ (lit? (cite 'posix 'swapon) ? () (udie 1 (nm + ": no swap on this seat")))
+       (go l ok) (atom? l ? ok
+                  (f <l @ e
+                   (e ? (say err (nm + ": " + <l + ": " + show e), put err 10),
+                    go >l (e ? 0 ok))))
+       ok (go as 1)
+       (flush err, ok ? 0 1))
+   (swapon-main as) (atom? as ? (swapon-list ()) (swap-each "swapon" swapon as))
+   (swapoff-main as) (swap-each "swapoff" swapoff as)
 
    ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
    ; all `uread` and a parser; with no procfs mounted they read as no processes, not an error

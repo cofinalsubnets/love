@@ -85,7 +85,6 @@
 675 5592 test/uukind.l
 495 4935 test/grid.l
 485 4927 test/hash.l
-228 4330 test/c0push.l
 461 3921 test/triangle.l
 314 3634 test/holo.l
 324 3552 test/mint.l

@@ -35,10 +35,11 @@
 (: readset (: names '(peep pin tally)
    (foldl (\ t s (: v (gv s ()) (v ? (pin t v 1) t))) {} names)))
 ; what cprop knows of a value's kind, keyed by value as pureset is: a test's answers by kind (1 a
-; charm, 2 a string, 3 a pair), or ('head arity kind) for a head that answers one kind. cpkindfill
+; charm, 2 a string, 3 a pair) then the kind its truth and its falsehood each make certain (0 none),
+; or ('head arity kind) for a head that answers one kind. cpkindfill
 ; pins the ones bound so far; the egg calls it again past post, once show is
 (: cpkinds {}
-   (cpkindfill _) (each '((two? 0 0 1) (atom? 1 1 0) (charm? 1 0 0) (string? 0 1 0) (nom? 0 0 0) (tray? 0 0 0)
+   (cpkindfill _) (each '((two? 0 0 1 3 0) (atom? 1 1 0 0 3) (charm? 1 0 0 1 0) (string? 0 1 0 2 0) (nom? 0 0 0 0 0) (tray? 0 0 0 0 0)
                         (tally head 1 1) (show head 1 2) (. head 2 3))
                       (r \ (: v (gv <r ()) (v ? (pin cpkinds v >r)))))
    _ (cpkindfill 0))
@@ -82,9 +83,10 @@
 (:- (x \ evk (opfix x) 0)
   lvm_cur (pick 0 (+))
   lvm_ret0 (pick 1 cap)
-  ; the nil? nif for cflip's head test: opfix's glued lane splices the value, so `!e` reaches
+  ; the nil? nif for aco's flipped test: opfix's glued lane splices the value, so `!e` reaches
   ; the peephole unnamed
   nilv (gv 'nil? ())
+  nilop (lvm_ret0 == pick 1 nilv ? (pick 0 nilv) -1)
   ; npow's test and products, spliced as values so no local of either name can catch them
   numv (gv 'numeric? ())
   mulv (gv '* ())
@@ -182,7 +184,7 @@
     (: h <x (h @
      ^x x
      '\ (atom? >>x ? x (wxl1 c x (lp x) bnd))
-     '? (atom? >x ? '? (keep x (wxc >x bnd) '?))
+     '? (atom? >x ? '? (keep x (mapi (e \ wx e bnd) >x) '?))
      ': (? (atom? >x) ':
            (atom? >>x) (keep x (keep1 >x (wx <>x bnd)) ':)
            (: cr (census (lflat >x) bnd) bs <cr rows >cr    ; boxfix rides the census
@@ -251,13 +253,6 @@
      (keep3 bs <nd (wxd >nd bnd fr) (wxb >>bs bnd fr))))
    (wxd d bnd fr) (!(lambp d) ? (wx d bnd)                        ; a lambda def walks under its let's frame
                      (push c 'fr fr, (: w (wx d bnd) (pop c 'fr, w))))
-   (wxc bs bnd) (: fb (cflip bs (elem 'nil? bnd))
-    (? (atom? fb) [()]                           ; clauses ran out: implicit () else
-       (atom? >fb) (keep1 fb (wx <fb bnd))      ; the lone else
-       (: t (wx <fb bnd) k (cst t)
-        (? (atom? k) (keep3 fb t (wx <>fb bnd) (wxc >>fb bnd))   ; unknown -> keep the clause
-           >k   (wxc >>fb bnd)               ; statically false -> drop this clause, try the rest
-                     [(wx <>fb bnd)]))))     ; statically true  -> this result is the cond, drop rest
    (mark y) (tablet? c ? (wx y ()) y)                   ; c 0 answers the lowering unmarked
    (mark (lo ? x (lower x))))
   ; feel's helpers that read nothing of its frame: built once here, not at each compile
@@ -295,17 +290,6 @@
   (mapi f x) (atom? x ? x (mapi2 x (f <x) (mapi f >x)))
   (mapi2 x e r) (e == <x && r == >x ? x (e . r))
   (relam x r b) (b == >r ? x ('\ . <r + [b]))              ; r = (lp x), b the walked body
-  ; cflip: (? (nil? e) c [el]) is (? e [el] c), so drop the nil? wrapper of an exact (nil? e)
-  ; test in a 2- or 3-form clause. the head answers to the value as well as the name, and only
-  ; the name defers to sh, the shadow: a spliced value has no binder to hide it.
-  (cflip bs sh) (: r (cflip1 bs sh) (r == bs ? bs (cflip r sh)))
-  (cflip1 bs sh) (two? >bs && two? <bs && atom? >><bs
-                  && (<<bs == nilv || (!sh && <<bs == 'nil?)) ?
-   (: e <><bs c <>bs rest >>bs
-    (? (atom? rest)       [e () c]                ; (nil? e) c    -> (e () c)
-       (atom? >rest) [e <rest c]        ; (nil? e) c el -> (e el c)
-       bs))
-   bs)
   ; cst: kconst re-read as (const? . falsy?), so a folded test prunes its dead branch
   (cst t) (: c (kconst t)
              (? <c (1 . !>c)
@@ -453,16 +437,22 @@
          [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
   ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
   ; var and folds a pure-fn call on constant args; pureset is the fold license and a
-  ; bnd-shadowed head never folds (the alpha law). it prunes no conds (wxc does) and unfolds no
+  ; bnd-shadowed head never folds (the alpha law). it prunes a cond's dead arms and unfolds no
   ; recursion. only an already-constant RHS propagates, so it is letrec-safe, and a
   ; non-constant rebind or a lambda param kills the name.
   (propk? v) <(kconst v)
   ; se, the static value env: a scope per binder, (tablet . parent). a name maps to its
   ; (name value) entry, or to segone where the binder hides an outer one; a miss asks the parent.
   ; a (segk kind) entry hides as segone does, its value unknown but its kind certain
-  segone (mint 0) segk (mint 0)
-  (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? () v) (seget x >se))))
-  (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v) (sekind x >se))))
+  ; a (segal y kind) entry names another local, y, whose reads it stands for while no binder
+  ; between hides y; a narrowing's scope (segnar) binds nothing
+  segone (mint 0) segk (mint 0) segal (mint 0) segnar (mint 0)
+  (seget x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk || <v == segal ? () v) (seget x >se))))
+  (sekind x se) (? (atom? se) () (: v (peep <se x 0) (? (v == segone) () (two? v) (<v == segk ? <>v <v == segal ? (v 2)) (sekind x >se))))
+  ; the local x reads as, x itself unless an alias whose y is seen here as where it was bound
+  (cpal x se) (: v (cpent x se) (two? v && <v == segal && cpsee <>v x se ? <>v x))
+  (cpent x se) (? (atom? se) () (: v (peep <se x 0) (v == 0 ? (cpent x >se) v)))
+  (cpsee y x se) (: f <se (peep f x 0 !== 0 ? 1 (peep f y 0 !== 0 && peep f segnar 0 == 0) 0 (cpsee y x >se)))
   ; cpkinds' row for a head by name or by value; a shadowed name is no book head, asked only on a hit
   (khead h hr bnd) (: r (peep cpkinds (nom? h ? (gv h ()) hr) ()) (two? r && !(nom? h && elem h bnd) ? r))
   ; a one-operand kind test whose operand's kind is certain -> (answer), else ()
@@ -473,6 +463,25 @@
                        (nom? e) (sekind e se)
                        (two? e) (: r (khead <e <e bnd) (two? r && <r == 'head && r 1 = #>e ? (r 2)))
                        ())
+  ; a test (T x) of a local whose kind is not yet known -> [x then else], the kinds its holding
+  ; and its failing make certain, else ()
+  (cpnar c se bnd) (: x (two? c && two? >c && atom? >>c && nom? <>c ? (cpal <>c se))
+                      r (nom? x && elem x bnd && atom? (seget x se) && sekind x se == () ? (khead <c <c bnd))
+                      (two? r && <r != 'head ? [x (r 3) (r 4)]))
+  ; se past that test: i 1 where it held, 2 where it failed
+  (cpsek n i se) (: k (two? n ? (n i) 0) (k == 0 ? se (pin (pin {} segnar 1) <n [segk k] . se)))
+  ; an arm of ? sees what its test made certain, the arms past a test what its failing did. a
+  ; constant test keeps its live arm alone, so nothing walks the dead one
+  (cpif as se fl op bnd pb) (? (atom? as) as
+     (atom? >as) (keep1 as (cprop <as se fl op bnd pb))
+     (: n (cpnar <as se bnd) t (cprop <as se fl op bnd pb) k (cst t)
+        (? (atom? k) (keep3 as t (cprop <>as (cpsek n 1 se) fl op bnd pb) (cpif >>as (cpsek n 2 se) fl op bnd pb))
+           >k (atom? >>as ? [()] (cpif >>as se fl op bnd pb))
+           [(cprop <>as se fl op bnd pb)])))
+  ; && and ||'s operands, each seeing what the ones before it made certain by reaching it
+  (cpops h as se fl op bnd pb) (? (atom? as) as
+     (atom? >as) [(cprop <as se fl op bnd pb)]
+     (cprop <as se fl 0 bnd pb . cpops h >as (cpsek (cpnar <as se bnd) (h == '&& ? 1 2) se) fl op bnd pb))
   (sehide ns se) (foldl (\ t n (pin t n segone)) {} ns . se)   ; a binder's scope, its names hidden
   (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
   (kval v) (atom? v ? v <>v)                                                  ; a const form -> its value
@@ -623,9 +632,21 @@
    (atom? bs) bs
    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's body inherits the let's op
    (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
-      _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1] (cpkind v1 se bnd @ k (k ? [segk k] segone))))   ; a const or a known pure lambda enters se; else its kind
+      _ (pin <se nm (propk? v1 || inlinable? nm v1 ? [nm v1]                  ; a const or a known pure lambda enters se,
+                      (nom? v1 && v1 != () && elem v1 bnd && peep <se v1 0 == 0) [segal v1 (cpkind v1 se bnd)]   ; a local of an outer scope its alias,
+                      (cpkind v1 se bnd @ k (k ? [segk k] segone))))                 ; else its kind
       b (two? <bs ? (usug <bs v1) segone)                                    ; a define keeps its sugar
       (b == segone ? (keep3 bs nm v1 (cpbinds >>bs se fl op bnd pb)) (keep3 bs <bs b (cpbinds >>bs se fl op bnd pb)))))
+  ; an alias row nothing else in the let reads goes; a bodyless let's rows bind, and a const's
+  ; row stays for the glaze's autospec, which reads it
+  (cpdead bs) (cpbless? bs || !(cpalr bs) ? bs (: t (ocnt bs {})
+                    (go r) (? (atom? r || atom? >r) r
+                              (nom? <r && <r != () && t <r == 1 && nom? <>r && <>r != ()) (go >>r)
+                              (<r . <>r . go >>r))
+                    (go bs)))
+  (cpbless? l) (? (atom? l) 1 (atom? >l) 0 (cpbless? >>l))
+  (cpalr l) (? (atom? l || atom? >l) 0 (nom? <>l && <>l != ()) 1 (cpalr >>l))
+  (ocnt e t) (? (nom? e) (pin t e (peep t e 0 + 1)) (atom? e) t (ocnt >e (ocnt <e t)))
   ; usug: the body under a define's head (f a..), dsug undone, or segone where cprop changed its lambdas
   (usug k v) (? (atom? k) v
                 (: w (usug <k v) (w != segone && two? w && <w == '\ && init >w = >k ? (last w) segone)))
@@ -633,16 +654,19 @@
   ; stand in, since absence from se doesn't tell local from global.
   ; the atom test stays out of the @ chain: as the pin ^x it would compile to a deep `=`
   (cprop x se fl op bnd pb) (atom? x ?
-   (nom? x ? (seget x se @ (_ . e . _) e x) x)              ; const/known-lambda var -> value
+   (nom? x ? (cpent x se @ (n . e . _) (n == segal ? (cpsee e x se ? e x) n == segk ? x e) x) x)   ; const/known-lambda var -> value, an alias its local
    (<x @
    '\ (cplam x se fl op bnd pb)
-   ': (ln >x @ ns (keep x (cpbinds >x (sehide ns se) fl op (ns + bnd) (ns + pb)) ':))
-   '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
-   h (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
-      (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (atom? >x ? () (map (e \ cprop e se fl 0 bnd pb) (init >x) + [(cprop (last >x) se fl op bnd pb)])) bnd)
+   ': (ln >x @ ns (: s (sehide ns se) d (cpdead (cpbinds >x s fl op (ns + bnd) (ns + pb)))
+                    (atom? >d ? <d (keep x d ':))))
+   '? (cpif >x se fl op bnd pb @ r (two? r && atom? >r ? <r (keep x r '?)))   ; a lone arm is the cond
+   h (: e0 (nom? h ? (cpent h se) ())
+     (? (two? e0 && <e0 == segal && cpsee <>e0 h se) (cprop (<>e0 . >x) se fl op bnd pb)   ; an alias head reads as its local
+     (: m (nom? h ? (macros h) 0)                                          ; an unshadowed macro head expands on raw args
+      (? (m && !(elem h bnd) && (h == '&& || h == '||)) (cpand h (cpops h >x se fl op bnd pb) bnd)
          (m && !(elem h bnd)) (cprop (opfix-past (m >x) (filter two? >x)) se fl op bnd pb)     ; the expansion is source: opfix lowers its binders' patterns
          (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
-            hr (nom? h ? (: e (seget h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
+            hr (nom? h ? (two? e0 && <e0 != segk && <e0 != segal ? <>e0 h) (cprop h se fl 1 bnd pb)) ; head is consumed -> op 1
             h2 (nom? h ? (propk? hr && (kind hr) != 'lambda ? hr h) hr)       ; a const-bound nom emits its value; a closure stays a nom
             hk (kconst hr)
             kv (cpktest h hr as se bnd)
@@ -666,15 +690,18 @@
                  (foldc >hk as)
                (two? as && propk? <as && <hk && pure-ap? >hk (kval <as) && !(nifsat? >hk as))   ; fold the known prefix; an unknown tail
                  (cpap >hk as)                                                       ;   keeps the value as its head
-               (keep2 x h2 as)))))))
+               (keep2 x h2 as)))))))))
   ; && and || keep the macro's answer without its let where the left operand may be read twice:
   ; (? a b a) and (? a a b), the shape the glaze's recognizers read
   ; its operands come propagated: a sibling cprop's show would carry twice
   (cpand h as bnd) (? (atom? as) (h == '&& ? 1 0)
      (atom? >as) <as
      (: a <as r (cpand h >as bnd)
-        (? (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
+        (? (cp01? a bnd) (h == '&& ? ['? a r 0] ['? a 1 r])                  ; a kind test answers 0 or 1
+           (dupok? a bnd) (h == '&& ? ['? a r a] ['? a a r])
            (: y (nom 0) [': y a (h == '&& ? ['? y r y] ['? y y r])]))))
+  (cp01? a bnd) (two? a && nom? <a && !(elem <a bnd) && two? >a && atom? >>a
+                 && (: k (peep cpkinds (gv <a ()) ()) (two? k && <k != 'head)))
   ; dupok?: a leaf, or a pure fn over dupok? operands in nine nodes or fewer: cheap to read twice, the same answer both times
   (dupok? a bnd) (? (atom? a) 1
                     (9 < nsz a) 0
@@ -807,8 +834,9 @@
    ; clauses: t/result pairs then a trailing else. a constant test folds to one branch; else emit
    ; lvm_cond -- true runs `then` + jumps to join, false falls to `rest`.
    (clauses b) (?
-    (atom? b) (kim ())                                ; no else
+    (atom? b) (kim () * tojoin)                       ; no else: (), then join
     (atom? >b) (ana c <b * tojoin)            ; trailing else: result, then join
+    ((atom? >>b || atom? >>>b) && two? (nilt c <b)) (clauses [<(nilt c <b) (atom? >>b ? () <>>b) <>b])   ; (nil? e) c el is e el c
     (: test (ana c <b)
        then (ana c <>b)
        rest (clauses >>b)
@@ -818,6 +846,12 @@
             j (then (tojoin k) $ 2 + n)                    ; true: then, jump to join, into k
             (p2 lvm_cond (pop c 'alt) j)))))))))
 
+  ; an exact (nil? e) -> [e], else (): fold's (iop OP e), the nif's value as head, or its name
+  ; where no local binds it
+  (nilt c t) (two? t && two? >t && (? (<t == iop) (3 = #t && <>t == nilop ? [(t 2)])
+                                      (atom? >>t && (<t == nilv || <t == 'nil? && !(aloc? c 'nil?))) [<>t]))
+  (aloc? c x) (? !c 0 (two? (assq x (c 'lam)) || 0 <= sat c x || 0 <= lidx x (c 'imp + c 'arg)) 1
+                 (aloc? (c 'par) x))
   ; recursive-fn ref: a built closure is a constant like any other, through kim's fusion, else
   ; `quote 0` + a backpatch site (lfd . box-of-cell) on the scope for wire to resolve. the cell
   ; rides a box (pin, barriered): a raw poke into tenured data escapes the precise barrier.

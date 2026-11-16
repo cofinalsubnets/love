@@ -2,8 +2,9 @@
 ; ordering: 00-init, spec and uu first as common.mk's `t` has them, each kernel file after what
 ; it depends on (kore0.l pins `quit`)
 
-; layers only the corpus asserts on: borrowed here, not spliced at boot
-(borrow 'kanren)
+; layers only the corpus asserts on: borrowed here, not spliced at boot. kanren is carried: an
+; image lifts it off /love, a bare egg reads the tree's
+(borrow ((cite 'kanren) @ m (m ? m "/love/src/apps/kanren.l")))
 
 ; the driver reads the roster before it feeds 00-init.l, so the corpus's splice is not standing yet
 (borrow 'posix)

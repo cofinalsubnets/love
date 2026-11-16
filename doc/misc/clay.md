@@ -34,7 +34,7 @@ about C needs a semantics for it, and for general C that is a CompCert-sized job
 in reach is a shallow embedding of a narrow subset -- fixed-width integers, arrays without
 aliasing, no escaping pointers -- which fits the bignum limb helpers, already modelled
 against `Z` in `test/proof/rocq/big.v` and fuzzed by `big_drive`. the prover target is uu
-(`src/love/boot/uu.l`); rocq and lean are export legs, as `mx2coq.l`/`uu2coq.l` are.
+(`src/apps/uu.l`); rocq and lean are export legs, as `mx2coq.l`/`uu2coq.l` are.
 
 past that, differentials pay better than proofs. the compiler stays trusted whatever is
 proved about the datum, and every mooncc codegen bug in the run of five that prompted this

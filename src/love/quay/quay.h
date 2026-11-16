@@ -132,7 +132,6 @@ void
   cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid
   cb_clear(struct cb*),
   cb_putc(struct cb*, char),
-  cb_stamp(struct cb*, uint8_t),
   cb_fill(struct cb*, uint32_t cp),
   cb_attr(struct cb*, uint32_t fg, uint32_t bg),
   cb_recolor(struct cb*, uint32_t fg, uint32_t bg),

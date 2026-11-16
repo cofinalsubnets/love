@@ -12,7 +12,7 @@
 # by hand on netduinoplus2 and expect 28 -- `make test_nucleo446_smoke` does it.
 p_tgt = thumb2sp
 p_be  = thumb2
-include ../port.mk
+include ../../../src/inle/port.mk
 
 nu_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
 
@@ -24,11 +24,11 @@ default: nucleo446
 nucleo446: $(R)/$(o)/firm.hex
 smoke: $(R)/$(o)/smoke.elf
 
-$(eval $(call p_obj,nucleo446,src/inle/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
-$(eval $(call p_obj,main,src/inle/nucleo446/main.c,main.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
+$(eval $(call p_obj,nucleo446,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
+$(eval $(call p_obj,main,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc)))
 # the -D QSMOKE twin, the same two sources through the same cc
-$(eval $(call p_obj,nucleo446-q,src/inle/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
-$(eval $(call p_obj,main-q,src/inle/nucleo446/main.c,main.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
+$(eval $(call p_obj,nucleo446-q,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
+$(eval $(call p_obj,main-q,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
 
 # boot.o: the vector table, crt0, the fault shim and the asm helpers, laid from holo IR --
 # no gas. src/inle/teensy41/mkboot.l is the same shape with the i.MX ROM blocks on top.

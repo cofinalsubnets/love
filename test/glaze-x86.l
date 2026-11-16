@@ -12,7 +12,7 @@
    consir (G 'consir)  coreir (G 'coreir)  delet (G 'delet)  deoptir (G 'deoptir)
    emit (G 'emit)  fbits (G 'fbits)  fr (G 'fr)  grok (G 'grok)
    jit (G 'jit)  jit2 (G 'jit2)  jitf (G 'jitf)  jitfgrid (G 'jitfgrid)  jitfr (G 'jitfr)
-   jitgroupir (G 'jitgroupir)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
+   jitgroupir (G 'jitgroupir)  jitgroupirm (G 'jitgroupirm)  jitgroupirx (G 'jitgroupirx)  jitir (G 'jitir)  jitloop-n (G 'jitloop-n)  jitn (G 'jitn)
    jitnir (G 'jitnir)  jitsum (G 'jitsum)  jitcalloutsum (G 'jitcalloutsum)  jitcalloutx (G 'jitcalloutx)  calloutir (G 'calloutir)  calloutframeir (G 'calloutframeir)  loopcode (G 'loopcode)
    thloop (G 'thloop)  thcount (G 'thcount)  threadir (G 'threadir)  mkhir (G 'mkhir)  mkouterir (G 'mkouterir)
    occurs? (G 'occurs?)  plift (G 'plift)  qualfr (G 'qualfr)  twolow (G 'twolow)  canon (G 'canon)
@@ -419,8 +419,9 @@
     (ag '(: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))
                (ck t) (? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0)
                (ck (mk 8))) 255) ; depth 8 = 2^8-1 = 255 nodes
-    ; chain-lane soundness: a cap feeding arithmetic is rejected, stays interpreted
-    (agd '(: (g t) (+ (cap t) 0) (g (. 7 8)))) ; not rewritten (rejected) -> == interp
+    ; chain-lane soundness: a cap feeding arithmetic reads a fixnum car, and any other car deopts
+    (ag '(: (g t) (+ (cap t) 0) (g (. 7 8))) 7)
+    (agt '(: (g t) (+ (cap t) 0) (g (. 2.5 8))))                ; rewritten, == interp
     ; partial lift: the read-only `scan` hoists to a top-level sibling threading (n h); tested via
     ; base-ev, since plift is not on the autogroup chain
     (: rpl '(: (hash-run n)
@@ -433,11 +434,19 @@
        pl (plift rpl)
        (&& !(= pl rpl) (900 = (base-ev rpl)) (900 = (base-ev pl))                       ; fired + source->source semantic equivalence
            (elem 'hash-run_scan (map (\ pr (? (two? (cap pr)) (caap pr) (cap pr))) (cap (anat-defs (cup pl)))))))   ; scan hoisted to a top-level sibling
-    ; map lane: a read-only map probe glazes; h is peep'd but never tally'd, so mapfix makes it a map
+    ; map lane: a read-only map probe glazes; h is bound to a tablet, so the fact makes m a map
     (ag '(: (msum m i acc) (? (< i 5) (msum m (+ i 1) (+ acc (peep m (+ 1 (* 97 i)) 0))) acc)
                 h (tablet 0) _ (pin h 1 10) _ (pin h 98 20) _ (pin h 195 30) _ (pin h 292 40) _ (pin h 389 50)
                 (msum h 0 0)) 150)
-    ; the hash bench: plift hoists scan, mapfix maps its peep, the allocating fns stay interpreted
+    ; ..and an applied map reads alike
+    (ag '(: (msum m i acc) (? (< i 5) (msum m (+ i 1) (+ acc (m (+ 1 (* 97 i))))) acc)
+                h (tablet 0) _ (pin h 1 10) _ (pin h 98 20) _ (pin h 195 30) _ (pin h 292 40) _ (pin h 389 50)
+                (msum h 0 0)) 150)
+    ; a peep'd param with no tablet fact stays a string's: a map handed it deopts, answering as interp
+    (ag '(: (msum m i acc) (? (< i 5) (msum m (+ i 1) (+ acc (peep m (+ 1 (* 97 i)) 0))) acc)
+                (run h) (msum h 0 0)
+                (run (: h (tablet 0) _ (pin h 1 10) _ (pin h 98 20) h))) 30)
+    ; the hash bench: plift hoists scan and ins, the fact maps their h, the allocating fns stay interpreted
     (ag '(: (hash-run n) (: h (tablet 0)
                   (ins i)      (? (< i n) (: _ (pin h (+ 1 (* 97 i)) i) (ins (+ i 1))) h)
                   (scan i acc) (? (< i n) (scan (+ i 1) (+ acc (peep h (+ 1 (* 97 i)) 0))) acc)
@@ -653,8 +662,8 @@
          (jitgroupir [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))] 'fib 'x64))                 ; two natives, same source -> = (transparent)
       ; jitgroupirx takes its deopt target directly; a native is its twin to `=`
       (: dfs [(. '(fib n) '(? (< n 2) n (+ (fib (- n 1)) (fib (- n 2)))))]  dopt (jitgroupir dfs 'fib 'x64)
-         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt) 10))
-             (= (jitgroupirx dfs 'fib 'x64 dopt) (jitgroupirx dfs 'fib 'x64 dopt))))
+         (&& (55 = ((jitgroupirx dfs 'fib 'x64 dopt ()) 10))
+             (= (jitgroupirx dfs 'fib 'x64 dopt ()) (jitgroupirx dfs 'fib 'x64 dopt ()))))
       ; string lane: s kind-guarded and passed raw
       (: data (string [72 105 90 33 65])                                                                         ; "HiZ!A": byte-sum 365, len 5
          sbn (jitgroupir [(. '(sb s i) '(? (< i 0) 0 (+ (peep s i 0) (sb s (- i 1)))))] 'sb 'x64)              ; recursive byte-sum
@@ -669,13 +678,15 @@
          _ (fil c 4)
          (&& (= '(65 66 67 68 69) [(peep c 0 0) (peep c 1 0) (peep c 2 0) (peep c 3 0) (peep c 4 0)])               ; each byte written natively
              (88 = (: c2 (cask 4) _ ((jitgroupir [(. '(g c) '(pin c 2 88))] 'g 'x64) c2) (peep c2 2 0)))))       ; a single native pin -> byte 2
-      ; map lane (mpeep/mpin): m kind-guarded and raw
-      (: rn (jitgroupir [(. '(run m i) '(? (< i 0) (mpeep m 3 -1) (run (mpin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'x64)     ; fill keys 1..i+1 with 10*i, then read key 3
+      ; map lane: m a map by the fact, kind-guarded and raw
+      (: rn (jitgroupirm [(. '(run m i) '(? (< i 0) (peep m 3 -1) (run (pin m (+ 1 i) (* 10 i)) (- i 1))))] 'run 'x64 '((run 0)))     ; fill keys 1..i+1 with 10*i, then read key 3
          m16 (tablet 16) r16 (rn m16 8)                                                                              ; presized -> pure native
          m2 (tablet 2) r2 (rn m2 8)                                                                                  ; undersized -> grow deopt -> interp grows
-         (&& (20 = r16) (40 = (peep m16 5 -1)) (0 = (peep m16 1 -1))                                                 ; native mpin wrote real entries
+         (&& (20 = r16) (40 = (peep m16 5 -1)) (0 = (peep m16 1 -1))                                                 ; the native pin wrote real entries
              (20 = r2) (80 = (peep m2 9 -1))                                                                         ; grow deopt faithful
-             (-1 = ((jitgroupir [(. '(g m k) '(mpeep m k -1))] 'g 'x64) 5 3))))                                   ; a fixnum map arg deopts -> the default
+             (-1 = ((jitgroupirm [(. '(g m k) '(peep m k -1))] 'g 'x64 '((g 0))) 5 3))                           ; a fixnum map arg deopts -> the default
+             (: ap (jitgroupirm [(. '(g m k) '(+ 1 (m k)))] 'g 'x64 '((g 0))) t {3 41 4 2.5}                  ; an applied map: a hit is native,
+                (&& (42 = ap t 3) (= (ap t 9) (1 + t 9)) (= (ap t 4) (1 + t 4))))))                          ; a miss and a heap value deopt
       ; chain lane: no entry guard (two? is total); cap/cup guard inline
       (: (mk d) (? (< d 1) 0 (. (mk (- d 1)) (mk (- d 1))))                                                       ; an interp tree builder
          ckn (jitgroupir [(. '(ck t) '(? (two? t) (+ 1 (+ (ck (cap t)) (ck (cup t)))) 0))] 'ck 'x64)              ; native node-count walk

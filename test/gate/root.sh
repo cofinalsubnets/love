@@ -1,5 +1,5 @@
 #!/bin/sh
-# root.sh -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod.
+# root.sh -- the privileged verbs: chroot, mount, umount, sync, mkfifo, mknod, mkswap, swapon, swapoff.
 #
 # TWO HALVES, and the second is the one that means something:
 #   unprivileged  -- every refusal comes back as a STATUS and a word, never a crash,
@@ -32,7 +32,11 @@ W=$HO/.root; rm -rf "$W"; mkdir -p "$W"
 "$m" chroot                          2>/dev/null && fail "chroot: no operand must fail"
 "$m" umount                          2>/dev/null && fail "umount: no operand must fail"
 "$m" sync extra                      2>/dev/null && fail "sync: an operand must be refused"
-echo "root: the refusals are statuses (chroot/mount/umount/sync say no and live) ok"
+"$m" swapoff                         2>/dev/null && fail "swapoff: no operand must fail"
+"$m" mkswap                          2>/dev/null && fail "mkswap: no operand must fail"
+head -c 4096 /dev/zero > "$W/small"
+"$m" mkswap "$W/small"               2>/dev/null && fail "mkswap: under 10 pages must fail"
+echo "root: the refusals are statuses (chroot/mount/umount/sync/swap say no and live) ok"
 
 # ---------------------------------------------------------------- sync and fifos
 "$m" sync || fail "sync"
@@ -44,6 +48,21 @@ echo "root: the refusals are statuses (chroot/mount/umount/sync say no and live)
 [ -p "$W/h" ] || fail "mknod p: that is not a fifo"
 "$m" mkfifo "$W/f" 2>/dev/null && fail "mkfifo: an existing name must fail"
 echo "root: sync, mkfifo and mknod p (the modes land, the second create refuses) ok"
+
+# ---------------------------------------------------------------- swap
+# mkswap's header is linux's version 1: the version and last page after 1024 bytes, the
+# signature ending the first page; a swapon by a user is a refusal
+pg=$(getconf PAGESIZE)
+head -c $((16 * pg)) /dev/zero > "$W/sw"
+"$m" mkswap "$W/sw" > /dev/null || fail "mkswap"
+[ "$(od -An -tu4 -j 1024 -N 8 "$W/sw" | tr -s ' ')" = " 1 15" ] || fail "mkswap: the version and last page"
+[ "$(dd if="$W/sw" bs=1 skip=$((pg - 10)) count=10 2>/dev/null)" = SWAPSPACE2 ] || fail "mkswap: the signature"
+"$m" swapon "$W/sw" 2>/dev/null && [ "$(id -u)" != 0 ] && fail "swapon: unprivileged must fail"
+if [ -r /proc/swaps ]; then
+  "$m" swapon > "$W/swaps" || fail "swapon (bare)"
+  cmp -s /proc/swaps "$W/swaps" || fail "swapon: the listing is not /proc/swaps"
+fi
+echo "root: mkswap lays linux's header; bare swapon is /proc/swaps ok"
 
 # ---------------------------------------------------------------- the mount listing
 # the oracle is /proc/self/mounts itself, formatted by awk -- NOT util-linux's own

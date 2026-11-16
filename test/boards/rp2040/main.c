@@ -1,24 +1,22 @@
-// Nucleo-F446RE firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
-// not love (128 KB SRAM): the toolchain on silicon, a self-check battery over the ST-LINK VCP.
-// -D QSMOKE exits through qemu semihosting with the tally (100+n the first miss, 98 a fault),
-// booted by hand (`make -C src/inle/nucleo446 smoke`); the device blinks slow green, fast a miss
+// raspberry pi pico (RP2040) firmware, mooncc -t thumb1, no SDK. not love: 264 KB is under
+// any bake's arena, so this runs the toolchain's battery on silicon (test_mps2_t1's ISA) --
+// LED slow blink all green, fast a miss. console UART0 on GPIO0/1 at 115200 8N1
 #include <stdint.h>
-#include "nucleo446.h"
-#include "../bput.h"
-#include <stdarg.h>
+#include "rp2040.h"
+#include "../../../src/inle/bput.h"
 
 static void puts_(const char *s) {
   for (; *s; s++) { if (*s == '\n') serial_putc('\r'); serial_putc(*s); } }
 
 static void putu(uint32_t v) { bput_n(serial_putc, v, 10); }
 
-// --- the battery ----------------------------------------------------------
-// volatile inputs keep every operand a runtime value; expectations are exact (harnesslm.c's)
+// volatile inputs, so nothing folds at compile time into its answer
 static volatile double da = 2.5, db = -1.25, one = 1.0, two = 2.0, big = 1e9;
 static volatile float ff = 1.5f;
-static volatile long long p64 = 0x123456789ABLL, q64 = 100000LL;
+static volatile long long p64 = 0x123456789ABLL;
 static volatile unsigned long long u64 = 0xFEDCBA9876543210ULL;
-static volatile int i7 = 7, i2 = 2;
+static volatile int i7 = 7, i2 = 2, i1000 = 1000, im7 = -7;
+static volatile unsigned u9 = 900000007u;
 
 double lm_sin(double), lm_cos(double), lm_sqrt(double), lm_exp(double),
        lm_log(double), lm_atan2(double, double);
@@ -27,21 +25,20 @@ struct zn { double re, im; };
 static struct zn zmake(double re, double im) {
   struct zn z; z.re = re; z.im = im; return z; }         // memory-returned
 static double znorm(struct zn z) { return z.re*z.re + z.im*z.im; }
-struct ii { short a, b; };
-static struct ii imake(int a, int b) {
-  struct ii r; r.a = (short)a; r.b = (short)b; return r; }
-static int isum(struct ii v) { return v.a + v.b; }
-static int vsum(int n, ...) {
-  va_list ap; int s = 0;
-  va_start(ap, n);
-  for (int i = 0; i < n; i++) s += va_arg(ap, int);
-  va_end(ap); return s; }
+
 static int run(void) {
   int ok = 0;
 #define CK(x) do { ok++; \
     puts_("; check "); putu((uint32_t)ok); \
     if (x) puts_(" ok\n"); else { puts_(" FAIL\n"); return 100 + ok; } } while (0)
-  // softened doubles: arith, compares, conversions (__aeabi_d*)
+  // v6-M has NO divide instruction: every one of these is an __aeabi_ call
+  CK(i1000 / i7 == 142);
+  CK(i1000 % i7 == 6);
+  CK(im7 / i2 == -3);                  // C truncates toward zero, not down
+  CK(im7 % i2 == -1);
+  CK(u9 / 7u == 128571429u);
+  CK(u9 % 7u == 4u);
+  // and no FPU: doubles are the full soft-float set
   CK(da + db == 1.25);
   CK(da - db == 3.75);
   CK(da * db == -3.125);
@@ -50,18 +47,18 @@ static int run(void) {
   CK(db < 0.0);
   CK((long long)(da * 4.0) == 10);
   CK((double)i7 / (double)i2 == 3.5);
-  // bare floats, the FPU's own lane
+  // bare floats soften too (no FPv4 to fall back on, unlike the nucleo)
   CK(ff * ff == 2.25f);
   CK((double)ff == 1.5);
   CK(ff + ff == 3.0f);
-  // 64-bit pairs; no signed 64 divide: thumb2's open refusal
+  // 64-bit pairs on an 8-register machine
   CK(u64 % 1000ULL == 720ULL);
   CK(-p64 == -1250999896491LL);
   CK(p64 * 3 == 3752999689473LL);
   CK(u64 >> 16 == 0xFEDCBA987654ULL);
   CK((long long)u64 == -81985529216486896LL);
   CK(u64 / 1000ULL == 18364758544493064ULL);
-  // the lm math floor, bit-exact (harnesslm.c's values)
+  // the lm math floor, bit-exact (the values harnesslm.c pins against gcc)
   CK(lm_sin(one) == 0.8414709848078965);
   CK(lm_cos(two) == -0.41614683654714241);
   CK(lm_sqrt(two) == 1.4142135623730951);
@@ -69,30 +66,23 @@ static int run(void) {
   CK(lm_log(two) == 0.69314718055994529);
   CK(lm_atan2(one, two) == 0.46364760900080609);
   CK(lm_sin(big) == 0.54584344944869956);      // the big-argument reduction
-  // composites + varargs, the AAPCS-VFP shapes
+  // a composite through memory, the shape AAPCS returns via the sret pointer
   { struct zn z = zmake(da, db);
     CK(z.re == da && z.im == db);
     CK(znorm(z) == da*da + db*db); }
-  CK(isum(imake(-7, 1000)) == 993);
-  CK(vsum(3, 10, 20, 12) == 42);
-  return ok; }   // 28; mooncc varargs are anonymous words only
+  return ok; }   // 32
 
 int main(void) {
-  // first light: a board that dies later still shows crt0 and the clocks worked
-  led_init(); led_put(1);
-  timer_init();
-  puts_("\n; mooncc/nucleo446\n; core ");
-  putu(clock_mhz());
-  puts_(" MHz\n");
+  // first light before anything else
+  gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
+  serial_init();
+  puts_("\n; mooncc/rp2040 (cortex-m0+, thumb1)\n");
   int r = run();
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));
-  puts_(r <= 100 ? "/28 green\n" : "\n");
-#ifdef QSMOKE
-  sh_exit((uint32_t)r);
-#endif
-  // slow blink green, fast a miss; the button holds it solid
+  puts_(r <= 100 ? "/32 green\n" : "\n");
+  // the LED is the status channel when no terminal is watching
   uint32_t half = r <= 100 ? 500u : 120u;
   for (;;) {
-    led_put(1); { uint32_t t = clock_ms(); while (clock_ms() - t < half && !btn_get()) {} }
-    led_put(0); { uint32_t t = clock_ms(); while (clock_ms() - t < half && !btn_get()) {} } } }
+    gpio_put(LED_PIN, 1); { uint32_t t = clock_ms(); while (clock_ms() - t < half) {} }
+    gpio_put(LED_PIN, 0); { uint32_t t = clock_ms(); while (clock_ms() - t < half) {} } } }
