@@ -159,7 +159,7 @@ static intptr_t image_imm_index(word v) {
 // the buffer codec: save compacts and serializes {header, dictionary, token stream}; load
 // validates, expands, decodes in place. a mismatched buffer -> NULL, a normal boot
 /* bump on any wire format change, renumbering image_immortals included */
-#define ImageMagic 0x31314f4e5349411aULL
+#define ImageMagic 0x32314f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -184,15 +184,20 @@ static intptr_t image_imm_index(word v) {
 #define CodeZLevel 15
 #endif
 // token stream: [raw length, chunks, shared code's length, dict length, its deflated length], per
-// chunk a StreamRow, the shared code, the dictionary, then the deflated bytes or the raw stream.
-// a chunk starts at an object boundary, so each one inflates and walks on its own. the hot chunks,
-// what every run wakes, share one code; the rest but the last deflate against the dictionary
+// chunk a StreamRow, the shared code, the dictionary deflated, then the coded bytes or the raw stream.
+// a chunk starts at an object boundary, so each one decodes and walks on its own. the hot chunks,
+// what every run wakes, share one deflate code, and the last deflates alone; the rest are zstd
+// frames against the dictionary, zstd's with tables as the code segment's
 #define StreamSegHead (5 * sizeof(uint64_t))
 #ifndef StreamDict
-#define StreamDict ((uintptr_t) 32 << 10)
+#define StreamDict ((uintptr_t) 110 << 10)
 #endif
-#define StreamDictSpan 256u
-#define StreamDictShape 8u
+#define StreamDictTabs CodeDictTabs
+#define StreamDictSpan 64u
+#define StreamDictShape 5u
+#ifndef StreamZLevel
+#define StreamZLevel 19
+#endif
 #ifndef ImageHotChunks
 #define ImageHotChunks 76
 #endif
@@ -1097,7 +1102,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
  uint64_t *tab = z ? alloc(NULL, 4 * ncap * sizeof(uint64_t)) : NULL;
  uintptr_t nh = ncb > 2 * ImageHotChunks ? ImageHotChunks : 0, tn = 0;
  uintptr_t rend[ImageHotChunks + 1], zend[ImageHotChunks + 1];
- unsigned char code[1024], *dic = tab ? alloc(NULL, 2 * StreamDict + 64) : NULL;
+ unsigned char code[1024], *dic = tab ? alloc(NULL, StreamDict + 2 * (StreamDict + StreamDictTabs) + 64) : NULL;
  uintptr_t dn = 0, dnz = 0, r0 = 0;
  if (!raw) goto out;
  if (tab) {                                              // each chunk laid apart: its tokens, then its literals
@@ -1120,15 +1125,28 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
    if (i == nh) r0 = ra;
    tab[4 * nch] = a, tab[4 * nch + 1] = ra, nch++;
    a = b, ra = rb; }
-  if (nch && dic && ra > r0 && (dn = img_dict_of((char const*) raw + r0, ra - r0, dic, StreamDict, StreamZWords * 2, StreamDictSpan, StreamDictShape))) {
-   intptr_t dg = deflate_raw(g, dic, dn, dic + StreamDict, StreamDict + 64);
+  uintptr_t nm = nch > nh + 1 ? nch - 1 - nh : 0, pn = 0;   // the middle ones: zstd against the dictionary
+  uintptr_t *cut = nm && dic ? alloc(NULL, (2 * nm + 1) * sizeof *cut) : NULL, *ze = cut ? cut + nm + 1 : NULL;
+  unsigned char *zd = dic ? dic + StreamDict : NULL, *dz = zd ? zd + StreamDict + StreamDictTabs : NULL, *mz = NULL;
+  if (cut) {
+   for (uintptr_t k = 0; k <= nm; k++) cut[k] = (uintptr_t) tab[4 * (nh + k) + 1];
+   if ((pn = img_dict_of((char const*) raw + r0, cut[nm] - r0, dic, StreamDict, StreamZWords * 2, StreamDictSpan, StreamDictShape))
+       && (mz = alloc(NULL, cut[nm] - cut[0])))
+    dn = zstde_dict(dic, pn, raw, cut, nm, StreamZLevel, zd, StreamDict + StreamDictTabs, mz, cut[nm] - cut[0], ze);
+   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, StreamDict + StreamDictTabs + 64) : 0;
    if (dg > 0) dnz = (uintptr_t) dg; else dn = 0; }
-  for (uintptr_t i = nh; i < nch; i++) {                 // the rest against the dictionary, the hot ones stay out of it
-   uintptr_t rb = i + 1 < nch ? (uintptr_t) tab[4 * i + 5] : ra;
-   intptr_t got = deflate_dict(g, raw + tab[4 * i + 1], rb - (uintptr_t) tab[4 * i + 1], dic, i + 1 < nch ? dn : 0, z + zn, rn - zn);
+  for (uintptr_t i = nh; i < nch; i++) {                 // the hot ones and the last stay out of it
+   uintptr_t ri = (uintptr_t) tab[4 * i + 1], rb = i + 1 < nch ? (uintptr_t) tab[4 * i + 5] : ra;
+   intptr_t got = 0;
+   if (dn && i + 1 < nch) {
+    uintptr_t k = i - nh, w0 = k ? ze[k - 1] : 0, w = ze[k] - w0;
+    if (w <= rn - zn) memcpy(z + zn, mz + w0, w), got = (intptr_t) w; }
+   else got = deflate_dict(g, raw + ri, rb - ri, dic, 0, z + zn, rn - zn);
    if (got <= 0) { nch = 0; break; }
    tab[4 * i + 2] = zn, tab[4 * i + 3] = image_sum(z + zn, (uintptr_t) got, 0);
-   zn += (uintptr_t) got; } }
+   zn += (uintptr_t) got; }
+  if (mz) alloc(mz, 0);
+  if (cut) alloc(cut, 0); }
  if (nch && StreamRow * nch + tn + dnz + zn >= ra) nch = 0;
  if (!nch) tn = dn = dnz = 0;
  last = 0, rn = nch ? ra : img_stream(raw, blob, nw, 0, d, &last);
@@ -1138,7 +1156,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
   if (nch) {
    unsigned char *q = seg + StreamSegHead + StreamRow * nch;
    memcpy(seg + StreamSegHead, tab, StreamRow * nch), memcpy(q, code, tn);
-   if (dnz) memcpy(q + tn, dic + StreamDict, dnz);
+   if (dnz) memcpy(q + tn, dic + 2 * StreamDict + StreamDictTabs, dnz);
    memcpy(q + tn + dnz, z, zn); }
   else memcpy(seg + StreamSegHead, raw, rn);
   *outn = StreamSegHead + body; }
@@ -1321,12 +1339,13 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
   off += sz; }
  return off == hi && !d->bad; }
 
-// a chunked stream: per chunk [first word, raw offset, deflated offset] and a sentinel row,
-// the digests, which are live. a lazy wake decodes a chunk when a page of it is first touched
+// a chunked stream: per chunk [first word, raw offset, coded offset] and a sentinel row,
+// the digests, which are live. a lazy wake decodes a chunk when a page of it is first touched;
+// zt is the dictionary's tables, built with dic
 struct img_lazy {
  word *base; char *code; word const *dict; unsigned char const *z, *dz;
  uint64_t *t, *sum; unsigned char *run, *st, *want, *dic;
- void *tabs;
+ void *tabs, *zt;
  uintptr_t nw, nch, left, ps, pg0, pg1, cn, nd, ndz; int clazy; };
 
 // the segment's table, checked to tile the image, into a fresh img_lazy. NULL refuses
@@ -1336,11 +1355,11 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  if (ns < StreamSegHead) return NULL;
  memcpy(&rn, p, 8), memcpy(&nch, p + 8, 8), memcpy(&tn, p + 16, 8), memcpy(&nd, p + 24, 8), memcpy(&ndz, p + 32, 8);
  p += StreamSegHead, ns -= StreamSegHead;
- if (!nch || nch > ns / StreamRow || tn + ndz < tn || tn + ndz > ns - StreamRow * nch || nd > StreamDict || !nd != !ndz) return NULL;
+ if (!nch || nch > ns / StreamRow || tn + ndz < tn || tn + ndz > ns - StreamRow * nch || nd > StreamDict + StreamDictTabs || !nd != !ndz) return NULL;
  uintptr_t zn = ns - StreamRow * (uintptr_t) nch - (uintptr_t) tn - (uintptr_t) ndz, most = 0;
  uintptr_t tb = 24 * ((uintptr_t) nch + 1);
- uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0;
- uintptr_t fix = sizeof(struct img_lazy) + ts + tb + 9 * (uintptr_t) nch + (uintptr_t) nd;
+ uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0, zs = nd ? (zstd_dict_size() + 7) & ~(uintptr_t) 7 : 0;
+ uintptr_t fix = sizeof(struct img_lazy) + ts + zs + tb + 9 * (uintptr_t) nch + (uintptr_t) nd;
  for (uint64_t k = 0; k < nch; k++) {
   memcpy(t, p + StreamRow * k, StreamRow);
   if (k + 1 < nch) memcpy(t + 4, p + StreamRow * (k + 1), StreamRow);
@@ -1351,10 +1370,10 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
   if (t[5] - t[1] > most) most = (uintptr_t) (t[5] - t[1]); }
  struct img_lazy *L = alloc(NULL, fix + most);
  if (!L) return NULL;
- L->tabs = ts ? (void*) (L + 1) : NULL;
+ L->tabs = ts ? (void*) (L + 1) : NULL, L->zt = zs ? (char*) (L + 1) + ts : NULL;
  if (ts && !inflate_tabs_load(p + StreamRow * nch, (uintptr_t) tn, L->tabs)) { alloc(L, 0); return NULL; }
  L->base = base, L->code = code, L->cn = cn, L->dict = dict, L->dz = p + StreamRow * nch + tn, L->ndz = (uintptr_t) ndz, L->nd = (uintptr_t) nd, L->z = L->dz + ndz, L->clazy = clazy;
- L->t = (uint64_t*) ((char*) (L + 1) + ts), L->sum = L->t + 3 * (nch + 1);
+ L->t = (uint64_t*) ((char*) (L + 1) + ts + zs), L->sum = L->t + 3 * (nch + 1);
  L->st = (unsigned char*) (L->sum + nch), L->run = L->st + nch, L->dic = L->run + most;
  for (uint64_t k = 0; k < nch; k++)
   memcpy(L->t + 3 * k, p + StreamRow * k, 24), memcpy(L->sum + k, p + StreamRow * k + 24, 8);
@@ -1364,18 +1383,20 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  L->want = NULL;
  return L; }
 
-// chunk k into its words: digest checked, inflated, expanded, walked. 0 refuses
+// chunk k into its words: digest checked, decoded, expanded, walked. 0 refuses
 static int img_chunk(struct img_lazy *L, uintptr_t k) {
  uint64_t const *t = L->t + 3 * k;
  uintptr_t rl = (uintptr_t) (t[4] - t[1]), zl = (uintptr_t) (t[5] - t[2]);
  int shared = L->tabs && inflate_shared_is(L->z + t[2], zl);
  int bare = k + 1 == L->nch;                             // every wake reads the last chunk: no dictionary
- if (!shared && !bare && L->ndz) {                       // the first chunk past the hot ones inflates dic
-  if (inflate_raw(L->dz, L->ndz, L->dic, L->nd) != (intptr_t) L->nd) return 0;
+ int zs = !shared && !bare && L->nd;                    // a middle one: zstd against the dictionary
+ if (zs && L->ndz) {                                     // the first of them builds dic and its tables
+  if (inflate_raw(L->dz, L->ndz, L->dic, L->nd) != (intptr_t) L->nd || !zstd_dict_load(L->zt, L->dic, L->nd)) return 0;
   L->ndz = 0; }
  if (image_sum(L->z + t[2], zl, 0) != L->sum[k]
      || (shared ? inflate_shared(L->z + t[2], zl, L->run, rl, L->tabs)
-                : inflate_dict(L->z + t[2], zl, L->run, rl, L->dic, bare ? 0 : L->nd)) != (intptr_t) rl
+         : zs ? zstd_dict_into(L->zt, L->z + t[2], zl, L->run, rl)
+              : inflate_dict(L->z + t[2], zl, L->run, rl, L->dic, 0)) != (intptr_t) rl
      || img_expand(L->base + t[0], (uintptr_t) (t[3] - t[0]), (uintptr_t) t[0], L->run, L->run + rl, L->dict) != L->run + rl
      || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->cn, L->clazy)) return 0;
  return L->st[k] = 1, L->left--, 1; }
