@@ -122,6 +122,8 @@
       nifx (shfind ".love.nifs")
       nifa (bias + rle64 pie (sho nifx + 16))
       nifz (rle64 pie (sho nifx + 32))
+      ; the bracket is whole rows from the first: a skewed one binds every nif to its neighbour
+      _ (nifa % 8 = 0 && nifz % 24 = 0 ? 0 (scare 'kproject-nifs [nifa nifz]))
       cx [glo nifa (nifa + nifz) b0 b0 () (mach = 243) () (backends tgt) (ld-extents (objs + kobjs)) ()]
       (ksym nm) (: r (glo nm) (two? r ? (<r - bias) (scare 'kproject-ksym nm)))
       kt (ldemitn cx 'text kobjs (ldemit cx 'text k0 kobjs ()))
