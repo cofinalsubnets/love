@@ -9,6 +9,7 @@
 (borrow 'bytes)
 (:
  close (cite 'posix 'close)
+ bind (cite 'posix 'bind) recv (cite 'posix 'recv) send (cite 'posix 'send)
  ; "http://host:port/path?q" -> [scheme host port path] | ()
  (tr-url u) (: k (fsub u "://" 0)
                p (0 < k ? (snip u 0 k) "") r (snip u (k + 3) #u)
