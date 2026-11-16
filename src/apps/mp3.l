@@ -15,7 +15,7 @@
 ; one doubled, or two averaged.
 (module (mp3 mp3-sniff mp3-meta mp3-format mp3-pump mpg123-main mpg123-usage
              mp3-new mp3-head mp3-frame)
-(borrow '(bytes wav cli))
+(borrow '(bytes wav horn cli))
 (:
    open (cite 'posix 'open) close (cite 'posix 'close)
 

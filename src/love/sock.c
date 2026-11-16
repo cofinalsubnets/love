@@ -604,11 +604,11 @@ static lvm(lvm_farend) {
 
 static union u const
   nif_connect[]  = {{lvm_connect}, {lvm_connectw}, {lvm_ret0}};
-LvNif("connect", nif_connect, NULL);
-LvDef("listen", listen, 1, NULL);
-LvDef("bind", bind, 1, NULL);
-LvDef("accept", accept, 1, NULL);
-LvDef("seal", shutdown, 2, NULL);
-LvDef("recv", recv, 1, NULL);
-LvDef("send", send, 3, NULL);
-LvDef("farend", farend, 1, NULL);
+LvNif("connect", nif_connect, "posix");
+LvDef("listen", listen, 1, "posix");
+LvDef("bind", bind, 1, "posix");
+LvDef("accept", accept, 1, "posix");
+LvDef("seal", shutdown, 2, "posix");
+LvDef("recv", recv, 1, "posix");
+LvDef("send", send, 3, "posix");
+LvDef("farend", farend, 1, "posix");

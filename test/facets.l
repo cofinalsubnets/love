@@ -1,6 +1,7 @@
 ; facets: triangles onto a frame. a shared edge drawn once, the nearer face standing,
 ; textures and their levels; frame-bytes and frame-paint lay a frame out; an exposure rolls
 ; the light off; a big frame drawn in bands over the pool comes out the same at widths 1, 2, 8
+(borrow 'lore)
 (: (fc-flat l) (foldr (+) () l)
    (fc-g l) (fc-flat l @ f (gem-tray [(tally f)] f))
    (fc-z l) (fc-flat l @ f (star-tray [(tally f)] f))

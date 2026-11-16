@@ -3,6 +3,7 @@
 ; run: cat test/00-init.l test/host/00-host.l test/host/cb.l | out/love      ; exits 1 on fail, prints cb: ok
 ; a cell is three words (src/love/quay/quay.h): the glyph (codepoint, width, picture, face),
 ; then fg and bg, each a kind in its top byte over a 24-bit value
+(borrow 'quay)
 (: (chat s i) (2097151 & glass s i 0)
    (cface s i) (glass s i 0 >> 24)
    (cink k) ((k >> 24) @- 'def                      ; a colour: 'def, an index, or [r g b]

@@ -103,7 +103,7 @@
    cont (dead """(: t {} p (twirl (\ _ (call-cc (c \ (pin t 0 c)))) 0) _ (catch p) ((t 0) 1))""")
    pair (dead """(: t {} a (twirl (\ _ (catch (t (quote b)))) 0) b (twirl (\ _ (catch a)) 0) _ (pin t (quote b) b) (putx (catch a)))""")
    frz (dead """(: m (myself 0) p (twirl (\ _ (putx (freeze m))) 0) _ (catch p) (putx (quote back)))""")
-   pse (dead """(: m (myself 0) p (twirl (\ _ (putx (pause m))) 0) _ (catch p) (putx (quote back)))""")
+   pse (dead """(: m (myself 0) p (twirl (\ _ (putx (cite (quote task) (quote pause) m))) 0) _ (catch p) (putx (quote back)))""")
    ; a catch whose task sleeps is no deadlock: the clock wakes it
    slept (dead """(: p (twirl (\ _ (rest 50, 7)) 0) (putx (catch p)))""")
    _ (test (scared? cont) (scared? pair) (scared? frz) (scared? pse)

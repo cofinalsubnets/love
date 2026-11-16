@@ -401,7 +401,7 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 # plain tree's moon objects
 $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
-	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+	@$(love0) -l $< -e '(? ((cite (quote image) (quote bake) "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(holo_ld) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)

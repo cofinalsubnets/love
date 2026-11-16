@@ -137,11 +137,13 @@
      + '((iretq))
      ;; a process's `syscall` (LSTAR): rcx its pc, r11 its flags, IF masked. its stack goes
      ;; aside through gs; the frame is struct k_sysf (x64/proc.c), and every register but rax
-     ;; comes back as it was, as linux keeps them
+     ;; comes back as it was, as linux keeps them. the callee-saved six ride under it, unpopped,
+     ;; for a fork's child to start from
      + [['align 8] ['label 'k_syscall_entry]]
      + [['swapgs]
         ['raw [0x65 0x48 0x89 0x24 0x25 8 0 0 0]]      ; mov %rsp, %gs:8
         ['raw [0x65 0x48 0x8b 0x24 0x25 0 0 0 0]]      ; mov %gs:0, %rsp
+        '(push r3) '(push r4) '(push r11) '(push r12) '(push r13) '(push r14)
         ['raw [0x65 0xff 0x34 0x25 8 0 0 0]]]          ; push %gs:8
      + '((push r10) (push r1) (push r8) (push r7) (push r9) (push r2) (push r5) (push r6) (push r0))
      + x-fsave
@@ -172,6 +174,17 @@
          (xor r0 r0 r0) (xor r2 r2 r2) (xor r3 r3 r3) (xor r4 r4 r4) (xor r5 r5 r5)
          (xor r6 r6 r6) (xor r7 r7 r7) (xor r8 r8 r8) (xor r9 r9 r9) (xor r11 r11 r11)
          (xor r12 r12 r12) (xor r13 r13 r13) (xor r14 r14 r14)
+         (swapgs))
+     + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
+     ;; a fork's child: r12 its struct k_uctx, [24] the frame its parent's call laid. every
+     ;; register as that call found it, and rax 0, the call's answer here
+     + [['align 8] ['label 'k_uforked]]
+     + '((lea r6 r11 24)
+         (ld r1 r6 56) (ld r10 r6 64)
+         (ld r5 r6 16) (ld r2 r6 24) (ld r9 r6 32) (ld r7 r6 40) (ld r8 r6 48)
+         (ld r14 r6 80) (ld r13 r6 88) (ld r12 r6 96) (ld r11 r6 104) (ld r4 r6 112) (ld r3 r6 120)
+         (ld r0 r6 72) (mov sp r0)
+         (ld r6 r6 8) (xor r0 r0 r0)
          (swapgs))
      + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
      ;; archinit: the GDT and TSS (so the gates name its code selector), the syscall MSRs,
@@ -324,7 +337,7 @@
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]
                 '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr"
-                  "k_kswap" "k_ufirst")
+                  "k_kswap" "k_ufirst" "k_uforked")
                 '("k_tss" "k_cpu")       ; x64/proc.c's; idt/isrs/idtreg/gdt64 are ours alone
                 ()
                 ;; local function symbols, so nm, gdb and a backtrace name them

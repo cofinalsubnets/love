@@ -1,5 +1,6 @@
 ; test/thumb2/perf/work.l -- what perf.sh meter counts past boot: float-bound love on a board. facets'
 ; frames, plain and toned, tray kernels as the drone runs them, scalar floats, bignums' true quotient, a sort
+(borrow 'lore)
 (: fb-n 500 fb-w 160 fb-h 120
    (fb-lcg s) ((s * 1103515245 + 12345) % 2147483648)
    (fb-rs n s) (: (go i s acc) (i < n ? (fb-lcg s @ t (go (i + 1) t ((t / 2147483648.0) . acc))) acc) (go 0 s ()))
