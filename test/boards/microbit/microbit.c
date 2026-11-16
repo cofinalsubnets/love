@@ -113,12 +113,16 @@ void led_put(int on) {
   col_put(2, 1);
   REG(on ? GPIO_OUTSET(P0) : GPIO_OUTCLR(P0)) = 1u << row_pin[2]; }
 
-// one pass over the rows, LED_MAX slices of 250 us each: a cell at level v lights for v of
-// them, so a pass is ~10 ms
+// a level's share of a row's 32 slices, 32 (v / 8) ** 2.2 so the steps look even; level 1
+// keeps one slice rather than rounding dark
+#define LED_SLICES 32
+static uint8_t const led_gamma[LED_MAX + 1] = { 0, 1, 2, 4, 7, 11, 17, 24, 32 };
+
+// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms
 void led_scan(uint8_t const *lv) {
   for (int r = 0; r < LED_N; r++) {
     REG(GPIO_OUTSET(P0)) = 1u << row_pin[r];
-    for (int s = 0; s < LED_MAX; s++) {
-      for (int c = 0; c < LED_N; c++) col_put(c, lv[r * LED_N + c] > s);
-      for (uint32_t t = clock_us(); clock_us() - t < 250u; ) {} }
+    for (int s = 0; s < LED_SLICES; s++) {
+      for (int c = 0; c < LED_N; c++) col_put(c, led_gamma[lv[r * LED_N + c]] > s);
+      for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
     REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; } }

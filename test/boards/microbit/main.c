@@ -14,7 +14,7 @@ static uint32_t dice(uint32_t x, uint32_t k, uint32_t n) { return h32(x * 7919u 
 
 // matrix: each column a drop of its own speed, length and gap, a function of the column and the clock
 static void rain(uint8_t *lv, uint32_t t) {
-  static uint8_t const tail[4] = { LED_MAX, 4, 2, 1 };
+  static uint8_t const tail[4] = { LED_MAX, 6, 4, 2 };
   for (int k = 0; k < LED_N * LED_N; k++) lv[k] = 0;
   for (uint32_t x = 0; x < LED_N; x++) {
     uint32_t sp = 4 + dice(x, 0, 8), n = 2 + dice(x, 1, 3), per = LED_N + n + dice(x, 2, 6);
