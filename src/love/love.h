@@ -539,6 +539,7 @@ uintptr_t zstde_dict(unsigned char const*, uintptr_t, unsigned char const*, uint
           zstde_cap(uintptr_t), zstd_dict_size(void);
 int zstd_dict_load(void*, unsigned char const*, uintptr_t);
 intptr_t zstd_dict_into(void const*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+unsigned char *zstd_whole(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, uintptr_t*);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
