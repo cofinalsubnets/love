@@ -9,7 +9,7 @@
    mop-gone '(peek poke pick place seek spin stem span trim cellread stack setstack
               seal-hook lib enter leave yield dis disp discell opname nifnom ci-vt to-vt
               numfn nfq nfa lamform macros boxset lvm_ret lvm_quote
-              gv nifop letc opfixed jotfuse defercell deferpatch)
+              gv nifop letc opfixed jotfuse defercell deferpatch kreg inhand turnf)
    mop-kept '(peepw pinw peepv pinv pinf threadir)
    (mop-has k) (mop-G k !== ())
    (mop-on-book k) (elem k (names ()))

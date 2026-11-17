@@ -3,6 +3,7 @@
 ; empties the keep; (taprate ()) and (tapchans ()) the rate and channels
 
 ; a ramp, so a sample is its own index and a reversed or doubled buffer says so
+(borrow 'horn)
 (: (ramp n) (string (map (i \ i % 251) ^n)))
 
 ; --- a stereo port: what goes in is what the sink takes, byte for byte ---

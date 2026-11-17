@@ -1,6 +1,7 @@
 ; facets alone, the frame lore's stones draws: a few thousand triangles through a perspective
 ; eye, some off the screen and some through the near plane, half of them textured. prints the
 ; frames' sum, ms a frame and ms in all; RASTER_REPS frames (5 when unset)
+(borrow 'lore)
 (: fb-n 4000 fb-w 320 fb-h 708
    fb-r (getenv "RASTER_REPS" @ s (string? s ? (read s) 5))
    (fb-lcg s) ((s * 1103515245 + 12345) % 2147483648)

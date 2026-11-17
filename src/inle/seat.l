@@ -104,10 +104,10 @@
    (tether argv) (openpty 0 @ fs
                    (!(two? fs) ? fs
                       (: m <fs sl <>fs sg <>>fs
-                         w (worn ()) sp (fdopen (dup sl))
+                         w (worn ()) sp (cite 'posix 'fdopen (cite 'posix 'dup sl))
                          _ (wear [sp sp sp])
                          p (k-spawn1 argv sl sl sl 0 1)
-                         (wear w, close sp, close sl, twirl (_ \ k-sigs (fdopen sg) p) 0, (p . fdopen m)))))
+                         (wear w, close sp, close sl, twirl (_ \ k-sigs (cite 'posix 'fdopen sg) p) 0, (p . cite 'posix 'fdopen m)))))
    ; a hangup reaches the child that holds the session as well as the group in front
    (k-sigs q p) (see q @ c
                   (c < 0 ? (close q)
@@ -148,7 +148,7 @@
    (k-procrun argv)
      (kproc (k-words argv) (k-words (environ 0)) @ r
         (!(two? r) ? (say err (<argv + ": " + show r), put err 10, 126)
-           (: q (fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
+           (: q (cite 'posix 'fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
               (kreap <r @ s (charm? s ? s 1)))))
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
    (proc-main args) (k-procrun args)

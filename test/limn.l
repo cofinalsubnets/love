@@ -1,5 +1,6 @@
 ; --- limn, the cell painter: a grid of cells in, escapes out; 0-based in, 1-based on the wire
 (borrow "src/apps/mitty/limn.l")
+(borrow 'quay)
 
 ; sub? searches from i, at? is the exact-position twin
 (: (at? h n i) (((i + #n) <= #h) && n = snip h i (i + #n))
