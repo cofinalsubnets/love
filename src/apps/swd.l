@@ -161,7 +161,8 @@
  ; a wire over three lines of a chip through io's 'open, 'ioctl and 'close: clk bit 0, dio 1,
  ; nrst 2 (high lets go), all outputs to begin with, nrst high. swdio turns input while the
  ; target holds it, and a values call then masks it out, since setting an input is refused.
- ; a bit goes out with clk low and in at its rise; one comes in read with clk low
+ ; a bit goes out with clk low and in at its rise; one comes in read with clk low. closing
+; turns all three to inputs first, so nothing is left driving the target
  GetLine 0xC250B407 SetCfg 0xC110B40D GetVals 0xC010B40E SetVals 0xC010B40F
  (gpio-wire-on io chip clk dio rst)
   (: fd (io 'open chip)
@@ -183,7 +184,7 @@
                                                                   [(gpio-attr 1 4 2) (gpio-attr 2 (st 'v) 5)]))))
                    b))
       'rst (b \ put (lvl (st 'v) (b = 0) 4))
-      'close (_ \ (io 'close lf, io 'close fd))})
+      'close (_ \ (io 'ioctl lf SetCfg (gpio-cfg [(gpio-attr 1 4 7)]), io 'close lf, io 'close fd))})
  ; the device itself
  (gpio-wire chip clk dio rst)
   (gpio-wire-on {'open (p \ openfd p 6) 'ioctl ioctl 'close (fd \ fdopen fd @ p (close p))} chip clk dio rst)

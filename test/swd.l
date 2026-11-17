@@ -471,7 +471,8 @@
                         (: _ (call ['line (map (i \ rdle s (4 * i) 4) ^(rdle s 560 4)) (snip s 256 259)])
                            _ (cfg (snip s 288 560))
                            (snip s 0 588 + wrle 4 4)))
-                    (rq = 0xC110B40D) (? (#s != 272) 'einval (: _ (cfg s) s))
+                    (rq = 0xC110B40D) (? (#s != 272) 'einval
+                                         (: _ (call ['cfg (rdle s 32 4) (rdle s 40 8) (rdle s 48 8)]) _ (cfg s) s))
                     (rq = 0xC010B40F)
                      (? (#s != 16) 'einval
                         (: v (rdle s 0 8) m (rdle s 8 8)
@@ -486,7 +487,8 @@
         'calls (_ \ rev (st 'calls)) 'level (_ \ st 'v)}))
 
 ; the whole stack over a gpio chip: attach, the ids, a flash written and read back, nothing
-; refused, the target's wire clean, the lines asked for by name and nrst let go at the end
+; refused, the target's wire clean, the lines asked for by name, nrst let go at the end, and
+; all three turned to inputs before they are closed
 (: t (f4chip 2) g (swdt-gpio <t) w (gpio-wire-on g "/dev/gpiochip9" 5 6 7)
    ids (swd-attach w) fid (f4-ids w)
    s "a flash written over three gpio lines"
@@ -496,7 +498,7 @@
    (test (ids = [f4dp f4ap]) (fid = [0x10006421 512]) (1 = r) (back = s)
          (<cl = ['open "/dev/gpiochip9"]) (cl 1 = ['line [5 6 7] "swd"]) (!(elem 'eperm cl))
          (() = <t 'errs ()) (4 = (g 'level ()) & 4)
-         (g 'calls () @ c (drop (#c - 2) c) = [['close 4] ['close 3]])))
+         (g 'calls () @ c (drop (#c - 3) c) = [['cfg 1 4 7] ['close 4] ['close 3]])))
 
 ; the chip refuses an input set, and the wire's failures scare: a chip that will not open, and
 ; lines it will not give
