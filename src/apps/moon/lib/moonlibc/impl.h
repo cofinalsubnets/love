@@ -41,7 +41,7 @@
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
 /* the tables compile everywhere but wasm; without the sigtramp netbsd's sigaction refuses by name */
 #if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
-# define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
+# define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
 #if defined(__x86_64__) && defined(LvOsTranslate)
@@ -868,7 +868,7 @@ struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 spe
   unsigned int c_ispeed, c_ospeed;
 };
 extern void __love_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
-extern void __love_tiofb(struct termios const *t, struct __fb_termios *f);   /* os.c's termios rows */
+extern void __love_tiofb(struct termios const *t, struct __fb_termios *f);   /* ostio.c's rows */
 extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur);
 extern void __love_tiocan(struct __fb_termios const *f, struct termios *t);
 
