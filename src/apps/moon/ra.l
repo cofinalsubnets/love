@@ -9,11 +9,13 @@
    ; caller-saved; a64 keeps r4 out (a4ize reads it as the frame base), x15 to the callr park, x16-x18
    ; to holo and the platform, d8-d15 for their saves; riscv keeps r4 out likewise and t4 (r12) to the
    ; park, and its float file is caller-saved whole; t32 keeps r4 out, r12 to the park and holo, d15
-   ; to holo's scratch, and takes d8-d14 last, callee-saved
+   ; to holo's scratch, and takes d8-d14 last, callee-saved; thumb2 takes r4 last, by a name of
+   ; its own, q4, that a4ize spells r4 once the frame's r4 is fp
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (xt? g) '(r0 r1 r2 r3 r5 r6 r7 r9 r10 r11)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
+               (t2? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 q4)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
                (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
@@ -539,14 +541,47 @@
                                   + map ld (filter (v \ !(rr? v)) (at i))))))
                     ^n)
              (pin g 'rasls (map sl ok + g 'rasls), ok) sl]))
-   ; the forms over their registers: a copy onto itself and the use markers gone, a fix its body
-   (rasub fs loc)
+   ; a spill slot a register still holds: its reload into that register, or its store back from it,
+   ; goes. a label forgets them all; a store near the slot, or into the frame by an index, the slot;
+   ; a write the register
+   (rakeep g fs)
+    (: sls (foldl (t \ o \ pin t o 1) {} (g 'rasls))
+       (has k o r) (any (e \ e = [o r]) k)
+       (fst? f) (peep a4base <f -1 = 1 && f 1 = 'r4)
+       (go fs k)
+        (fs @ (f . u)
+              (f @ (['ld r 'r4 o] && sls o && has k o r) (go u k)
+                   (['st 'r4 o r] && sls o && has k o r) (go u k)
+                   (['ld r 'r4 o] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o && <>e != r) k))
+                   (['st 'r4 o r] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o) k))
+                   ('label . _) (f . go u ())
+                   _ (fst? f ? (f . go u (charm? (f 2) && elem <f stops9 ? (filter (e \ abs (<e - f 2) >= 8) k) ()))
+                        (raops g f @ [_ d] (f . go u (filter (e \ nelem <>e d) k)) _ (f . go u ()))))
+              _ ())
+     (two? (g 'rasls) ? (go fs ()) fs))
+   ; a spill slot's gp reload whose register a call or a write takes before any read, on its run
+   ; to a label or a jump, goes. over registers, while a call's cuse still says its reads: a call
+   ; with none ahead of it (a runtime helper's) may read any
+   (radrl g fs)
+    (: sls (foldl (t \ o \ pin t o 1) {} (g 'rasls))
+       (dead? r u c)
+        (u @ (f . u2)
+             (f @ (('label || 'jmp || 'jmpr || 'jmpm || 'jmpt || 'br || 'ret || 'raw) . _) 0
+                  ((('call || 'callr) . _) && !c) 0
+                  _ (raops g f @ [a d] (? (elem r a) 0 (elem r d) 1 (dead? r u2 (<f = 'cuse))) _ 0))
+             _ 0)
+       (go fs) (fs @ (f . u) (f @ (['ld r 'r4 o] && sls o && dead? r u ()) (go u) _ (f . go u)) _ ())
+     (two? (g 'rasls) && !(abl? g 'drl) ? (go fs) fs))
+   ; the forms over their registers: a copy onto itself gone, a fix its body; rasubk keeps the use
+   ; markers for the passes over registers that read them
+   (rasubk fs loc)
     (: (sub x) (lovr? x ? (loc x) x)
-       (catmap (f \ (f @ (('cuse || 'cdef) . _) ()
-                         ('fix . _ . _ . fs . _) fs
+       (catmap (f \ (f @ ('fix . _ . _ . fs . _) fs
                          ([('mov || 'movapd || 'movss) a b] && sub a = sub b) ()
                          (_ . _) [(map sub f)]
                          [f])) fs))
+   (raunmark fs) (filter (f \ f @ (('cuse || 'cdef) . _) 0 _ 1) fs)
+   (rasub fs loc) (raunmark (rasubk fs loc))
    ; dead defs: a pure form whose every def is a vreg no other form reads goes, to a fixpoint.
    ; no flag-setter a branch reads is pure here: lo.l lays a compare before every branch
    rapure (foldl (t \ op \ pin t op 1) {} '(li la lea mov movapd movss negss fimm add sub and or xor imul shl shr sar not neg

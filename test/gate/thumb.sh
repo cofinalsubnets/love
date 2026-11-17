@@ -159,6 +159,10 @@ thumb2sp)
   printf 'struct va { float x, y, z, w, a[11]; };\nstatic float sd(struct va const *v, int k) { return k ? v->w - v->x : v->z + v->w; }\nint in(float x, float y, float z, float w) { struct va const v = { .x = x, .y = y, .z = z, .w = w }; int a = 1; for (int k = 0; k < 2; k++) a &= sd(&v, k) >= 0; return a; }\n' > "$d/sv.c"
   LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/sv.c" -o "$d/sv.o" || fail "mooncc sv.c"
   [ "$(arm-none-eabi-objdump -d "$d/sv.o" | grep -c '\[sp')" = 0 ] || fail "a braced local struct stays in memory"
+  # with every other callee-saved register taken, r4 holds a value too
+  printf 'int g(int);\nint f(int *p) { int a = p[0], b = p[1], c = p[2], d = p[3], e = p[4], h = p[5], i = p[6], j = p[7], k = p[8], l = p[9];\n int s = g(a); s += g(s); s += g(s); s += g(s);\n return s + a * b + c * d + e * h + i * j + k * l; }\n' > "$d/r4.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/r4.c" -o "$d/r4.o" || fail "mooncc r4.c"
+  arm-none-eabi-objdump -d "$d/r4.o" | grep -qE 'stmdb.*\{r4,' || fail "thumb2 leaves r4 idle under pressure"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
   for f in raster lamp poly swatch audio/tones; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
