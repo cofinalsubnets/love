@@ -2,7 +2,8 @@
 ; a wire is a tablet of four words: 'out b clocks b out on swdio, 'in clocks a bit in and
 ; answers it, 'own b turns swdio to the host (1) or the target (0), 'rst b holds nrst low (1)
 ; or lets it go (0). bits go lsb first
-(module (swd swd-bits swd-sample swd-par swd-xfer swd-line swd-dp swd-dpw swd-ap swd-apw swd-connect swd-rd swd-rds swd-wr swd-wrs)
+(module (swd swd-bits swd-sample swd-par swd-xfer swd-line swd-dp swd-dpw swd-ap swd-apw swd-connect swd-rd swd-rds swd-wr swd-wrs
+             swd-halted? swd-halt swd-attach swd-resume swd-run)
 (:
  ; the low n bits of x out, then n bits in as a number
  (swd-bits w x n) (n > 0 ? (w 'out (x & 1), swd-bits w (x >> 1) (n - 1)) 0)
@@ -82,5 +83,21 @@
                       (run (a + 4) >vs (k + 1))))
      (run a vs 0))
  (swd-wr w a v) (: _ (swd-wrs w a [v]) v)
+
+ ; the core's debug registers: dhcsr (its key in each write; debug enable, halt; the halt
+ ; seen in bit 17), demcr's reset vector catch, aircr's system reset
+ dhcsr 0xE000EDF0 demcr 0xE000EDFC aircr 0xE000ED0C
+ (swd-halted? w) ((((swd-rd w dhcsr) >> 17) & 1) = 1)
+ (swd-wait w k) (? (swd-halted? w) 1 (k > 0) (swd-wait w (k - 1)) (scare 'swd-halt (swd-rd w dhcsr)))
+ (swd-halt w) (: _ (swd-wr w dhcsr 0xA05F0003) (swd-wait w 100))
+ ; connect under reset: nrst held through the switch, the core told to halt and to catch the
+ ; reset vector, nrst let go, the halt awaited and the catch put back: connect's ids
+ (swd-attach w) (: _ (w 'rst 1) ids (swd-connect w)
+                   _ (swd-wr w dhcsr 0xA05F0003) _ (swd-wr w demcr 1)
+                   _ (w 'rst 0) _ (swd-wait w 100) _ (swd-wr w demcr 0)
+                   ids)
+ ; the core let go where it stopped, still under debug; or reset and run from the top, free
+ (swd-resume w) (: _ (swd-wr w dhcsr 0xA05F0001) 1)
+ (swd-run w) (: _ (swd-wr w demcr 0) _ (swd-wr w dhcsr 0xA05F0000) _ (swd-wr w aircr 0x05FA0004) 1)
 )
 ) ; module swd

@@ -74,7 +74,7 @@
         'in (_ \ (? (st 'own = 1) (err 'in-while-host, 1)
                     (: q (st 'q) _ (say >q) (two? q ? <q 1))))
         'own (b \ ((b = 1 && two? (st 'q) ? (err 'own-early, say ())), pin st 'own b))
-        'rst (b \ pin st 'rst b)
+        'rst (b \ (pin st 'rst b, peep h 'rst (_ \ 0) b))
         'errs (_ \ rev (st 'errs)) 'reqs (_ \ rev (st 'reqs)) 'state (_ \ st 's)})
    ; registers by (ap a), a read of the debug port's 0 its id; writes kept in order
    (swdt-regs id ack)
@@ -159,20 +159,20 @@
    r (swd-xfer w 0 1 0 0)
    (test (r = [-1 0x2BA01477]) (() = w 'errs ())))
 
-; a debug port under swdt-target: dpidr id; ctrl/stat's power acks answer their asks n reads
-; late; select's bank; ap reads posted to rdbuff, the first a stale 0. its ap is a mem-ap over
-; 'mem, a tablet of words by address: csw (its reset value aps 0) and tar, drw reading and
+; swdt-mem a bus of words by address, 'mem its tablet. a debug port under swdt-target: dpidr
+; id; ctrl/stat's power acks answer their asks n reads late; select's bank; ap reads posted to
+; rdbuff, the first a stale 0. its ap is a mem-ap over bus, nrst passed on to it: csw (its reset value aps 0) and tar, drw reading and
 ; writing at tar, which steps by 4 when csw says, wrapping in its 1K block. an ap transfer while
 ; the power is down faults and sets stickyerr (ctrl/stat bit 5); while it is set every transfer
 ; faults but reads of dpidr and ctrl/stat and writes of abort, whose bit 2 clears it. 'writes
 ; is every write the port took, in order
-(: (swdt-dp id aps n)
+(: (swdt-mem _) (: m {} {'rd (a \ peep m a 0) 'wr (\ a v (pin m a v)) 'mem (_ \ m)})
+   (swdt-dp id aps n bus)
     (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w () 'csw (peep aps 0 0) 'tar 0}
-       mem {}
        (reg a) ((st 'sel & 0xF0) | a)
        (step _) ((st 'csw >> 4 & 3) = 1 ? (: t (st 'tar) (pin st 'tar ((t - (t & 1023)) | ((t + 4) & 1023)))) 0)
        (apget r) (? (r = 0) (st 'csw) (r = 4) (st 'tar)
-                    (r = 12) (: v (peep mem (st 'tar) 0) _ (step ()) v)
+                    (r = 12) (: v (bus 'rd (st 'tar)) _ (step ()) v)
                     (peep aps r 0))
        (free? ap rd a) (ap = 0 && (rd = 1 && a < 8 || rd = 0 && a = 0))
        (cs _) (: l (st 'left)
@@ -190,18 +190,19 @@
         'wr (\ ap a v (: _ (pin st 'w ([ap a v] . st 'w))
                          (? (ap = 1) (: r (reg a)
                                         (? (r = 0) (pin st 'csw v) (r = 4) (pin st 'tar v)
-                                           (r = 12) (pin mem (st 'tar) v, step ())
+                                           (r = 12) (bus 'wr (st 'tar) v, step ())
                                            0))
                             (a = 0) (v & 4 ? (pin st 'sticky 0) 0)
                             (a = 4) (pin st 'ask (v & 0x50000000), pin st 'left n, pin st 'acks 0)
                             (a = 8) (pin st 'sel v)
                             0)))
-        'writes (_ \ rev (st 'w)) 'mem (_ \ mem)}))
+        'rst (b \ peep bus 'rst (_ \ 0) b)
+        'writes (_ \ rev (st 'w)) 'mem (_ \ bus 'mem ())}))
 
 ; the board's ids: an stm32f4's sw-dp, and its ahb-ap
 (: f4dp 0x2BA01477 f4ap 0x24770011
    f4aps {0xFC f4ap 0x00 0x23000040 0xF8 0xE00FF003}
-   (f4port n) (swdt-dp f4dp f4aps n))
+   (f4port n) (swdt-dp f4dp f4aps n (swdt-mem ())))
 
 ; connect: the switch, dpidr, abort, power asked and polled till both acks, the ap's id
 ; through bank 0xF0 and rdbuff
@@ -271,3 +272,63 @@
    _ (pin on 'f 1)
    f (trap (_ \ swd-rd v 0x20000000) 0 (a \ b \ [a b]))
    (test (u = ['swd-align 0x20000002]) (n0 = n1) (f = ['swd-read [4 ()]])))
+
+; a cortex-m core over a bus: dhcsr's debug enable and halt (key 0xA05F, else ignored), the
+; halt seen in bit 17 and a reset since the last read in bit 25; demcr's reset vector catch;
+; aircr's system reset. nrst held keeps it in reset; let go, it reaches its reset vector two
+; dhcsr reads later; reset by aircr, at once. there it halts if debug is on and it was told to
+; halt or catch the vector, else runs. 'log is what it did and
+; every write to it, oldest first
+(: (swdt-core m)
+    (: st {'en 0 'ch 0 'halt 0 'vc 0 'rs 0 'nrst 0 'pend 0 'log ()}
+       (ev e) (pin st 'log (e . st 'log))
+       (boot _) (? (st 'en = 1 && (st 'vc = 1 || st 'ch = 1)) (pin st 'halt 1, ev 'caught)
+                   (pin st 'halt 0, ev 'runs))
+       {'rd (a \ (? (a = 0xE000EDF0)
+                     (: p (st 'pend) _ (p > 0 ? (pin st 'pend (p - 1), (p = 1 ? (boot ()) 0)) 0)
+                        v (st 'en | st 'ch << 1 | 1 << 16 | st 'halt << 17 | st 'rs << 25) _ (pin st 'rs 0) v)
+                     (a = 0xE000EDFC) (st 'vc)
+                     (m 'rd a)))
+        'wr (\ a v (: _ (ev ['wr a v])
+                      (? (a = 0xE000EDF0)
+                         (? ((v >> 16) != 0xA05F) (ev 'nokey)
+                            (: _ (pin st 'en (v & 1)) _ (pin st 'ch ((v >> 1) & 1))
+                               (? (st 'nrst = 1) 0
+                                  (st 'en = 1 && st 'ch = 1 && st 'halt = 0) (pin st 'halt 1, ev 'halts)
+                                  (st 'ch = 0 && st 'halt = 1) (pin st 'halt 0, ev 'resumes)
+                                  0)))
+                         (a = 0xE000EDFC) (pin st 'vc (v & 1))
+                         (a = 0xE000ED0C) (v = 0x05FA0004 ? (pin st 'rs 1, ev 'sysreset, boot ()) 0)
+                         (m 'wr a v))))
+        'rst (b \ (? (b = 1) (pin st 'nrst 1, pin st 'halt 0, ev 'reset)
+                      (pin st 'nrst 0, pin st 'rs 1, pin st 'pend 2)))
+        'mem (_ \ m 'mem ())
+        'log (_ \ rev (st 'log)) 'halted (_ \ st 'halt)})
+   (f4core n) (: c (swdt-core (swdt-mem ()))
+                 [(swdt-target (swdt-dp f4dp f4aps n c)) c]))
+
+; attach: nrst held through connect, halt and vector catch asked, nrst let go, the core
+; caught at its reset vector, the catch put back; halted, with the reset seen
+(: t (f4core 2) w <t c (t 1)
+   ids (swd-attach w) h (swd-halted? w)
+   (test (ids = [f4dp f4ap]) (1 = h) (1 = c 'halted ()) (() = w 'errs ())
+         (c 'log () = ['reset ['wr 0xE000EDF0 0xA05F0003] ['wr 0xE000EDFC 1] 'caught ['wr 0xE000EDFC 0]])))
+
+; resume lets it go under debug; halt stops it again; run turns debug off, which lets it go,
+; and resets it free, nothing caught
+(: t (f4core 0) w <t c (t 1) _ (swd-attach w) n0 #(c 'log ())
+   _ (swd-resume w) r (swd-halted? w)
+   _ (swd-halt w) h (swd-halted? w)
+   _ (swd-run w) g (swd-halted? w)
+   (test (0 = r) (1 = h) (0 = g) (0 = c 'halted ())
+         (drop n0 (c 'log ()) = [['wr 0xE000EDF0 0xA05F0001] 'resumes ['wr 0xE000EDF0 0xA05F0003] 'halts
+                                 ['wr 0xE000EDFC 0] ['wr 0xE000EDF0 0xA05F0000] 'resumes ['wr 0xE000ED0C 0x05FA0004]
+                                 'sysreset 'runs])))
+
+; a halt that never shows scares after 101 polls, with dhcsr as last read: here a bus that
+; reads 0 everywhere
+(: w (swdt-target (swdt-dp f4dp f4aps 0 {'rd (a \ 0) 'wr (\ a v 0) 'mem (_ \ {})})) _ (swd-connect w)
+   n0 #(w 'reqs ())
+   e (trap (_ \ swd-halt w) 0 (a \ b \ [a b]))
+   n #(filter (q \ q = [0 1 12]) (drop n0 (w 'reqs ())))     ; rdbuff, once a dhcsr read
+   (test (e = ['swd-halt 0]) (n = 102)))
