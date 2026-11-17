@@ -683,9 +683,26 @@ static lvm(lvm_swapoff) {
   char const *p = str_c(Sp[0]);
   Sp[0] = !p ? badarg(g) : (swapoff(p) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
+// (ioctl fd req s), s a string: the call fills a copy of s's bytes, the struct shape (gpio's
+// line requests); answers the copy after. the kernel writes what req says, not what s holds:
+// a size req encodes must fit s, and one it doesn't lands in a zeroed page past s's end
+love_noinline static struct g *host_ioctl_buf(struct g *g) {
+  unsigned char b[4096];
+  uintptr_t n = len(g->sp[2]);
+  intptr_t fd = charmp(g->sp[0]) ? getcharm(g->sp[0]) : port_fd(g->sp[0]);
+  unsigned long rq = charmp(g->sp[1]) ? (unsigned long) getcharm(g->sp[1]) : 0;
+  if (fd < 0 || !charmp(g->sp[1]) || n > sizeof b || (rq >> 30 && (rq >> 16 & 0x3fff) > n))
+   return g->sp[2] = badarg(g), g->sp += 2, g;
+  memset(b, 0, sizeof b), memcpy(b, txt(g->sp[2]), n);
+  if (ioctl((int) fd, rq, b) < 0) return g->sp[2] = love_err(g, errno), g->sp += 2, g;
+  if (!ok(g = str0(g, n))) return g;
+  memcpy(txt(g->sp[0]), b, n);
+  return g->sp[3] = g->sp[0], g->sp += 3, g; }
+static lvm(lvm_ioctl_buf) LvmCall(g, host_ioctl_buf)
 // (ioctl fd req n): linux's ioctl handed one 64-bit word holding n, BLKRRPART's and
 // EXT4_IOC_RESIZE_FS's shape; answers the word after. fd a raw fd or a port
 static lvm(lvm_ioctl) {
+  if (strp(Sp[2])) love_musttail return Ap(lvm_ioctl_buf, g);
   uint64_t w = charmp(Sp[2]) ? (uint64_t) getcharm(Sp[2]) : 0;
   intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : port_fd(Sp[0]);
   Sp[2] = fd < 0 || !charmp(Sp[1]) ? badarg(g)
