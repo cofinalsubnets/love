@@ -1,7 +1,7 @@
 ; test/host/pool.l -- the thread pool (src/love/pool.c): the width a call takes, LOVE_THREADS
 ; read at each call, and a fork's child drawing on a pool of its own
 ;   run:  cat test/00-init.l test/host/pool.l | out/love
-(borrow '(posix pool))
+(borrow '(posix pool lore))
 (: (pl-w k n) (: _ (setenv "LOVE_THREADS" k) w (par-width n) _ (setenv "LOVE_THREADS" ()) w)
    ; a frame big enough to share: two big squares, red and blue, one over the other
    (pl-g l) (: f (foldr (+) () l) (gem-tray [(tally f)] f))

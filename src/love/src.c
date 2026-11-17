@@ -90,6 +90,6 @@ static lvm(lvm_rtzst) LvmCall(g, host_rtzst)
 static LvmWrap(lvm_tree_tar, host_tree_tar)
 static LvmWrap(lvm_tree_head, host_tree_head)
 
-LvDef("tree-tar", tree_tar, 1, NULL);
-LvDef("tree-head", tree_head, 1, NULL);
-LvDef("runtime-zst", rtzst, 1, NULL);
+LvDef("tree-tar", tree_tar, 1, "tree");
+LvDef("tree-head", tree_head, 1, "tree");
+LvDef("runtime-zst", rtzst, 1, "tree");

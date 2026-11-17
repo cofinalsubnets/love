@@ -11,7 +11,7 @@
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
-(borrow '(rove cli))
+(borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
@@ -20,7 +20,7 @@
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
 (borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
-(borrow 'lore)                          ; lamp-open and its kin, in C
+(borrow 'lore)                          ; lamp-open and its kin, lace and frame-paint, in C
 (borrow 'neon)                          ; the signs, and the poster's letters
 (borrow 'brush)                         ; the world, carved and filled
 (borrow 'swatch)                        ; the textures, from their recipes

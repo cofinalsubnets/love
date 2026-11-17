@@ -12,6 +12,7 @@
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'vec)                           ; triples, and the noise
 (borrow 'sky)                           ; the sun, its light, the sky's colour
+(borrow 'lore)                          ; lace, in C
 (borrow 'grove)                         ; the tree of heaven
 (borrow 'flicker)                       ; a television's flicker
 (borrow 'walk)                          ; the keys

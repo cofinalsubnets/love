@@ -19,6 +19,7 @@
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic
 (borrow 'view)                          ; throw
+(borrow 'lore)                          ; swatch-pic, in C
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)

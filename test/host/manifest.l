@@ -2,6 +2,7 @@
 ; its screen read back through a scribed screen
 ; run: cat test/00-init.l test/host/00-host.l test/host/manifest.l | out/love
 
+(borrow 'quay)
 (borrow 'manifest)
 
 ; formulas, the unit, labels, functions as cargo

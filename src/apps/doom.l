@@ -1,6 +1,7 @@
 ; src/apps/doom.l -- doom on the host in an X window, and the verb.
 ;   love doom [-iwad FILE] [-display :N] [-frames N]
-; the game is C, linked in by the DOOM=1 lane (src/inle/doom.c's doom-start/-tick/-frame/-key);
+; the game is C, linked in by the DOOM=1 lane: src/inle/doom.c's doom-start/-tick/-frame/-key, in
+; this module;
 ; a love without it lays a nest that builds one (doom-nest). on inle the game runs whole on
 ; the console, or the machine builds and boots a module with it (doom-nest-inle).
 ; keys come from keysyms with XKB's detectable autorepeat, so a held key is not a release
@@ -177,8 +178,8 @@
        disp (opt as "-display" (getenv "DISPLAY"))
        frames (opt as "-frames" () @ f (string? f ? (digits f) 0))
        ; on inle the game is linked in or not: the WAD is a baked file and (doom ()) runs it whole
-       (? (inle? 0) (elem 'doom (names ()) ? (doom ()) (doom-nest-inle 0))
-          !(elem 'doom-start (names ())) (doom-nest as)
+       (? (inle? 0) (cite 'doom 'doom ? (doom ()) (doom-nest-inle 0))
+          !(cite 'doom 'doom-start) (doom-nest as)
           (atom? (stat wad)) (say err ("doom: no IWAD at " + wad + "\n"), 1)
           (x-open disp @ o
              (? (o = 'no-display) (say err ("doom: no display :" + x-dispnum (string? disp ? disp "") + "\n"), 1)

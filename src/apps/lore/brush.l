@@ -11,7 +11,7 @@
 (module (brush brush brush-box brush-land land-g land-y brush-prism brush-cut brush-cuts brush-move brush-mirror brush-medium brush-ray brush-mesh brush-chunks chunks-kept brush-faces)
 (borrow 'vec)                           ; triples
 (borrow 'mesh)
-(borrow 'lore)                          ; poly-*, in C
+(borrow 'lore)                          ; poly-* and lace, in C
 (:
  (side pl p) (dot (pl 0) p - pl 1)        ; above 0 outside the plane's brush
  (plane n p) (: u (unit n) [u (dot u p)])

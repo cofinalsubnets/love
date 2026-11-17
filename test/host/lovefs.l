@@ -2,7 +2,7 @@
 ; file doors alone, mirroring the checkout's root
 ; run: cat test/00-init.l test/host/lovefs.l | out/love
 
-(borrow 'posix)
+(borrow '(posix tree))
 (: (lf-rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
    ver (lf-rd "VERSION")
    s (stat "/love/VERSION")
@@ -45,7 +45,7 @@
    tars >h
    whole (tree-tar 0)
    moon (tree-tar "moon")
-   (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow 'posix, " + e + ", (puts (show (map (r \\ r 5) (tree-head 0)))), quit 0)")])
+   (lf-fresh e) (hark [(selfpath 0) "-e" ("(borrow '(posix tree), " + e + ", (puts (show (map (r \\ r 5) (tree-head 0)))), quit 0)")])
  (test
    ((map cap h) = ["index" "moon" "bake" "seat" "lisp" "c" "rest"])
    (all (r \ elem (r 1) [0 1 2 3]) h)                 ; the Makefile's tree_codecs, any of the four
