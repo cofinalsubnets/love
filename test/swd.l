@@ -30,11 +30,12 @@
 ; the jtag-to-swd switch, requests, acks, turnarounds, data and parity -- and hands each transfer
 ; to h: (h 'ack ap rd a) its ack, (h 'rd ap a) a read's value, (h 'wr ap a v) a write, and
 ; (h 'badpar ap a) when there, a read's parity to send wrong. until the
-; switch it answers nothing; a malformed request locks it out till a line reset. 'errs is the
+; switch it answers nothing; a malformed request locks it out till a line reset, misuse but for
+; eight ones (a line reset's start) and the select resent to a port already switched. 'errs is the
 ; wire's misuse, oldest first: a host driving swdio the target holds, clocking one in while it
 ; holds it, or taking it back mid-answer; a write's bad parity
 (: (swdt-target h)
-    (: st {'s 'jtag 'ones 0 'acc 0 'k 0 'q () 'own 1 'rst 0 'errs () 'reqs () 'at 0}
+    (: st {'s 'jtag 'ones 0 'n 0 'acc 0 'k 0 'q () 'own 1 'rst 0 'errs () 'reqs () 'at 0}
        (err e) (pin st 'errs (e . st 'errs))
        (go s) (pin st 's s)
        (from s a k) (pin st 's s, pin st 'acc a, pin st 'k k)
@@ -51,9 +52,11 @@
               (say ([1] + bits 1 3 + [1]), pin st 'at [ap a], from 'wdata 0 0)))
        (req r) (: ap (r >> 1 & 1) rd (r >> 2 & 1) a ((r >> 3 & 3) << 2)
                   (? ((r >> 6 & 1) = 0 && (r >> 7 & 1) = 1 && (r >> 5 & 1) = swd-par (r >> 1 & 15)) (reply ap rd a)
+                     (r = 0xFF || st 'n = 9 && r = ((0xE79E >> 1) & 0xFF)) (go 'lock)   ; a line reset's start, or the select resent
                      (err 'bad-request, go 'lock)))
        (host b)
         (: was (st 'ones) ones (b = 1 ? (was + 1) 0) _ (pin st 'ones ones)
+           _ (pin st 'n (ones >= 50 ? 0 (st 'n + 1)))     ; bits since a line reset
            s (st 's) acc (st 'acc | b << st 'k) k (st 'k + 1)
            (? (ones >= 50) (? (s = 'jtag || s = 'sel) (go 'jtag) (go 'lr))
               (s = 'jtag) (b = 0 && was >= 50 ? (from 'sel 0 1))
@@ -155,3 +158,68 @@
 (: w (swdt-target (pin (swdt-regs 0x2BA01477 1) 'badpar (\ ap a 1))) _ (swdt-select w)
    r (swd-xfer w 0 1 0 0)
    (test (r = [-1 0x2BA01477]) (() = w 'errs ())))
+
+; a debug port under swdt-target: dpidr id; ctrl/stat's power acks answer their asks n reads
+; late; select's bank; ap reads posted to rdbuff, the first a stale 0. an ap transfer while
+; the power is down faults and sets stickyerr (ctrl/stat bit 5); while it is set every transfer
+; faults but reads of dpidr and ctrl/stat and writes of abort, whose bit 2 clears it. 'writes
+; is every write the port took, in order
+(: (swdt-dp id aps n)
+    (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w ()}
+       (free? ap rd a) (ap = 0 && (rd = 1 && a < 8 || rd = 0 && a = 0))
+       (cs _) (: l (st 'left)
+               _ (l > 0 ? (pin st 'left (l - 1)) (pin st 'acks (st 'ask << 1)))
+               (st 'ask | st 'acks | st 'sticky << 5))
+       {'ack (\ ap rd a (? (free? ap rd a) 1
+                           (st 'sticky = 1) 4
+                           (ap = 1 && st 'acks != 0xA0000000) (pin st 'sticky 1, 4)
+                           1))
+        'rd (\ ap a (? (ap = 1) (: v (st 'rb) _ (pin st 'rb (peep aps ((st 'sel & 0xF0) | a) 0)) v)
+                       (a = 0) id
+                       (a = 4) (cs ())
+                       (a = 12) (st 'rb)
+                       0))
+        'wr (\ ap a v (: _ (pin st 'w ([ap a v] . st 'w))
+                         (? (ap = 1) 0
+                            (a = 0) (v & 4 ? (pin st 'sticky 0) 0)
+                            (a = 4) (pin st 'ask (v & 0x50000000), pin st 'left n, pin st 'acks 0)
+                            (a = 8) (pin st 'sel v)
+                            0)))
+        'writes (_ \ rev (st 'w))}))
+
+; the board's ids: an stm32f4's sw-dp, and its ahb-ap
+(: f4dp 0x2BA01477 f4ap 0x24770011
+   f4aps {0xFC f4ap 0x00 0x23000040 0xF8 0xE00FF003}
+   (f4port n) (swdt-dp f4dp f4aps n))
+
+; connect: the switch, dpidr, abort, power asked and polled till both acks, the ap's id
+; through bank 0xF0 and rdbuff
+(: h (f4port 3) w (swdt-target h) r (swd-connect w)
+   (test (r = [f4dp f4ap]) (() = w 'errs ())
+         (h 'writes () = [[0 0 0x1E] [0 4 0x50000000] [0 8 0xF0]])
+         (w 'reqs () = [[0 1 0] [0 0 0] [0 0 4] [0 1 4] [0 1 4] [0 1 4] [0 1 4] [0 0 8] [1 1 12] [0 1 12]])))
+
+; a posted read: the ap answers the read before, rdbuff this one; swd-ap answers this one, and
+; a bank change writes select first
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w)
+   raw (swd-xfer w 1 1 12 0) buf (swd-dp w 12)
+   csw (swd-ap w 0) base (swd-ap w 0xF8)
+   _ (swd-apw w 4 0x20000000)
+   (test (raw = [1 f4ap]) (buf = [1 f4ap]) (csw = [1 0x23000040]) (base = [1 0xE00FF003])
+         (h 'writes () = [[0 0 0x1E] [0 4 0x50000000] [0 8 0xF0] [0 8 0] [0 8 0xF0] [0 8 0] [1 4 0x20000000]])))
+
+; an ap read with the power down faults and sticks: dp reads of the id still answer, the next
+; ap transfer faults, and connect's abort clears it
+(: h (f4port 0) w (swdt-target h) _ (swdt-select w)
+   a (swd-xfer w 1 1 0 0) s (swd-dp w 4) b (swd-dp w 0) c (swd-dpw w 8 0)
+   r (swd-connect w)
+   (test (a = [4 ()]) (s = [1 0x20]) (b = [1 f4dp]) (c = [4 ()]) (r = [f4dp f4ap]) (() = w 'errs ())))
+
+; no target, swdio pulled high, answers 7: connect scares on the id; power that never comes scares after 101 polls;
+; an ap that faults scares naming it
+(: e (trap swd-connect {'out (_ \ 0) 'in (_ \ 1) 'own (_ \ 0) 'rst (_ \ 0)} (a \ b \ [a b]))
+   w (swdt-target (f4port 1000)) p (trap swd-connect w (a \ b \ [a b]))
+   polls #(filter (q \ q = [0 1 4]) (w 'reqs ()))
+   f (trap swd-connect (swdt-target (pin (f4port 0) 'ack (\ ap rd a (ap = 1 ? 4 1)))) (a \ b \ [a b]))
+   (test (e = ['swd-connect ['id [7 ()]]]) (p = ['swd-power [1 0x50000000]]) (101 = polls)
+         (f = ['swd-connect ['ap [4 ()]]])))
