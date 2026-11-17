@@ -28,7 +28,8 @@
 
 ; a simulated target under the wire's four words. it frames swd a bit at a time -- line resets,
 ; the jtag-to-swd switch, requests, acks, turnarounds, data and parity -- and hands each transfer
-; to h: (h 'ack ap rd a) its ack, (h 'rd ap a) a read's value, (h 'wr ap a v) a write. until the
+; to h: (h 'ack ap rd a) its ack, (h 'rd ap a) a read's value, (h 'wr ap a v) a write, and
+; (h 'badpar ap a) when there, a read's parity to send wrong. until the
 ; switch it answers nothing; a malformed request locks it out till a line reset. 'errs is the
 ; wire's misuse, oldest first: a host driving swdio the target holds, clocking one in while it
 ; holds it, or taking it back mid-answer; a write's bad parity
@@ -45,7 +46,8 @@
         (: ack (h 'ack ap rd a)
            _ (pin st 'reqs ([ap rd a] . st 'reqs))
            (? (ack != 1) (say ([1] + bits ack 3 + [1]), go 'idle)
-              (rd = 1) (: v (h 'rd ap a) (say ([1] + bits 1 3 + bits v 32 + [(swd-par v) 1]), go 'idle))
+              (rd = 1) (: v (h 'rd ap a) f (peep h 'badpar (\ ap a 0) ap a)
+                          (say ([1] + bits 1 3 + bits v 32 + [(swd-par v ^ f) 1]), go 'idle))
               (say ([1] + bits 1 3 + [1]), pin st 'at [ap a], from 'wdata 0 0)))
        (req r) (: ap (r >> 1 & 1) rd (r >> 2 & 1) a ((r >> 3 & 3) << 2)
                   (? ((r >> 6 & 1) = 0 && (r >> 7 & 1) = 1 && (r >> 5 & 1) = swd-par (r >> 1 & 15)) (reply ap rd a)
@@ -123,3 +125,33 @@
    _ (swd-bits w 0xF0 32) _ (swd-bits w 1 1) _ (swd-bits w 0 2)
    (test (w 'errs () = ['out-while-target 'out-while-target 'own-early 'wdata-parity])
          (() = h 'writes ())))
+
+; swd-xfer against the target: every request it can build parses, parity and all, and answers
+(: h (swdt-regs 0x2BA01477 1) w (swdt-target h) _ (swdt-select w)
+   qs (map (i \ [(i >> 3 & 1) (i >> 2 & 1) (4 * (i & 3))]) ^16)
+   rs (map (q \ swd-xfer w <q (q 1) (q 2) (q 2 + 16 * <q + 0x5A00)) qs)
+   id (swd-xfer w 0 1 0 0) sel (swd-xfer w 0 1 8 0)
+   (test (w 'reqs () = qs + [[0 1 0] [0 1 8]]) (() = w 'errs ())
+         (all (r \ <r = 1) rs) (id = [1 0x2BA01477]) (sel = [1 0x5A08])
+         (h 'writes () = map (q \ [<q (q 2) (q 2 + 16 * <q + 0x5A00)]) (filter (q \ q 1 = 0) qs))))
+
+; acks the target answers in turn, then oks
+(: (swdt-acks acks)
+    (: q {'q acks}
+       (pin (swdt-regs 0x2BA01477 1) 'ack (\ ap rd a (: l (q 'q) _ (pin q 'q >l) (two? l ? <l 1))))))
+
+; a wait is asked again; one that never ends answers its ack after 65 asks
+(: w (swdt-target (swdt-acks [2 2])) _ (swdt-select w) r (swd-xfer w 0 1 0 0) n #(w 'reqs ())
+   v (swdt-target (swdt-acks (map (_ \ 2) ^70))) _ (swdt-select v) s (swd-xfer v 0 0 8 3) m #(v 'reqs ())
+   (test (r = [1 0x2BA01477]) (3 = n) (s = [2 ()]) (65 = m) (() = w 'errs ()) (() = v 'errs ())))
+
+; a fault answers its ack, nothing written, and the next transfer is clean; no answer is 7
+(: h (swdt-acks [4]) w (swdt-target h) _ (swdt-select w)
+   f (swd-xfer w 0 0 8 0xF0) g (swd-xfer w 0 0 8 0xF1)
+   u (swd-xfer (swdt-target h) 0 1 0 0)
+   (test (f = [4 ()]) (g = [1 0xF1]) (h 'writes () = [[0 8 0xF1]]) (() = w 'errs ()) (<u = 7)))
+
+; a read whose parity comes back wrong answers -1 with what was read
+(: w (swdt-target (pin (swdt-regs 0x2BA01477 1) 'badpar (\ ap a 1))) _ (swdt-select w)
+   r (swd-xfer w 0 1 0 0)
+   (test (r = [-1 0x2BA01477]) (() = w 'errs ())))
