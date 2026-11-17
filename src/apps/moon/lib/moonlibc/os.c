@@ -269,6 +269,8 @@ static short const os_nr[][4] = {
   {NR_setrlimit,     NR_fb_setrlimit,   195,  195},
   {NR_setpriority,   NR_fb_setpriority,  96,   96},
   {NR_kill,          NR_fb_kill,         37,   37},
+  {NR_setitimer,     NR_fb_setitimer,   425,   83},   /* nb: __setitimer50 */
+  {NR_getitimer,     NR_fb_getitimer,   426,   86},
   {NR_fcntl,         NR_fb_fcntl,        92,   92},
   {NR_fsync,         NR_fb_fsync,        95,   95},
   {NR_fdatasync,     NR_fb_fdatasync,   241,  187},

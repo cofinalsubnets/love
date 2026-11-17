@@ -1931,6 +1931,12 @@ else
   gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
 fi
 moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+# -rdynamic and -rpath: nothing to a static link (jimsh's line), refused where a loader would read them
+moonrun -Wl,-rpath -Wl,/usr/local/lib -rdynamic -Wl,-rpath,/opt -o "$ho/.rdyn" "$ho/.dyn.c" > /dev/null 2>&1 \
+  || fail "-rdynamic and -rpath on a static link were not taken as no-ops"
+moonrun -shared -rdynamic -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" || fail "-rdynamic with -shared was not refused"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -Wl,-rpath=/opt -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" \
+  || fail "-rpath with -dynamic-linker was not refused"
 
 # -- constructors and destructors: priorities first in order, the plain last; destructors
 # the other way about, after atexit's; static, -pie, a gcc object, every libc, a dlopened object

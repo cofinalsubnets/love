@@ -96,15 +96,9 @@ struct stat {
 #define st_mtime st_mtim.tv_sec
 #define st_ctime st_ctim.tv_sec
 /* a file's birth time: 0 with *out filled, 1 where the filesystem keeps none, -1 errno */
-int __love_birth(char const *path, int follow, struct timespec *out);
-int stat(char const*, struct stat*);
-int fstat(int, struct stat*);
-int lstat(char const*, struct stat*);
-int mkdir(char const*, unsigned int);
-int chmod(char const*, unsigned int);
-int fchmod(int, unsigned int);
+int __love_birth(char const *path, int follow, struct timespec *out),
+    stat(char const*, struct stat*), fstat(int, struct stat*), lstat(char const*, struct stat*),
+    mkdir(char const*, unsigned int), chmod(char const*, unsigned int), fchmod(int, unsigned int);
 unsigned int umask(unsigned int);
-int utimensat(int, char const*, struct timespec const*, int);
-int futimens(int, struct timespec const*);
-int mkfifo(char const*, unsigned int);
-int mknod(char const*, unsigned int, unsigned long);
+int utimensat(int, char const*, struct timespec const*, int), futimens(int, struct timespec const*),
+    mkfifo(char const*, unsigned int), mknod(char const*, unsigned int, unsigned long);

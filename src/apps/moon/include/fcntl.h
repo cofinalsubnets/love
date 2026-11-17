@@ -11,6 +11,9 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
+#define O_NDELAY      O_NONBLOCK
+#define O_DSYNC       4096
+#define O_SYNC     1052672   /* __O_SYNC | O_DSYNC */
 /* a64 keeps 32-bit arm's values for these two; rv64 takes asm-generic's, which are x86-64's */
 #if defined(__aarch64__) || defined(__arm__)
 #define O_DIRECTORY  16384   /* arm/a64 040000 */
@@ -56,8 +59,5 @@ struct flock {
   off_t l_len;
   int   l_pid;
 };
-int open(char const*, int, ...);
-int openat(int, char const*, int, ...);
-int creat(char const*, unsigned int);
-int fcntl(int, int, ...);
-int posix_fallocate(int, off_t, off_t);
+int open(char const*, int, ...), openat(int, char const*, int, ...),
+    creat(char const*, unsigned int), fcntl(int, int, ...), posix_fallocate(int, off_t, off_t);

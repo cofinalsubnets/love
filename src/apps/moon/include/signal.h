@@ -87,10 +87,8 @@ struct sigaction {
 #define SA_NODEFER 1073741824
 #define SA_RESETHAND 0x80000000
 void *signal(int, void*);
-int raise(int);
-int sigaction(int, struct sigaction const*, struct sigaction*);
-int sigemptyset(sigset_t*);
-int sigfillset(sigset_t*);
+int raise(int), sigaction(int, struct sigaction const*, struct sigaction*), sigemptyset(sigset_t*),
+    sigfillset(sigset_t*);
 #define SIGHUP   1
 #define SIGQUIT  3
 #define SIGKILL  9
@@ -122,11 +120,8 @@ int sigfillset(sigset_t*);
 /* one past the highest signal, real-time ones included, as glibc counts */
 #define NSIG      65
 #define _NSIG     NSIG
-int kill(pid_t, int);
-int sigaddset(sigset_t*, int);
-int sigdelset(sigset_t*, int);
-int sigismember(sigset_t const*, int);
-int sigprocmask(int, sigset_t const*, sigset_t*);
+int kill(pid_t, int), sigaddset(sigset_t*, int), sigdelset(sigset_t*, int),
+    sigismember(sigset_t const*, int), sigprocmask(int, sigset_t const*, sigset_t*);
 /* linux's shape on every kernel; reordered for the bsds underneath */
 typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
 #define SS_ONSTACK  1

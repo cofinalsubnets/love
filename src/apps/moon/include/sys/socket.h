@@ -54,21 +54,15 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define MSG_WAITALL 256
 #define MSG_ERRQUEUE 8192
 #define MSG_CMSG_CLOEXEC 1073741824
-int socket(int, int, int);
-int socketpair(int, int, int, int[2]);
-int bind(int, struct sockaddr const*, socklen_t);
-int listen(int, int);
-int accept(int, struct sockaddr*, socklen_t*);
-int connect(int, struct sockaddr const*, socklen_t);
-long send(int, void const*, unsigned long, int);
-long recv(int, void*, unsigned long, int);
-int setsockopt(int, int, int, void const*, socklen_t);
-int getsockopt(int, int, int, void*, socklen_t*);
-int shutdown(int, int);
-int getsockname(int, struct sockaddr*, socklen_t*);
-int getpeername(int, struct sockaddr*, socklen_t*);
-long recvfrom(int, void*, unsigned long, int, struct sockaddr*, socklen_t*);
-long sendto(int, void const*, unsigned long, int, struct sockaddr const*, socklen_t);
+int socket(int, int, int), socketpair(int, int, int, int[2]),
+    bind(int, struct sockaddr const*, socklen_t), listen(int, int),
+    accept(int, struct sockaddr*, socklen_t*), connect(int, struct sockaddr const*, socklen_t);
+long send(int, void const*, unsigned long, int), recv(int, void*, unsigned long, int);
+int setsockopt(int, int, int, void const*, socklen_t), getsockopt(int, int, int, void*, socklen_t*),
+    shutdown(int, int), getsockname(int, struct sockaddr*, socklen_t*),
+    getpeername(int, struct sockaddr*, socklen_t*);
+long recvfrom(int, void*, unsigned long, int, struct sockaddr*, socklen_t*),
+     sendto(int, void const*, unsigned long, int, struct sockaddr const*, socklen_t);
 /* glibc x86-64's layout */
 struct iovec { void *iov_base; unsigned long iov_len; };
 struct msghdr {
@@ -85,5 +79,4 @@ struct cmsghdr { unsigned long cmsg_len; int cmsg_level; int cmsg_type; };
 #define CMSG_DATA(c)  ((unsigned char*)((struct cmsghdr*)(c) + 1))
 #define CMSG_FIRSTHDR(m) ((m)->msg_controllen >= sizeof(struct cmsghdr)   ? (struct cmsghdr*)(m)->msg_control : (struct cmsghdr*) 0)
 #define CMSG_NXTHDR(m, c)   ((unsigned char*)(c) + CMSG_ALIGN((c)->cmsg_len) + sizeof(struct cmsghdr)      > (unsigned char*)(m)->msg_control + (m)->msg_controllen    ? (struct cmsghdr*) 0    : (struct cmsghdr*)((unsigned char*)(c) + CMSG_ALIGN((c)->cmsg_len)))
-long recvmsg(int, struct msghdr*, int);
-long sendmsg(int, struct msghdr const*, int);
+long recvmsg(int, struct msghdr*, int), sendmsg(int, struct msghdr const*, int);
