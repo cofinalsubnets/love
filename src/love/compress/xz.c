@@ -574,7 +574,8 @@ static intptr_t xs_feed(struct xs_st *S, const uint8_t *in, uintptr_t n, int end
  return (intptr_t) at; }
 
 // --- crc64 ----------------------------------------------------------------------------------
-// eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent
+// eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent, the flag a
+// release once they are laid, read with an acquire
 static uint64_t crc64_t[8][256];
 static int crc64_ready;
 static void crc64_init(void) {
@@ -585,10 +586,10 @@ static void crc64_init(void) {
  for (unsigned i = 0; i < 256; i++) {           // table k is table 0 shifted k bytes on
   uint64_t v = crc64_t[0][i];
   for (int k = 1; k < 8; k++) v = crc64_t[0][v & 255] ^ v >> 8, crc64_t[k][i] = v; }
- crc64_ready = 1; }
+ __atomic_store_n(&crc64_ready, 1, __ATOMIC_RELEASE); }
 static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
  uint64_t c = ~c0;
- if (!crc64_ready) crc64_init();
+ if (!__atomic_load_n(&crc64_ready, __ATOMIC_ACQUIRE)) crc64_init();
  for (; n >= 8; p += 8, n -= 8) {
   uint64_t x = c ^ ld64le(p);
   c = crc64_t[7][x & 255] ^ crc64_t[6][x >> 8 & 255] ^ crc64_t[5][x >> 16 & 255] ^ crc64_t[4][x >> 24 & 255]
