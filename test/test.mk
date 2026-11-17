@@ -1113,12 +1113,13 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
-# test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own
+# test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
 	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 

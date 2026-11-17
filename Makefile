@@ -795,7 +795,8 @@ k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
 else
 ifneq ($(and $(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
-k_pie_in = $(xd)/love.baked
+# rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
+k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
 k_pie_o = $(xkart_o)
 endif
 endif
