@@ -999,11 +999,13 @@
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb imp?)
     (: mach (peep elf-machines tgt 0)
-       ; a thread template owes the startup that lays the first thread's copy
-       lg (ldledger srcs mach) dt <lg owed (lg 2 ? ("__love_start" . <>lg) <>lg)
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
+       ; pulls it. a thread template owes it regardless, for the first thread's copy
+       lg (ldledger srcs mach) dt <lg
+       home (!nostd && mhome ())
+       owed (lg 2 || !nostd && (string? home || vb) ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
-       home (two? owed && !nostd && mhome ())
        ; owed and no runtime in reach: the certain fact first
        (two? owed && !(string? home) && !vb
         && udie 1 "cc: undefined reference to \(qfew owed); no runtime in reach to supply it either (looked in \(mfew (mroots ()))) -- check the spelling, then the nest",
