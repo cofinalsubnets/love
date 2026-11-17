@@ -994,20 +994,20 @@
                     (string (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
-   (rtpull srcs tgt os nostd vb imp?)
+   (rtpull srcs tgt os nostd vb imp? bare)
     (: mach (peep elf-machines tgt 0)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
-       ; pulls it. a thread template owes it regardless, for the first thread's copy. a set
-       ; with a strong one of its own (a board's startup) owes none
+       ; pulls it. a bare link has no crt0 to call it. a thread template owes it regardless,
+       ; for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
        lg (ldledger srcs mach) dt <lg
        home (!nostd && mhome ())
-       owed (!(lg 3 "__love_start") && (lg 2 || !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
+       owed (!(lg 3 "__love_start") && (lg 2 || !bare && !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        ; owed and no runtime in reach: the certain fact first
        (two? owed && !(string? home) && !vb
         && udie 1 "cc: undefined reference to \(qfew owed); no runtime in reach to supply it either (looked in \(mfew (mroots ()))) -- check the spelling, then the nest",
-        nostd || !(string? home) && !vb ? ()
+        nostd || !(two? owed) || !(string? home) && !vb ? ()      ; nothing owed compiles nothing
           (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach @ pr
              ; the owe left at the end is exactly what nothing defines, said whole
              (two? <>pr && !imp? && undie <>pr,
@@ -1137,7 +1137,7 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld?))
+       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
