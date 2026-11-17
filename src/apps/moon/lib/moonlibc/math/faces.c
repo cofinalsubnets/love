@@ -21,7 +21,7 @@ double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
 double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
-double floor(double), ceil(double), fmod(double, double); /* fp.c's */
+double floor(double), ceil(double), fmod(double, double); /* math/round.c and math/fmod.c */
 /* float twins: the double result narrowed once */
 float sinf(float x) { return (float) sin(x); }
 float cosf(float x) { return (float) cos(x); }
