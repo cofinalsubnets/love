@@ -2429,7 +2429,7 @@ echo "mooncc: a program that names nothing of libc's starts through the runtime'
 # -- the carried runtime is kernel-neutral
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
-for a in x64 a64 rv64 i386 arm wasm; do
+for a in x64 a64 rv64 i386 arm rv32 wasm; do
   n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-ar) \"$a\")))) 0)" | head -1)
   case $n in ''|*[!0-9]*) n=0;; esac
   [ "$n" -gt 100000 ] \
@@ -2456,6 +2456,15 @@ done
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
 moonrun -t i386 "$ho/.os.c" -o "$ho/.os.i386" > /dev/null 2>&1 \
   || fail "carried runtime: -t i386 did not link"
+# rv32 is linux alone: its carried archive links, and runs where qemu can
+s0=$(date +%s)
+moonrun -t rv32 "$ho/.os.c" -o "$ho/.os.rv32" > /dev/null 2>&1 \
+  || fail "carried runtime: -t rv32 did not link"
+[ $(( $(date +%s) - s0 )) -lt 5 ] \
+  || fail "carried runtime: -t rv32 took the member-compile lane (it refused the carried archive)"
+if have qemu-riscv32; then
+  [ "$(qemu-riscv32 "$ho/.os.rv32")" = "os lane" ] || fail "carried runtime: the rv32 link did not run"
+fi
 moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
   && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"

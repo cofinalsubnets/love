@@ -39,8 +39,8 @@
 #include <netinet/in.h>
 
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
-/* the tables compile everywhere but wasm; without the sigtramp netbsd's sigaction refuses by name */
-#if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
+/* the tables compile everywhere but wasm and rv32; without the sigtramp netbsd's sigaction refuses by name */
+#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__))   /* wasm's one kernel is the page's loader; rv32 has only linux */
 # define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -301,6 +301,26 @@ struct _IO_FILE {
 #define NR_fstatfs         44
 #define NR_memfd_create   279
 #define NR_execveat       281
+#if defined(__riscv) && defined(__ILP32__)
+/* rv32: asm-generic's 32-bit names and only the *_time64 calls. it has no wait4, fstat or
+ * get/setrlimit: waitpid, statx and prlimit64 answer, and those keys stay for os.c's map */
+#undef NR_clock_gettime
+#undef NR_futex
+#undef NR_ppoll
+#undef NR_pselect6
+#undef NR_utimensat
+#define NR_clock_gettime  403   /* clock_gettime64 */
+#define NR_futex          422   /* futex_time64 */
+#define NR_ppoll          414   /* ppoll_time64 */
+#define NR_pselect6       413   /* pselect6_time64 */
+#define NR_utimensat      412   /* utimensat_time64 */
+#define NR_clock_nanosleep 407  /* clock_nanosleep_time64 */
+#define NR__llseek         62
+#define NR_statfs64        43
+#define NR_fstatfs64       44
+#define NR_waitid          95
+#define NR_prlimit64      261
+#endif
 #elif defined(__ARM_EABI__)
 /* arm eabi: 64-bit off_t and time_t through the *64 and *_time64 calls; before linux 5.1
  * the 32-bit twins named beside them answer */

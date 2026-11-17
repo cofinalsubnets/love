@@ -6,14 +6,14 @@
 // (tree-tar name) -> that section of the carried source as a tar; (tree-tar 0) -> the whole
 // tar. () where none is carried, no such section, or it won't decode
 // (tree-head 0) -> the sections, [name codec raw packed crc32 decoded?] each, the index first.
-// (runtime-ar "x64"|"a64"|"rv64"|"i386"|"arm"|"wasm") -> that ISA's moonlibc archive: its zstd
+// (runtime-ar "x64"|"a64"|"rv64"|"i386"|"arm"|"rv32"|"wasm") -> that ISA's moonlibc archive: its zstd
 // frame read against the base, the build ISA's archive, which rides a frame of its own;
 // (runtime-ar "id") -> the tree-slice hash they were cut from (moon.l's rtcid). () when none.
 // mksrc.l and mkrt.l lay the blobs; a link without them takes noblob.c, so a length 0 is none
 extern const unsigned char
- rtzst_base[], rtzst_x64[], rtzst_a64[], rtzst_rv64[], rtzst_i386[], rtzst_arm[], rtzst_wasm[], rtzst_id[];
+ rtzst_base[], rtzst_x64[], rtzst_a64[], rtzst_rv64[], rtzst_i386[], rtzst_arm[], rtzst_rv32[], rtzst_wasm[], rtzst_id[];
 extern const uintptr_t
- rtzst_base_len, rtzst_x64_len, rtzst_a64_len, rtzst_rv64_len, rtzst_i386_len, rtzst_arm_len, rtzst_wasm_len, rtzst_id_len;
+ rtzst_base_len, rtzst_x64_len, rtzst_a64_len, rtzst_rv64_len, rtzst_i386_len, rtzst_arm_len, rtzst_rv32_len, rtzst_wasm_len, rtzst_id_len;
 
 // the "c" section's crc32 and length, off the header undecoded: snap.c's header src. 0 = none
 uint64_t image_carried_c(void) {
@@ -81,6 +81,7 @@ love_noinline static struct g *host_rtar(struct g *g) {
   else if (sl == 4 && !memcmp(s, "rv64",  4)) p = rtzst_rv64,  n = rtzst_rv64_len;
   else if (sl == 4 && !memcmp(s, "i386",  4)) p = rtzst_i386,  n = rtzst_i386_len;
   else if (sl == 3 && !memcmp(s, "arm",   3)) p = rtzst_arm,   n = rtzst_arm_len;
+  else if (sl == 4 && !memcmp(s, "rv32",  4)) p = rtzst_rv32,  n = rtzst_rv32_len;
   else if (sl == 4 && !memcmp(s, "wasm",  4)) p = rtzst_wasm,  n = rtzst_wasm_len;
   else if (sl == 2 && !memcmp(s, "id",    2)) p = rtzst_id,    n = on = rtzst_id_len; }
  if (!n) return g->sp[0] = ZeroPoint, g;

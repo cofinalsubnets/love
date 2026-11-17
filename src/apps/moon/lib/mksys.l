@@ -11,6 +11,7 @@
 (: (mksys-x64 dst) (mksys-as 'x64 dst)
    (mksys-a64 dst) (mksys-as 'a64 dst)
    (mksys-rv64 dst) (mksys-as 'rv64 dst)
+   (mksys-rv32 dst) (mksys-as 'rv32 dst)
    (mksys-i386 dst) (mksys-as 'i386 dst)
    (mksys-arm dst) (mksys-as 'arm dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
@@ -895,6 +896,102 @@
          (label __love_nbsvc))
           + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
+         (arch = 'rv32)
+         ; rv32: linux alone, rv64's lanes at a 4-byte word. jmp_buf: [0] ra, [1] sp, [2..13]
+         ; s0..s11, the mask at byte 56; soft float, so no fp file
+         '(
+         (label __love_sys)
+         (mov r7 r0)                 ; a7 <- n
+         (mov r0 r1)
+         (mov r1 r2)
+         (mov r2 r3)
+         (mov r3 r4)
+         (mov r4 r5)
+         (mov r5 r6)
+         (sys)
+         (ret)                       ; a0 rides out (-errno included; C wraps it)
+
+         (label __sigsetjmp)
+         (st r0 0  lr)
+         (st r0 4  sp)
+         (st r0 8  fp)
+         (st r0 12 r15)
+         (st r0 16 r13)
+         (st r0 20 r14)
+         (st r0 24 r19)
+         (st r0 28 r20)
+         (st r0 32 r21)
+         (st r0 36 r22)
+         (st r0 40 r23)
+         (st r0 44 r24)
+         (st r0 48 r25)
+         (st r0 52 r26)
+         (lea r2 r0 56)              ; a2 = the mask (oldset)
+         (li r1 0)
+         (li r3 8)
+         (li r0 0)                   ; SIG_BLOCK
+         (li r7 135)                 ; rt_sigprocmask
+         (sys)
+         (li r0 0)
+         (ret)
+
+         (label siglongjmp)
+         (mov r9 r0)                 ; t1 <- buf
+         (mov r10 r1)                ; t2 <- val
+         (lea r1 r9 56)
+         (li r2 0)
+         (li r3 8)
+         (li r0 2)                   ; SIG_SETMASK
+         (li r7 135)
+         (sys)
+         (ld fp  r9 8)
+         (ld r15 r9 12)
+         (ld r13 r9 16)
+         (ld r14 r9 20)
+         (ld r19 r9 24)
+         (ld r20 r9 28)
+         (ld r21 r9 32)
+         (ld r22 r9 36)
+         (ld r23 r9 40)
+         (ld r24 r9 44)
+         (ld r25 r9 48)
+         (ld r26 r9 52)
+         (mov r0 r10)
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (ld sp r9 4)
+         (ld lr r9 0)
+         (ret)
+
+         (label __love_sigret)
+         (li r7 139)                 ; rt_sigreturn
+         (sys)
+
+         (label __love_clone)
+         (mov r8 r3)                 ; t0 <- ctid
+         (mov r3 r4)                 ; a3 <- tls
+         (mov r4 r8)                 ; a4 <- ctid
+         (li r7 220)                 ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (ld r0 sp 4)                ; a0 <- arg, a word past fn
+         (ld r8 sp 0)
+         (callr r8)
+         (li r0 0)
+         (li r7 93)                  ; exit
+         (sys)
+         (label clone-out)
+         (ret)
+         (label __love_tp)
+         (raw (19 5 2 0))            ; addi a0, tp, 0
+         (ret)
+         (label __love_fencei)
+         (fencei)
+         (ret))
+
          ; rv64: the number in a7 (linux), t0 (freebsd), t6 (netbsd). a BSD error: freebsd
          ; raises t0; netbsd resumes one word past the ecall, success three, so the raw tail
          ; li t0 1 / j .+8 / li t0 0 makes one flag. t6 is holo's scratch: netbsd's number
@@ -1143,6 +1240,8 @@
                   '("__love_sys" "__love_sysw" "__love_sys8" "__love_fbfork" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   (arch = 'i386)
                   '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
+                  (arch = 'rv32)
+                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp" "__love_fencei")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp" "__love_fencei"))
                () () () () () () ())))

@@ -23,8 +23,8 @@
 #define O_NOFOLLOW  131072   /* x86-64, rv64, asm-generic 0400000 */
 #endif
 #define O_CLOEXEC   524288
-#ifdef __i386__
-#define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it */
+#if defined(__i386__) || defined(__riscv) && defined(__ILP32__)
+#define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it (rv32: asm-generic's 0100000) */
 #elif defined(__ARM_EABI__)
 #define O_LARGEFILE 131072 /* arm's 0400000 */
 #else

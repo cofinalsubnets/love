@@ -11,6 +11,7 @@ const unsigned char
  rtzst_rv64[1] = {0},
  rtzst_i386[1] = {0},
  rtzst_arm[1] = {0},
+ rtzst_rv32[1] = {0},
  rtzst_wasm[1] = {0},
  rtzst_id[1] = {0};
 const uintptr_t
@@ -22,5 +23,6 @@ const uintptr_t
  rtzst_rv64_len = 0,
  rtzst_i386_len = 0,
  rtzst_arm_len = 0,
+ rtzst_rv32_len = 0,
  rtzst_wasm_len = 0,
  rtzst_id_len = 0;
