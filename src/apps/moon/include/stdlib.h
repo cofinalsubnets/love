@@ -43,7 +43,7 @@ char *ptsname(int);
 int   ptsname_r(int, char*, size_t);
 /* our own generators: a seed does not give glibc's sequence */
 #define RAND_MAX 32767
-int  rand(void);
+int  rand(void), rand_r(unsigned int*);
 void srand(unsigned int);
 long random(void);
 void srandom(unsigned int);

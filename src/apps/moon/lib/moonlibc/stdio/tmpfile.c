@@ -15,6 +15,7 @@ char *tmpnam(char *s) {
   strcpy(s, "/tmp/aiXXXXXX");
   mktemp(s);
   return s[0] ? s : 0; }
+char *tmpnam_r(char *s) { return s ? tmpnam(s) : 0; }   /* glibc's: no buffer of its own */
 /* racy by design: the caller opens the name */
 char *mktemp(char *tmpl) {
   size_t n = strlen(tmpl);
