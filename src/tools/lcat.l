@@ -96,7 +96,7 @@
      ['cat_post_z ['post " " 'holo " " 'a64]]
      "#elif defined(__riscv)"
      ['cat_post_z ['post " " 'holo " " 'rv64]]
-     "#elif defined(__arm__) && defined(__linux__)"
+     "#elif defined(__arm__) && defined(__unix__)"
      ['cat_post_z ['post " " 'holo " " 'thumb2 " " 'scan]]
      ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
      "#elif defined(__wasm__)"
@@ -107,7 +107,11 @@
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.
      "#ifdef LvGlazed"
+     "#if defined(__arm__)"
+     ['src_glaze_z ['glaze 'holo 'x64 'a64 'thumb2]]   ; holo again, so arm's backend rides it
+     "#else"
      ['src_glaze_z ['glaze 'holo 'x64 'a64]]
+     "#endif"
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)

@@ -567,7 +567,7 @@ struct g *lovefs_port(struct g *g, uintptr_t i);
 extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
-uintptr_t love_clock(void);
+uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
 intptr_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
@@ -907,6 +907,21 @@ struct twin { lvm_t *ap; union { word re; flo_t dre; }; union { word im; flo_t d
 // payloads through the union, never a stack temporary, whose address costs a caller its sibcalls
 _Static_assert(sizeof(flo_t) == sizeof(uintptr_t), "float box assumes flo_t is pointer-width");
 static love_inline flo_t gem_get(word x) { return ((struct gem*) x)->d; }
+int int_flo_cmp(word, flo_t);
+// the same for a machine int, as a typed tray holds one: past the word a float settles by sign
+static love_inline int zf_cmp(intptr_t i, flo_t f) {
+ if (f != f) return 2;
+ flo_t const lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24)), top = (flo_t) ((uintptr_t) 1 << (Bits - 1));
+ if (f > -lim && f < lim) { flo_t const x = (flo_t) i; return x < f ? -1 : x > f; }
+ if (f >= top) return -1;
+ if (f < -top) return 1;
+ intptr_t const k = (intptr_t) f;                         // whole, and in the word
+ return i < k ? -1 : i > k; }
+// two numbers, a float among them, exactly: -1 0 1, 2 unordered
+static love_inline int numf_cmp(word a, word b) {
+ if (gemp(a) && gemp(b)) { flo_t x = gem_get(a), y = gem_get(b); return x < y ? -1 : x > y ? 1 : x == y ? 0 : 2; }
+ int const c = gemp(a) ? int_flo_cmp(b, gem_get(a)) : int_flo_cmp(a, gem_get(b));
+ return c == 2 || !gemp(a) ? c : -c; }
 // the one float box-write, under Have(gem_req): NaN collapses to () so the order stays total;
 // glaze's lanes emit the same collapse
 static love_inline word mk_gem(word **hpp, flo_t v) {
@@ -934,17 +949,48 @@ static love_inline intptr_t wbig_get(word x) {
  uintptr_t u = 0;
  for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
  return (intptr_t) (sl < 0 ? (uintptr_t) 0 - u : u); }
-// a word past the charm range as a bignum, under Have(wbig_req); never 0, as callers demote
-static love_inline word mk_wbig(word **hpp, intptr_t v) {
+// a word's magnitude m as a bignum, under Have(wbig_req); never 0, as callers demote
+static love_inline word mk_mbig(word **hpp, uintptr_t m, bool neg) {
  struct big *b = (struct big*) *hpp;
- bool neg = v < 0;
- uintptr_t m = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;   // |INTPTR_MIN| survives unsigned
  int n = wlimbs;
  for (int i = 0; i < wlimbs; i++) b->limb[i] = (love_limb) (m >> (limb_bits * i));
  while (n > 1 && b->limb[n-1] == 0) n--;
  ini_big(b, neg ? -n : n);
  *hpp += b2w(sizeof(struct big) + (size_t) n * sizeof(love_limb));
  return word(b); }
+// a word past the charm range as a bignum, under Have(wbig_req)
+static love_inline word mk_wbig(word **hpp, intptr_t v) {
+ return mk_mbig(hpp, v < 0 ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v, v < 0); }   // |INTPTR_MIN| survives unsigned
+// an unsigned word as a number: a fixnum when it fits, else a bignum under Have(wbig_req)
+static love_inline word mk_uword(word **hpp, uintptr_t m) {
+ return m <= (uintptr_t) maxcharm ? putcharm((intptr_t) m) : mk_mbig(hpp, m, false); }
+// a 64-bit integer as a number, a fixnum when it fits, under Have(i64_req); toi64 the way back,
+// a bignum's low 64 bits
+#define i64_req b2w(sizeof(struct big) + 8)
+static love_inline word mk_i64(word **hpp, int64_t v) {
+ uint64_t m = v < 0 ? (uint64_t) 0 - (uint64_t) v : (uint64_t) v;
+ love_limb l[64 / limb_bits];
+ for (int i = 0; i < 64 / limb_bits; i++) l[i] = (love_limb) (m >> (limb_bits * i));
+ return big_canon(hpp, l, 64 / limb_bits, v < 0); }
+static love_inline int64_t toi64(word x) {
+ if (charmp(x)) return getcharm(x);
+ struct big *b = (struct big*) x;
+ intptr_t sl = b->slen;
+ int n = (int) (sl < 0 ? -sl : sl);
+ uint64_t u = 0;
+ for (int i = 0; i < n && i < 64 / limb_bits; i++) u |= (uint64_t) b->limb[i] << (limb_bits * i);
+ return (int64_t) (sl < 0 ? (uint64_t) 0 - u : u); }
+// the scheduler's clock: love_clock modulo tick_span, so a deadline is a nonnegative charm and a
+// held task's negation stays apart. deadlines order by signed difference, sound within half the
+// span: beyond reach on a 64-bit word, about 6 days on a 32-bit one, the longest single wait
+#define tick_span ((uintptr_t) 1 << (Bits - 2))
+#define tick_max (tick_span / 2 - 1)
+static love_inline uintptr_t tick_of(uint64_t ms) { uintptr_t t = (uintptr_t) (ms & (tick_span - 1)); return t ? t : 1; }   // 0 is none
+static love_inline uintptr_t love_tick(void) { return tick_of(love_clock()); }
+static love_inline uintptr_t tick_add(uintptr_t t, uintptr_t ms) { return tick_of((uint64_t) t + (ms < tick_max ? ms : tick_max)); }
+static love_inline intptr_t tick_cmp(uintptr_t a, uintptr_t b) {   // a - b
+ uintptr_t d = (a - b) & (tick_span - 1);
+ return d > tick_max ? (intptr_t) d - (intptr_t) tick_span : (intptr_t) d; }
 // love admits no irreflexive value: = reads two NaNs as one
 static love_inline bool same_flo(flo_t a, flo_t b) { return a == b || (a != a && b != b); }
 // truncation toward zero and float remainder, no libm

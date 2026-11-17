@@ -473,7 +473,7 @@ lvm(lvm_fputc) {
    if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    if (io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
     Unpack(g);
-    g->next_wake_at = love_clock() + 1;
+    g->next_wake_at = tick_add(love_tick(), 1);
     love_musttail return Ap(lvm_yield_sw, g); } }
   if (!ok(g = ioputc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g); }
@@ -489,7 +489,7 @@ lvm(lvm_fflush) {
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_raise, g);
   if (io_wpending(g, (struct io*) g->sp[0])) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;      // the write residue's poll
+   g->next_wake_at = tick_add(love_tick(), 1);      // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   Unpack(g); }
  love_musttail return Next(1); }
@@ -512,7 +512,7 @@ lvm(lvm_fputs) {
   // backpressure: the run is a buffer, not a queue
   if (ok(g) && io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;            // the write residue's poll
+   g->next_wake_at = tick_add(love_tick(), 1);            // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   while (ok(g) && i < l) {
    intptr_t k = 0;
@@ -667,7 +667,7 @@ lvm(lvm_fgetc) {
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
    intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
-   if (fd < 0) g->next_wake_at = love_clock() + 1;   // no fd to wait on (the horn): poll
+   if (fd < 0) g->next_wake_at = tick_add(love_tick(), 1);   // no fd to wait on (the horn): poll
    else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
