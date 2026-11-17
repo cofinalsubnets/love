@@ -2707,9 +2707,10 @@
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
    (auto-ev e) (? (atom? e) (ev-run e)                                                 ; an atom has nothing to lower
                   (targets arch 'float && qualfr e) (memo e (l \ jitfr l arch))
-                  ; cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
+                  ; cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp.
+                  ; with no float lane the pairs would only run interpreted, slower than the twins
                   (: f (canon (ev-lower e))
-                     (ev-run (autogroup (autonat (twolow (castbuild f)))))))
+                     (ev-run (autogroup (autonat ((targets arch 'float ? twolow id) (castbuild f)))))))
    ; `ev` is orth, which a module layer cannot write, so the boot installs (: ev (cite 'glaze 'ev)). a re-load hands the baked
    ; auto-ev back; a trampoline build (love-tco 0) stays the interpreter, since glazed code Continues by tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev
