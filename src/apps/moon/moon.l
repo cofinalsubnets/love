@@ -7,7 +7,7 @@
 (module 'moon
 (borrow '(kore cli))
 (borrow 'holo) ; the assembler module: asm-text, arbytes, the linker
-(borrow '(gz hashes zstd))
+(borrow '(gz hashes zstd tree))
 
 (borrow 'posix)
 (borrow 'glob) ; match and ones, under the wildcard

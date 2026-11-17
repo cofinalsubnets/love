@@ -70,7 +70,8 @@
      ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
-     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]]
+     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]
+     ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
@@ -78,7 +79,7 @@
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
      ["test_inle" "test_kernel_vmx" "test_disk" "test_uefi" "test_kboot" "test_kpier" "test_kverb" "test_kernel_uproc"
-      "test_kernel_a64" "test_uefi_a64" "test_uefi_stay_a64" "test_kernel_rv64" "test_kernel_wasm" "test_seedwasm" "test_nestwasm"]
+      "test_kernel_a64" "test_kernel_rpi3" "test_uefi_a64" "test_uefi_stay_a64" "test_kernel_rv64" "test_kernel_wasm" "test_seedwasm" "test_nestwasm"]
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"

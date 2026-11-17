@@ -2412,7 +2412,7 @@ echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a 
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
 for a in x64 a64 rv64; do
-  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + runtime-zst \"$a\")))) 0)" | head -1)
+  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-zst) \"$a\")))) 0)" | head -1)
   case $n in ''|*[!0-9]*) n=0;; esac
   [ "$n" -gt 1000 ] \
     || fail "carried runtime: this binary carries no $a archive (runtime-zst answered $n bytes)"

@@ -273,7 +273,7 @@ love_noinline static struct g *host_par_width(struct g *g) {
  g->sp[0] = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
  return g; }
 static LvmWrap(lvm_par_width, host_par_width)
-LvDef("par-width", par_width, 1, NULL);
+LvDef("par-width", par_width, 1, "pool");
 // (par-cpus m) the whole cpus a spare of m thousandths allows, the rounding the width takes: the laws'
 love_noinline static struct g *host_par_cpus(struct g *g) {
  word mw = g->sp[0];

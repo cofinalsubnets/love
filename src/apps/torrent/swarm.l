@@ -21,6 +21,7 @@
 (:
  blk 16384
  (close q) (cite 'posix 'close q)
+ pipe (cite 'posix 'pipe) fdopen (cite 'posix 'fdopen) accept (cite 'posix 'accept)
  ; --- the files: a piece's bytes as runs [path offset length] over them -----------
  (swarm-spans t off n)
   (: (go fs off n acc) (? (n < 1 || atom? fs) (rev acc)

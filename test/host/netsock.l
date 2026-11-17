@@ -1,0 +1,132 @@
+; test/host/netsock.l -- src/apps/net/sock.l: the socket door over one stack talking to itself
+; on 127.0.0.1 and its own address, then between two stacks over a lossy wire. connect, accept,
+; both ways, half-close, close, refused, reset, eaddrinuse, udp, and readiness at each step
+; run: cat test/00-init.l test/host/netsock.l | out/love
+(borrow "src/apps/net/wire.l")
+(borrow "src/apps/net/ip.l")
+(borrow "src/apps/net/tcp.l")
+(borrow "src/apps/net/sock.l")
+(borrow '(wire net tcp sock bytes))
+
+; a clock shared by the steps below: (run-for k ms done) pumps a ms at a time until (done ())
+(: (clock-for pump) {'t 0 'pump pump})
+(: (run-for k ms done)
+    (: (lp t) (? (done ()) (pin k 't t, 1) (k 't + ms < t) (pin k 't t, 0) ((k 'pump) t, lp (t + 1)))
+       (lp (k 't))))
+
+; one stack, its loopback
+(: st (net-make (string [2 0 0 0 0 1]) (quad 10 0 0 1) 5)
+   _ (tcp-on st)
+   nic (nic-loop 0)
+   k (clock-for (t \ net-pump st nic t))
+   (now _) (k 't)
+   l (sock-listen st '(tcp "127.0.0.1" 7000) 0)
+   _ (test (tablet? l) (sock-listen st 7000 0 = 'eaddrinuse)
+           (sock-listen st '(tcp "1.2.3" 1) 0 = 'badarg) (sock-listen st '(udp 1) 0 = 'badarg)
+           (sock-connect st '(tcp "127.0.0.1" 0) 0 = 'badarg))
+   c (sock-connect st '(tcp "127.0.0.1" 7000) 0)
+   ; the handshake under way: nothing to accept, nothing to write yet
+   _ (test (tablet? c) (!(sock-writable? c)) (sock-write c "x" 0 = 'eagain)
+           (!(sock-readable? l)) (sock-accept l 0 = 'eagain) (sock-farend c = 'enotconn))
+   _ (test (run-for k 100 (_ \ sock-readable? l)))
+   s (sock-accept l (now 0))
+   _ (test (tablet? s) (sock-writable? c) (sock-writable? s)
+           (sock-farend c = ["127.0.0.1" 7000])
+           (sock-farend s = sock-name c) (sock-name s = ["127.0.0.1" 7000])
+           (sock-accept l (now 0) = 'eagain)
+           (!(sock-readable? s)) (sock-read s (now 0) = 'eagain))
+   _ (test (sock-write c "ping" (now 0) = 4))
+   _ (test (run-for k 100 (_ \ sock-readable? s)) (sock-read s (now 0) = "ping") (sock-read s (now 0) = 'eagain))
+   _ (test (sock-write s "pong" (now 0) = 4))
+   _ (test (run-for k 100 (_ \ sock-readable? c)) (sock-read c (now 0) = "pong"))
+   ; c shuts its write half: s reads the end, and can still answer
+   _ (test (sock-seal c 1 (now 0) = c) (sock-write c "x" (now 0) = 'epipe) (sock-writable? c))
+   _ (test (run-for k 100 (_ \ sock-readable? s)) (sock-read s (now 0) = "") (!(sock-closed? s)))
+   _ (test (sock-write s "after" (now 0) = 5))
+   _ (test (run-for k 100 (_ \ sock-readable? c)) (sock-read c (now 0) = "after"))
+   _ (sock-close s (now 0))
+   _ (test (run-for k 100 (_ \ sock-readable? c)) (sock-read c (now 0) = "") (sock-closed? s))
+   _ (sock-close c (now 0))
+   _ (test (run-for k 5000 (_ \ keys (st 'tcbs) = ())) (sock-closed? c) (sock-err c = ()))
+   ; nothing on 7001
+   r (sock-connect st '(tcp "127.0.0.1" 7001) (now 0))
+   _ (test (run-for k 100 (_ \ sock-err r != ())) (sock-err r = 'econnrefused)
+           (sock-readable? r) (sock-writable? r)
+           (sock-read r (now 0) = 'econnrefused) (sock-write r "x" (now 0) = 'econnrefused))
+   ; closed with unread bytes: a reset
+   c (sock-connect st '(tcp "10.0.0.1" 7000) (now 0))
+   _ (test (run-for k 100 (_ \ sock-readable? l)))
+   s (sock-accept l (now 0))
+   _ (test (sock-name c = ["10.0.0.1" (sock-name c 1)]) (sock-farend s 0 = "10.0.0.1"))
+   _ (test (run-for k 100 (_ \ sock-writable? c)) (sock-write c "unread" (now 0) = 6))
+   _ (test (run-for k 100 (_ \ sock-readable? s)))
+   _ (sock-close s (now 0))
+   _ (test (run-for k 100 (_ \ sock-err c != ())) (sock-err c = 'econnreset)
+           (sock-read c (now 0) = 'econnreset) (sock-readable? c))
+   ; the listener shut: a connect is refused, the port free again
+   _ (sock-close l (now 0))
+   _ (test (sock-accept l (now 0) = 'einval) (sock-readable? l))
+   r (sock-connect st '(tcp "127.0.0.1" 7000) (now 0))
+   _ (test (run-for k 100 (_ \ sock-err r != ())) (sock-err r = 'econnrefused))
+   l (sock-listen st 7000 (now 0))
+   _ (test (tablet? l))
+   ; udp: a fixed port and an any port
+   u (sock-bind st '(udp "127.0.0.1" 5353))
+   v (sock-bind st '(udp 0))
+   _ (test (tablet? u) (sock-bind st '(udp 5353) = 'eaddrinuse) (sock-bind st '(tcp 5353) = 'badarg)
+           (sock-name v 1 >= 49152) (sock-recv u = 'eagain) (!(sock-readable? u)) (sock-writable? u))
+   _ (test (sock-send v ["127.0.0.1" 5353] "dg" (now 0) = v)
+           (sock-send v ["127.0.0.1" 5353] (zbytes 1473) (now 0) = 'emsgsize)
+           (sock-send v ["nowhere" 5353] "dg" (now 0) = 'badarg))
+   _ (test (run-for k 100 (_ \ sock-readable? u)) (sock-recv u = [["127.0.0.1" (sock-name v 1)] "dg"]))
+   _ (sock-send u ["127.0.0.1" (sock-name v 1)] "back" (now 0))
+   _ (test (run-for k 100 (_ \ sock-readable? v)) (sock-recv v @ [_ "back"] 1 _ 0) (sock-recv v = 'eagain))
+   _ (sock-close u (now 0))
+   (test (sock-recv u = 'badarg) (tablet? (sock-bind st '(udp 5353)))))
+
+; two stacks over a lossy wire: 200k each way through the door, a half-close, refused, udp
+(: ipb (quad 10 0 0 2)
+   w (wire-make 41 {'drop 30 'dup 10 'reorder 50 'delay 2 'jitter 5})
+   a (net-make (string [2 0 0 0 0 1]) (quad 10 0 0 1) 41)
+   b (net-make (string [2 0 0 0 0 2]) ipb 42)
+   _ (tcp-on a) _ (tcp-on b)
+   na (wire-nic w 0) nb (wire-nic w 1)
+   k (clock-for (t \ (net-pump a na t, net-pump b nb t)))
+   (now _) (k 't)
+   l (sock-listen b 80 0)
+   c (sock-connect a '(tcp "10.0.0.2" 80) 0)
+   _ (test (run-for k 20000 (_ \ sock-readable? l)))
+   s (sock-accept l (now 0))
+   blk (string (map (i \ i * 13 + 1 & 255) ^4091))
+   up (join "" (map (_ \ blk) ^50))
+   down (snip up 1000 #up)
+   q {'cu 0 'sd 0 'cr () 'sr () 'ce 0 'se 0 'stalls 0}
+   ; a writer that meets 'eagain waits for writable?, and a reader for readable?
+   (wr x src i)
+    (q i @ n (n < #src && sock-writable? x
+                ? (sock-write x (snip src n #src) (now 0) @ m (charm? m ? (pin q i (n + m)) (pin q 'stalls (q 'stalls + 1)))) 0))
+   (rd x acc e)
+    (sock-readable? x && !(q e) ? (sock-read x (now 0) @ r (r = "" ? (pin q e 1) (string? r ? (pin q acc (r . q acc)) 0))) 0)
+   (both _)
+    (wr c up 'cu, wr s down 'sd,
+     q 'cu = #up && !(c 'wshut) ? (sock-seal c 1 (now 0)) 0,
+     q 'sd = #down && !(s 'wshut) ? (sock-seal s 1 (now 0)) 0,
+     rd c 'cr 'ce, rd s 'sr 'se,
+     q 'ce && q 'se)
+   _ (test (run-for k 100000 both))
+   _ (test (join "" (rev (q 'sr)) = up) (join "" (rev (q 'cr)) = down) (20 < w 'lost))
+   _ (sock-close c (now 0)) _ (sock-close s (now 0))
+   _ (test (run-for k 20000 (_ \ keys (a 'tcbs) = () && keys (b 'tcbs) = ())) (sock-err c = ()) (sock-err s = ()))
+   r (sock-connect a '(tcp "10.0.0.2" 81) (now 0))
+   _ (test (run-for k 20000 (_ \ sock-err r != ())) (sock-err r = 'econnrefused))
+   ; datagrams may be lost here; what arrives arrives whole
+   u (sock-bind b '(udp 53))
+   v (sock-bind a '(udp 0))
+   _ (each ^20 (i \ sock-send v ["10.0.0.2" 53] ("q" + show i) (now 0)))
+   got {'d ()}
+   _ (run-for k 200 (_ \ (sock-recv u @ [p d] (pin got 'd (d . got 'd)) _ 0, 0)))
+   (test (10 < #(got 'd)) (#(got 'd) <= 25)
+         (#(filter (d \ d 0 = 113) (got 'd)) = #(got 'd))))
+
+(test_fin ())
+(puts "netsock: ok\n")

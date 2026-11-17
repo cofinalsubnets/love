@@ -9,7 +9,7 @@
    img ("out/.imgcheck-" + me + ".image")
    bad ("out/.imgcheck-bad-" + me + ".image")
    drv ("out/.imgcheck-drive-" + me + ".l")
-   _ (test (bake img = 1))
+   _ (test (cite 'image 'bake img = 1))
    s (: q (open img "r") b (slurp q) (close q, b))
    n #s
    (u64 o) (foldr (\ i a (a * 256 + s (o + i))) 0 ^8)

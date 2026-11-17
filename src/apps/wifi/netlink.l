@@ -17,6 +17,7 @@
          rt-up rt-addr rt-gateway)
 (borrow '(bytes))
 (:
+   bind (cite 'posix 'bind) recv (cite 'posix 'recv) send (cite 'posix 'send)
    ; --- the numbers: linux's uapi ---
    NlmError 2  NlmDone 3
    FRequest 1  FMulti 2  FAck 4  FDump 768  FCreate 1024  FExcl 512  FReplace 256

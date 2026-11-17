@@ -1,6 +1,7 @@
 ; test/host/mesh.l -- src/apps/lore/mesh.l: camera, faces, textures, sun, sky, lamps, and the
 ; frame as half blocks and as kitty pixels read back off a quay screen.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/mesh.l | out/love
+(borrow 'quay)
 (borrow 'mesh)
 (borrow 'view)     ; pi
 (borrow '(sky json lore))
