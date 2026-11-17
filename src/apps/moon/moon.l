@@ -998,10 +998,11 @@
    (rtpull srcs tgt os nostd vb imp?)
     (: mach (peep elf-machines tgt 0)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
-       ; pulls it. a thread template owes it regardless, for the first thread's copy
+       ; pulls it. a thread template owes it regardless, for the first thread's copy. a set
+       ; with a strong one of its own (a board's startup) owes none
        lg (ldledger srcs mach) dt <lg
        home (!nostd && mhome ())
-       owed (lg 2 || !nostd && (string? home || vb) ? ("__love_start" . <>lg) <>lg)
+       owed (!(lg 3 "__love_start") && (lg 2 || !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        ; owed and no runtime in reach: the certain fact first
