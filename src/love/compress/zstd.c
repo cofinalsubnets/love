@@ -496,6 +496,9 @@ intptr_t zstd_dict_into(void const *T, const uint8_t *z, uintptr_t nz, uint8_t *
  if (on == n) memcpy(o, w, n);
  alloc(w, 0);
  return on == n ? (intptr_t) n : -1; }
+// z, one frame against base's nb bytes (nb 0: none) -> its bytes, alloc'd, *on long | NULL
+uint8_t *zstd_whole(const uint8_t *z, uintptr_t nz, const uint8_t *base, uintptr_t nb, uintptr_t *on) {
+ return zs_whole(z, nz, base, nb, NULL, on); }
 
 // ===== the coder: a hash-chain parse, an optimal one from level 16, huffman literals, fse sequences =====
 struct ze_bw { uint8_t *p, *e; uint64_t acc; unsigned nb; int bad; };   // bits out, low first
