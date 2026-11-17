@@ -160,12 +160,20 @@
    (test (r = [-1 0x2BA01477]) (() = w 'errs ())))
 
 ; a debug port under swdt-target: dpidr id; ctrl/stat's power acks answer their asks n reads
-; late; select's bank; ap reads posted to rdbuff, the first a stale 0. an ap transfer while
+; late; select's bank; ap reads posted to rdbuff, the first a stale 0. its ap is a mem-ap over
+; 'mem, a tablet of words by address: csw (its reset value aps 0) and tar, drw reading and
+; writing at tar, which steps by 4 when csw says, wrapping in its 1K block. an ap transfer while
 ; the power is down faults and sets stickyerr (ctrl/stat bit 5); while it is set every transfer
 ; faults but reads of dpidr and ctrl/stat and writes of abort, whose bit 2 clears it. 'writes
 ; is every write the port took, in order
 (: (swdt-dp id aps n)
-    (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w ()}
+    (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w () 'csw (peep aps 0 0) 'tar 0}
+       mem {}
+       (reg a) ((st 'sel & 0xF0) | a)
+       (step _) ((st 'csw >> 4 & 3) = 1 ? (: t (st 'tar) (pin st 'tar ((t - (t & 1023)) | ((t + 4) & 1023)))) 0)
+       (apget r) (? (r = 0) (st 'csw) (r = 4) (st 'tar)
+                    (r = 12) (: v (peep mem (st 'tar) 0) _ (step ()) v)
+                    (peep aps r 0))
        (free? ap rd a) (ap = 0 && (rd = 1 && a < 8 || rd = 0 && a = 0))
        (cs _) (: l (st 'left)
                _ (l > 0 ? (pin st 'left (l - 1)) (pin st 'acks (st 'ask << 1)))
@@ -174,18 +182,21 @@
                            (st 'sticky = 1) 4
                            (ap = 1 && st 'acks != 0xA0000000) (pin st 'sticky 1, 4)
                            1))
-        'rd (\ ap a (? (ap = 1) (: v (st 'rb) _ (pin st 'rb (peep aps ((st 'sel & 0xF0) | a) 0)) v)
+        'rd (\ ap a (? (ap = 1) (: v (st 'rb) _ (pin st 'rb (apget (reg a))) v)
                        (a = 0) id
                        (a = 4) (cs ())
                        (a = 12) (st 'rb)
                        0))
         'wr (\ ap a v (: _ (pin st 'w ([ap a v] . st 'w))
-                         (? (ap = 1) 0
+                         (? (ap = 1) (: r (reg a)
+                                        (? (r = 0) (pin st 'csw v) (r = 4) (pin st 'tar v)
+                                           (r = 12) (pin mem (st 'tar) v, step ())
+                                           0))
                             (a = 0) (v & 4 ? (pin st 'sticky 0) 0)
                             (a = 4) (pin st 'ask (v & 0x50000000), pin st 'left n, pin st 'acks 0)
                             (a = 8) (pin st 'sel v)
                             0)))
-        'writes (_ \ rev (st 'w))}))
+        'writes (_ \ rev (st 'w)) 'mem (_ \ mem)}))
 
 ; the board's ids: an stm32f4's sw-dp, and its ahb-ap
 (: f4dp 0x2BA01477 f4ap 0x24770011
@@ -223,3 +234,40 @@
    f (trap swd-connect (swdt-target (pin (f4port 0) 'ack (\ ap rd a (ap = 1 ? 4 1)))) (a \ b \ [a b]))
    (test (e = ['swd-connect ['id [7 ()]]]) (p = ['swd-power [1 0x50000000]]) (101 = polls)
          (f = ['swd-connect ['ap [4 ()]]])))
+
+; the sim's mem-ap: tar steps within its 1K block, so two words written from 0x3FC land at
+; 0x3FC and back at 0x000 of the same block
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w)
+   _ (swd-apw w 0 0x23000012) _ (swd-apw w 4 0x200003FC)
+   _ (swd-xfer w 1 0 12 7) _ (swd-xfer w 1 0 12 8)
+   m (h 'mem ())
+   (test (7 = m 0x200003FC) (8 = m 0x20000000) (0 = peep m 0x20000400 0)))
+
+; a word written and read back, csw set first and tar after
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w) n0 #(h 'writes ())
+   v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
+   (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010)
+         (drop n0 (h 'writes ()) = [[0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010] [1 12 0xDEADBEEF]
+                                 [0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010]])))
+
+; runs across 1K boundaries: tar set again at each, every word where it belongs
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w)
+   ws (map (i \ 0x1000 * i + 7) ^300)
+   n (swd-wrs w 0x200003F0 ws)
+   m (h 'mem ())
+   back (swd-rds w 0x200003F0 300)
+   odd (swd-rds w 0x200007FC 2)
+   tars (map (e \ e 2) (filter (e \ <e = 1 && e 1 = 4) (h 'writes ())))
+   (test (300 = n) (back = ws) (odd = [(ws 259) (ws 260)])
+         (all (i \ m (0x200003F0 + 4 * i) = ws i) ^300)
+         (tars = [0x200003F0 0x20000400 0x20000800 0x200003F0 0x20000400 0x20000800 0x200007FC 0x20000800])))
+
+; an unaligned address scares before a transfer; a faulting ap scares naming the step
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w) n0 #(w 'reqs ())
+   u (trap (_ \ swd-rd w 0x20000002) 0 (a \ b \ [a b]))
+   n1 #(w 'reqs ())
+   on {'f 0}                                  ; armed after connect, whose id read shares drw's bits
+   v (swdt-target (pin (f4port 0) 'ack (\ ap rd a (on 'f = 1 && ap = 1 && rd = 1 ? 4 1)))) _ (swd-connect v)
+   _ (pin on 'f 1)
+   f (trap (_ \ swd-rd v 0x20000000) 0 (a \ b \ [a b]))
+   (test (u = ['swd-align 0x20000002]) (n0 = n1) (f = ['swd-read [4 ()]])))
