@@ -552,3 +552,77 @@
    _ (v 'rst 1) _ (swd-connect v) _ (swd-wr v 0xE000EDF0 0xA05F0001) _ (swd-wr v 0xE000EDFC 1)
    k (swd-rd v 0xE000EDFC) _ (v 'rst 0) _ (swd-wait v 10)
    (test (0 = a) (1 = k) (1 = d 'halted ())))
+
+; --- the probe wire: whole transfers over a byte link ---
+
+; a link that records what is sent and answers from the bytes given, in order
+(: (swdt-link ans)
+    (: st {'a ans 'sent ()}
+       {'send (s \ pin st 'sent (s . st 'sent))
+        'recv (n \ (: a (st 'a) _ (pin st 'a (snip a n #a)) (snip a 0 n)))
+        'close (_ \ 0) 'sent (_ \ rev (st 'sent))})
+   ; a probe in love over a bit wire: the commands decoded and each transfer one swd-xfer1,
+   ; a batch's transfers after its first ack not 1 answering 0, unclocked
+   (swdt-probe bw)
+    (: st {'out "" 'stop 0 'n 0}
+       (emit s) (pin st 'out (st 'out + s))
+       (tx rq rd v) (: r (swd-xfer1 bw rq rd v)
+                       _ (pin st 'n (st 'n + 1))
+                       _ (emit (string [<r]))
+                       _ (rd = 1 && <r = 1 && emit (wrle (r 1) 4 + string [(r 2)]))
+                       (<r != 1 && pin st 'stop 1))
+       (cmd s i)
+        (? (#s <= i) i
+           (: c (s i)
+              (? (c = 84) (: rq (s (i + 1)) rd ((rq >> 2) & 1)
+                             _ (st 'stop = 1 ? (emit (string [0])) (tx rq rd (rd = 1 ? 0 (rdle s (i + 2) 4))))
+                             (cmd s (i + (rd = 1 ? 2 6))))
+                 (c = 78) (: _ (swd-xfer1 bw (s (i + 1)) 0 (rdle s (i + 2) 4)) (cmd s (i + 6)))
+                 (c = 66) (: n (rdle s (i + 1) 2)
+                             _ (bw 'own 1)
+                             _ (map (j \ bw 'out ((s (i + 3 + j // 8) >> (j % 8)) & 1)) ^n)
+                             (cmd s (i + 3 + (n + 7) // 8)))
+                 (c = 82) (: _ (bw 'rst (s (i + 1))) (cmd s (i + 2)))
+                 (c = 67) (: _ (emit (snip s (i + 1) (i + 5))) (cmd s (i + 5)))
+                 (c = 69) (: _ (emit "e") _ (pin st 'stop 0) (cmd s (i + 1)))
+                 (c = 73) (: _ (emit "lovswd1\n") (cmd s (i + 1)))
+                 (c = 90) (cmd s (i + 1))
+                 (scare 'swdt-probe c))))
+       {'send (s \ (cmd s 0, 0))
+        'recv (n \ (: o (st 'out) _ (#o < n && scare 'swdt-probe-short n) _ (pin st 'out (snip o n #o)) (snip o 0 n)))
+        'close (_ \ 0) 'n (_ \ st 'n)}))
+
+; a batch: each transfer's bytes, 'E' after them; answers by the lengths the requests foretell,
+; and after a fault the transfers the probe did not clock answer 0
+(: l (swdt-link (string [1] + wrle 0x2BA01477 4 + string [0 1 4 0] + "e"))
+   w (probe-wire-on l)
+   r (w 'xfer [[0xA5 0] [0x81 0x1E] [0xA5 0] [0xA5 0]])
+   (test (r = [[1 0x2BA01477 0] [1 () ()] [4 () ()] [0 () ()]])
+         (l 'sent () = [("T" + string [0xA5] + "T" + string [0x81] + wrle 0x1E 4 + "T" + string [0xA5] + "T" + string [0xA5] + "E")])))
+
+; swd-xfer over a probe: a wait asked again as a batch of its own, the read's parity checked
+; by love, so a bad bit answers -1; a noack write foretells no answer; the switch is 136 raw
+; bits as 17 bytes; 'clock answers the rate the probe set
+(: l (swdt-link (string [2] + "e" + string [1] + wrle 0x2BA01477 4 + string [0] + "e"
+                 + string [1] + wrle 0x2BA01477 4 + string [1] + "e" + "e" + wrle 1041666 4))
+   w (probe-wire-on l)
+   a (swd-xfer w 0 1 0 0)
+   b (swd-xfer w 0 1 0 0)
+   c (w 'xfer [[0x99 0x01002927 'noack]])
+   _ (swd-line w)
+   hz (w 'clock 1000000)
+   s (l 'sent ())
+   (test (a = [1 0x2BA01477]) (b = [-1 0x2BA01477]) (c = [[() () ()]]) (hz = 1041666)
+         (s 0 = "T" + string [0xA5] + "E") (s 1 = s 0)
+         (s 3 = "N" + string [0x99] + wrle 0x01002927 4 + "E")
+         (s 4 = "B" + wrle 136 2 + string [255 255 255 255 255 255 255 0x9E 0xE7 255 255 255 255 255 255 255 0])
+         (s 5 = "C" + wrle 1000000 4)))
+
+; the board's laws through a probe: an f4 behind the probe's own bit wire attaches with its
+; ids and flashes 40 bytes across two sectors, read back the same, as over bits
+(: t (f4chip 5) p (swdt-probe <t) w (probe-wire-on p)
+   ids (swd-attach w)
+   s (string (map (i \ (37 * i + 11) % 256) ^40))
+   r (f4-flash w 0x08003FF0 s)
+   (test (ids = [0x2BA01477 0x24770011]) (1 = r) (f4-read w 0x08003FF0 40 = s)
+         ([['erase 0] ['erase 1]] = filter (e \ <e = 'erase) ((t 1) 'log ())) (0 < p 'n ())))
