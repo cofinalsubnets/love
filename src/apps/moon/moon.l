@@ -1059,8 +1059,9 @@
        entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
-       owed0 (ledger bsyms)
-       home (two? owed0 && !nostd && mhome ())
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
+       home (!nostd && mhome ())
+       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
