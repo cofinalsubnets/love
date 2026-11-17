@@ -599,7 +599,12 @@ static love_noinline int tray_eq(struct g *g, word a, word b, word *base, word *
   for (uintptr_t i = 0; i < n; i++)
    if (tray_get_int(va, i) != tray_get_int(vb, i)) return 0;
   return 1; }
- for (uintptr_t i = 0; i < n; i++)                  // a float on either side: as doubles
+ if (va->type == love_Z || vb->type == love_Z) {        // an int against a float: exact
+  struct tray *z = va->type == love_Z ? va : vb, *f = z == va ? vb : va;
+  for (uintptr_t i = 0; i < n; i++)
+   if (zf_cmp(tray_get_int(z, i), tray_get_flo(f, i))) return 0;
+  return 1; }
+ for (uintptr_t i = 0; i < n; i++)
   if (!same_flo(tray_get_flo(va, i), tray_get_flo(vb, i))) return 0;
  return 1; }
 

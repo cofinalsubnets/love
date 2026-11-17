@@ -218,3 +218,11 @@
  ([5 7] = map @(5 6 7) [0 2]) (peep @(5 6 7) 3 0 = 0)
  (aall (@(2.0 4.0 8.0) = 2 ** @(1 2 3))) (aall (@(1 4 9) = @(1 2 3) ** 2))
  (aall (@(1.0 8.0) = @(1 2) ** @(2 3))) (aall (@(2.0) = 4.0 ** @(0.5))))
+
+; an int tray against floats compares exactly, at the edge of the word's float mantissa
+(: m (word ? (53 2) (24 2)) z (star-tray '(2) [(m + 1) m]) f (gem-tray '(2) [(m + 0.0) (m + 0.0)])
+   b (70 2) fb (gem-tray '(1) [(b + 0.0)])
+   (test (aall (@(0 1) = (z = f))) (aall (@(1 0) = (z > f))) (aall (@(1 0) = (f < z)))
+         (aall (@(0 1) = (z = m + 0.0))) (aall (@(1 1) = (z >= m + 0.0))) !(elem z [f])
+         (aall (@(1) = (fb = b))) (aall (@(1) = (fb < b + 1))) (aall (@(0) = (fb = b + 1)))
+         (aall (@(1 1) = (z < 1 / 0.0)))))

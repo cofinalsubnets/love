@@ -872,6 +872,15 @@ struct twin { lvm_t *ap; union { word re; flo_t dre; }; union { word im; flo_t d
 _Static_assert(sizeof(flo_t) == sizeof(uintptr_t), "float box assumes flo_t is pointer-width");
 static love_inline flo_t gem_get(word x) { return ((struct gem*) x)->d; }
 int int_flo_cmp(word, flo_t);
+// the same for a machine int, as a typed tray holds one: past the word a float settles by sign
+static love_inline int zf_cmp(intptr_t i, flo_t f) {
+ if (f != f) return 2;
+ flo_t const lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24)), top = (flo_t) ((uintptr_t) 1 << (Bits - 1));
+ if (f > -lim && f < lim) { flo_t const x = (flo_t) i; return x < f ? -1 : x > f; }
+ if (f >= top) return -1;
+ if (f < -top) return 1;
+ intptr_t const k = (intptr_t) f;                         // whole, and in the word
+ return i < k ? -1 : i > k; }
 // two numbers, a float among them, exactly: -1 0 1, 2 unordered
 static love_inline int numf_cmp(word a, word b) {
  if (gemp(a) && gemp(b)) { flo_t x = gem_get(a), y = gem_get(b); return x < y ? -1 : x > y ? 1 : x == y ? 0 : 2; }
