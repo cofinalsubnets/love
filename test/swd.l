@@ -1,6 +1,7 @@
 ; --- swd: the bit layer over a wire that records what it is asked ---
 
 (borrow "src/apps/swd.l")
+(borrow 'bytes)
 
 ; a wire answering ins in order (1 once they run out), its 'log every event so far
 (: (swdt-wire ins)
@@ -332,3 +333,108 @@
    e (trap (_ \ swd-halt w) 0 (a \ b \ [a b]))
    n #(filter (q \ q = [0 1 12]) (drop n0 (w 'reqs ())))     ; rdbuff, once a dhcsr read
    (test (e = ['swd-halt 0]) (n = 102)))
+
+; an stm32f446's flash over a bus: 512K of sectors (16K x4, 64K, 128K x3) reading ones once
+; erased; keyr's two keys unlock it, any other write locks it till a reset; cr's lock bit
+; locks it. a sector erase keeps sr busy for k reads of sr; program (pg, x32) only clears
+; bits; a flash write without pg sets pgserr (bit 7), one at another size pgperr (bit 6), one
+; while locked wrperr (bit 4). errors stay till written with a 1. 'log is each erase and
+; program, the rest goes to m
+(: (swdt-flash m k)
+    (: fb 0x08000000 fr 0x40023C00
+       st {'lock 1 'keys 0 'stuck 0 'cr 0 'sr 0 'busy 0 'log ()}
+       secs {}
+       (sec a) (: o (a - fb) (? (o < 65536) (o >> 14) (o < 131072) 4 (5 + ((o - 131072) >> 17))))
+       (secmem i) (peep secs i () @ t (t ? t (: n {} (pin secs i n, n))))
+       (ev e) (pin st 'log (e . st 'log))
+       (err b) (pin st 'sr (st 'sr | b))
+       (flash? a) (fb <= a && a < fb + 524288)
+       {'rd (a \ (? (flash? a) (peep (secmem (sec a)) a 0xFFFFFFFF)
+                    (a = fr + 12) (: b (st 'busy) _ (b > 0 ? (pin st 'busy (b - 1)) 0)
+                                     (st 'sr | (b > 0 ? 0x10000 0)))
+                    (a = fr + 16) (st 'cr | st 'lock << 31)
+                    (m 'rd a)))
+        'wr (\ a v
+              (? (flash? a)
+                  (: cr (st 'cr)
+                     (? (st 'lock = 1) (err 16)
+                        ((cr & 1) = 0) (err 128)
+                        (((cr >> 8) & 3) != 2) (err 64)
+                        (: t (secmem (sec a)) (pin t a (peep t a 0xFFFFFFFF & v), ev ['pg a v]))))
+                 (a = fr + 4)
+                  (? (st 'stuck = 1) 0
+                     (st 'lock = 0) (pin st 'stuck 1, pin st 'lock 1)
+                     (st 'keys = 0 && v = 0x45670123) (pin st 'keys 1)
+                     (st 'keys = 1 && v = 0xCDEF89AB) (pin st 'keys 0, pin st 'lock 0)
+                     (pin st 'stuck 1))
+                 (a = fr + 12) (pin st 'sr (st 'sr - (st 'sr & v & 0x1F3)))
+                 (a = fr + 16)
+                  (? ((v >> 31) = 1) (pin st 'lock 1, pin st 'keys 0)
+                     (st 'lock = 1) 0
+                     (: _ (pin st 'cr v)
+                        ((v & 0x10002) = 0x10002
+                         ? (: n ((v >> 3) & 15) _ (pin secs n {}) _ (pin st 'busy k) (ev ['erase n]))
+                         0)))
+                 (m 'wr a v)))
+        'rst (b \ (pin st 'stuck 0, pin st 'lock 1, pin st 'keys 0, peep m 'rst (_ \ 0) b))
+        'mem (_ \ m 'mem ())
+        'log (_ \ rev (st 'log)) 'sr (_ \ st 'sr) 'busy (_ \ st 'busy)})
+   ; an f4 under the wire: its id code and size word, its core, its flash busy k polls an erase
+   (f4chip k) (: m (swdt-mem ())
+                 _ (m 'wr 0xE0042000 0x10006421) _ (m 'wr 0x1FFF7A20 0x02000000)
+                 f (swdt-flash (swdt-core m) k)
+                 [(swdt-target (swdt-dp f4dp f4aps 0 f)) f]))
+
+; attached, the ids are the board's: an f446 rev a, 512K
+(: t (f4chip 3) w <t _ (swd-attach w)
+   (test (f4-ids w = [0x10006421 512])))
+
+; the sectors: eight, contiguous, 512K in all
+(: (test (#f4-sectors = 8) (f4-sectors 0 = [0 0x08000000 16384]) (f4-sectors 4 = [4 0x08010000 65536])
+         (f4-sectors 7 = [7 0x08060000 131072])
+         (net (map (k \ k 2) f4-sectors) = 524288)
+         (all (i \ f4-sectors i 1 + f4-sectors i 2 = f4-sectors (i + 1) 1) ^7)))
+
+; locked to begin with: a word written is refused with wrperr and nothing changes; a wrong
+; key locks it till a reset, where unlock scares; a reset frees it
+(: t (f4chip 3) w <t f (t 1) _ (swd-attach w)
+   _ (swd-wr w 0x08000000 0) e (f 'sr ()) v (swd-rd w 0x08000000)
+   _ (swd-wr w 0x40023C0C 0x1F3)
+   _ (swd-wr w 0x40023C04 0x12345678)
+   s (trap (_ \ f4-unlock w) 0 (a \ b \ a))
+   _ (swd-attach w) u (f4-unlock w)
+   (test (16 = e & 16) (v = 0xFFFFFFFF) (s = 'f4-locked) (1 = u)))
+
+; a flash of 40 bytes across sectors 0 and 1: both erased, then the words programmed, padded
+; with ones, then locked; read back the same, and the erase kept the flash busy 5 polls
+(: t (f4chip 5) w <t f (t 1) _ (swd-attach w)
+   s (string (map (i \ (37 * i + 11) % 256) ^40))
+   a 0x08003FF0
+   r (f4-flash w a s)
+   lg (f 'log ())
+   q (f4-flash w 0x08008000 "abcdef")         ; six bytes: the word's last two stay erased
+   (test (1 = r) (f4-read w a 40 = s) (f4-locked? w)
+         ([['erase 0] ['erase 1]] = filter (e \ <e = 'erase) lg)
+         (10 = #(filter (e \ <e = 'pg) lg))
+         (swd-rd w 0x08004018 = 0xFFFFFFFF)
+         (f4-read w 0x08003FF0 3 = snip s 0 3)
+         (1 = q) (f4-read w 0x08008000 8 = "abcdef" + string [255 255])))
+
+; erase answers once the flash is idle; program only clears bits: a second write over the
+; first without an erase reads their and; f4-flash, erasing first, writes it clean
+(: t (f4chip 4) w <t f (t 1) _ (swd-attach w) a 0x08020000
+   _ (f4-unlock w) _ (f4-erase w 5) b (f 'busy ())
+   _ (f4-write w a (wrle 0xF0F0F0F0 4)) _ (f4-write w a (wrle 0x3C3C3C3C 4))
+   x (swd-rd w a)
+   r (f4-flash w a (wrle 0x3C3C3C3C 4)) y (swd-rd w a)
+   (test (0 = b) (x = 0x30303030) (1 = r) (y = 0x3C3C3C3C)))
+
+; the flash's errors scare: a write at the wrong size, and an erase still busy after its polls
+(: t (f4chip 1) w <t f (t 1) _ (swd-attach w) _ (f4-unlock w)
+   _ (swd-wr w 0x40023C10 1) _ (swd-wr w 0x08000000 0)
+   e (trap (_ \ f4-write w 0x08000000 "abcd") 0 (a \ b \ [a b]))
+   v (f4chip 50) x <v _ (swd-attach x) _ (f4-unlock x)
+   _ (swd-wr x 0x40023C10 0x10002)
+   b (trap (_ \ f4-idle x 10) 0 (a \ b \ [a b]))
+   n (f4-idle x 100)
+   (test (e = ['f4-flash 64]) (b = ['f4-busy 0x10000]) (n = 0)))

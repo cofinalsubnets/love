@@ -3,7 +3,9 @@
 ; answers it, 'own b turns swdio to the host (1) or the target (0), 'rst b holds nrst low (1)
 ; or lets it go (0). bits go lsb first
 (module (swd swd-bits swd-sample swd-par swd-xfer swd-line swd-dp swd-dpw swd-ap swd-apw swd-connect swd-rd swd-rds swd-wr swd-wrs
-             swd-halted? swd-halt swd-attach swd-resume swd-run)
+             swd-halted? swd-halt swd-attach swd-resume swd-run
+             f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash)
+(borrow 'bytes)
 (:
  ; the low n bits of x out, then n bits in as a number
  (swd-bits w x n) (n > 0 ? (w 'out (x & 1), swd-bits w (x >> 1) (n - 1)) 0)
@@ -99,5 +101,49 @@
  ; the core let go where it stopped, still under debug; or reset and run from the top, free
  (swd-resume w) (: _ (swd-wr w dhcsr 0xA05F0001) 1)
  (swd-run w) (: _ (swd-wr w demcr 0) _ (swd-wr w dhcsr 0xA05F0000) _ (swd-wr w aircr 0x05FA0004) 1)
+
+ ; an stm32f4: its id code and flash size in K
+ (f4-ids w) [(swd-rd w 0xE0042000) ((swd-rd w 0x1FFF7A20) >> 16)]
+ ; its flash from 0x08000000: sectors of 16K 16K 16K 16K 64K then 128Ks, [n base size] each,
+ ; written as x32 words. keyr +4, sr +12 (busy bit 16, errors 0x1F2, each cleared by a 1),
+ ; cr +16 (pg 1, ser 2, the sector from bit 3, psize from bit 8, strt bit 16, lock bit 31)
+ fl 0x40023C00 fbase 0x08000000
+ f4-sectors (: (k i) (i < 4 ? 16384 (i = 4 ? 65536 131072))
+               (map (i \ [i (fbase + net (map k ^i)) (k i)]) ^8))
+ ; the flash idle, polled k times at most: its status, or a scare with an error's
+ (f4-idle w k) (: s (swd-rd w (fl + 12))
+                  (? ((s & 0x1F2) != 0) (scare 'f4-flash s)
+                     ((s & 0x10000) = 0) s
+                     (k > 0) (f4-idle w (k - 1))
+                     (scare 'f4-busy s)))
+ (f4-locked? w) (((swd-rd w (fl + 16)) & 0x80000000) != 0)
+ ; a key pair while unlocked locks the flash till a reset, so only a locked one is given it
+ (f4-unlock w) (: _ (f4-locked? w ? (swd-wr w (fl + 4) 0x45670123, swd-wr w (fl + 4) 0xCDEF89AB) 0)
+                  (f4-locked? w ? (scare 'f4-locked 0) 1))
+ (f4-lock w) (: _ (swd-wr w (fl + 16) 0x80000000) 1)
+ (f4-erase w n) (: _ (f4-idle w 1000000) _ (swd-wr w (fl + 12) 0x1F3)
+                   _ (swd-wr w (fl + 16) (2 | n << 3 | 2 << 8))
+                   _ (swd-wr w (fl + 16) (2 | n << 3 | 2 << 8 | 0x10000))
+                   _ (f4-idle w 1000000)
+                   (swd-wr w (fl + 16) 0))
+ ; the words of s, padded with ones (what erase leaves) to a multiple of 4
+ (f4-words s) (: p (s + string (map (_ \ 255) ^((4 - #s % 4) % 4)))
+                 (map (i \ rdle p (4 * i) 4) ^(#p // 4)))
+ (f4-write w a s) (: _ (f4-idle w 1000000) _ (swd-wr w (fl + 12) 0x1F3)
+                     _ (swd-wr w (fl + 16) (1 | 2 << 8))
+                     _ (swd-wrs w a (f4-words s))
+                     _ (f4-idle w 1000000)
+                     (swd-wr w (fl + 16) 0))
+ (f4-read w a n) (snip (join "" (map (v \ wrle v 4) (swd-rds w a ((n + 3) // 4)))) 0 n)
+ ; erase the sectors s covers from a, write it, lock, read it back: 1, or where it differs first
+ (f4-flash w a s)
+  (: hit (filter (k \ k 1 < a + #s && a < k 1 + k 2) f4-sectors)
+     _ (f4-unlock w)
+     _ (map (k \ f4-erase w <k) hit)
+     _ (f4-write w a s)
+     _ (f4-lock w)
+     b (f4-read w a #s)
+     (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
+     (at 0))
 )
 ) ; module swd
