@@ -36,13 +36,17 @@
    ; args/ovf: the group lane's callee-saved bank, each H saving its own. slot: the push/pop unit.
    ; link: the return address is a register an H saves. kept: the first callee-saved grid counter,
    ; by encoding. packed: 2-wide doubles with a lane mask. word: a vm word's bytes, the unit of
-   ; every frame slot and cell field the lanes address
+   ; every frame slot and cell field the lanes address. group: the group lane runs here. float: the
+   ; float lanes run here, their gem a double. save: the C convention leaves too few free registers,
+   ; so a blob saves what it uses (tsave)
    targets {'x64  {'g 'r6 'ip 'r5 'hp 'r2 'sp 'r1 'acc 'r0 'tmp 'r7 'anchor 'r8 'scratch 'r10
-                   'loop '(r8 r9 r10) 'args '(r3 r12 r13 r14) 'ovf 'r11 'slot 8 'link 0 'kept 12 'packed 1 'word 8}
+                   'loop '(r8 r9 r10) 'args '(r3 r12 r13 r14) 'ovf 'r11 'slot 8 'link 0 'kept 12 'packed 1 'word 8 'group 1 'float 1}
             'a64  {'g 'r0 'ip 'r1 'hp 'r2 'sp 'r3 'acc 'r4 'tmp 'r5 'anchor 'r9 'scratch 'r10
-                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 16 'packed 0 'word 8}
+                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 16 'packed 0 'word 8 'group 1 'float 1}
             'rv64 {'g 'r0 'ip 'r1 'hp 'r2 'sp 'r3 'acc 'r4 'tmp 'r5 'anchor 'r9 'scratch 'r10
-                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 14 'packed 0 'word 8}}
+                   'loop '(r6 r7 r8) 'args '(r19 r20 r21 r22) 'ovf 'r23 'slot 16 'link 1 'kept 14 'packed 0 'word 8 'group 1 'float 1}
+            'arm  {'g 'r0 'ip 'r1 'hp 'r2 'sp 'r3 'acc 'r4 'tmp 'r5 'anchor 'r9 'scratch 'r10
+                   'loop '(r6 r7 r8) 'args () 'ovf () 'slot 4 'link 1 'kept 4 'packed 0 'word 4 'group 0 'float 0 'save 1}}
    letc (cite 'guts 'letc)                 ; (letc rows . binds): the hook's twin carries it where a surface is missing
    threadir (cite 'guts 'threadir)
    leafops '(+ - * // % & | ^ < <= > >= =)   ; the ops the integer lanes emit
@@ -65,7 +69,27 @@
    (fairbit tgt cv r) (: G (greg tgt 'g) o (fairo tgt) ok (mint 0)
                          ([['test cv 63] ['br 'ne ok] ['ld r G o] ['sub r r 64] ['st G o r] ['cmp r 0] ['br 'gt ok]] + fairtk tgt r o ok))   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap
    mapmix 0x9e3779b97f4a7c15                                       ; must match the C map hash multiplier
-   (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt ir))
+   (hasm tgt ir) (: f (glazeasm 'f) ((lit? f ? f (cite 'holo 'assemble)) tgt (tsave tgt ir)))
+   ; a blob is entered at its start and at the resume labels lar takes, and leaves by jmpr. where the
+   ; target saves, r4..r11 that the ir names are pushed at each way in and popped before each way out,
+   ; an even count for the stack's 8-byte alignment; the jump goes through r12, which no pop touches.
+   ; the push at the start sits ahead of its label, so a self tail call's jump back to it saves nothing
+   tsaveable '(r4 r5 r6 r7 r8 r9 r10 r11)
+   (tsave tgt ir) (targets tgt 'save ? (tsaves ir) ir)
+   (tsaves ir)
+    (: (names f) (foldl (\ a x (two? x ? (a + x) (x . a))) () >f)
+       used (filter (r \ any (f \ elem r (names f)) ir) tsaveable)
+       rs (#used % 2 = 0 ? used (used + [(gfind (r \ !(elem r used)) tsaveable)]))
+       top (<<ir = 'label ? (last <ir))
+       ins (foldl (\ a f (<f = 'lar && last f != top ? (last f . a) a)) () ir)
+       (way? f) (<f = 'label && elem (last f) ins)
+       (go fs) (fs @ (f . r) (? (way? f) (f . ['pushm rs] . go r)
+                                 (<f = 'jmpr) (['mov 'r12 (f 1)] . ['popm rs] . ['jmpr 'r12] . go r)
+                                 (f . go r))
+                     ())
+       (? !rs ir
+          (any (f \ elem <f '(jmp br) && elem (last f) ins) ir) (scare 'tsave-jump-in ir)   ; a resume only from outside
+          (['pushm rs] . go ir)))
    (asmx ir) (hasm 'x64 ir 'bytes)
    (asmt tgt ir) (hasm tgt ir 'bytes)
    ; the map probe: map in r0, tagged key in r10, ends branched to hit (match) / miss (gap).
@@ -580,7 +604,7 @@
        fbk  (drok && (ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
        ; the float lane on every arithmetic guard costs a run-time compile its size, so past the bake
        ; it rides only a body that spells a float
-       flk  (gv 'bake-count 0 || string? (gv 'bake-calls 0) || aflo? body || any aflo? inits)
+       flk  (targets tgt 'float && (gv 'bake-count 0 || string? (gv 'bake-calls 0) || aflo? body || any aflo? inits))
        ovs  (fbk ? '(bit + - < = cap cup . <= > >= * // % & | ^) ())   ; the most driven first: a stub walks to its own
        ovals (map (o \ o = 'bit ? bit (gv o 0)) ovs)   ; the truth stub's bit is the glaze's own: the book's may be a module's namesake
        nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
@@ -618,6 +642,7 @@
                     (aseq cl as @ 'bad 'bad 1)))))
        ok (two? s && two? >s && all nom? ps && aparams? ps M
            && a = #ps && 0 < a && lpok && drok && dvok && lts != 'bad && two? body
+           && (targets tgt 'float || !(aflo? body || any aflo? inits))              ; no float lane: a float body only deopts
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the bisect knob: splits the call machinery from the rest
            && all lit? gvals && all lit? ovals && nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48   ; slots are cheap once the prologue guards the room
            && all (amble-ok? ps shd kn 0 0 0) inits
@@ -629,6 +654,7 @@
                                (two? bad ? (small <bad) e)))
                why (? !(two? s && two? >s && all nom? ps && aparams? ps M && a = #ps && 0 < a) 'shape
                       !lpok 'loop (lts = 'bad) 'lets !drok 'cost !dvok (txok ? 'calls 'text) !(two? body) 'nobody
+                      !(targets tgt 'float || !(aflo? body || any aflo? inits)) 'float
                       !(all lit? gvals) ['globals (filter (p \ !(lit? <>p)) (map (f \ [f (gv f 0)]) gn))] !(all lit? ovals) 'ops
                       !(nd < 48 && k + #gn + #cn + nq + nin + nl + !!fbk < 48) 'slots
                       !(all (amble-ok? ps shd kn 0 0 0) inits) 'inits
@@ -1297,7 +1323,7 @@
    ; divk: tmp / the literal k >= 2 by magic multiply (Hacker's Delight 10-1, signed 64-bit): q = mulh(n, M)
    ; (+ n when M < 0) >> s, + 1 for negative n so it truncates toward zero like idiv; % is n - q*k
    (divc? b) (charm? b && b >= 2)
-   (magic k) (: two63 9223372036854775808  two64 18446744073709551616
+   (magic k b) (: two63 ((b - 1) 2)  two64 (b 2)                                   ; b the word's bits
                 anc (two63 - 1 - two63 % k)
                 (go p q1 r1 q2 r2)
                  (: p1 (p + 1)
@@ -1307,17 +1333,17 @@
                     q2b (r2a >= k ? (q2a + 1) q2a) r2b (r2a >= k ? (r2a - k) r2a)
                     delta (k - r2b)
                     (q1b < delta || (q1b = delta) && (r1b = 0) ? (go p1 q1b r1b q2b r2b)
-                       (: M (q2b + 1) ((M >= two63 ? (M - two64) M) . (p1 - 64)))))
-                (go 63 (two63 // anc) (two63 - (two63 // anc) * anc) (two63 // k) (two63 - (two63 // k) * k)))
+                       (: M (q2b + 1) ((M >= two63 ? (M - two64) M) . (p1 - b)))))
+                (go (b - 1) (two63 // anc) (two63 - (two63 // anc) * anc) (two63 // k) (two63 - (two63 // k) * k)))
    (pow2 k) ((: (go j) (? (j 2 < k) (go (j + 1)) (j 2 = k) j 0)) 1)                  ; k = 2^j -> j, else 0
-   (divk tgt op k) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) j (pow2 k)
-      (j ? ([['mov A T] ['sar A 63] ['shr A (64 - j)] ['add A A T] ['sar A j]]                   ; bias a negative n by k-1, then shift
+   (divk tgt op k) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch) j (pow2 k) b (8 * wd tgt)
+      (j ? ([['mov A T] ['sar A (b - 1)] ['shr A (b - j)] ['add A A T] ['sar A j]]               ; bias a negative n by k-1, then shift
             + (op @ '% [['shl A j] ['sub T T A] ['mov A T]] ()))
-         (: m (magic k) M <m s >m
+         (: m (magic k b) M <m s >m
             ([['li SC M] ['mulh A T SC]]
              + (M < 0 ? [['add A A T]] ())
              + (s > 0 ? [['sar A s]] ())
-             + [['mov SC T] ['shr SC 63] ['add A A SC]]
+             + [['mov SC T] ['shr SC (b - 1)] ['add A A SC]]
              + (op @ '% [['li SC k] ['imul SC A SC] ['sub T T SC] ['mov A T]] ())))))
    ; cgir: an arith expr over params ps -> acc, operands on the machine stack, one shared deopt label.
    ; it reads every op by name, never shd: sound only while amble-ok? declines a frame that rebinds one
@@ -2438,7 +2464,7 @@
                          (gfix fns cm pm vnames cands))
    (rewrite-bindings bl gnames gdefs mp cps) (atom? >bl ? bl
       (: nf <bl val <>bl  hit (two? nf && elem <nf gnames)
-         ok (hit && jgir-ok? gdefs mp && jgir-entry-ok? <nf gdefs mp)                  ; a declined group keeps its define-sugar
+         ok (hit && targets arch 'group && jgir-ok? gdefs mp && jgir-entry-ok? <nf gdefs mp)   ; a declined group keeps its define-sugar
          ((ok ? <nf nf)
             . ((ok ? (jitgroupirx gdefs <nf arch (cps <nf) mp) val)
                   . (rewrite-bindings >>bl gnames gdefs mp cps)))))
@@ -2631,7 +2657,7 @@
                                         invd (map (iv \ margs (posof iv recps 0)) invs)
                                         starts ('arg . anat-starts outerp pairs recnm)
                                         glam (anat-twin >form <outerp)        ; the interp nest from its args: deopt fallback and =/show
-                                        ng (all (anat-fop? cnames) invd ? (jitfgridn glam cnames dims starts 2 invs invd fvars updates testexpr cmpop bound lim arch) ())
+                                        ng (targets arch 'float && all (anat-fop? cnames) invd ? (jitfgridn glam cnames dims starts 2 invs invd fvars updates testexpr cmpop bound lim arch) ())
                                         (lit? ng ? (': . anat-rebind >form <<outerp ng) form))))))
                          form)))))))
    ; compile cache: each source \-expr compiles once, keyed by source, so structurally-equal closures share the native (they are =).
@@ -2680,7 +2706,7 @@
                    e))
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
    (auto-ev e) (? (atom? e) (ev-run e)                                                 ; an atom has nothing to lower
-                  (qualfr e) (memo e (l \ jitfr l arch))
+                  (targets arch 'float && qualfr e) (memo e (l \ jitfr l arch))
                   ; cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp
                   (: f (canon (ev-lower e))
                      (ev-run (autogroup (autonat (twolow (castbuild f)))))))
@@ -2707,7 +2733,7 @@
        njit-loop (G 'njit-loop)  njit-loop-n (G 'njit-loop-n)
        calloutinfo (G 'calloutinfo)  jitcalloutx (G 'jitcalloutx)
        calloutinfo-frame (G 'calloutinfo-frame)  njit-calloutframe (G 'njit-calloutframe)
-       qualfr (G 'qualfr)  jitfrx (G 'jitfrx)
+       qualfr (G 'qualfr)  jitfrx (G 'jitfrx)  flo ((G 'targets) arch 'float)
        anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jgir-rerun-ok? (G 'jgir-rerun-ok?)  jitgroupirx (G 'jitgroupirx)  grpfix (G 'grpfix)
        njit-amble (G 'njit-amble)
        asm (cite 'holo 'assemble)                                         ; pinned: the cat's later reopen of holo never moves it
@@ -2761,7 +2787,7 @@
               (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))
                          (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
               !(all nom? ps) e                                                        ; a pattern binder in the frame declines every source lane
-              (qualfr s) (hit (jitfrx s arch e))                                      ; deopt to e, never (ev s), which re-enters ala
+              (flo && qualfr s) (hit (jitfrx s arch e))                                      ; deopt to e, never (ev s), which re-enters ala
                 (: ci (calloutinfo s)
                    fv (ci && !(farq <ci) && gv <ci 0)
                    (lit? fv ? (ci @ [_ op iv arg] (hit (jitcalloutx fv s op iv arg arch)))

@@ -210,6 +210,8 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
   #define LvArch "a64"
 #elif defined(__riscv)
   #define LvArch "rv64"
+#elif defined(__arm__) && defined(__unix__)
+  #define LvArch "arm"
 #elif defined(__wasm__)
   #define LvArch "wasm"
 #else
@@ -640,7 +642,7 @@ union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) {
 // tell the I-cache about fresh code; wasm has no arena and no intrinsic, so a site never asks directly
 #ifdef __wasm__
 #define code_sync(a, b) ((void) (a), (void) (b))
-#elif defined(__riscv) && defined(__mooncc__)
+#elif (defined(__riscv) || (defined(__arm__) && defined(__unix__))) && defined(__mooncc__)
 void __love_codesync(char *a, char *b);
 #define code_sync(a, b) __love_codesync(a, b)
 #else
@@ -663,6 +665,13 @@ struct cfree { char *p; size_t n; struct cfree *next; };           // a free spa
 #endif
 #define CodeChunk ((size_t) 1 << 20)
 #define CodeHead (2 * sizeof(uintptr_t))
+// on thumb a blob opens with an a32 stub into its body, add ip, pc, #1; bx ip, so its address
+// is even as on every other arch, and never reads as a charm
+#ifdef __thumb__
+#define CodeStub 8
+#else
+#define CodeStub 0
+#endif
 static size_t code_round(size_t n) { return (n + 15) & ~(size_t) 15; }
 static size_t code_page(void) { long q = sysconf(_SC_PAGESIZE); return q > 0 ? (size_t) q : 4096; }
 // open [p, p+n) for writing, or seal it; neighbours on the page ride along, and nothing runs meanwhile
@@ -717,7 +726,7 @@ static struct code *code_at(struct g *g, char *p) {
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct g *g, char const *src, size_t n) {
- size_t need = code_round(CodeHead + n + 1), span = need;
+ size_t need = code_round(CodeHead + CodeStub + n + 1), span = need;
  char *p = NULL;
  for (struct cfree **l = &g->cfree; *l; l = &(*l)->next)     // first fit, lowest address first
   if ((*l)->n >= need) {
@@ -733,11 +742,12 @@ char *code_install(struct g *g, char const *src, size_t n) {
  struct code *c = code_at(g, p);
  char *w = c->own ? c->own + (p - c->base) : p;                   // a heap chunk is written at its own address
  if (!c->own && code_open(p, span, PROT_READ | PROT_WRITE)) return code_release(g, p, span), NULL;
- ((uintptr_t*) w)[0] = n, ((uintptr_t*) w)[1] = span;
- memcpy(w + CodeHead, src, n);
- w[CodeHead + n] = 0;
+ ((uintptr_t*) w)[0] = CodeStub + n, ((uintptr_t*) w)[1] = span;
+ if (CodeStub) { uint32_t const stub[2] = {0xe28fc001u, 0xe12fff1cu}; memcpy(w + CodeHead, stub, sizeof stub); }
+ memcpy(w + CodeHead + CodeStub, src, n);
+ w[CodeHead + CodeStub + n] = 0;
  if (!c->own && code_open(p, span, PROT_READ | PROT_EXEC)) return code_release(g, p, span), NULL;
- code_sync(p + CodeHead, p + CodeHead + n);
+ code_sync(p + CodeHead, p + CodeHead + CodeStub + n);
  return p + CodeHead; }
 void code_free(struct g *g, char *code) {
  char *p = code - CodeHead;

@@ -920,6 +920,14 @@ int __love_sofb(long *lv, long *op) {
   return -1; }
 #endif
 
+#ifdef __ARM_EABI__
+/* fresh code to the i-cache: linux's cacheflush, the BSDs' sysarch(ARM_SYNC_ICACHE) */
+void __love_codesync(char *a, char *b) {
+  long span[2] = { (long) a, b - a };
+  if (__love_osv == 1) __love_sys(0xf0002, (long) a, (long) b, 0, 0, 0, 0);
+  else if (__love_osv == 2 || __love_osv == 3) __love_fb(165, 0, (long) span, 0, 0, 0, 0); }
+#endif
+
 #ifdef __riscv
 /* fence.i reaches this hart alone; linux's call reaches them all */
 void __love_codesync(char *a, char *b) {

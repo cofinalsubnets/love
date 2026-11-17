@@ -10,9 +10,10 @@
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; applied inline, deopts to a bignum
     (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; a chain body: the amble owns it
     ; --- a float-result leaf boxes a gem, == interp, deopts on a non-float arg
-    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; the float lane fires
+    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; the float lane fires, where there is one
+       fl (cite 'glaze 'targets love-arch 'float)
        (gem? (fr 4) && 8.0 = (fr 4) && (fr 4 = ((x \ (x * 1.5) + 2.0) 4))      ; == the interpreter
-        && fired? n && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))            ; ..and a non-float arg deopts
+        && (!fl || fired? n) && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))   ; ..and a non-float arg deopts
     ; --- an N-var loop (fib): a native back-edge, == interp
     (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
        (55 = (fib 10) && fired? n
@@ -158,7 +159,7 @@
     (: n (peep fires () 0)
        f (ev '(: (gzf16 a b c d e f g h i j k l m n o p) (? (tablet? o) 0 1)
                  (gzfmk m) (: g (gauge 0)  r (- (- (g 0) (g 1)) (g 2))
-                              _ (? (> r (+ m 64)) (cask (* 8 (- (- r m) 16))))
+                              _ (? (> r (+ m 64)) (cask (* (? (charm? 1099511627776) 8 4) (- (- r m) 16))))
                               (tablet 0))
                  (gzfrun m bad) (? (< m 0) bad
                                    (: x (list m m)
