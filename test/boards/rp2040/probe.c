@@ -117,6 +117,11 @@ static void puts_(char const *s) { for (; *s; s++) usb_putc(*s); }
 int main(void) {
   struct probe p = { 0, 0, 0 };
   unsigned const pins[3] = { swclk, nrst, swdio };
+  // the blocks it uses from their reset, whatever the rom left them in
+  uint32_t const blk = RST_IO_BANK0 | RST_PADS_BANK0 | RST_TIMER;
+  REG(RESETS_RESET + REG_SET) = blk;
+  REG(RESETS_RESET + REG_CLR) = blk;
+  while ((REG(RESETS_RESET_DONE) & blk) != blk) {}
   for (unsigned i = 0; i < 3; i++) {
     gpio_init(pins[i]);
     REG(PADS_BANK0_GPIO(pins[i]) + REG_CLR) = PADS_PDE;

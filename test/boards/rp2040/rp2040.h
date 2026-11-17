@@ -31,6 +31,7 @@
 #define RST_PADS_BANK0 (1u << 8)
 #define RST_PLL_SYS    (1u << 12)
 #define RST_PLL_USB    (1u << 13)
+#define RST_TIMER      (1u << 21)
 #define RST_UART0      (1u << 22)
 #define RST_USBCTRL    (1u << 24)
 

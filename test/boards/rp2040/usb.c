@@ -144,8 +144,12 @@ void usb_poll(void) {
     else txon = 0; } }
 
 // pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
-// as present, the pullup on
+// as present, the pullup on. the rom's usb boot leaves the pll running and feeding clk_usb, so
+// the clock stops and the pll resets before either is set
 void usb_init(void) {
+  REG(CLK_USB_CTRL) = 0;
+  for (volatile uint32_t k = 0; k < 64; k++) {}
+  REG(RESETS_RESET + REG_SET) = RST_PLL_USB;
   REG(RESETS_RESET + REG_CLR) = RST_PLL_USB;
   while (!(REG(RESETS_RESET_DONE) & RST_PLL_USB)) {}
   REG(PLL_USB_BASE + 0x0u) = 1;
