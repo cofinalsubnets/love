@@ -31,9 +31,10 @@ static unsigned long __love_bias(void) {
   return 0; }
 
 /* -pie: the linker leaves each abs64 data pointer at its base-0 offset, its sites listed
- * in love_rela; add the bias to each. ET_EXEC links an empty table */
+ * in love_rela; add the bias to each. ET_EXEC links an empty table; dyld has made a mach-o's */
 extern long __start_love_rela[], __stop_love_rela[];
 static void __love_reloc(void) {
+  if (__love_osv == 4) return;
   unsigned long bias = __love_bias();
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }

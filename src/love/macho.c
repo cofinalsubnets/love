@@ -1,4 +1,4 @@
-// macho.c -- image_lay for a mach-o: its link alone takes this over elfbake.c
+// macho.c -- image_lay's mach-o writer; elfbake.c is the other
 #define _GNU_SOURCE
 #include "love.h"
 #include "bytes.h"
@@ -50,7 +50,7 @@ static int macho_sign(int src, int dst, char *cmds, uint32_t ncb, long li, struc
   return rc; }
 static int macho_slideof(struct dl_phdr_info *in, size_t sz, void *d) {
   return *(uintptr_t*) d = in->dlpi_addr, 1; }
-int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win) {
+int image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win) {
   uintptr_t slide = 0;
   dl_iterate_phdr(macho_slideof, &slide);
   uintptr_t lenaddr = (uintptr_t) &baked_image_len - slide, imgaddr = (uintptr_t) baked_image - slide;
