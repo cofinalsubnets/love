@@ -245,6 +245,18 @@ struct _IO_FILE {
 #define NR_exit            93    /* this thread alone */
 #define NR_futex           98
 #define NR_sched_yield    124
+#define NR_accept4        242
+#define NR_flock          32
+#define NR_getrandom      278
+#define NR_rt_sigsuspend  133
+#define NR_tgkill         131
+#define NR_gettid         178
+#define NR_prctl          167
+#define NR_getsid         156
+#define NR_getpgid        155
+#ifndef __ILP32__
+#define NR_clock_nanosleep 115   /* rv32 names its time64 one */
+#endif
 #define NR_unshare         97
 #define NR_clock_gettime  113
 #define NR_kill           129
@@ -393,6 +405,15 @@ struct _IO_FILE {
 #define NR_futex          422   /* futex_time64 */
 #define NR_futex_32       240
 #define NR_sched_yield    158
+#define NR_accept4        366
+#define NR_flock          143
+#define NR_getrandom      384
+#define NR_rt_sigsuspend  179
+#define NR_tgkill         268
+#define NR_gettid         224
+#define NR_prctl          172
+#define NR_getsid         147
+#define NR_getpgid        132
 #define NR_openat         322
 #define NR_mkdirat        323
 #define NR_mknodat        324
@@ -513,6 +534,15 @@ struct _IO_FILE {
 #define NR_exit             1
 #define NR_futex          422   /* futex_time64 */
 #define NR_sched_yield    158
+#define NR_accept4        364
+#define NR_flock          143
+#define NR_getrandom      355
+#define NR_rt_sigsuspend  179
+#define NR_tgkill         270
+#define NR_gettid         224
+#define NR_prctl          172
+#define NR_getsid         147
+#define NR_getpgid        132
 #define NR_openat         295
 #define NR_mkdirat        296
 #define NR_mknodat        297
@@ -633,6 +663,16 @@ struct _IO_FILE {
 #define NR_exit            60    /* this thread alone */
 #define NR_futex          202
 #define NR_sched_yield     24
+#define NR_accept4        288
+#define NR_flock          73
+#define NR_getrandom      318
+#define NR_rt_sigsuspend  130
+#define NR_tgkill         234
+#define NR_gettid         186
+#define NR_prctl          157
+#define NR_getsid         124
+#define NR_getpgid        121
+#define NR_clock_nanosleep 230
 #define NR_arch_prctl     158
 #define NR_openat         257
 #define NR_mkdirat        258
@@ -1032,8 +1072,9 @@ extern unsigned char __obuf[8192];
 /* threads: the clone leaf starts the child calling sp[0](sp[1]); __love_tp reads the
  * thread pointer clone set */
 struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128];
-                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp, *mself; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
+                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp, *mself, *reap; int rlock; long mktid; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
+extern void (*__love_forkhook)(int);   /* fork.c's, set by pthread_atfork */
 /* the pt_tls template (tlsimg 0 without one): a thread's copy lies tlsoff from its thread pointer */
 void __love_tlscopy(void *tp);
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);

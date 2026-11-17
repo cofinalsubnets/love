@@ -101,4 +101,6 @@ int __love_birth(char const *path, int follow, struct timespec *out),
     mkdir(char const*, unsigned int), chmod(char const*, unsigned int), fchmod(int, unsigned int);
 unsigned int umask(unsigned int);
 int utimensat(int, char const*, struct timespec const*, int), futimens(int, struct timespec const*),
-    mkfifo(char const*, unsigned int), mknod(char const*, unsigned int, unsigned long);
+    mkfifo(char const*, unsigned int), mknod(char const*, unsigned int, unsigned long),
+    fstatat(int, char const*, struct stat*, int), fchmodat(int, char const*, unsigned int, int),
+    mkdirat(int, char const*, unsigned int);

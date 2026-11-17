@@ -187,3 +187,33 @@ int sem_timedwait(sem_t *s, struct timespec const *abs) {
   if (abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) { errno = EINVAL; return -1; }
   return __sem_wait(s, abs); }
 int sem_getvalue(sem_t *s, int *v) { *v = __atomic_load_n(&s->__v, __ATOMIC_ACQUIRE); return 0; }
+
+/* a barrier: the n-th arrival opens a new generation and answers SERIAL; the rest wait on
+ * the generation word until it moves */
+int pthread_barrier_init(pthread_barrier_t *b, pthread_barrierattr_t const *a, unsigned n) {
+  if (!n) return EINVAL;
+  b->__lock = 0, b->__seq = 0, b->__n = n, b->__in = 0;
+  return 0; }
+int pthread_barrier_destroy(pthread_barrier_t *b) { return 0; }
+int pthread_barrier_wait(pthread_barrier_t *b) {
+  __pt_take(&b->__lock);
+  int seq = b->__seq;
+  if (++b->__in == b->__n) {
+    b->__in = 0;
+    __atomic_add_fetch(&b->__seq, 1, __ATOMIC_RELEASE);
+    __pt_give(&b->__lock);
+    __fx_wake(&b->__seq, 0x7fffffff);
+    return PTHREAD_BARRIER_SERIAL_THREAD; }
+  __pt_give(&b->__lock);
+  while (__atomic_load_n(&b->__seq, __ATOMIC_ACQUIRE) == seq) __fx_wait(&b->__seq, seq, 0);
+  return 0; }
+
+/* spinlocks: an exchange to take, a load to spin on, a release store to give */
+int pthread_spin_init(pthread_spinlock_t *s, int sh) { *s = 0; return 0; }
+int pthread_spin_destroy(pthread_spinlock_t *s) { return 0; }
+int pthread_spin_lock(pthread_spinlock_t *s) {
+  while (__atomic_exchange_n(s, 1, __ATOMIC_ACQUIRE))
+    while (__atomic_load_n(s, __ATOMIC_RELAXED)) ;
+  return 0; }
+int pthread_spin_trylock(pthread_spinlock_t *s) { return __atomic_exchange_n(s, 1, __ATOMIC_ACQUIRE) ? EBUSY : 0; }
+int pthread_spin_unlock(pthread_spinlock_t *s) { __atomic_store_n(s, 0, __ATOMIC_RELEASE); return 0; }

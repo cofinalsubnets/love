@@ -19,7 +19,10 @@ int ffsl(long), ffsll(long long);
 char *strcasestr(char const*, char const*), *strcpy(char*, char const*),
      *strncpy(char*, char const*, size_t), *strcat(char*, char const*), *strchr(char const*, int),
      *strrchr(char const*, int), *strstr(char const*, char const*), *strdup(char const*),
-     *strndup(char const*, size_t);
+     *strndup(char const*, size_t), *stpcpy(char*, char const*), *stpncpy(char*, char const*, size_t);
+void *memrchr(void const*, int, size_t);
+void  explicit_bzero(void*, size_t);
+int   strverscmp(char const*, char const*);
 size_t strnlen(char const*, size_t);
 char *strerror(int), *strsignal(int);
 int   strerror_r(int, char*, size_t);          /* xsi: 0 or ERANGE */

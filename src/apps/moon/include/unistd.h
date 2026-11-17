@@ -32,14 +32,22 @@ int  access(char const*, int);
 #define R_OK 4
 int dup(int), dup2(int, int), pipe(int*), fork(void), execvp(char const*, char *const*),
     execv(char const*, char *const*), execve(char const*, char *const*, char *const*),
-    fexecve(int, char *const*, char *const*);
+    fexecve(int, char *const*, char *const*), dup3(int, int, int), pipe2(int*, int),
+    execvpe(char const*, char *const*, char *const*), vfork(void), daemon(int, int),
+    lockf(int, int, off_t), getpagesize(void), getentropy(void*, size_t);
+long syscall(long, ...);
+#define F_ULOCK 0
+#define F_LOCK  1
+#define F_TLOCK 2
+#define F_TEST  3
 extern char **environ, *optarg;
 extern int optind, opterr, optopt;
 int getopt(int, char *const *, char const *), execl(char const*, char const*, ...),
     execlp(char const*, char const*, ...), execle(char const*, char const*, ...);
 void _exit(int);
 unsigned int getuid(void), geteuid(void), getegid(void), getgid(void);
-int getpid(void), getppid(void), setsid(void), isatty(int);
+int getpid(void), getppid(void), setsid(void), isatty(int), ttyname_r(int, char*, size_t);
+char *ttyname(int);
 unsigned int alarm(unsigned int);
 int pause(void), gethostname(char*, unsigned long), ftruncate(int, off_t),
     truncate(char const*, off_t), getlogin_r(char*, size_t);
@@ -58,12 +66,14 @@ long pathconf(char const*, int);
 long fpathconf(int, int);
 int fsync(int), fdatasync(int);
 void sync(void);
-int  unlinkat(int, char const*, int);
+int  unlinkat(int, char const*, int), linkat(int, char const*, int, char const*, int),
+     symlinkat(char const*, int, char const*), faccessat(int, char const*, int, int),
+     fchownat(int, char const*, unsigned int, unsigned int, int);
 unsigned int sleep(unsigned int);
 int  usleep(unsigned int);
 long pread(int, void*, unsigned long, off_t);
 ssize_t copy_file_range(int, off_t*, int, off_t*, unsigned long, unsigned int);
 long pwrite(int, void const*, unsigned long, off_t);
-int getpgrp(void), setpgid(pid_t, pid_t);
+int getpgrp(void), setpgid(pid_t, pid_t), getsid(pid_t), getpgid(pid_t);
 pid_t tcgetpgrp(int);
 int  tcsetpgrp(int, pid_t);

@@ -36,6 +36,8 @@
 #define AT_FDCWD      (-100)
 #define AT_SYMLINK_NOFOLLOW 256
 #define AT_REMOVEDIR        512
+#define AT_EACCESS          512   /* faccessat's, beside AT_REMOVEDIR as linux's */
+#define AT_SYMLINK_FOLLOW  1024
 /* linux only, for fexecve */
 #define AT_EMPTY_PATH      4096
 #define F_DUPFD          0

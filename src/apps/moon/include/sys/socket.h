@@ -56,7 +56,8 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define MSG_CMSG_CLOEXEC 1073741824
 int socket(int, int, int), socketpair(int, int, int, int[2]),
     bind(int, struct sockaddr const*, socklen_t), listen(int, int),
-    accept(int, struct sockaddr*, socklen_t*), connect(int, struct sockaddr const*, socklen_t);
+    accept(int, struct sockaddr*, socklen_t*), connect(int, struct sockaddr const*, socklen_t),
+    accept4(int, struct sockaddr*, socklen_t*, int);
 long send(int, void const*, unsigned long, int), recv(int, void*, unsigned long, int);
 int setsockopt(int, int, int, void const*, socklen_t), getsockopt(int, int, int, void*, socklen_t*),
     shutdown(int, int), getsockname(int, struct sockaddr*, socklen_t*),

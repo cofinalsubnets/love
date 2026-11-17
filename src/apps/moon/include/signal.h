@@ -121,7 +121,9 @@ int raise(int), sigaction(int, struct sigaction const*, struct sigaction*), sige
 #define NSIG      65
 #define _NSIG     NSIG
 int kill(pid_t, int), sigaddset(sigset_t*, int), sigdelset(sigset_t*, int),
-    sigismember(sigset_t const*, int), sigprocmask(int, sigset_t const*, sigset_t*);
+    sigismember(sigset_t const*, int), sigprocmask(int, sigset_t const*, sigset_t*),
+    sigsuspend(sigset_t const*), killpg(pid_t, int), pthread_sigmask(int, sigset_t const*, sigset_t*);
+void psignal(int, char const*);
 /* linux's shape on every kernel; reordered for the bsds underneath */
 typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
 #define SS_ONSTACK  1
