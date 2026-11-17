@@ -238,9 +238,8 @@ test_hook: host
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_BUDGET_MB=64 $m" "glaze-tail: ok" test/glaze-tail.l
 	@echo TEST test/glaze-yield.l "(a native loop yields to a waiting peer, every lane)"
 	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-yield: ok" test/glaze-yield.l
-	@echo TEST test/glaze-group.l "(the group lane answers what the interpreter does, both stacks)"
+	@echo TEST test/glaze-group.l "(the group lane answers what the interpreter does)"
 	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-group: ok" test/glaze-group.l
-	@$(gsh) test/gate/run.sh -a hook "env LOVE_GROUP_MSTACK=1 $m" "glaze-group: ok" test/glaze-group.l
 # test_glazebench -- each bench, by stdin and by file, beats LOVE_NO_GLAZE=1 by a floor ratio
 test_glazebench: host
 	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"

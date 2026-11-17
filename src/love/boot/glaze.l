@@ -1490,26 +1490,18 @@
    (restargsir tgt k) (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
    (loadargsir tgt k) (foldl (\ a i (bcat [a [['ld (argregir tgt i) 'sp (slotsz tgt * (2 * k - i))]]])) () (rangeL 0 k))   ; the passed arg at [sp + slotsz*(2k-i)]
    (garith tgt op) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)   ; acc = (popped a) OP acc
-      (peep gkn 2 0 ? (op @ '+ [['sub A A 1] ['adds A A T] '(br vs OVF)]            ; tagged: 2a+1 + 2b = 2(a+b)+1
-                             '- [['subs T T A] '(br vs OVF) ['or T T 1] ['mov A T]]
-                             '* [['sub T T 1] ['sar A 1] ['mulo A A T SC 'OVF] ['or A A 1]]
-                             ())
       (op @ '+ [['adds A A T] '(br vs OVF)]
             '- [['subs T T A] '(br vs OVF) ['mov A T]]
             '* [['mulo A A T SC 'OVF]]
-            ())))
+            ()))
    ; the reg/imm peephole: a param (already in an arg reg) or a small immediate combines with acc directly
-   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= (peep gkn 2 0 ? 2047 4095))   ; an immediate every target adds, subs and compares directly, tagged too
+   (pimm? x) (whole? x && (x < 0 ? (0 - x) x) <= 4095)                      ; an immediate every target adds, subs and compares directly
    (preg tgt ps x) (elem x ps && argregir tgt (argix x ps 0))
-   (garith-r tgt op R) (: A (greg tgt 'acc) T (greg tgt 'tmp) SC (greg tgt 'scratch)
-      (? (peep gkn 2 0) (op @ '+ [['sub A A 1] ['adds A A R] '(br vs OVF)]
-                             '- [['subs A A R] '(br vs OVF) ['or A A 1]]
-                             '* [['mov T R] ['sub T T 1] ['sar A 1] ['mulo A A T SC 'OVF] ['or A A 1]]
-                             ())
-         (op = '+) [['adds A A R] '(br vs OVF)]
+   (garith-r tgt op R) (: A (greg tgt 'acc) SC (greg tgt 'scratch)
+      (? (op = '+) [['adds A A R] '(br vs OVF)]
          (op = '-) [['subs A A R] '(br vs OVF)]
          (op = '*) [['mulo A A R SC 'OVF]] ()))
-   (garith-i tgt op imm0) (: A (greg tgt 'acc) imm (peep gkn 2 0 ? (2 * imm0) imm0)   ; tagged, the step doubles
+   (garith-i tgt op imm) (: A (greg tgt 'acc)
       (op @ '+ [['adds A A imm] '(br vs OVF)]
             '- [['subs A A imm] '(br vs OVF)]
             ()))
@@ -1519,11 +1511,10 @@
    ; cggir: a group expr over params ps (in arg regs); syms are the group fns, the call targets. overflow
    ; and /-by-0 jump the shared OVF handler; the operand patterns are exact-arity, groupok?'s grammar
    (cggir tgt syms ps e)
-    (: A (greg tgt 'acc) T (greg tgt 'tmp) tg? (peep gkn 2 0)                 ; tg?: ints ride tagged, 2x+1
-       (unt l) (tg? ? ([['sar A 1]] + l + [['leax A A A 1 1]]) l)              ; division runs untagged
+    (: A (greg tgt 'acc) T (greg tgt 'tmp)
        (go x) (cggir tgt syms ps x)
        (? (elem e ps) [['mov A (argregir tgt (argix e ps 0))]]
-          (whole? e) [['li A (tg? ? (2 * e + 1) e)]]
+          (whole? e) [['li A e]]
           (atom? e) ()
           (elem <e syms)
             (bcat [(gargsir tgt syms ps >e) [['call <e]] [['add 'sp 'sp (slotsz tgt * #>e)]]])
@@ -1535,13 +1526,12 @@
                        (pa && elem op '(+ *))   (bcat [(go b) (garith-r tgt op pa)])   ; (p op E): commute
                        (pimm? a && op = '+)     (bcat [(go b) (garith-i tgt op a)])    ; (C + E): an imm `*` has no a64 form, so it stays generic
                        (bcat [(go a) [['push A]] (go b) [['pop T]] (garith tgt op)])))
-               (elem op '(// %) && divc? b) (bcat [(go a) (unt ([['mov T A]] + divk tgt op b))])
+               (elem op '(// %) && divc? b) (bcat [(go a) [['mov T A]] (divk tgt op b)])
                (elem op '(// %))
-                 (bcat [(go a) [['push A]] (go b) [['cmp A (tg? ? 1 0)] '(br eq OVF) ['pop T]]
-                        (tg? ? [['sar T 1]] ()) (unt (divir tgt op))])
+                 (bcat [(go a) [['push A]] (go b) [['test A A] '(br eq OVF) ['pop T]] (divir tgt op)])
                (elem op '(& | ^))
-                 (bcat [(go a) [['push A]] (go b) [['pop T] [(bitop op) A A T]] (tg? && op = '^ ? [['or A A 1]] ())])
-               (elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['set cc A]] (tg? ? [['leax A A A 1 1]] ())]))
+                 (bcat [(go a) [['push A]] (go b) [['pop T] [(bitop op) A A T]]])
+               (elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['set cc A]]]))
                (op = 'mget) (: R (argregir tgt (argix a ps 0)) lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)    ; (mget MAP k): an applied map, a miss OVFs
                   (bcat [(go b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel (mget-ir tgt A ()) lp ht ms en 'deopt)]))
                ())
@@ -1563,7 +1553,7 @@
             (? (op = 'tally) (: R (argregir tgt (argix a ps 0)) [['ld A R (wd tgt)]])       ; the raw len at [STR+w]
                (op = 'two?) (: z (mint 0) en (mint 0)                                       ; total, since a non-chain reads 0
                   (bcat [(go a) [['test A 1] ['br 'ne z] ['ld T A 0] (reach tgt 'r8 0) ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
-               (op = 'whole?) (bcat [(go a) [['test A 1] ['br 'eq 'OVF] ['li A (tg? ? 3 1)]]])         ; a heap value (a big, a float, ..) deopts
+               (op = 'whole?) (bcat [(go a) [['test A 1] ['br 'eq 'OVF] ['li A 1]]])         ; a heap value (a big, a float, ..) deopts
                (op = 'cap) (bcat [(go a) (gkpair tgt a) [['ld A A (wd tgt)]]])                ; a non-chain deopts
                (op = 'cup) (bcat [(go a) (gkpair tgt a) [['ld A A (2 * wd tgt)]]])
                (op = 'ucar) (bcat [(go a) (gkpair tgt a) [['ld A A (wd tgt)] ['test A 1] ['br 'eq 'OVF] ['sar A 1]]])   ; ..and a non-fixnum car
@@ -1579,11 +1569,10 @@
    ; gcmpir: a comparison's operands to flags -> [code cc], cc the condition that holds when it does
    (gcmpir tgt syms ps op a b)
     (: A (greg tgt 'acc) T (greg tgt 'tmp) pa (preg tgt ps a) pb (preg tgt ps b) (go x) (cggir tgt syms ps x)
-       (tk c) (peep gkn 2 0 ? (2 * c + 1) c)                                             ; order keeps under 2x+1
        (? pb        [(bcat [(go a) [['cmp A pb]]]) (ccof op)]
-          (pimm? b) [(bcat [(go a) [['cmp A (tk b)]]]) (ccof op)]
+          (pimm? b) [(bcat [(go a) [['cmp A b]]]) (ccof op)]
           pa        [(bcat [(go b) [['cmp pa A]]]) (ccof op)]                          ; (p op E): flags p-acc = a-b, cc kept
-          (pimm? a) [(bcat [(go b) [['cmp A (tk a)]]]) (ccof (flipc op))]                   ; (C op E): b-a, flip cc
+          (pimm? a) [(bcat [(go b) [['cmp A a]]]) (ccof (flipc op))]                   ; (C op E): b-a, flip cc
           [(bcat [(go a) [['push A]] (go b) [['pop T] ['cmp T A]]]) (ccof op)]))
    (ccnot c) (c @ 'lt 'ge  'ge 'lt  'le 'gt  'gt 'le  'eq 'ne  'ne 'eq  c)
    ; gtestir: q's code, branching to el when q fails; a comparison branches on its own flags
@@ -1591,7 +1580,7 @@
     (q @ ((op a b) && elem op '(< <= > >= =)) (gcmpir tgt syms ps op a b @ [c cc] (bcat [c [['br (ccnot cc) el]]]))
          ('two? x) (bcat [(cggir tgt syms ps x) [['test (greg tgt 'acc) 1] ['br 'ne el] ['ld (greg tgt 'tmp) (greg tgt 'acc) 0]
                                                  (reach tgt 'r8 0) ['cmp (greg tgt 'tmp) 'r8] ['br 'ne el]]])
-         _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) (peep gkn 2 0 ? 1 0)] ['br 'le el]]]))
+         _ (bcat [(cggir tgt syms ps q) [['cmp (greg tgt 'acc) 0] ['br 'le el]]]))
    ; tailir: a tail self-call's args into the arg regs. an arg that is its own param stays put; one no
    ; other changed arg reads computes straight into its reg, and when none is left so, the rest compute
    ; from the old regs, all but the last pushed, the last moved from acc
@@ -1637,22 +1626,22 @@
                                  (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
-   ; its frames ride the machine stack, which no yield keeps: a peer waiting at the countdown takes OVF,
-   ; and the twin runs the call again (the group is rerun-safe), yielding at its first call
-   ; a call deeper than gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
+   ; an all-integer group on x64 and a64 runs on love's stack (lspark below); any other's frames ride
+   ; the machine stack, which no yield keeps: a peer waiting at the countdown takes OVF, and the twin
+   ; runs the call again (the group is rerun-safe), yielding at its first call. a call deeper than
+   ; gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
    gdepth 262144                                                                   ; well inside inle's 1 MiB kernel stack
    (mkhir tgt syms nm ps body)
     (: k #ps Lbody (mint 0) ls (peep gkn 1 0)
        ir (bcat [[['label nm]] (ls ? (lsroom tgt) [['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)])
-                 (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 (ls ? (peep gkn 2 0 ? (lsyield tgt k) (lspark tgt k)) [['jmp 'OVF]]))
+                 (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 (ls ? (lspark tgt k) [['jmp 'OVF]]))
                  (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
                  (restargsir tgt k) (hrest tgt) ['(ret)]])
        (ls ? (lstag tgt ir) ir))
    ; the love-stack group (x64 and a64, an all-integer group): the machine sp rides love's stack below
    ; Sp, so a call keeps call/ret and the depth bound is the heap gap. no collection runs inside a group,
    ; so its raw words need hiding only at a yield: lspark copies the segment into a string, whose bytes
-   ; the collector moves whole and never reads. LOVE_GROUP_TAGGED instead keeps every int tagged (cggir's
-   ; tg?), so the segment walks where it stands (lsyield). lstag unwraps ('raw x)
+   ; the collector moves whole and never reads. lstag unwraps ('raw x)
    (lsroom tgt) [['lea 'r9 (greg tgt 'hp) (wd tgt * 4096)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
    (lstag tgt ir) (map (i \ (i @ ('raw x) x  ('push R) (lpush tgt R)  i)) ir)
    ; a push onto love's stack fills its whole slot, so a 16-byte slot's second word walks too
@@ -1665,22 +1654,6 @@
                          [['lea 'r10 'sp 0] ['lea 'sp S 0] ['push 'r10]]))
    (lsorig tgt OV) (: S (greg tgt 'sp)                                              ; Sp again, off the anchor
       (slotsz tgt = 16 ? [['ld 'r9 OV 8] ['sar 'r9 1] ['lea S OV 16] ['add S S 'r9]] [['lea S OV (wd tgt)]]))
-   ; the park: the args tagged, Ip, and the distance to the anchor go on the group's stack, which becomes
-   ; the VM's down to the fair resume frame [x, charm(bb - gbase), gbase]; the machine state the outer
-   ; saved comes back first. at bb the outer's saves are made again and the anchor found from the distance
-   (lsyield tgt k) (: S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) W (wd tgt) OV (govf tgt) bb (mint 0)
-                      (raw l) (map (i \ ['raw i]) l)
-      (saveargsir tgt k
-      + [['push IP] ['lea 'r10 'sp 0] ['mov 'r9 OV] ['sub 'r9 'r9 'r10] ['leax 'r9 'r9 'r9 1 1] ['push 'r9]
-         ['lea S 'sp 0] ['ld 'r10 OV 0] ['lea 'sp 'r10 0]]
-      + raw (restargsir tgt 4 + [['pop OV]] + hrest tgt)
-      + [['li T 1] ['st S (-3 * W) T] ['lar T bb] ['lar 'r10 'gbase] ['sub T T 'r10] ['leax T T T 1 1]
-         ['st S (-2 * W) T] ['st S (-1 * W) 'r10] (reach tgt IP 12) ['sub S S (3 * W)] ['ld T IP 0] ['jmpr T]
-         ['label bb] ['add S S W]]
-      + raw (hsave tgt + [['push OV]] + saveargsir tgt 4)
-      + [['lea 'r10 'sp 0] ['lea 'sp S 0] ['pop 'r9] ['sar 'r9 1] ['lea OV 'sp 0] ['add OV OV 'r9] ['st OV 0 'r10]]
-      + lsorig tgt OV + [['pop IP]]
-      + restargsir tgt k))
    ; the park by copy, in the binary (gpark_gen.h, `make mx`) at reach 14: a site pushes its args and
    ; calls it, its return riding the segment. it lays [sp, anchor slot] at Hp as a string, puts the
    ; machine state back, then [Ip, the string] above the fair resume frame, itself the base. at bb
@@ -1727,12 +1700,12 @@
        pushargs (foldl (\ a i (bcat [a (pusharg1 i)])) () (rangeL 0 k))
        epi (valt ? [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]]
                  [['adds A A A] '(br vs DEOPT) ['or A A 1] ['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]])
-       ls (peep gkn 1 0)  tg (peep gkn 2 0)
-       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF)] (tg ? () [['sar A 1]]) [(lpush tgt A)]])) () (rangeL 0 k))
-       (ls ? (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt 4) (tg ? (map (i \ ['li (argregir tgt i) 1]) (rangeL 0 4)) ())
+       ls (peep gkn 1 0)
+       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) ['sar A 1]] [(lpush tgt A)]])) () (rangeL 0 k))
+       (ls ? (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt 4)
                     (lsenter tgt) [['lea OVFR 'sp 0]] lsargs                                  ; the anchor holds the machine sp
                     [['call entry] ['add 'sp 'sp (ss * k)] ['ld 'r10 'sp 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
-                    (tg ? [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]] epi)    ; a tagged answer stores as it is
+                    epi
                     [['label 'OVF] ['ld 'r10 OVFR 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
                     [['label 'DEOPT]] (deoptmn tgt (arity > 1))])
        (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt k) [['lea OVFR 'sp 0]] pushargs
@@ -1840,12 +1813,11 @@
        bufmask (kmask 2)
        cmask (kmask 3)
        pmask (kmask 4)
-       _ (pin gkn 1 (elem tgt '(x64 a64) && !(getenv "LOVE_GROUP_MSTACK") && !valt && all (f \ !(hasl (f 2))) parse
+       _ (pin gkn 1 (elem tgt '(x64 a64) && !valt && all (f \ !(hasl (f 2))) parse
                      && all (f \ all (j \ !(two? (jgir-kind km <f j))) (rangeL 0 #(f 1))) parse))
-       _ (pin gkn 2 (peep gkn 1 0 && !!(getenv "LOVE_GROUP_TAGGED")))
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       (nif (emit (assemble tgt (bcat [[['label 'gbase]] outer Hs]) 'bytes)) deopt k))
+       (nif (emit (assemble tgt (bcat [outer Hs]) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.

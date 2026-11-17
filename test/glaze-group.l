@@ -1,7 +1,7 @@
 ; --- test/glaze-group.l: the group lane answers what the interpreter does -------------------
 ; nine two-arg int groups over every operator the lane lowers, imm and reg operands, negatives,
 ; a comparison as a value, division, and products past a fixnum (which deopt), each glazed; the
-; answers are the interpreter's. test.mk's test_hook runs it, both stacks
+; answers are the interpreter's. test.mk's test_hook runs it
 (: fs [(ev '(: (g a b) (? (< a 1) b (+ (g (- a 1) b) (* a b))) g))
        (ev '(: (g a b) (? (< a 1) b (- (g (- a 1) (+ b 3)) (- a b))) g))
        (ev '(: (g a b) (? (<= a 0) (// b 7) (+ (g (- a 1) b) (% (* a b) 5))) g))
