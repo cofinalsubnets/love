@@ -399,7 +399,7 @@ lvm(lvm_duct_seal) {
   if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
   if (io_wpending(g, (struct io*) g->sp[0])) {   // park; nothing shut yet
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;
+   g->next_wake_at = tick_add(love_tick(), 1);
    love_musttail return Ap(lvm_yield_sw, g); }
   Unpack(g); }
  duct_shut((struct io*) Sp[0], (int) how);
