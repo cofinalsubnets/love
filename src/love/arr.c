@@ -76,7 +76,7 @@ static lvm(lvm_mul_rep) {
    n = (uintptr_t) (v < 0 ? -v : v); }
  else n = (uintptr_t) maxcharm;                      // |big|: refused below
  // the apcap rule (prel.l): refused here, as Hp + n in Have() can wrap and read as room
- if (n > ((uintptr_t) 1 << 40)) love_musttail return Push(ZeroPoint);
+ if (n > words_max) love_musttail return Push(ZeroPoint);
  if (chainp(seq)) {
   if (!n) love_musttail return Push(ZeroPoint);
   uintptr_t m = llen(seq), total = mulsat(m, n);

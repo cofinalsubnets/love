@@ -58,7 +58,7 @@
 
  ; 2^40*2^40 = 2^80: z wraps to 0, o stays exact
  ((80 2) = peep (oa-oar * oa-oar) 0 0)
- !((80 2) = peep (oa-zar * oa-zar) 0 0)
+ (word ? !((80 2) = peep (oa-zar * oa-zar) 0 0) 1)   ; a 32-bit star-tray can't hold 2^40: an object tray, exact
 
  ; broadcasting: object array (+) scalar bignum
  (2 * 100 2 = peep (oa-x + 100 2) 0 0)

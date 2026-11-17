@@ -16,7 +16,7 @@ static int con_getc(void) { return uart_rx_ready() ? uart_getc() : usb_getc(); }
 static void con_putc(int c) { uart_putc(c); usb_putc(c); }
 
 uintptr_t te_ms(void);
-uintptr_t love_clock(void) { return te_ms(); }
+uint64_t love_clock(void) { return te_ms(); }
 
 // cooperative waits spin against love_clock (ms; 0 forever)
 void love_sleep(uintptr_t ms) {

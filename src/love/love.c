@@ -313,7 +313,10 @@ struct g *gxr(struct g *g) {
  return g; }
 
 // ===== sys =====
-op11(lvm_clock, putcharm(love_clock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
+lvm(lvm_clock) {                                   // epoch ms less t, a bignum past a 32-bit word's charms
+ Have(i64_req);
+ Sp[0] = mk_i64(&Hp, (int64_t) love_clock() - (intp(Sp[0]) ? toi64(Sp[0]) : 0));
+ Ip++; love_musttail return Continue(); }
 
 // monotonic ns, for differences; clock stays ms, since ns wraps 32 bits every 4.3s
 op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
@@ -451,8 +454,8 @@ lvm(lvm_heed) {
  intptr_t fd = io_fd(i), ms = charmp(Sp[1]) ? getcharm(Sp[1]) : 0;
  if (getcharm(i->ungetc_buf) != EOF || io_pending(g, i) || ready((int) fd, wait_in))
   love_musttail return Answerp(1, putcharm(1));
- uintptr_t now = love_clock(), due = ms < 0 ? (uintptr_t) -ms : now + (uintptr_t) ms;
- if (due <= now) love_musttail return Answerp(1, zero);
+ uintptr_t now = love_tick(), due = ms < 0 ? (uintptr_t) -ms : tick_add(now, (uintptr_t) ms);
+ if (tick_cmp(due, now) <= 0) love_musttail return Answerp(1, zero);
  Sp[1] = putcharm(-(intptr_t) due);
  g->next_wait_fd = (int) fd, g->next_wait_events = -wait_in, g->next_wake_at = due;
  love_musttail return Ap(lvm_yield_sw, g); }

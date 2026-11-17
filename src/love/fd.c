@@ -101,15 +101,15 @@ void love_fd_drain(int fd, void const *p, uintptr_t n) { love_fd_write_all(fd, p
 
 // retries EINTR to the deadline; ms 0 is forever
 static void poll_wait(struct pollfd *fds, nfds_t nfds, uintptr_t ms) {
- uintptr_t deadline = ms == 0 ? 0 : love_clock() + ms;
+ uint64_t deadline = ms == 0 ? 0 : love_clock() + ms;
  for (;;) {
   int t = ms == 0 ? -1 :
           ms > (uintptr_t) __INT_MAX__ ? __INT_MAX__ : (int) ms;
   if (poll(fds, nfds, t) >= 0 || errno != EINTR) return;
   if (!deadline) continue;
-  uintptr_t now = love_clock();
+  uint64_t now = love_clock();
   if (now >= deadline) return;
-  ms = deadline - now; } }
+  ms = (uintptr_t) (deadline - now); } }
 
 love_door void love_sleep(uintptr_t ms) {
  poll_wait(NULL, 0, ms); }

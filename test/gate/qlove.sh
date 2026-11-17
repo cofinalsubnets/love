@@ -13,14 +13,14 @@ cat=$4
 shift 4
 name=test_love_$xa
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-case $xa in rv64) qe=qemu-riscv64 ;; arm) qe=qemu-arm ;; *) fail "no qemu for $xa" ;; esac
+case $xa in rv64) qe=qemu-riscv64 t=1800 ;; arm) qe=qemu-arm t=5400 ;; *) fail "no qemu for $xa" ;; esac   # arm's corpus runs about an hour
 command -v $qe >/dev/null || gate_skip "$name: skipped (no $qe)"
 
 r=$ho/${xa}love
 mkdir -p "$r"
 ulimit -c 0
 cat "$@" > "$r/corpus.l"
-q="timeout 1800 $qe"
+q="timeout $t $qe"
 
 LOVE_NO_IMAGE=1 $q "$xl" "$r/corpus.l" > "$r/egg.out" 2>&1 || fail "the egg's corpus (exit $?)"
 tail -1 "$r/egg.out"

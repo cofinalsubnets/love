@@ -543,7 +543,7 @@ struct g *lovefs_port(struct g *g, uintptr_t i);
 extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
-uintptr_t love_clock(void);
+uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
 intptr_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
@@ -928,6 +928,33 @@ static love_inline word mk_wbig(word **hpp, intptr_t v) {
 // an unsigned word as a number: a fixnum when it fits, else a bignum under Have(wbig_req)
 static love_inline word mk_uword(word **hpp, uintptr_t m) {
  return m <= (uintptr_t) maxcharm ? putcharm((intptr_t) m) : mk_mbig(hpp, m, false); }
+// a 64-bit integer as a number, a fixnum when it fits, under Have(i64_req); toi64 the way back,
+// a bignum's low 64 bits
+#define i64_req b2w(sizeof(struct big) + 8)
+static love_inline word mk_i64(word **hpp, int64_t v) {
+ uint64_t m = v < 0 ? (uint64_t) 0 - (uint64_t) v : (uint64_t) v;
+ love_limb l[64 / limb_bits];
+ for (int i = 0; i < 64 / limb_bits; i++) l[i] = (love_limb) (m >> (limb_bits * i));
+ return big_canon(hpp, l, 64 / limb_bits, v < 0); }
+static love_inline int64_t toi64(word x) {
+ if (charmp(x)) return getcharm(x);
+ struct big *b = (struct big*) x;
+ intptr_t sl = b->slen;
+ int n = (int) (sl < 0 ? -sl : sl);
+ uint64_t u = 0;
+ for (int i = 0; i < n && i < 64 / limb_bits; i++) u |= (uint64_t) b->limb[i] << (limb_bits * i);
+ return (int64_t) (sl < 0 ? (uint64_t) 0 - u : u); }
+// the scheduler's clock: love_clock modulo tick_span, so a deadline is a nonnegative charm and a
+// held task's negation stays apart. deadlines order by signed difference, sound within half the
+// span: beyond reach on a 64-bit word, about 6 days on a 32-bit one, the longest single wait
+#define tick_span ((uintptr_t) 1 << (Bits - 2))
+#define tick_max (tick_span / 2 - 1)
+static love_inline uintptr_t tick_of(uint64_t ms) { uintptr_t t = (uintptr_t) (ms & (tick_span - 1)); return t ? t : 1; }   // 0 is none
+static love_inline uintptr_t love_tick(void) { return tick_of(love_clock()); }
+static love_inline uintptr_t tick_add(uintptr_t t, uintptr_t ms) { return tick_of((uint64_t) t + (ms < tick_max ? ms : tick_max)); }
+static love_inline intptr_t tick_cmp(uintptr_t a, uintptr_t b) {   // a - b
+ uintptr_t d = (a - b) & (tick_span - 1);
+ return d > tick_max ? (intptr_t) d - (intptr_t) tick_span : (intptr_t) d; }
 // love admits no irreflexive value: = reads two NaNs as one
 static love_inline bool same_flo(flo_t a, flo_t b) { return a == b || (a != a && b != b); }
 // truncation toward zero and float remainder, no libm

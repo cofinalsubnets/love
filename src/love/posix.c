@@ -73,10 +73,10 @@
 #include <sys/vfs.h>        // statfs(2), the block and inode counts df reports
 #endif
 // CLOCK_REALTIME in ms: the one scale for deadlines, (clock t) and every mtime
-love_noinline uintptr_t love_clock(void) {
+love_noinline uint64_t love_clock(void) {
  struct timespec ts;
- return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
-  (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
+ return clock_gettime(CLOCK_REALTIME, &ts) ? (uint64_t) -1 :
+  (uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000; }
 
 // the strings at g->sp[0] -> a char** laid in the heap gap at hp, which host_spawn_guard keeps
 // mapped across a fork; consumed before any further allocation. *cavp NULL with g ok is a
@@ -463,7 +463,7 @@ love_noinline static word host_waitpid(struct g *g, word arg) {
 // parks, polling each ms, so a peer task runs under a foreground job; the op re-runs whole
 static lvm(lvm_waitpid) {
  word r = host_waitpid(g, Sp[0]);
- if (r == ZeroPoint) { g->next_wake_at = love_clock() + 1; love_musttail return Ap(lvm_yield_sw, g); }
+ if (r == ZeroPoint) { g->next_wake_at = tick_add(love_tick(), 1); love_musttail return Ap(lvm_yield_sw, g); }
  Sp[0] = r; love_musttail return Next(1); }
 
 love_noinline static word host_posix_signal(struct g *g, word sigw, word dw) {
@@ -783,27 +783,20 @@ love_noinline static struct g *host_stat_tuple(struct g *g, int follow) {
   if (lovefs_stat(p, &st)) {
    if (st.st_mode == 0) return g->sp[0] = love_err(g, ENOENT), g; }
   else if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = love_err(g, errno), g; }
- intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
-          ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec,
-          as = (intptr_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec,
-          cs = (intptr_t) st.st_ctim.tv_sec * 1000000000 + st.st_ctim.tv_nsec;
- if (!ok(g = have(g, 14 * Width(struct chain)))) return g;
+ // in 64 bits, as the times and sizes pass a 32-bit word's charms
+ int64_t const f[14] = {
+  (int64_t) st.st_size, (int64_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000, (int64_t) st.st_mode,
+  (int64_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec, (int64_t) st.st_uid, (int64_t) st.st_gid,
+  (int64_t) st.st_nlink, (int64_t) st.st_blocks, (int64_t) st.st_ino,
+  (int64_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec, (int64_t) st.st_ctim.tv_sec * 1000000000 + st.st_ctim.tv_nsec,
+  (int64_t) st.st_dev, (int64_t) st.st_rdev, (int64_t) st.st_blksize };
  size_t const C = Width(struct chain);
- struct chain *c = ini_chain(bump(g, C), putcharm(st.st_blksize), ZeroPoint);
- c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_rdev), word(c));
- c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_dev), word(c));
- c = ini_chain(bump(g, C), putcharm(cs), word(c));
- c = ini_chain(bump(g, C), putcharm(as), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_ino), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_blocks), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_nlink), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_gid), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_uid), word(c));
- c = ini_chain(bump(g, C), putcharm(ns), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_mode), word(c));
- c = ini_chain(bump(g, C), putcharm(ms), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_size), word(c));
- return g->sp[0] = word(c), g; }
+ if (!ok(g = have(g, 14 * (C + i64_req)))) return g;
+ word v[14];
+ for (int i = 0; i < 14; i++) v[i] = mk_i64(&g->hp, f[i]);   // boxed first: bump moves the same hp
+ word c = ZeroPoint;
+ for (int i = 13; i >= 0; i--) c = word(ini_chain(bump(g, C), v[i], c));
+ return g->sp[0] = c, g; }
 
 love_inline static struct g *host_posix_stat(struct g *g) {
  return host_stat_tuple(g, 1); }
@@ -1210,8 +1203,8 @@ love_noinline static word host_posix_utime(struct g *g, word pw, word msw) {
  char const *p = str_c(pw);
  if (!p) return badarg(g);
  struct timespec ts[2];
- if charmp(msw) {
-  intptr_t ms = getcharm(msw);
+ if (intp(msw)) {
+  int64_t ms = toi64(msw);
   ts[0].tv_sec = ts[1].tv_sec = (time_t) (ms / 1000);
   ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
  } else
@@ -1699,7 +1692,7 @@ static lvm(lvm_close) {
       // a short write parks; nothing is mutated yet, so the re-run is this close whole
       if (io_wpending(g, (struct io*) g->sp[0])) {
         Unpack(g);
-        g->next_wake_at = love_clock() + 1;
+        g->next_wake_at = tick_add(love_tick(), 1);
         love_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
       if (horn) love_horn_shut((struct io*) Sp[0]); else close(fd);
