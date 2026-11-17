@@ -849,19 +849,28 @@
         ok ? 0 1))
 
    ; objdump, as llvm-objdump writes it: -r its relocation records, a heading per table naming
-   ; what it patches and none for an empty one; -d x86-64's executable sections disassembled,
-   ; a heading per symbol, a branch or rip target named by the symbol it lands in
+   ; what it patches and none for an empty one; -d x86-64's and rv64's executable sections
+   ; disassembled, a heading per symbol, a branch or rip target named by the symbol it lands in
    (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
                + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" "unknown"))
-   (od-dis b ss)
-    (: fs (bu-fs b) sy (ld-syms "objdump" b)
+   (od-dis b ss m)
+    (: fs (bu-fs b) sy (ld-syms "objdump" b) rv? (m = 243)
+       ; x86's bytes one by one; riscv's a word or halfword as a number, longer ones by halves
        (hexb s) (xa-join " " (map (c \ zpad 2 (radix c 16)) (chars s)))
-       ; the bytes padded to column 39, or on to one short of the tab stop past them
-       (col c t) (c >= 39 && c % 8 = 7 ? t (col (c + 1) (t + " ")))
+       (hexw s) (zpad (2 * #s) (radix (rdle s 0 #s) 16))
+       (hexr s) (? (#s = 1 || #s = 2 || #s = 4) (hexw s)
+                   (xa-join " " (map (i \ hexw (snip s (2 * i) (2 * i + 2))) ^(#s // 2))))
+       ; the bytes padded to column 39 (riscv's 23), or on to one short of the tab stop past them
+       c-min (rv? ? 23 39)
+       (col c t) (c >= c-min && c % 8 = 7 ? t (col (c + 1) (t + " ")))
+       ; a mapping symbol or the assembler's .L0 names no heading
+       (shown? r) (0 < #<r && !(elem (r 2) '(3 4)) && <r 0 != 36 && <r != ".L0 ")
        (one sc)
         (: addr (b 4 = 2 ? (rdle (sc 9) 16 8) (rdle (sc 9) 12 4)) bs (snip b (sc 4) (sc 4 + sc 5)) end (addr + sc 5)
-           named (sort (map (r \ [(r 4) <r])
-                            (filter (r \ r 3 = <sc && !(elem (r 2) '(3 4)) && 0 < #<r) sy)))
+           ; of symbols at one address, llvm heads it with the last by type, then name
+           named (foldl (\ acc r (two? acc && <<acc = <r ? (r . >acc) (r . acc))) ()
+                        (sort (map (r \ [(r 4) (r 2) <r]) (filter (r \ r 3 = <sc && shown? r) sy)))
+                  @ l (rev (map (r \ [<r (r 2)]) l)))
            labs (two? named && <<named = addr ? named ([addr (sc 1)] . named))
            ; llvm names a target by the last symbol at or below it, to the section's end and past
            (sym a) (? (a < addr) ""
@@ -869,10 +878,10 @@
                        (" <" + <>l + (<l = a ? "" ("+" + od-hex (a - <l))) + ">")))
            at (foldl (\ t l (pin t <l (peep t <l () + [<>l]))) {} labs)
            (row r)
-            (: a (addr + <r) x (x64-od r a sym)
+            (: a (addr + <r) x ((rv? ? rv-od x64-od) r a sym)
                _ (each (peep at a ()) (n \ say out ("\n" + zpad 16 (radix a 16) + " <" + n + ">:\n")))
                h (urpad (8 - #(radix a 16)) "" + radix a 16 + ": ")
-               by (hexb (snip bs <r (<r + r 1)))
+               by ((rv? ? hexr hexb) (snip bs <r (<r + r 1)))
                c0 (#h + #by) pad (col c0 "")
                t0 ((c0 + #pad) // 8 * 8 + 8)
                tx <x
@@ -880,17 +889,22 @@
                c1 (foldl (\ c ch (ch = 9 ? (c + (8 - c % 8) % 8) (c + 1))) t0 (chars tx))
                ; a comment at column 72, or a space past the text; a second on a line of its own
                ns <>x
-               (say out (h + by + pad + "\t" + tx
+               (r 2 0 = 'skip ? (say out "\t\t...\n")
+                (say out (h + by + pad + "\t" + tx
                          + (two? ns ? ((c1 < 72 ? (urpad (72 - c1) "") " ") + "# " + <ns) "")
                          + "\n"
-                         + (two? ns ? (join "" (map (n \ urpad 72 "" + "# " + n + "\n") >ns)) ""))))
+                         + (two? ns ? (join "" (map (n \ urpad 72 "" + "# " + n + "\n") >ns)) "")))))
            _ (say out ("\nDisassembly of section " + sc 1 + ":\n"))
            ; a lock or wait first in an instruction is one of its own, as llvm reads it
            (split r) (: its (r 2)
                         (r 1 > 1 && two? >its && <<its = 'op && elem (<its 1) '(lock fwait)
                          && elem (bs <r) '(240 155)
                          ? [[<r 1 [<its]] [(<r + 1) (r 1 - 1) >its]] [r]))
-           (each (catmap split (x64-disasm bs addr)) row))
+           ; riscv's rows a symbol at a time, where llvm counts its zero runs
+           cuts (sort (filter (o \ 0 < o && o < sc 5) (map (l \ <l - addr) labs)) + [(sc 5)])
+           (rvrows _) (foldl (\ acc hi (acc + rv-disasm bs addr (two? acc ? (last acc @ r (<r + r 1)) 0) hi))
+                             () cuts)
+           (each (rv? ? (rvrows 0) (catmap split (x64-disasm bs addr))) row))
        (each (filter (sc \ sc 2 = 1 && sc 3 & 4 != 0 && 0 < sc 5) ss) one))
    (objdump-main as)
     (: bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-r" "--reloc" "-d" "--disassemble"))) as)
@@ -909,8 +923,8 @@
                   (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
                      rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
                      _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
-                     _ (d? && m != 62 ? (udie 1 ("objdump: -d reads x86-64 here, not " + od-fmt b)) 0)
-                     _ (d? ? (od-dis b ss) 0)
+                     _ (d? && !(elem m [62 243]) ? (udie 1 ("objdump: -d reads x86-64 and riscv here, not " + od-fmt b)) 0)
+                     _ (d? ? (od-dis b ss m) 0)
                      _ (each (d? ? () rs) (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
                                                 + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),
                                        each (re-rents b ss sc)

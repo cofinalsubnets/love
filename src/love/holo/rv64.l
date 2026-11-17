@@ -15,6 +15,90 @@
 ; borrows x30, so it may not sit between a cmp and its br.
 
 (module 'holo
+(: ;; the instruction table, one row a machine instruction: [name match mask kinds], a word is
+   ;; the row's when (w & mask) = match, its operands the kinds in text order (decode.l reads
+   ;; them). a dotted name is spelt through name, since . is cons
+   (rvt-r op f3 f7 ks nm) [nm (f7 << 25 | f3 << 12 | op) 0xfe00707f ks]
+   (rvt-i op f3 ks nm) [nm (f3 << 12 | op) 0x707f ks]
+   (rvt-f2 f7 rs2 ks nm) [nm (f7 << 25 | rs2 << 20 | 0x53) 0xfff0007f ks]  ; rs2 fixed, rm free
+   (rvt-sfx nm s) (name (show nm + s))
+   (rvt-sd f) (catmap (k \ f k (k = 0 ? ".s" ".d")) [0 1])                 ; a row for each width
+   rv-tab (catall [
+     [['lui 0x37 0x7f '(rd u20)] ['auipc 0x17 0x7f '(rd u20)] ['jal 0x6f 0x7f '(rd j)]
+      ['jalr 0x67 0x707f '(rd m)]
+      ['ecall 0x73 0xffffffff ()] ['ebreak 0x100073 0xffffffff ()] ['sret 0x10200073 0xffffffff ()]
+      ['mret 0x30200073 0xffffffff ()] ['wfi 0x10500073 0xffffffff ()]
+      [(name "sfence.vma") 0x12000073 0xfe007fff '(rs1 rs2)]
+      [(name "fence.i") 0x100f 0xffffffff ()] ['fence 0xf 0x707f '(fence)]]
+     (map (r \ rvt-i 0x63 (r 1) '(rs1 rs2 b) <r) '((beq 0) (bne 1) (blt 4) (bge 5) (bltu 6) (bgeu 7)))
+     (map (r \ rvt-i 0x03 (r 1) '(rd m) <r) '((lb 0) (lh 1) (lw 2) (ld 3) (lbu 4) (lhu 5) (lwu 6)))
+     (map (r \ rvt-i 0x23 (r 1) '(rs2 ms) <r) '((sb 0) (sh 1) (sw 2) (sd 3)))
+     (map (r \ rvt-i 0x13 (r 1) '(rd rs1 i12) <r) '((addi 0) (slti 2) (sltiu 3) (xori 4) (ori 6) (andi 7)))
+     [['slli 0x1013 0xfc00707f '(rd rs1 sh6)] ['srli 0x5013 0xfc00707f '(rd rs1 sh6)]
+      ['srai 0x40005013 0xfc00707f '(rd rs1 sh6)]
+      (rvt-i 0x1b 0 '(rd rs1 i12) 'addiw) (rvt-r 0x1b 1 0 '(rd rs1 sh5) 'slliw)
+      (rvt-r 0x1b 5 0 '(rd rs1 sh5) 'srliw) (rvt-r 0x1b 5 32 '(rd rs1 sh5) 'sraiw)]
+     (map (r \ rvt-r 0x33 (r 1) (r 2) '(rd rs1 rs2) <r)
+          '((add 0 0) (sub 0 32) (sll 1 0) (slt 2 0) (sltu 3 0) (xor 4 0) (srl 5 0) (sra 5 32)
+            (or 6 0) (and 7 0) (mul 0 1) (mulh 1 1) (mulhsu 2 1) (mulhu 3 1) (div 4 1) (divu 5 1)
+            (rem 6 1) (remu 7 1)))
+     (map (r \ rvt-r 0x3b (r 1) (r 2) '(rd rs1 rs2) <r)
+          '((addw 0 0) (subw 0 32) (sllw 1 0) (srlw 5 0) (sraw 5 32) (mulw 0 1) (divw 4 1)
+            (divuw 5 1) (remw 6 1) (remuw 7 1)))
+     (map (r \ rvt-i 0x73 (r 1) (r 2) <r)
+          '((csrrw 1 (rd csr rs1)) (csrrs 2 (rd csr rs1)) (csrrc 3 (rd csr rs1))
+            (csrrwi 5 (rd csr zimm)) (csrrsi 6 (rd csr zimm)) (csrrci 7 (rd csr zimm))))
+     ;; the atomics: aq and rl free, the name's suffix
+     (catmap (r \ map (w \ [(rvt-sfx <r (w 0)) (r 1 << 27 | w 1 << 12 | 0x2f)
+                            (<r = 'lr ? 0xf9f0707f 0xf800707f) ('aqrl . r 2)])
+                      [[".w" 2] [".d" 3]])
+             '((lr 2 (rd am)) (sc 3 (rd rs2 am)) (amoswap 1 (rd rs2 am)) (amoadd 0 (rd rs2 am))
+               (amoxor 4 (rd rs2 am)) (amoand 12 (rd rs2 am)) (amoor 8 (rd rs2 am))
+               (amomin 16 (rd rs2 am)) (amomax 20 (rd rs2 am)) (amominu 24 (rd rs2 am))
+               (amomaxu 28 (rd rs2 am))))
+     [(rvt-i 0x07 2 '(fd m) 'flw) (rvt-i 0x07 3 '(fd m) 'fld)
+      (rvt-i 0x27 2 '(fs2 ms) 'fsw) (rvt-i 0x27 3 '(fs2 ms) 'fsd)]
+     (rvt-sd (k \ s \ map (r \ [(rvt-sfx <r s) (k << 25 | r 1) 0x600007f '(fd fs1 fs2 fs3 rm)])
+                         '((fmadd 0x43) (fmsub 0x47) (fnmsub 0x4b) (fnmadd 0x4f))))
+     (rvt-sd (k \ s \ map (r \ [(rvt-sfx <r s) (r 1 + k << 25 | 0x53) 0xfe00007f '(fd fs1 fs2 rm)])
+                         '((fadd 0) (fsub 4) (fmul 8) (fdiv 12))))
+     (rvt-sd (k \ s \ map (r \ rvt-r 0x53 (r 2) (r 1 + k) (r 3) (rvt-sfx <r s))
+                         '((fsgnj 16 0 (fd fs1 fs2)) (fsgnjn 16 1 (fd fs1 fs2)) (fsgnjx 16 2 (fd fs1 fs2))
+                           (fmin 20 0 (fd fs1 fs2)) (fmax 20 1 (fd fs1 fs2))
+                           (feq 80 2 (rd fs1 fs2)) (flt 80 1 (rd fs1 fs2)) (fle 80 0 (rd fs1 fs2)))))
+     (rvt-sd (k \ s \ [(rvt-f2 (44 + k) 0 '(fd fs1 rm) (rvt-sfx 'fsqrt s))
+                       [(rvt-sfx 'fclass s) (112 + k << 25 | 1 << 12 | 0x53) 0xfff0707f '(rd fs1)]]))
+     [(rvt-f2 32 1 '(fd fs1 rm) (name "fcvt.s.d")) (rvt-f2 33 0 '(fd fs1 rm) (name "fcvt.d.s"))
+      [(name "fmv.x.w") 0xe0000053 0xfff0707f '(rd fs1)] [(name "fmv.x.d") 0xe2000053 0xfff0707f '(rd fs1)]
+      [(name "fmv.w.x") 0xf0000053 0xfff0707f '(fd rs1)] [(name "fmv.d.x") 0xf2000053 0xfff0707f '(fd rs1)]]
+     ;; the integer conversions, by rs2: w wu l lu
+     (rvt-sd (k \ s \ catmap (i \ (: t ("." + show ('(w wu l lu) i))
+                                    [(rvt-f2 (96 + k) i '(rd fs1 rm) (name ("fcvt" + t + s)))
+                                     (rvt-f2 (104 + k) i '(fd rs1 rm) (name ("fcvt" + s + t)))]))
+                             ^4))])
+   ;; the C table: [name match mask kinds base], the base instruction a word stands for, its
+   ;; operands in the base's order. 0 is no instruction; c.mv is addi as llvm reads it back
+   rvc-tab [["c.addi4spn" 0x0000 0xe003 '(p2 sp c4spn) 'addi] ["c.fld" 0x2000 0xe003 '(p2f cd) 'fld]
+            ["c.lw" 0x4000 0xe003 '(p2 cw) 'lw] ["c.ld" 0x6000 0xe003 '(p2 cd) 'ld]
+            ["c.fsd" 0xa000 0xe003 '(p2f cd) 'fsd] ["c.sw" 0xc000 0xe003 '(p2 cw) 'sw]
+            ["c.sd" 0xe000 0xe003 '(p2 cd) 'sd]
+            ["c.addi" 0x0001 0xe003 '(r5 r5 ci6) 'addi] ["c.addiw" 0x2001 0xe003 '(r5 r5 ci6) 'addiw]
+            ["c.li" 0x4001 0xe003 '(r5 z ci6) 'addi] ["c.addi16sp" 0x6101 0xef83 '(sp sp c16sp) 'addi]
+            ["c.lui" 0x6001 0xe003 '(r5 clui) 'lui]
+            ["c.srli" 0x8001 0xec03 '(p1 p1 cu6) 'srli] ["c.srai" 0x8401 0xec03 '(p1 p1 cu6) 'srai]
+            ["c.andi" 0x8801 0xec03 '(p1 p1 ci6) 'andi]
+            ["c.sub" 0x8c01 0xfc63 '(p1 p1 p2) 'sub] ["c.xor" 0x8c21 0xfc63 '(p1 p1 p2) 'xor]
+            ["c.or" 0x8c41 0xfc63 '(p1 p1 p2) 'or] ["c.and" 0x8c61 0xfc63 '(p1 p1 p2) 'and]
+            ["c.subw" 0x9c01 0xfc63 '(p1 p1 p2) 'subw] ["c.addw" 0x9c21 0xfc63 '(p1 p1 p2) 'addw]
+            ["c.j" 0xa001 0xe003 '(z cj) 'jal]
+            ["c.beqz" 0xc001 0xe003 '(p1 z cb) 'beq] ["c.bnez" 0xe001 0xe003 '(p1 z cb) 'bne]
+            ["c.slli" 0x0002 0xe003 '(r5 r5 cu6) 'slli] ["c.fldsp" 0x2002 0xe003 '(r5f cdsp) 'fld]
+            ["c.lwsp" 0x4002 0xe003 '(r5 cwsp) 'lw] ["c.ldsp" 0x6002 0xe003 '(r5 cdsp) 'ld]
+            ["c.jr" 0x8002 0xf07f '(z r5m) 'jalr] ["c.mv" 0x8002 0xf003 '(r5 r2 i0) 'addi]
+            ["c.ebreak" 0x9002 0xffff () 'ebreak] ["c.jalr" 0x9002 0xf07f '(ra r5m) 'jalr]
+            ["c.add" 0x9002 0xf003 '(r5 r5 r2) 'add]
+            ["c.fsdsp" 0xa002 0xe003 '(r2f csdsp) 'fsd] ["c.swsp" 0xc002 0xe003 '(r2 cswsp) 'sw]
+            ["c.sdsp" 0xe002 0xe003 '(r2 csdsp) 'sd]])
 (: ;; r0..r7 a0..a7, r8..r12 t0..t4, r13/r14/r15 s2/s3/s1, r19..r26 s4..s11; sp x2, fp s0, lr ra.
    ;; gp and tp are never touched. zr is x0, for the system lane (sfence zr, zr)
    rv-regs {'sp 2 'fp 8 'lr 1 'zr 0

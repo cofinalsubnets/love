@@ -510,4 +510,191 @@
        ; a prefix before the instruction rides its line, two tabs on, as llvm writes lock and rep
        [(xa-join "\t\t" (map (p \ <p + (<>p = "" ? "" ("\t" + <>p))) ps))
         (<>>(ps (#ps - 1)))]))
+;; an ISA's decoder (dec s i pc) -> (n item) walked over s from lo to hi, laid at base: rows
+;; (off n item). eight or more zero bytes are one (skip) row, four at a time, as llvm reads them
+(: (od-zeros s i hi) (: (go k) (k < hi && s k = 0 ? (go (k + 1)) k) n (go i - i)
+                        (n < 8 ? 0 (n & -4)))
+   (od-walk dec s base lo hi)
+    (: (go i acc) (? (i >= hi) (rev acc)
+                     (od-zeros s i hi @ z (z > 0 ? (go (i + z) ([i z ['skip]] . acc))
+                                             (dec s i (base + i) @ d (go (i + <d) ([i <d (d 1)] . acc))))))
+       (go lo ())))
+
+;; riscv: a word decoded by its row in rv-tab, a half by rvc-tab's (rv64.l), and shown as
+;; llvm-objdump writes it. an operand: (x n) (f n) (im v) (mem off n) (amem n) (lbl a) (rm k)
+;; (csr n) (fence pred succ)
+(: rvd-xn '(zero ra sp gp tp t0 t1 t2 s0 s1 a0 a1 a2 a3 a4 a5 a6 a7 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11
+            t3 t4 t5 t6)
+   rvd-fn '(ft0 ft1 ft2 ft3 ft4 ft5 ft6 ft7 fs0 fs1 fa0 fa1 fa2 fa3 fa4 fa5 fa6 fa7 fs2 fs3 fs4 fs5
+            fs6 fs7 fs8 fs9 fs10 fs11 ft8 ft9 ft10 ft11)
+   (rvd-b w hi lo) (w >> lo & ((1 << (hi - lo + 1)) - 1))
+   (rvd-sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
+   (rvd-first p l) (? !(two? l) () (p <l) <l (rvd-first p >l))
+   ;; the CSRs llvm names on rv64: (number name), or a run (first count prefix from)
+   rvd-csrs '((1 fflags) (2 frm) (3 fcsr) (8 vstart) (9 vxsat) (10 vxrm) (15 vcsr) (17 ssp)
+               (21 seed) (23 jvt) (256 sstatus) (260 sie) (261 stvec) (262 scounteren)
+               (266 senvcfg) (268 4 sstateen 0) (288 scountinhibit) (320 sscratch) (321 sepc)
+               (322 scause) (323 stval) (324 sip) (333 stimecmp) (334 sctrctl) (335 sctrstatus)
+               (336 siselect) (337 sireg) (338 2 sireg 2) (341 3 sireg 4) (348 stopei)
+               (351 sctrdepth) (384 satp) (385 srmcfg) (512 vsstatus) (516 vsie) (517 vstvec)
+               (576 vsscratch) (577 vsepc) (578 vscause) (579 vstval) (580 vsip) (589 vstimecmp)
+               (590 vsctrctl) (592 vsiselect) (593 vsireg) (594 2 vsireg 2) (597 3 vsireg 4)
+               (604 vstopei) (640 vsatp) (768 mstatus) (769 misa) (770 medeleg) (771 mideleg)
+               (772 mie) (773 mtvec) (774 mcounteren) (776 mvien) (777 mvip) (778 menvcfg)
+               (780 4 mstateen 0) (800 mcountinhibit) (801 mcyclecfg) (802 minstretcfg)
+               (803 29 mhpmevent 3) (832 mscratch) (833 mepc) (834 mcause) (835 mtval) (836 mip)
+               (842 mtinst) (843 mtval2) (846 mctrctl) (848 miselect) (849 mireg) (850 2 mireg 2)
+               (853 3 mireg 4) (860 mtopei) (928 pmpcfg0) (930 pmpcfg2) (932 pmpcfg4) (934 pmpcfg6)
+               (936 pmpcfg8) (938 pmpcfg10) (940 pmpcfg12) (942 pmpcfg14) (944 64 pmpaddr 0)
+               (1448 scontext) (1536 hstatus) (1538 hedeleg) (1539 hideleg) (1540 hie)
+               (1541 htimedelta) (1542 hcounteren) (1543 hgeie) (1544 hvien) (1545 hvictl)
+               (1546 henvcfg) (1548 4 hstateen 0) (1603 htval) (1604 hip) (1605 hvip)
+               (1606 2 hviprio 1) (1610 htinst) (1664 hgatp) (1704 hcontext) (1856 mnscratch)
+               (1857 mnepc) (1858 mncause) (1860 mnstatus) (1863 mseccfg) (1952 tselect)
+               (1953 3 tdata 1) (1956 tinfo) (1957 tcontrol) (1960 mcontext) (1962 mscontext)
+               (1968 dcsr) (1969 dpc) (1970 2 dscratch 0) (2816 mcycle) (2818 minstret)
+               (2819 29 mhpmcounter 3) (3072 cycle) (3073 time) (3074 instret)
+               (3075 29 hpmcounter 3) (3104 vl) (3105 vtype) (3106 vlenb) (3488 scountovf)
+               (3504 stopi) (3602 hgeip) (3760 vstopi) (3857 mvendorid) (3858 marchid)
+               (3859 mimpid) (3860 mhartid) (3861 mconfigptr) (4016 mtopi))
+   (rvd-csr n)
+    (rvd-first (e \ #e = 2 ? (<e = n) (<e <= n && n < <e + e 1)) rvd-csrs @ e
+     (? !(two? e) (od-hex n) (#e = 2) (show (e 1)) (show (e 2) + show (e 3 + n - <e))))
+   ;; a table's rows by opcode, in its order
+   (rvd-index tab) (foldl (\ t r (r 1 & 127 @ k (pin t k (peep t k () + [r])))) {} tab)
+   (rvd-op k w pc)
+    (: (b hi lo) (rvd-b w hi lo)
+       (k @ 'rd ['x (b 11 7)] 'fd ['f (b 11 7)] 'rs1 ['x (b 19 15)] 'fs1 ['f (b 19 15)]
+            'rs2 ['x (b 24 20)] 'fs2 ['f (b 24 20)] 'fs3 ['f (b 31 27)]
+            'i12 ['im (rvd-sx (b 31 20) 12)] 'u20 ['im (b 31 12)] 'sh6 ['im (b 25 20)] 'sh5 ['im (b 24 20)]
+            'm ['mem (rvd-sx (b 31 20) 12) (b 19 15)]
+            'ms ['mem (rvd-sx (b 31 25 << 5 | b 11 7) 12) (b 19 15)]
+            'b ['lbl (pc + rvd-sx (b 31 31 << 12 | b 7 7 << 11 | b 30 25 << 5 | b 11 8 << 1) 13)]
+            'j ['lbl (pc + rvd-sx (b 31 31 << 20 | b 19 12 << 12 | b 20 20 << 11 | b 30 21 << 1) 21)]
+            'am ['amem (b 19 15)] 'rm ['rm (b 14 12)] 'csr ['csr (b 31 20)] 'zimm ['im (b 19 15)]
+            ['fence (b 27 24) (b 23 20)]))
+   (rvd-cop k h pc)
+    (: (b hi lo) (rvd-b h hi lo) p1 (8 + b 9 7) p2 (8 + b 4 2) c6 (b 12 12 << 5 | b 6 2)
+       (k @ 'r5 ['x (b 11 7)] 'r5f ['f (b 11 7)] 'r2 ['x (b 6 2)] 'r2f ['f (b 6 2)]
+            'p1 ['x p1] 'p2 ['x p2] 'p2f ['f p2] 'z ['x 0] 'ra ['x 1] 'sp ['x 2] 'i0 ['im 0]
+            'ci6 ['im (rvd-sx c6 6)] 'cu6 ['im c6] 'clui ['im (rvd-sx c6 6 & 0xfffff)]
+            'c16sp ['im (rvd-sx (b 12 12 << 9 | b 4 3 << 7 | b 5 5 << 6 | b 2 2 << 5 | b 6 6 << 4) 10)]
+            'c4spn ['im (b 12 11 << 4 | b 10 7 << 6 | b 6 6 << 2 | b 5 5 << 3)]
+            'cw ['mem (b 12 10 << 3 | b 6 6 << 2 | b 5 5 << 6) p1]
+            'cd ['mem (b 12 10 << 3 | b 6 5 << 6) p1]
+            'cwsp ['mem (b 12 12 << 5 | b 6 4 << 2 | b 3 2 << 6) 2]
+            'cdsp ['mem (b 12 12 << 5 | b 6 5 << 3 | b 4 2 << 6) 2]
+            'cswsp ['mem (b 12 9 << 2 | b 8 7 << 6) 2]
+            'csdsp ['mem (b 12 10 << 3 | b 9 7 << 6) 2]
+            'r5m ['mem 0 (b 11 7)]
+            'cj ['lbl (pc + rvd-sx (b 12 12 << 11 | b 11 11 << 4 | b 10 9 << 8 | b 8 8 << 10
+                                    | b 7 7 << 6 | b 6 6 << 7 | b 5 3 << 1 | b 2 2 << 5) 12)]
+            ['lbl (pc + rvd-sx (b 12 12 << 8 | b 11 10 << 3 | b 6 5 << 6 | b 4 3 << 1 | b 2 2 << 5) 9)]))
+   ;; a C word's item. a hint (rd zero) keeps its C name, c.addi's is c.nop; a reserved
+   ;; zero immediate or register is no instruction
+   (rvd-c r h pc)
+    (: cn (r 0) ops (map (k \ rvd-cop k h pc) (r 3)) rd (h >> 7 & 31) iv (two? ops ? (last ops 1) 0)
+       (? (cn = "c.addi" && rd = 0 && iv != 0) ['op (name "c.nop") [(last ops)]]
+          (elem cn ["c.li" "c.slli"] && rd = 0) ['op (name cn) [<ops (ops 2)]]
+          (cn = "c.lui" && iv = 0) ['dir "<unknown>"]
+          (cn = "c.lui" && rd = 0) ['op (name cn) ops]
+          (elem cn ["c.addi4spn" "c.addi16sp"] && iv = 0) ['dir "<unknown>"]
+          (elem cn ["c.lwsp" "c.ldsp" "c.jr" "c.addiw"] && rd = 0) ['dir "<unknown>"]
+          ['op (r 4) ops]))
+   ;; how far a word that is no instruction reaches, by its low bits as llvm reads them: 16, 32,
+   ;; 48 or 64 bits, 80 to 176 by the second byte's nnn, else a byte; a byte too when it is cut
+   (rvd-len s i)
+    (: b0 (dc-at s i) b1 (dc-at s (i + 1)) m (#s - i)
+       n (? (b0 & 3 != 3) 2 (b0 & 28 != 28) 4 (b0 & 63 = 31) 6 (b0 & 127 = 63) 8
+            (m < 2) 1 (b1 >> 4 & 7 = 7) 1 (10 + 2 * (b1 >> 4 & 7)))
+       (n <= m ? n 1))
+   ;; -> (n item): item (op name ops), or (dir "<unknown>") for no row
+   (rvd-dec ix s i pc)
+    (: h (dc-at s i | dc-at s (i + 1) << 8) n (rvd-len s i)
+       (? (n != 2 && n != 4) [n ['dir "<unknown>"]]
+          (h & 3 != 3)
+           (rvd-first (r \ h & r 2 = r 1) rvc-tab @ r
+            (? (h = 0) [2 ['op 'unimp ()]] !(two? r) [2 ['dir "<unknown>"]] [2 (rvd-c r h pc)]))
+          (: w (h | dc-at s (i + 2) << 16 | dc-at s (i + 3) << 24)
+             (rvd-first (r \ w & r 2 = r 1) (peep ix (w & 127) ()) @ r
+              (!(two? r) ? [4 ['dir "<unknown>"]]
+                 (: ks (r 3) aq (<ks = 'aqrl) sf (aq ? (w >> 25 & 3 @ 0 "" 1 ".rl" 2 ".aq" ".aqrl") "")
+                    [4 ['op (sf = "" ? <r (name (show <r + sf))) (map (k \ rvd-op k w pc) (aq ? >ks ks))]]))))))
+   ;; rows (off n item) for the bytes s laid at base, from lo to hi. a jalr through a register
+   ;; an auipc set is told its target as a fourth item field, as llvm tracks them: any other
+   ;; write forgets the register, a branch or call forgets all
+   (rv-disasm s base lo hi)
+    (: rows (od-walk (rvd-dec (rvd-index rv-tab)) s base lo hi)
+       (sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
+       (flow? it) (elem (it 1) '(jal jalr beq bne blt bge bltu bgeu))
+       (def it) (two? (it 2) && <<(it 2) = 'x && nelem (it 1) '(sb sh sw sd fence) ? (it 2 0 1) -1)
+       (step st r) (: it (r 2) a (base + <r)
+                      (? (<it != 'op) st (flow? it) {}
+                         (it 1 = 'auipc) (pin st (it 2 0 1) (a + (sx (it 2 1 1) 20 << 12)))
+                         (def it @ d (d > 0 ? (pin st d ()) st))))
+       (mark st r) (: it (r 2)
+                      (<it = 'op && it 1 = 'jalr && r 1 = 4 && charm? (peep st (it 2 1 2) ())
+                       ? [<r (r 1) ['op 'jalr (it 2) (peep st (it 2 1 2) () + sx (it 2 1 1) 12)]] r))
+       (: (go st l acc) (? !(two? l) (rev acc) (go (step st <l) >l (mark st <l . acc)))
+          (go {} rows ())))
+   ;; llvm's aliases, the operands as written
+   (rvd-x? o n) (<o = 'x && o 1 = n)
+   (rvd-alias mn ops)
+    (: a (dc-at ops 0) b (dc-at ops 1) c (dc-at ops 2) s (show mn)
+       (im? o v) (two? o && <o = 'im && o 1 = v)
+       (z? o) (two? o && rvd-x? o 0)
+       (? (mn = 'addi && z? a && z? b && im? c 0) ['nop ()]
+          (mn = 'addi && z? b) ['li [a c]]
+          (mn = 'addi && im? c 0) ['mv [a b]]
+          (mn = 'addiw && im? c 0) [(name "sext.w") [a b]]
+          (mn = 'andi && im? c 255) [(name "zext.b") [a b]]
+          (mn = 'xori && im? c -1) ['not [a b]]
+          (mn = 'sub && z? b) ['neg [a c]]
+          (mn = 'subw && z? b) ['negw [a c]]
+          (mn = 'sltiu && im? c 1) ['seqz [a b]]
+          (mn = 'sltu && z? b) ['snez [a c]]
+          (mn = 'slt && z? c) ['sltz [a b]]
+          (mn = 'slt && z? b) ['sgtz [a c]]
+          (mn = 'jal && z? a) ['j [b]]
+          (mn = 'jal && rvd-x? a 1) ['jal [b]]
+          (mn = 'jalr && z? a && b = ['mem 0 1]) ['ret ()]
+          (mn = 'jalr && z? a) ['jr [(b 1 = 0 ? ['x (b 2)] b)]]
+          (mn = 'jalr && rvd-x? a 1) ['jalr [(b 1 = 0 ? ['x (b 2)] b)]]
+          (elem mn '(beq bne blt bge) && z? b)
+           [(mn @ 'beq 'beqz 'bne 'bnez 'blt 'bltz 'bgez) [a c]]
+          (elem mn '(blt bge) && z? a) [(mn = 'blt ? 'bgtz 'blez) [b c]]
+          (starts? s "fsgnj" && a != 0 && b = c)
+           [(name (s @ ("fsgnjn" + t) ("fneg" + t) ("fsgnjx" + t) ("fabs" + t) ("fsgnj" + t) ("fmv" + t) s)) [a b]]
+          (mn = 'fence && b = 0 && a = ['fence 15 15]) ['fence ()]
+          (mn = 'csrrw && z? a && z? c && b 1 = 3072) ['unimp ()]
+          (mn = 'csrrs && z? c && elem (b 1) [1 2 3 3072 3073 3074])
+           [(b 1 @ 1 'frflags 2 'frrm 3 'frcsr 3072 'rdcycle 3073 'rdtime 'rdinstret) [a]]
+          (elem mn '(csrrw csrrwi) && elem (b 1) (mn = 'csrrw ? [1 2 3] [1 2]))
+           [(name ((b 1 @ 1 "fsflags" 2 "fsrm" "fscsr") + (mn = 'csrrwi ? "i" ""))) (z? a ? [c] [a c])]
+          (mn = 'csrrs && z? c) ['csrr [a b]]
+          (elem mn '(csrrw csrrs csrrc csrrwi csrrsi csrrci) && z? a)
+           [(name ("csr" + snip s 4 #s)) [b c]]
+          (mn = (name "sfence.vma") && z? b) [mn (z? a ? () [a])]
+          [mn ops]))
+   (rvd-fence v) (v = 0 ? "0" (catmap (i \ v >> (3 - i) & 1 ? (string ("iorw" i)) "") ^4))
+   (rvd-opt o sym)
+    (<o @ 'x (show (rvd-xn (o 1))) 'f (show (rvd-fn (o 1)))
+          'im (od-hex (o 1))
+          'mem (od-hex (o 1) + "(" + show (rvd-xn (o 2)) + ")")
+          'amem ("(" + show (rvd-xn (o 1)) + ")")
+          'lbl (od-hex (o 1) + sym (o 1))
+          'rm (show ('(rne rtz rdn rup rmm 5 6 dyn) (o 1)))
+          'csr (rvd-csr (o 1))
+          'fence (rvd-fence (o 1) + ", " + rvd-fence (o 2))
+          (show o))
+   ;; a row -> (text notes) as x64-od answers. a dynamic rounding mode is not written, nor
+   ;; round-to-nearest on a conversion that is always exact
+   rvd-exact (map name ["fcvt.d.s" "fcvt.d.w" "fcvt.d.wu"])
+   (rv-od r a sym)
+    (: it (r 2) mn (it 1)
+       (quiet? o) (<o = 'rm && (o 1 = 7 || o 1 = 0 && elem mn rvd-exact))
+       (? (<it = 'skip) ["..." ()] (<it = 'dir) [(it 1) ()]
+          (rvd-alias mn (filter (o \ !(quiet? o)) (it 2)) @ m
+           [(show <m + (two? (m 1) ? ("\t" + xa-join ", " (map (o \ rvd-opt o sym) (m 1))) "")
+             + (3 < #it ? (sym (it 3)) "")) ()]))))
 ) ; module 'holo
