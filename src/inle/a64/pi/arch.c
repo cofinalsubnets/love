@@ -7,7 +7,6 @@
 #include "k.h"                       // kticks, kq's queue
 #include "../../mmio.h"               // mmio_rd/mmio_wr, device registers off the direct map
 
-void kq(uint8_t);                      // kmain's input queue, one byte
 void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 int usb_init(void), usb_up(void), usb_rx_ready(void), usb_getc(void);   // usb.c
 void usb_irq(void), usb_tick(void), usb_putc(int);

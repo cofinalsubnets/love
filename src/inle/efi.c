@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <string.h>
 #include "k.h"
-void kq(uint8_t);
 
 // a board's own polled keys, where no firmware holds the console
 __attribute__((weak)) void k_kb_board(int room) { (void) room; }

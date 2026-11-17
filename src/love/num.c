@@ -9,7 +9,6 @@
 #define limb_base ((dlimb) 1 << limb_bits)
 // bitwise ops only on machine-word cells (spec.l's width law), else the zero point
 #define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
-static love_inline flo_t love_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 static love_inline flo_t net_flo(flo_t v) { return v != v ? 0 : v; }
 struct love_zn { flo_t re, im; };                     // the net: a complex value
 static love_inline struct love_zn zn(flo_t re, flo_t im) {

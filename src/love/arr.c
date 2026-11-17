@@ -1,31 +1,5 @@
 // arr.c -- the generic-op lane, rng, eq, obin
 #include "love.h"
-// the math floor is ours on every frontend (moonlibc's math/lm.c)
-#if Bits == 64
-double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_asin(double), lm_acos(double),
-       lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
-#define love_sin   lm_sin
-#define love_cos   lm_cos
-#define love_atan2 lm_atan2
-#define love_asin  lm_asin
-#define love_acos  lm_acos
-#define love_sqrt  lm_sqrt
-#define love_exp   lm_exp
-#define love_log   lm_log
-#define love_pow   lm_pow
-#else
-float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_asinf(float), lm_acosf(float),
-      lm_sqrtf(float), lm_expf(float), lm_logf(float), lm_powf(float, float);
-#define love_sin   lm_sinf
-#define love_cos   lm_cosf
-#define love_atan2 lm_atan2f
-#define love_asin  lm_asinf
-#define love_acos  lm_acosf
-#define love_sqrt  lm_sqrtf
-#define love_exp   lm_expf
-#define love_log   lm_logf
-#define love_pow   lm_powf
-#endif
 static love_inline flo_t love_tan(flo_t x) { return love_sin(x) / love_cos(x); }
 static love_inline flo_t love_atan(flo_t x) { return love_atan2(x, (flo_t) 1); }
 #define avm_div(op, c_op) lvm(lvm_##op) { \

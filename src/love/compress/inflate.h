@@ -1,5 +1,5 @@
 // inflate.h -- RFC 1951 DEFLATE decoded, for gz.c.
-// an includer with bytes.h gets its one-load ld64, else a byte gather
+// its includer brings bytes.h: the one-load ld64 where the machine takes it, else ld64le
 #pragma once
 #include "prefix.h"
 #include <stdint.h>
@@ -8,14 +8,6 @@
 #ifndef inf_heap
 #define inf_heap 0
 #endif
-#ifndef wideld
-#define wideld 0
-static uint64_t ld64le(uint8_t const *p) {
- uint64_t v = 0;
- for (int i = 7; i >= 0; i--) v = v << 8 | p[i];
- return v; }
-#endif
-
 #if wideld
 #define LD64(p) ld64(p)
 #else

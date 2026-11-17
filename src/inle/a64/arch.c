@@ -5,7 +5,6 @@
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
 #include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
-void kq(uint8_t);                      // kmain's input queue, one byte
 void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 
 // qemu virt's fixed MMIO; another board would read the device tree

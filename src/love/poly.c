@@ -8,13 +8,6 @@
 // a carve's or a grid's pieces are those three or more corners round and over 1e-8 in area,
 // in the order brush.l laid them; () where an argument is not as it says
 #include "love.h"
-#if Bits == 64
-double lm_sqrt(double);
-#define pl_sqrt lm_sqrt
-#else
-float lm_sqrtf(float);
-#define pl_sqrt lm_sqrtf
-#endif
 
 struct pv { flo_t p[3]; intptr_t src; };   // src the input corner it is, -1 a cut's
 // pieces end to end: piece i's corners v[at[i]] to v[at[i + 1]]
@@ -55,7 +48,7 @@ static flo_t pl_area(struct pv const *ps, uintptr_t n) {
   s[0] = s[0] + (u[1] * v[2] - u[2] * v[1]);
   s[1] = s[1] + (u[2] * v[0] - u[0] * v[2]);
   s[2] = s[2] + (u[0] * v[1] - u[1] * v[0]); }
- return pl_sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]); }
+ return love_sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]); }
 static bool pl_ok(struct pv const *ps, uintptr_t n) { return n >= 3 && pl_area(ps, n) > (flo_t) 1e-8; }
 static bool pl_crosses(struct pv const *ps, uintptr_t n, flo_t const pl[4]) {
  bool hi = 0, lo = 0;
@@ -166,14 +159,13 @@ love_noinline static struct g *host_poly_carve(struct g *g) {
  if (pl) alloc(pl, 0);
  return bag_fin(&a), bag_fin(&c), g; }
 
-static flo_t pl_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 // one piece in strips across axis k onto c, last first as brush.l's slab laid them; s u r scratch
 static void pl_slab(struct pv const *ps, uintptr_t n, int k, flo_t cell, struct bag *c, struct bag *s, struct bag *u, struct bag *r) {
  flo_t lo = (flo_t) 1e9, hi = -(flo_t) 1e9;
  for (uintptr_t i = 0; i < n; i++) {
   flo_t const x = ps[i].p[k];
   lo = lo < x ? lo : x, hi = hi < x ? x : hi; }
- intptr_t m = (intptr_t) pl_floor((lo + (flo_t) 1e-5) / cell) + 1, m1 = (intptr_t) pl_floor((hi - (flo_t) 1e-5) / cell);
+ intptr_t m = (intptr_t) love_floor((lo + (flo_t) 1e-5) / cell) + 1, m1 = (intptr_t) love_floor((hi - (flo_t) 1e-5) / cell);
  bag_reset(r), bag_reset(s), bag_copy(s, ps, n);
  for (; !s->bad && !u->bad && !r->bad; m++) {
   if (m > m1 || cell * (flo_t) m >= hi - (flo_t) 1e-5) {
@@ -209,7 +201,7 @@ love_noinline static struct g *host_poly_grid(struct g *g) {
 // empty slot
 #define pl_gone ((flo_t) 1e30)
 struct seen { uint8_t *s; uint64_t cap; };
-static int64_t pl_mm(flo_t x) { return flo_i64(pl_floor(x * (flo_t) 1000.0 + (flo_t) 0.5)); }
+static int64_t pl_mm(flo_t x) { return flo_i64(love_floor(x * (flo_t) 1000.0 + (flo_t) 0.5)); }
 static int64_t pl_bk(flo_t x) { int64_t const k = pl_mm(x); return k >= 0 ? k / 256 : -((255 - k) / 256); }
 static uint64_t pl_hash(int64_t const k[3]) {
  uint64_t h = (uint64_t) k[0] * 0x9e3779b97f4a7c15u;
@@ -268,7 +260,7 @@ static void pl_near(struct fan *f, struct pv const *a, flo_t const d[3], flo_t d
 static void pl_on(struct fan *f, struct pv const *a, struct pv const *b, struct bag *e) {
  flo_t const d[3] = {b->p[0] - a->p[0], b->p[1] - a->p[1], b->p[2] - a->p[2]}, dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
  if (dd < (flo_t) 1e-12) return;
- flo_t const len = pl_sqrt(dd);
+ flo_t const len = love_sqrt(dd);
  int64_t lo[3], hi[3];
  uint64_t boxes = 1;
  for (int k = 0; k < 3; k++) {

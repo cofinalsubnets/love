@@ -110,9 +110,6 @@ struct k_boot kboot;
 
 // the source table: each fd's row of methods, a NULL one skipped (writes discard, reads
 // the end, ready false); state is per row. grows through k_source_open to k_fd_most
-void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-void kfree(void *p), k_drop(void *p);
-
 struct k_source {
   // love.h's readn, one fd deeper: >0 bytes, 0 nothing, -1 end
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n),
@@ -972,7 +969,6 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 
 // (stat path) -> (size mtime-ms mode ns) | (); ns is the ms date times a million. ino, nlink,
 // uid and dev are sys.c's to invent
-struct k_st { uintptr_t size, ms, mode; };
 
 // -> 0 | -ENOENT. fills a struct, not an index: a synthesized directory (the root, a bare
 // prefix) has no row

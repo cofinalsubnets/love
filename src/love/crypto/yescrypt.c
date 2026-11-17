@@ -119,8 +119,7 @@ static void shuf_out(uint32_t *b, uint32_t const *x, uintptr_t r) {
  for (uintptr_t k = 0; k < 2 * r; k++)
   for (int i = 0; i < 16; i++) {
    uint8_t *q = (uint8_t *) &b[k * 16 + i * 5 % 16];
-   uint32_t v = x[k * 16 + i];
-   q[0] = (uint8_t) v, q[1] = (uint8_t) (v >> 8), q[2] = (uint8_t) (v >> 16), q[3] = (uint8_t) (v >> 24); } }
+   st32le(q, x[k * 16 + i]); } }
 
 static void smix1(uint32_t *b, uintptr_t r, uint64_t n, unsigned fl, uint32_t *v, uint32_t *xy, struct pwx *c) {
  uintptr_t s = 32 * r;

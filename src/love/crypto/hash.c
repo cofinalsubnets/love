@@ -238,8 +238,7 @@ static void sha1_block(uint32_t h[5], const uint8_t *p) {
 static void md5_block(uint32_t h[4], const uint8_t *p) {
  uint32_t m[16], a = h[0], b = h[1], c = h[2], d = h[3];
  for (int i = 0; i < 16; i++)
-  m[i] = (uint32_t) p[4*i] | (uint32_t) p[4*i+1] << 8
-       | (uint32_t) p[4*i+2] << 16 | (uint32_t) p[4*i+3] << 24;
+  m[i] = ld32le(p + 4*i);
  for (int i = 0; i < 64; i++) {
   uint32_t f; int g;
   if (i < 16)      { f = (b & c) | (~b & d); g = i; }
@@ -643,10 +642,8 @@ static void dig_ld(const uint8_t *st, uint32_t *h, int words, uint64_t *len) {
  *len = ld64be(st + 4 * words); }
 
 static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
- for (int k = 0; k < words; k++) {
-  st[4*k]   = (uint8_t) (h[k] >> 24); st[4*k+1] = (uint8_t) (h[k] >> 16);
-  st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
- for (int k = 0; k < 8; k++) st[4*words + k] = (uint8_t) (len >> (56 - 8*k)); }
+ for (int k = 0; k < words; k++) st32be(st + 4*k, h[k]);
+ st64be(st + 4*words, len); }
 
 // (X-init b) -> b | () for anything not a cask of X's width
 static word dig_init(word x, const struct digspec *d) {

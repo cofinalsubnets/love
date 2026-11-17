@@ -317,7 +317,6 @@ struct mst {
  uint8_t ist[40];           // the right channel's intensity positions, 255 none
  float pcm[1152 * 2]; };
 
-double lm_sin(double), lm_cos(double), lm_sqrt(double);
 #define MP3_PI 3.14159265358979323846
 
 static void mp3_tables(struct mst *m) {

@@ -3,6 +3,7 @@
 // openbsd's bcrypt_hash, the block bcrypt_pbkdf repeats. pi is blowfish's starting state
 // (P then S, 1042 big-endian words), derived by the caller; the pbkdf around this is love's
 #include "love.h"
+#include "bytes.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -50,9 +51,7 @@ static void bc_hash(const uint8_t *pi, const uint8_t *pass, const uint8_t *salt,
  for (int i = 0; i < 8; i++) d[i] = bf_word((const uint8_t*) magic, 32, &j);
  for (int i = 0; i < 64; i++)
   for (int b = 0; b < 8; b += 2) bf_enc(&c, d + b, d + b + 1);
- for (int i = 0; i < 8; i++)
-  out[4*i] = (uint8_t) d[i], out[4*i+1] = (uint8_t) (d[i] >> 8),
-  out[4*i+2] = (uint8_t) (d[i] >> 16), out[4*i+3] = (uint8_t) (d[i] >> 24); }
+ for (int i = 0; i < 8; i++) st32le(out + 4*i, d[i]); }
 
 love_noinline static struct g *host_bcrypt(struct g *g) {
  word pw = g->sp[0], kw = g->sp[1], sw = g->sp[2];
