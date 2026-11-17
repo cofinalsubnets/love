@@ -848,15 +848,57 @@
        (flush out, flush err,
         ok ? 0 1))
 
-   ; objdump: -r alone, llvm-objdump's records, a heading per table naming what it patches
-   ; and none for an empty one
+   ; objdump, as llvm-objdump writes it: -r its relocation records, a heading per table naming
+   ; what it patches and none for an empty one; -d x86-64's executable sections disassembled,
+   ; a heading per symbol, a branch or rip target named by the symbol it lands in
    (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
                + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" "unknown"))
+   (od-dis b ss)
+    (: fs (bu-fs b) sy (ld-syms "objdump" b)
+       (hexb s) (xa-join " " (map (c \ zpad 2 (radix c 16)) (chars s)))
+       ; the bytes padded to column 39, or on to one short of the tab stop past them
+       (col c t) (c >= 39 && c % 8 = 7 ? t (col (c + 1) (t + " ")))
+       (one sc)
+        (: addr (b 4 = 2 ? (rdle (sc 9) 16 8) (rdle (sc 9) 12 4)) bs (snip b (sc 4) (sc 4 + sc 5)) end (addr + sc 5)
+           named (sort (map (r \ [(r 4) <r])
+                            (filter (r \ r 3 = <sc && !(elem (r 2) '(3 4)) && 0 < #<r) sy)))
+           labs (two? named && <<named = addr ? named ([addr (sc 1)] . named))
+           ; llvm names a target by the last symbol at or below it, to the section's end and past
+           (sym a) (? (a < addr) ""
+                      (foldl (\ c l (<l <= a ? l c)) () labs @ l
+                       (" <" + <>l + (<l = a ? "" ("+" + od-hex (a - <l))) + ">")))
+           at (foldl (\ t l (pin t <l (peep t <l () + [<>l]))) {} labs)
+           (row r)
+            (: a (addr + <r) x (x64-od r a sym)
+               _ (each (peep at a ()) (n \ say out ("\n" + zpad 16 (radix a 16) + " <" + n + ">:\n")))
+               h (urpad (8 - #(radix a 16)) "" + radix a 16 + ": ")
+               by (hexb (snip bs <r (<r + r 1)))
+               c0 (#h + #by) pad (col c0 "")
+               t0 ((c0 + #pad) // 8 * 8 + 8)
+               tx <x
+               ; llvm's count of a tab: none at a tab stop, which a comment's column follows
+               c1 (foldl (\ c ch (ch = 9 ? (c + (8 - c % 8) % 8) (c + 1))) t0 (chars tx))
+               ; a comment at column 72, or a space past the text; a second on a line of its own
+               ns <>x
+               (say out (h + by + pad + "\t" + tx
+                         + (two? ns ? ((c1 < 72 ? (urpad (72 - c1) "") " ") + "# " + <ns) "")
+                         + "\n"
+                         + (two? ns ? (join "" (map (n \ urpad 72 "" + "# " + n + "\n") >ns)) ""))))
+           _ (say out ("\nDisassembly of section " + sc 1 + ":\n"))
+           ; a lock or wait first in an instruction is one of its own, as llvm reads it
+           (split r) (: its (r 2)
+                        (r 1 > 1 && two? >its && <<its = 'op && elem (<its 1) '(lock fwait)
+                         && elem (bs <r) '(240 155)
+                         ? [[<r 1 [<its]] [(<r + 1) (r 1 - 1) >its]] [r]))
+           (each (catmap split (x64-disasm bs addr)) row))
+       (each (filter (sc \ sc 2 = 1 && sc 3 & 4 != 0 && 0 < sc 5) ss) one))
    (objdump-main as)
-    (: bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-r" "--reloc"))) as)
-       _ (two? bad ? (udie 1 ("objdump: " + <bad + " is not here (-r)")) 0)
+    (: bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-r" "--reloc" "-d" "--disassemble"))) as)
+       _ (two? bad ? (udie 1 ("objdump: " + <bad + " is not here (-r, -d)")) 0)
        fs (filter (w \ !(1 < #w && w 0 = 45)) as)
-       _ ((elem "-r" as || elem "--reloc" as) && two? fs ? 0 (udie 1 "Usage: objdump -r FILE.."))
+       r? (elem "-r" as || elem "--reloc" as) d? (elem "-d" as || elem "--disassemble" as)
+       _ (r? && d? ? (udie 1 "objdump: -d with -r is not here") 0)
+       _ ((r? || d?) && two? fs ? 0 (udie 1 "Usage: objdump -r|-d FILE.."))
        (val y a) ((two? y ? (y 1) "*ABS*")
                   + (charm? a && !(a = 0) ? ((a < 0 ? "-0x" "+0x") + radix (a < 0 ? (0 - a) a) 16) ""))
        (one f)
@@ -867,7 +909,9 @@
                   (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
                      rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
                      _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
-                     _ (each rs (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
+                     _ (d? && m != 62 ? (udie 1 ("objdump: -d reads x86-64 here, not " + od-fmt b)) 0)
+                     _ (d? ? (od-dis b ss) 0)
+                     _ (each (d? ? () rs) (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
                                                 + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),
                                        each (re-rents b ss sc)
                                             (r \ say out (re-hex <r w + " " + urpad 24 (re-rname m (r 2)) + " "
@@ -1084,7 +1128,7 @@
     'dircolors "usage: dircolors [-b|-c|-p|--print-ls-colors] [FILE]"
     'dc "usage: dc [-e EXPR] [-f FILE] [FILE..]"
     'readelf "usage: readelf -h|-l|-S|-s|-r|-e [-W] FILE.."
-    'objdump "usage: objdump -r FILE.."
+    'objdump "usage: objdump -r|-d FILE.."
     'ls "usage: ls [-aACcdFghiLlnoprRsStux1] [--color[=WHEN]] [FILE..]"
     'dir "usage: dir [-aACdlrtx1] [FILE..]"
     'cp "usage: cp [-afinpPLrRuv] [-t DIR] SRC.. DST"
