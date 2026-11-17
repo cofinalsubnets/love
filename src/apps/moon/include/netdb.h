@@ -42,6 +42,7 @@ struct hostent {
 #define TRY_AGAIN      2
 #define NO_RECOVERY    3
 #define NO_DATA        4
-extern int h_errno;
+int *__h_errno_location(void);
+#define h_errno (*__h_errno_location())   /* the calling thread's */
 struct hostent *gethostbyname(char const*);
 int gethostbyname_r(char const*, struct hostent*, char*, size_t, struct hostent**, int*);

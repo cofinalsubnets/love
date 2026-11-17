@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 int tcsetattr(int fd, int act, struct termios const *t) {
-  if (act < 0 || act > 2) { __errno_v = EINVAL; return -1; }
+  if (act < 0 || act > 2) { errno = EINVAL; return -1; }
 #ifdef LvMac
   if (__love_osv == 4) {
     struct __fb_termios f, cur;

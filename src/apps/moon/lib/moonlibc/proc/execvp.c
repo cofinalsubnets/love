@@ -17,5 +17,5 @@ int execvp(char const *f, char *const *av) {
       execv(buf, av); }
     path += i;
     if (*path == ':') path++; }
-  __errno_v = ENOENT;
+  errno = ENOENT;
   return -1; }

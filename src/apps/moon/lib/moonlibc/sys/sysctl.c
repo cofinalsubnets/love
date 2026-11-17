@@ -4,6 +4,6 @@
 /* the BSDs only */
 int sysctl(int const *name, unsigned int namelen, void *oldp, size_t *oldlenp,
            void const *newp, size_t newlen) {
-  if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
+  if (__love_osv < 2) { errno = ENOSYS; return -1; }
   return (int) er(fb6(NR_fb___sysctl, (long) name, namelen, (long) oldp,
                       (long) oldlenp, (long) newp, (long) newlen)); }

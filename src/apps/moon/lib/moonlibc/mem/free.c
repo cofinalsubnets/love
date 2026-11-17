@@ -113,7 +113,7 @@ static __mhdr *__mcore(size_t nu) {
 static void *__mbig(size_t nu) {                        /* its own mapping, given back whole */
   size_t len = (nu * sizeof(__mhdr) + 4095UL) & ~4095UL;
   void *m = mmap(0, (long) len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (m == (void *) -1) { __errno_v = ENOMEM; return 0; }
+  if (m == (void *) -1) { errno = ENOMEM; return 0; }
   __mhdr *u = m;
   u->size = len / sizeof(__mhdr);
   u->next = __MDirect;
@@ -129,7 +129,7 @@ static void *__marena(size_t nu) {
       q->next = __MLive;                                /* the tag, written before any payload can */
       return (void *) (q + 1); }
     if (q == __mfree)
-      if (!(q = __mcore(nu))) { __errno_v = ENOMEM; return 0; } } }
+      if (!(q = __mcore(nu))) { errno = ENOMEM; return 0; } } }
 static void *__mslot(unsigned c) {                     /* lock held */
   __mslab *s = __mslabs[c];
   unsigned u = __mcls[c];
@@ -149,7 +149,7 @@ static void *__mslot(unsigned c) {                     /* lock held */
   return (void *) (b + 1); }
 void *malloc(size_t n) {
   /* past PTRDIFF_MAX the rounding below wraps */
-  if (n > ((size_t) -1 >> 1) - 65536) { __errno_v = ENOMEM; return 0; }
+  if (n > ((size_t) -1 >> 1) - 65536) { errno = ENOMEM; return 0; }
   size_t nu = (n + sizeof(__mhdr) - 1) / sizeof(__mhdr) + 1;
   if (n >= MBig) return __mbig(nu);
   __mtake();

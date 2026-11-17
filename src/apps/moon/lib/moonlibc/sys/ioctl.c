@@ -27,6 +27,6 @@ int ioctl(int fd, unsigned long req, ...) {
       case 0xc0884116UL: fq = __love_osv == 3 ? req : 0; break;            /* AUDIO_SETINFO */
       case 0x80884123UL: fq = __love_osv == 3 ? 0x40884123UL : 0; break;   /* AUDIO_GETBUFINFO */
       default: fq = 0; }
-    if (!fq) { __errno_v = ENOSYS; return -1; }
+    if (!fq) { errno = ENOSYS; return -1; }
     return (int) er(fb3(NR_fb_ioctl, fd, (long) fq, arg)); }
   return (int) er(sc3(NR_ioctl, fd, (long) req, arg)); }

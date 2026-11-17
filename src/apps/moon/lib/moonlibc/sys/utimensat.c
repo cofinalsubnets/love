@@ -6,9 +6,9 @@
 static int macutimes(int dfd, char const *p, struct timespec const *ts) {
   char b[2048];
   if (dfd != AT_FDCWD && p[0] != '/') {
-    if (fb3(92, dfd, 50, (long) b) < 0) { __errno_v = EBADF; return -1; }   /* F_GETPATH */
+    if (fb3(92, dfd, 50, (long) b) < 0) { errno = EBADF; return -1; }   /* F_GETPATH */
     size_t k = strlen(b);
-    if (k + strlen(p) + 2 > sizeof b) { __errno_v = ENAMETOOLONG; return -1; }
+    if (k + strlen(p) + 2 > sizeof b) { errno = ENAMETOOLONG; return -1; }
     b[k] = '/', strcpy(b + k + 1, p), p = b; }
   if (!ts) return (int) er(fb2(138, (long) p, 0));
   struct timeval tv[2];
