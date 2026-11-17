@@ -18,7 +18,7 @@ extern FILE *stdin, *stdout, *stderr;
 #define _IONBF 2
 #define L_tmpnam 20
 #define TMP_MAX 238328
-char  *tmpnam(char*);
+char  *tmpnam(char*), *tmpnam_r(char*);
 int printf(char const*, ...), fprintf(FILE*, char const*, ...),
     snprintf(char*, size_t, char const*, ...), sprintf(char*, char const*, ...), puts(char const*),
     fputs(char const*, FILE*), putchar(int), fputc(int, FILE*), putc(int, FILE*), fgetc(FILE*),
