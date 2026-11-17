@@ -492,13 +492,16 @@ static love_inline word host_fchdir(struct g *g, word fw) {
  return fchdir((int) getcharm(fw)) ? love_err(g, errno) : ZeroPoint; }
 LvmWord1(fchdir)
 
-love_noinline static struct g *host_cwd(struct g *g) {
- char buf[4096];
- if (!getcwd(buf, sizeof buf)) return g->sp[0] = love_err(g, errno), g;
- if (!ok(g = strof(g, buf))) return g;
- return g->sp[1] = g->sp[0], g->sp += 1, g; }           // over the dummy arg
 static lvm(lvm_cwd) {
- LvmCall(g, host_cwd) }
+ char buf[4096];
+ if (!getcwd(buf, sizeof buf)) love_musttail return Answer(love_err(g, errno));
+ uintptr_t const n = strlen(buf);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += req;
+ memcpy(txt(o), buf, n);
+ love_musttail return Answer(word(o)); }           // over the dummy arg
 
 // (selfpath _) -> the running binary's path, or (). no argv[0] fallback: baked code folds
 // `cmdline` to the bake's line. a ladder: macos's proc_info, linux's link, netbsd's, then
@@ -530,13 +533,16 @@ love_noinline size_t host_selfpath(char *b, size_t n) {
 #endif
  return 0; }
 
-love_noinline static struct g *host_selfpath_ap(struct g *g) {
- char buf[4096];
- if (!host_selfpath(buf, sizeof buf)) return g->sp[0] = ZeroPoint, g;
- if (!ok(g = strof(g, buf))) return g;
- return g->sp[1] = g->sp[0], g->sp += 1, g; }
 static lvm(lvm_selfpath) {
- LvmCall(g, host_selfpath_ap) }
+ char buf[4096];
+ if (!host_selfpath(buf, sizeof buf)) love_musttail return Answer(ZeroPoint);
+ uintptr_t const n = strlen(buf);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += req;
+ memcpy(txt(o), buf, n);
+ love_musttail return Answer(word(o)); }
 
 // pipes and redirects. (spawnio argv in out err closes pg fg): a job in its own pgrp is what
 // makes ^Z real, since POSIX drops a stop sent to an orphaned group. (setpg pid pg) is that
@@ -863,20 +869,18 @@ static lvm(lvm_posix_birth) { Sp[1] = love_err(g, ENOSYS); love_musttail return 
 #endif
 
 // (rusage who) -> (user sys) in us; who 0 self, -1 the reaped children
-love_noinline static struct g *host_posix_rusage(struct g *g) {
- word x = g->sp[0];
- if (!charmp(x)) return g->sp[0] = badarg(g), g;
+static lvm(lvm_posix_rusage) {
+ word x = Sp[0];
+ if (!charmp(x)) love_musttail return Answer(badarg(g));
  struct rusage ru;
- if (getrusage((int) getcharm(x), &ru)) return g->sp[0] = love_err(g, errno), g;
+ if (getrusage((int) getcharm(x), &ru)) love_musttail return Answer(love_err(g, errno));
  intptr_t u = (intptr_t) ru.ru_utime.tv_sec * 1000000 + ru.ru_utime.tv_usec,
           s = (intptr_t) ru.ru_stime.tv_sec * 1000000 + ru.ru_stime.tv_usec;
- if (!ok(g = have(g, 2 * Width(struct chain)))) return g;
- size_t const C = Width(struct chain);
- struct chain *c = ini_chain(bump(g, C), putcharm(s), ZeroPoint);
- c = ini_chain(bump(g, C), putcharm(u), word(c));
- return g->sp[0] = word(c), g; }
-static lvm(lvm_posix_rusage) {
- LvmCall(g, host_posix_rusage) }
+ Have(2 * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += 2 * Width(struct chain);
+ ini_chain(c + 1, putcharm(s), ZeroPoint), ini_chain(c, putcharm(u), word(c + 1));
+ love_musttail return Answer(word(c)); }
 
 love_noinline static struct g *lovefs_readdir(struct g *g, char const *c, uintptr_t cn) {
  g->sp[0] = ZeroPoint;
@@ -1033,19 +1037,16 @@ static lvm(lvm_posix_uname) {
  LvmCall(g, host_posix_uname) }
 
 // (sysconf _) -> (pagesize cpus-conf cpus-online phys-pages avphys-pages), () where none
-love_noinline static struct g *host_posix_sysconf(struct g *g) {
- int const k[] = { _SC_AVPHYS_PAGES, _SC_PHYS_PAGES, _SC_NPROCESSORS_ONLN,
-                   _SC_NPROCESSORS_CONF, _SC_PAGESIZE };                   // last first
- g->sp[0] = ZeroPoint;
+static lvm(lvm_posix_sysconf) {
+ int const k[] = { _SC_PAGESIZE, _SC_NPROCESSORS_CONF, _SC_NPROCESSORS_ONLN,
+                   _SC_PHYS_PAGES, _SC_AVPHYS_PAGES };
+ Have(5 * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += 5 * Width(struct chain);
  for (int i = 0; i < 5; i++) {
   long v = sysconf(k[i]);
-  if (!ok(g = have(g, Width(struct chain)))) return g;
-  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
-                                 v < 0 ? ZeroPoint : putcharm(v), g->sp[0]);
-  g->sp[0] = word(w); }
- return g; }
-static lvm(lvm_posix_sysconf) {
- LvmCall(g, host_posix_sysconf) }
+  ini_chain(c + i, v < 0 ? ZeroPoint : putcharm(v), i < 4 ? word(c + i + 1) : ZeroPoint); }
+ love_musttail return Answer(word(c)); }
 
 static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return badarg(g);
@@ -1479,20 +1480,17 @@ static lvm(lvm_kill) {
  love_musttail return Nextp(1, 1); }
 
 // (tty fd) -> (rows . cols) | 'enotty: size and isatty are one question, so test with two?
-love_noinline static struct g *host_tty(struct g *g) {
- struct winsize ws;
- word x = g->sp[0];
- intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);   // a charm is a raw fd
- if (fd < 0) { g->sp[0] = badarg(g); return g; }
- if (ioctl((int) fd, TIOCGWINSZ, &ws) < 0) { g->sp[0] = love_err(g, errno); return g; }
- if (!ok(g = have(g, Width(struct chain)))) return g;
- struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
-                                 putcharm(ws.ws_row), putcharm(ws.ws_col));
- g->sp[0] = word(w);
- return g; }
-
 static lvm(lvm_tty) {
- LvmCall(g, host_tty) }
+ struct winsize ws;
+ word x = Sp[0];
+ intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);   // a charm is a raw fd
+ if (fd < 0) love_musttail return Answer(badarg(g));
+ if (ioctl((int) fd, TIOCGWINSZ, &ws) < 0) love_musttail return Answer(love_err(g, errno));
+ Have(Width(struct chain));
+ struct chain *w = ini_chain((struct chain*) Hp, putcharm(ws.ws_row), putcharm(ws.ws_col));
+ Hp += Width(struct chain);
+ love_musttail return Answer(word(w)); }
+
 
 // (settty port rows cols): the kernel raises SIGWINCH on the slave's foreground group
 love_noinline static int host_settty(intptr_t fd, intptr_t row, intptr_t col) {
@@ -1539,29 +1537,26 @@ static const unsigned tio_baud[][2] = {
 #else
 #define TIO_SPEEDS 0
 #endif
-love_noinline static struct g *host_termios(struct g *g) {
- word x = g->sp[0];
+static lvm(lvm_termios) {
+ word x = Sp[0];
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);
  struct termios t;
- if (fd < 0) return g->sp[0] = badarg(g), g;
+ if (fd < 0) love_musttail return Answer(badarg(g));
  memset(&t, 0, sizeof t);
- if (tcgetattr((int) fd, &t)) return g->sp[0] = love_err(g, errno), g;
+ if (tcgetattr((int) fd, &t)) love_musttail return Answer(love_err(g, errno));
  intptr_t sp = 0;
 #if TIO_SPEEDS
  sp = (intptr_t) t.c_ospeed;
 #endif
  if (!sp) for (unsigned k = 0; k < TIO_NB; k++)
   if (tio_baud[k][1] == (t.c_cflag & 4111u)) sp = tio_baud[k][0];
- size_t const C = Width(struct chain);
- if (!ok(g = have(g, 22 * C))) return g;
- struct chain *c = 0;
- word l = ZeroPoint;
- for (int k = 16; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(t.c_cc[k]), l), l = word(c);
+ Have(22 * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += 22 * Width(struct chain);
  intptr_t hd[5] = {t.c_iflag, t.c_oflag, t.c_cflag, t.c_lflag, sp};
- for (int k = 4; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(hd[k]), l), l = word(c);
- return g->sp[0] = l, g; }
-static lvm(lvm_termios) {
- LvmCall(g, host_termios) }
+ for (int k = 0; k < 22; k++)
+  ini_chain(c + k, putcharm(k < 5 ? hd[k] : t.c_cc[k - 5]), k < 21 ? word(c + k + 1) : ZeroPoint);
+ love_musttail return Answer(word(c)); }
 
 love_noinline static word host_settermios(struct g *g, word x, word l) {
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x), v[22];

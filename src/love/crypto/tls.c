@@ -226,36 +226,29 @@ static void gcm_tag(const struct aes_ks *s, const uint8_t iv[12], const uint8_t 
  for (int i = 0; i < 16; i++) tag[i] ^= e[i]; }
 
 // the nifs
-// str0 can collect: the result first, then the arguments re-read off the stack
-// FIXME why is this noinline?
-static love_inline struct g *host_chacha20(struct g *g) {
- word kw = g->sp[0], nw = g->sp[1], cw = g->sp[2], tw = g->sp[3];
+static lvm(lvm_chacha20) {
+ word const kw = Sp[0], nw = Sp[1], cw = Sp[2], tw = Sp[3];
  if (!strp(kw) || !strp(nw) || !strp(tw) || !oddp(cw)
-     || len(kw) != 32 || len(nw) != 12 || getcharm(cw) < 0) {
-  g->sp[3] = ZeroPoint, g->sp += 3; return g; }
- uintptr_t n = len(tw);
- uint32_t ctr = (uint32_t) getcharm(cw);
- if (!ok(g = str0(g, n))) return g;             // pushes: out over the four args
- cc_xor((const uint8_t*) txt(g->sp[1]), (const uint8_t*) txt(g->sp[2]), ctr,
-        (const uint8_t*) txt(g->sp[4]), (uint8_t*) txt(g->sp[0]), n);
- g->sp[4] = g->sp[0], g->sp += 4;
- return g; }
+     || len(kw) != 32 || len(nw) != 12 || getcharm(cw) < 0)
+  love_musttail return Answerp(3, ZeroPoint);
+ uintptr_t const n = len(tw), w = str_width(n);
+ if (!n) love_musttail return Answerp(3, EmptyString);
+ Have(w);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += w;
+ cc_xor((const uint8_t*) txt(kw), (const uint8_t*) txt(nw), (uint32_t) getcharm(cw),
+        (const uint8_t*) txt(tw), (uint8_t*) txt(o), n);
+ love_musttail return Answerp(3, word(o)); }
 
-static lvm(lvm_chacha20) LvmCall(g, host_chacha20)
-
-love_noinline static struct g *host_poly1305(struct g *g) {
- word kw = g->sp[0], mw = g->sp[1];
- if (!strp(kw) || !strp(mw) || len(kw) != 32)
-  return g->sp[1] = ZeroPoint, g->sp += 1, g;
- uintptr_t n = len(mw);
- uint8_t tag[16];
- po_mac((const uint8_t*) txt(kw), (const uint8_t*) txt(mw), n, tag);
- if (!ok(g = str0(g, 16))) return g;            // pushes: tag over the two args
- memcpy(txt(g->sp[0]), tag, 16);
- g->sp[2] = g->sp[0], g->sp += 2;
- return g; }
-static lvm(lvm_poly1305) LvmCall(g, host_poly1305)
-
+static lvm(lvm_poly1305) {
+ word const kw = Sp[0], mw = Sp[1];
+ if (!strp(kw) || !strp(mw) || len(kw) != 32) love_musttail return Answerp(1, ZeroPoint);
+ uintptr_t const req = str_width(16);
+ Have(req);
+ struct str *o = ini_str(str(Hp), 16);
+ Hp += req;
+ po_mac((const uint8_t*) txt(kw), (const uint8_t*) txt(mw), len(mw), (uint8_t*) txt(o));
+ love_musttail return Answerp(1, word(o)); }
 // the tag is checked before a byte is deciphered; a 16 or 32 byte key, a 12-byte iv, else ()
 static int gcm_args(struct g *g, int open) {
  word kw = g->sp[0], iw = g->sp[1], aw = g->sp[2], tw = g->sp[3];
