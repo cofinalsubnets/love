@@ -1115,6 +1115,11 @@ flo_t vop_flo(int op, flo_t a, flo_t b) {
   case vop_rem: return b == 0 ? a : love_fmod(a, b);
   case vop_max: return a > b ? a : b; case vop_min: return a < b ? a : b;
   default: return a + b; } }                   // vop_add
+// a machine word: past the width it empties, never wraps; a negative count shifts the other way
+static love_inline intptr_t vshift(bool lf, intptr_t a, intptr_t b) {
+ intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
+ return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
+                  : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
 static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
   case vop_sub: return (intptr_t)((uintptr_t) a - (uintptr_t) b);
@@ -1126,11 +1131,7 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
-  case vop_bsl: case vop_bsr: {   // a machine word: past the width it empties, never wraps
-   int lf = op == vop_bsl;
-   intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
-   return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
-                    : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
+  case vop_bsl: case vop_bsr: return vshift(op == vop_bsl, a, b);
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 intptr_t vcmp_flo(int op, flo_t a, flo_t b) {
  switch (op) {
@@ -1589,7 +1590,9 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
       case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
       case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
       case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return;
-      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; } } } }
+      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return;
+      case vop_band: VBF(av&bv); return; case vop_bor: VBF(av|bv); return; case vop_bxor: VBF(av^bv); return;
+      case vop_bsl: VBF(vshift(1, av, bv)); return; case vop_bsr: VBF(vshift(0, av, bv)); return; } } } }
     #undef VBF
  #undef VBL
  struct bcast w; bc_open(&w, va, vb, R, r->shape);
