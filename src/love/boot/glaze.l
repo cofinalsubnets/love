@@ -62,7 +62,7 @@
    ; at every 16th tick, a slice near the interpreter's, a peer on the run ring or a parked task takes the
    ; lane's yield yl, which falls through. r s scratch; fair rides past reach, the ring and the parked
    ; are g's words 3 and 4 (love.h asserts all three)
-   nreach 14                                                          ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap 12 fair 13 setcup
+   nreach 15                                                          ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc 11 gap 12 fair 13 setcup 14 park
    (fairo tgt) (reach-offset 0 + nreach * wd tgt)
    (fairtk tgt r s o ok yl) (: G (greg tgt 'g) W (wd tgt) py (mint 0)
                              ([['li r 64] ['st G o r] ['ld r G (o + W)] ['add r r 1] ['st G (o + W) r] ['test r 15] ['br 'ne ok]
@@ -1681,15 +1681,16 @@
       + [['lea 'r10 'sp 0] ['lea 'sp S 0] ['pop 'r9] ['sar 'r9 1] ['lea OV 'sp 0] ['add OV OV 'r9] ['st OV 0 'r10]]
       + lsorig tgt OV + [['pop IP]]
       + restargsir tgt k))
-   ; the park by copy, once a blob: a site pushes its args and calls GPARK, whose return rides the
-   ; segment. GPARK lays [sp, anchor slot] at Hp as a string, puts the machine state back, then
-   ; [Ip, the string] above the fair resume frame. at bb the outer's saves are made again and the
-   ; string's words but its top slot laid back below the new anchor, and it returns. no room, no yield
-   (lspark tgt k) (saveargsir tgt k + [['call 'GPARK]] + restargsir tgt k)
+   ; the park by copy, in the binary (gpark_gen.h, `make mx`) at reach 14: a site pushes its args and
+   ; calls it, its return riding the segment. it lays [sp, anchor slot] at Hp as a string, puts the
+   ; machine state back, then [Ip, the string] above the fair resume frame, itself the base. at bb
+   ; the outer's saves are made again and the string's words but its top slot laid back below the
+   ; new anchor, and it returns. no room, no yield
+   (lspark tgt k) (saveargsir tgt k + [(reach tgt 'r10 14) ['callr 'r10]] + restargsir tgt k)
    (gpark tgt) (: S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) A (greg tgt 'acc) HP (greg tgt 'hp)
                   W (wd tgt) OV (govf tgt) ss (slotsz tgt) bb (mint 0) sk (mint 0)
                   l1 (mint 0) l2 (mint 0) l3 (mint 0) l4 (mint 0) (raw l) (map (i \ ['raw i]) l)
-      (lstag tgt ([['label 'GPARK]] + hsave tgt
+      (lstag tgt ([['label 'gbase]] + hsave tgt
       + [['lea 'r10 'sp 0] ['lea 'r9 OV ss] ['sub 'r9 'r9 'r10]                      ; r9 = the segment's bytes
          ['lea T HP (3 * W)] ['add T T 'r9] ['cmp 'r10 T] ['br 'below sk]
          (reach tgt T 1) ['st HP 0 T] ['st HP W 'r9] ['lea A HP (2 * W)]              ; [str, len, words.., 0]
@@ -1844,7 +1845,7 @@
        _ (pin gkn 2 (peep gkn 1 0 && !!(getenv "LOVE_GROUP_TAGGED")))
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
-       (nif (emit (assemble tgt (bcat [[['label 'gbase]] outer Hs (peep gkn 1 0 && !(peep gkn 2 0) ? (gpark tgt) ())]) 'bytes)) deopt k))
+       (nif (emit (assemble tgt (bcat [[['label 'gbase]] outer Hs]) 'bytes)) deopt k))
 )
 ; auto -- rebind `ev` so a qualifying closure compiles to native with no verb and no annotation, =/show-identical to
 ; its source; anything else falls through to the base interpreter. every recognizer is exact-arity: (+ x 1 2) is a tower.
