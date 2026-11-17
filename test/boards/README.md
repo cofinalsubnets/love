@@ -31,7 +31,7 @@ thumb2sp`, linked at flash 0: no bootloader on the target, the DAPLink beside it
 flash. UART0 console on P0.06/P1.08, the DAPLink's VCP; the matrix's centre LED blinks.
 `make flash` copies firm.hex onto the DAPLink's drive; test_microbit builds it and
 verifies the boot surface, test_microbit_board flashes it over the DAPLink's CMSIS-DAP
-on a host with microbit-daplink and reads the battery.
+on a host with microbit-swd and reads the battery.
 
 ## rp2040/
 

@@ -651,7 +651,7 @@ test_nucleo446_board: test_nucleo446
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
 test_microbit_board: test_microbit
 	@echo TEST out/microbit/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-daplink out/microbit/firm.bin
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"

@@ -6,26 +6,21 @@
 # the running image reboots to its loader at 134 baud, teensy_loader_cli flashes the .hex, and green is
 # love's shell answering on the usb console the host's tty fact names. without such a host the gate
 # skips loudly.
+# the cap names the board, so what follows from its chip is here: where flash starts, openocd's
+# target, love's flasher. how the host reaches it is the host's facts: probe, `lovswd TTY` (the
+# love swd probe, test/boards/rp2040/probe.c), `gpio CHIP SWCLK SWDIO NRST` (love's bit wire on the
+# host's own gpio) or `openocd ARGS` (the interface's), console (its serial port, a glob), and love
+# when the host runs a love not this one
 # usage: mcuboard.sh OUTDIR LANE CAP IMAGE
 . test/gate/skip.sh
 set -u
 
-ho=$1 t=$2 cap=$3 img=$4 pre=
-# a board: its probe and chip for openocd, where its flash starts, and the ports its console may be on
+ho=$1 t=$2 cap=$3 img=$4
 case $cap in
-  rp2040-swd)
-    ocd='-f interface/cmsis-dap.cfg -c "adapter speed 1000" -f target/rp2040.cfg'   # 1 MHz holds over jumper wires
-    at=0x10000000 con='/dev/serial/by-id/*Debug_Probe*-if01*' ;;   # the probe's own uart, on the pico's gp0/gp1
-  nucleo446-swd)
-    # its firmware may sleep or take the swd pins, so it is reached under reset
-    ocd='-f interface/stlink.cfg -c "transport select hla_swd" -f target/stm32f4x.cfg -c "reset_config srst_only srst_nogate connect_assert_srst"'
-    at=0x08000000 con='/dev/serial/by-id/*STLink*' ;;
-  microbit-daplink)
-    # the daplink is the probe and the vcp; its serial, out of the host's tty fact, picks it,
-    # over usb bulk: the hid backend overflows on a serial this long
-    pre='sn=${BEE_TTY##*CMSIS-DAP_} sn=${sn%-if*}'
-    ocd='-f interface/cmsis-dap.cfg -c "cmsis_dap_backend usb_bulk" -c "adapter serial $sn" -f target/nrf52.cfg'
-    at=0x00000000 con='/dev/serial/by-id/*micro:bit*-if01*' ;;
+  rp2040-swd) chip=rp2040 at=0x10000000 tgt='-f target/rp2040.cfg' ;;
+  # its firmware may sleep or take the swd pins, so it is reached under reset
+  nucleo446-swd) chip=stm32f4 at=0x08000000 tgt='-f target/stm32f4x.cfg -c "reset_config srst_only srst_nogate connect_assert_srst"' ;;
+  microbit-swd) chip=nrf52 at=0x00000000 tgt='-f target/nrf52.cfg' ;;
   teensy41-usb) ;;
   *) echo "FAIL $t: no board known for $cap" >&2; exit 1 ;;
 esac
@@ -58,12 +53,25 @@ tr -d '\r' < got.1
 EOF
 else
 cp "$img" "$sd/firm.bin"
+cp "$ho/love" src/apps/swd.l test/gate/swdflash.l "$sd/"
 green='*; all * green*'
-echo "$pre" > "$sd/run.sh"
-echo "ocd() { openocd $ocd \"\$@\"; }" >> "$sd/run.sh"
-echo "at=$at con='$con'" >> "$sd/run.sh"
+printf "chip=%s at=%s tgt='%s'\n" "$chip" "$at" "$tgt" > "$sd/run.sh"
 cat >> "$sd/run.sh" <<'EOF'
-ocd -c "program firm.bin $at verify exit" > flash.log 2>&1 || { tail -5 flash.log; echo "the flash failed"; exit 1; }
+probe=${BEE_PROBE:-} con=${BEE_CONSOLE:-} lv=${BEE_LOVE:-./love}
+[ -n "$probe" ] || { echo "the host gives no probe fact"; exit 1; }
+[ -n "$con" ] || { echo "the host gives no console fact"; exit 1; }
+kind=${probe%% *} pa=${probe#"$kind"}
+case $kind in
+  lovswd|gpio)
+    flash() { "$lv" swdflash.l $chip $at firm.bin flash $probe; }
+    reset() { "$lv" swdflash.l $chip $at firm.bin run $probe; } ;;
+  openocd)
+    ocd() { eval "openocd $pa $tgt -c \"\$1\""; }
+    flash() { ocd "program firm.bin $at verify exit"; }
+    reset() { ocd "init; reset run; exit"; } ;;
+  *) echo "no probe known as $kind"; exit 1 ;;
+esac
+flash > flash.log 2>&1 || { tail -5 flash.log; echo "the flash failed"; exit 1; }
 n=0
 for p in $con; do
   [ -r "$p" ] || continue
@@ -73,7 +81,7 @@ for p in $con; do
   n=$((n + 1)); timeout 12 cat "$p" > "got.$n" &
 done
 sleep 1
-ocd -c "init; reset run; exit" > reset.log 2>&1 || { tail -5 reset.log; echo "the reset failed"; exit 1; }
+reset > reset.log 2>&1 || { tail -5 reset.log; echo "the reset failed"; exit 1; }
 wait
 cat got.* 2>/dev/null | tr -d '\r'
 EOF
