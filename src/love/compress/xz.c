@@ -826,8 +826,7 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
 love_noinline static struct g *host_crc64(struct g *g) {
  if (!strp(g->sp[0])) { g->sp[0] = ZeroPoint; return g; }
  if (!ok(g = str0(g, 8))) return g;
- uint64_t c = xz_crc64((const uint8_t*) txt(g->sp[1]), len(g->sp[1]));
- for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
+ st64le((uint8_t*) txt(g->sp[0]), xz_crc64((const uint8_t*) txt(g->sp[1]), len(g->sp[1])));
  g->sp[1] = g->sp[0];
  return g->sp++, g; }
 
@@ -835,10 +834,7 @@ love_noinline static struct g *host_crc64_on(struct g *g) {
  word cw = g->sp[0], sw = g->sp[1];
  if (!strp(cw) || len(cw) != 8 || !strp(sw)) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  if (!ok(g = str0(g, 8))) return g;              // pushes: out over c and s
- uint64_t c = 0;
- for (int i = 0; i < 8; i++) c |= (uint64_t) ((const uint8_t*) txt(g->sp[1]))[i] << 8 * i;
- c = xz_crc64_on(c, (const uint8_t*) txt(g->sp[2]), len(g->sp[2]));
- for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
+ st64le((uint8_t*) txt(g->sp[0]), xz_crc64_on(ld64le((const uint8_t*) txt(g->sp[1])), (const uint8_t*) txt(g->sp[2]), len(g->sp[2])));
  return g->sp[2] = g->sp[0], g->sp += 2, g; }
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)

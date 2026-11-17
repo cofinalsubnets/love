@@ -7,16 +7,11 @@
 #include <elf.h>
 #include <sys/utsname.h>
 #include "asmops.h"
+#include "../kface.h"
 
-extern uintptr_t khhdm;
-extern void *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-extern void kfree(void *p), k_drop(void *p);
-extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f);
 extern void k_kswap(uint64_t *save, uint64_t load), k_ufirst(void), k_uforked(void);
-extern void **k_proc_seat(long pid);
 extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the projection
 extern uintptr_t const k_pie_door[18];
-extern uintptr_t k_clock_ms(void);
 extern uint64_t k_cpu[4];                  // mkvec.l: [0] the kernel stack, [2] the running process
 extern uint8_t k_tss[104];                 // ..and the TSS, rsp0 at 4
 

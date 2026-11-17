@@ -22,15 +22,14 @@ struct sw_layer { flo_t const *box, *num; uintptr_t nbox, nnum; int kind; int64_
 struct sw { struct sw_layer const *l; uintptr_t nl; intptr_t w, h; flo_t *c; uint8_t *hole; };
 
 // the arithmetic as swatch.l's and view.l's, step for step
-static flo_t sw_ffloor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
-static int64_t sw_floor(flo_t x) { return flo_i64(sw_ffloor(x)); }
-static flo_t sw_fmod(flo_t a, flo_t m) { return a - m * sw_ffloor(a / m); }
+static int64_t sw_floor(flo_t x) { return flo_i64(love_floor(x)); }
+static flo_t sw_fmod(flo_t a, flo_t m) { return a - m * love_floor(a / m); }
 static int64_t sw_mash(int64_t a) {
  uint64_t const m = 4294967295u, h = (((uint64_t) a & m) * 1103515245u) & m, h2 = ((h ^ (h >> 15)) * 1664525u) & m;
  return (int64_t) (h2 ^ (h2 >> 13)); }
 static int32_t sw_throw(int64_t x, int64_t y, int64_t s) { return (int32_t) (sw_mash(y * 374761393 + x * 668265263 + s * 2654435761 + 1) % 1024); }
 static flo_t sw_vn(flo_t x, flo_t z, int64_t s) {
- flo_t const fx = sw_ffloor(x), fz = sw_ffloor(z);
+ flo_t const fx = love_floor(x), fz = love_floor(z);
  int64_t const ix = flo_i64(fx), iz = flo_i64(fz);
  flo_t const ux = x - fx, uz = z - fz, ex = ux * ux * ((flo_t) 3.0 - (flo_t) 2.0 * ux), ez = uz * uz * ((flo_t) 3.0 - (flo_t) 2.0 * uz),
              p = (flo_t) sw_throw(ix, iz, s) / (flo_t) 1023.0, q = (flo_t) sw_throw(ix + 1, iz, s) / (flo_t) 1023.0,
@@ -40,7 +39,7 @@ static flo_t sw_vn(flo_t x, flo_t z, int64_t s) {
 // value noise wrapped every pu by pv cells; and its octaves over a picture w by h
 static int64_t sw_wrap(int64_t i, int64_t p) { return (i % p + p) % p; }
 static flo_t sw_vnw(flo_t x, flo_t y, int64_t pu, int64_t pv, int64_t s) {
- flo_t const fx = sw_ffloor(x), fy = sw_ffloor(y);
+ flo_t const fx = love_floor(x), fy = love_floor(y);
  int64_t const ix = flo_i64(fx), iy = flo_i64(fy), i0 = sw_wrap(ix, pu), i1 = sw_wrap(ix + 1, pu), k0 = sw_wrap(iy, pv), k1 = sw_wrap(iy + 1, pv);
  flo_t const ux = x - fx, uy = y - fy, ex = ux * ux * ((flo_t) 3.0 - (flo_t) 2.0 * ux), ey = uy * uy * ((flo_t) 3.0 - (flo_t) 2.0 * uy),
              p = (flo_t) sw_throw(i0, k0, s) / (flo_t) 1023.0, q = (flo_t) sw_throw(i1, k0, s) / (flo_t) 1023.0,
@@ -56,20 +55,13 @@ static flo_t sw_fbm(flo_t x, flo_t y, flo_t size, flo_t oct, intptr_t w, intptr_
  return sum / wt; }
 static bool sw_octs(flo_t const *n) { return n[0] > 0 && n[1] >= 1 && n[1] <= 12; }
 static flo_t sw_sq(flo_t v) { return v * v; }
-#if Bits == 64
-double lm_sqrt(double);
-#define sw_sqrt lm_sqrt
-#else
-float lm_sqrtf(float);
-#define sw_sqrt lm_sqrtf
-#endif
 // a texel in an oval's own axes, a unit circle
 static flo_t sw_u(flo_t const *n, flo_t x, flo_t y) { return ((x + (flo_t) 0.5 - n[0]) * n[4] + (y + (flo_t) 0.5 - n[1]) * n[5]) / n[2]; }
 static flo_t sw_v(flo_t const *n, flo_t x, flo_t y) { return ((y + (flo_t) 0.5 - n[1]) * n[4] - (x + (flo_t) 0.5 - n[0]) * n[5]) / n[3]; }
 static void sw_ball(flo_t const *n, flo_t c[3], flo_t x, flo_t y) {
  flo_t const u = sw_u(n, x, y), v = sw_v(n, x, y), q = u * u + v * v;
  if (q >= (flo_t) 1.0) return;
- flo_t const nz = sw_sqrt((flo_t) 1.0 - q), nx = u * n[4] - v * n[5], ny = u * n[5] + v * n[4],
+ flo_t const nz = love_sqrt((flo_t) 1.0 - q), nx = u * n[4] - v * n[5], ny = u * n[5] + v * n[4],
              e = nx * n[6] + ny * n[7] + nz * n[8], d = e > (flo_t) 0.0 ? e : (flo_t) 0.0,
              k = ((flo_t) 0.38 + (flo_t) 0.8 * d) * ((flo_t) 0.66 + (flo_t) 0.34 * nz),
              d2 = d * d, d4 = d2 * d2, d8 = d4 * d4, sp = n[9] * (d8 * d8);

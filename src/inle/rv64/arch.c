@@ -5,7 +5,6 @@
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
 #include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
-void kq(uint8_t);                      // kmain's input queue, one byte
 
 // virt's MMIO: all under the first gigabyte, inside mkboot.l's window; sv39 has no memory
 // type, so no device mapping to add as a64's mmio_map does

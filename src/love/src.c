@@ -1,5 +1,6 @@
 // src/love/src.c -- the archives the artifact carries: its own source, and moonlibc per ISA
 #include "love.h"
+#include "bytes.h"
 #include "archive/srctree.h"
 #include <string.h>
 
@@ -19,13 +20,11 @@ extern const uintptr_t
 uint64_t image_carried_c(void) {
  unsigned char const *z = srctree;
  if (srctree_len < 12 || memcmp(z, "lovetree", 8)) return 0;
- uint32_t ns = (uint32_t) z[8] | (uint32_t) z[9] << 8 | (uint32_t) z[10] << 16 | (uint32_t) z[11] << 24;
+ uint32_t ns = ld32le(z + 8);
  for (uint32_t i = 0; i < ns && 12 + 24 * (uintptr_t)(i + 1) <= srctree_len; i++) {
   unsigned char const *r = z + 12 + 24 * i;
   if (r[0] != 'c' || r[1]) continue;
-  uint64_t v = 0;
-  for (int b = 0; b < 4; b++) v |= (uint64_t) r[12 + b] << 8 * b | (uint64_t) r[20 + b] << (32 + 8 * b);
-  return v; }
+  return ld32le(r + 12) | (uint64_t) ld32le(r + 20) << 32; }
  return 0; }
 
 // a section alone ends in the two zero blocks a tar ends with; the last carries its own
