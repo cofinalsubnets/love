@@ -309,6 +309,7 @@
                       (catall [(rv-li-rec 31 disp) (rv-alu-rrr 0 0 dn dn 31)]))]))
 
    (rv-push s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) (rv-wf3 0))])   ; addi sp,sp,-16 ; sd s,0(sp)
+   (rv-pushd s) (catall [(rv-i -16 2 0 2 0x13) (rv-s 0 2 (rvn s) (rv-wf3 0)) (rv-s 8 2 (rvn s) (rv-wf3 0))])   ; .. and sd s,8(sp): the slot whole
    (rv-pop d)  (catall [(rv-i 0 2 (rv-wf3 0) (rvn d) 0x03) (rv-i 16 2 0 2 0x13)])   ; ld d,0(sp) ; addi sp,sp,16
 
    (rv-decm base off)                                                        ; x30 = [base+off] - 1, stored, against x0
@@ -457,7 +458,7 @@
           ('shl . rv-shift 'shl) ('shr . rv-shift 'shr) ('sar . rv-shift 'sar)
           ('rol . rv-shift 'rol) ('ror . rv-shift 'ror)
           ('lea . rv-lea) ('lean . rv-lea)
-          ('push . rv-push) ('pop . rv-pop)
+          ('push . rv-push) ('pushd . rv-pushd) ('pop . rv-pop)
           ('neg . rv-neg) ('not . rv-not) ('inc . rv-inc) ('dec . rv-dec) ('decm . rv-decm)
           ('jmp . rv-jmp) ('br . rv-br) ('jmpr . rv-jmpr) ('jmpt . rv-jmpt) ('callr . rv-callr)
           ('mulo . rv-mulo) ('mulh . rv-mulh) ('umulh . rv-umulh) ('set . rv-set)
