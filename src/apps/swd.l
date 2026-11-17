@@ -142,9 +142,13 @@
                      _ (f4-idle w 1000000)
                      (swd-wr w (fl + 16) 0))
  (f4-read w a n) (snip (join "" (map (v \ wrle v 4) (swd-rds w a ((n + 3) // 4)))) 0 n)
- ; erase the sectors s covers from a, write it, lock, read it back: 1, or where it differs first
+ ; erase the sectors s covers from a, write it, lock, read it back: 1, or where it differs first.
+ ; nothing to write, or bytes past the flash, scare before the chip is touched: an empty
+ ; write would erase nothing and read back the same
  (f4-flash w a s)
-  (: hit (filter (k \ k 1 < a + #s && a < k 1 + k 2) f4-sectors)
+  (: _ (!(string? s) || #s = 0 ? (scare 'f4-empty a))
+     _ (!(fbase <= a && a + #s <= fbase + net (map (k \ k 2) f4-sectors)) ? (scare 'f4-range [a #s]))
+     hit (filter (k \ k 1 < a + #s && a < k 1 + k 2) f4-sectors)
      _ (f4-unlock w)
      _ (map (k \ f4-erase w <k) hit)
      _ (f4-write w a s)

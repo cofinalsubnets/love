@@ -448,6 +448,19 @@
    n (f4-idle x 100)
    (test (e = ['f4-flash 64]) (b = ['f4-busy 0x10000]) (n = 0)))
 
+; an empty write and one past the flash's ends scare before the chip is touched: nothing
+; unlocked, erased or written
+(: t (f4chip 1) w <t f (t 1) _ (swd-attach w)
+   (try a s) (trap (_ \ f4-flash w a s) 0 (a \ b \ [a b]))
+   e (try 0x08008000 "")
+   n (try 0x08008000 ())
+   lo (try 0x07FFFFFC "abcd")
+   hi (try 0x0807FFFE "abcd")
+   ok (try 0x0807FFFC "abcd")
+   (test (e = ['f4-empty 0x08008000]) (n = ['f4-empty 0x08008000])
+         (lo = ['f4-range [0x07FFFFFC 4]]) (hi = ['f4-range [0x0807FFFE 4]])
+         ([['erase 7]] = filter (e \ <e = 'erase) (f 'log ())) (1 = ok)))
+
 ; the v2 layouts: a request's size, its offsets, name, config and count where the uapi puts them
 (: cf (gpio-cfg [(gpio-attr 2 4 7)]) rq (gpio-req [5 6 7] "swd" cf)
    (test (592 = #rq) (272 = #cf) (24 = #(gpio-attr 1 4 2)) (16 = #(gpio-vals 0 7))
