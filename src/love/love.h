@@ -328,7 +328,7 @@ struct g {
  struct code *code;
  struct cfree *cfree;
  // binary addresses a native reads off g, as a blob holding one could not ride an image
- word reach[14];
+ word reach[15];
  intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a step
                   // or a call takes one, at 0 it refills
  uintptr_t ticks; // the refills and the vm's fairness yields: work in 64-step units
@@ -378,7 +378,7 @@ struct g {
     } *io; }; }; };
  intptr_t end[]; };
 // the glaze reads these off g by place: fair right past reach, the run ring and the parked at words 3 and 4
-_Static_assert(offsetof(struct g, fair) == offsetof(struct g, reach) + 14 * sizeof(word), "fair rides past reach");
+_Static_assert(offsetof(struct g, fair) == offsetof(struct g, reach) + 15 * sizeof(word), "fair rides past reach");
 _Static_assert(offsetof(struct g, tasks) == 3 * sizeof(word) && offsetof(struct g, parked) == 4 * sizeof(word), "the native's peer test");
 
 // --- nif registration ---
@@ -1203,7 +1203,7 @@ int nif_cell(union u const *k);
 int love_once(void), ops_fill(void);
 size_t code_len(char *code);
 // g->reach's slots: the emitter's `reach` law names them the same
-enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap, ReachFair, ReachSetcup };
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap, ReachFair, ReachSetcup, ReachPark };
 union u *fn_base(union u *k, int *nargs);
 struct g
  *eval(struct g *g),
