@@ -2414,6 +2414,18 @@ cmp -s "$ho/.wa-cold.o" "$ho/.wa-warm.o" \
 echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a failure) ok"
 
 
+# -- a program that names nothing of libc's still gets the runtime's startup: crt0's
+# __love_start is weak, so the link must owe the real one, which runs the constructors
+printf 'static int hit;\n__attribute__((constructor)) static void c(void) { hit = 42; }\nint main(void) { return hit; }\n' > "$ho/.bare-start.c"
+for a in x64 i386 arm; do
+  case $a in x64) q=;; i386) q=qemu-i386;; arm) q=qemu-arm;; esac
+  [ -z "$q" ] || command -v $q > /dev/null || { gate_partly "  (the startup of a libc-free $a program skipped: no $q)"; continue; }
+  "$m" cc -t $a -o "$ho/.bare-start" "$ho/.bare-start.c" || fail "startup: a libc-free $a program does not link"
+  $q "$ho/.bare-start"; r=$?
+  [ $r -eq 42 ] || fail "startup: a libc-free $a program ran without the runtime's __love_start (its constructor answered $r, want 42)"
+done
+echo "mooncc: a program that names nothing of libc's starts through the runtime's __love_start ok"
+
 # -- the carried runtime is kernel-neutral
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
