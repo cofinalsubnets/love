@@ -15,7 +15,7 @@ enum d { DMint, DNom, DGem, DTwin, DBig, DTray, DString, DChain };
 #endif
 #endif
 #if !defined(data_stride)
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || (defined(__aarch64__) || defined(__riscv))
 #define data_stride 16
 #else
 #define data_stride 128
