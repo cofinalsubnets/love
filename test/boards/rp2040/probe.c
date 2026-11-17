@@ -12,6 +12,9 @@
 //   'Z'            every line let go, the target's alone again
 //   'E'            the batch's end: answers 'e'
 //   'I'            answers "lovswd1\n"
+//   'P'            the wiring: four bytes of the three lines' levels (bit 0 swclk, 1 nrst, 2 swdio),
+//                  all pulled up, all pulled down, then swclk and then swdio driven low with
+//                  the others pulled up. nrst is never driven; every line is let go after
 #include <stdint.h>
 #include "rp2040.h"
 
@@ -57,6 +60,25 @@ static void take(struct probe *p) {
 static void release(struct probe *p) {
   REG(SIO_GPIO_OE_CLR) = PIN(swclk) | PIN(swdio) | PIN(nrst);
   p->on = 0; }
+
+static uint32_t levels(void) {
+  spin(2000);
+  uint32_t const v = REG(SIO_GPIO_IN);
+  return (v >> swclk & 1u) | (v >> nrst & 1u) << 1 | (v >> swdio & 1u) << 2; }
+
+static void pulls(uint32_t up) {
+  unsigned const pins[3] = { swclk, nrst, swdio };
+  for (unsigned i = 0; i < 3; i++) {
+    REG(PADS_BANK0_GPIO(pins[i]) + REG_CLR) = up ? PADS_PDE : PADS_PUE;
+    REG(PADS_BANK0_GPIO(pins[i]) + REG_SET) = up ? PADS_PUE : PADS_PDE; } }
+
+static void wiring(struct probe *p) {
+  release(p);
+  usb_putc((int) levels());
+  pulls(0), usb_putc((int) levels()), pulls(1);
+  REG(SIO_GPIO_OUT_CLR) = PIN(swclk) | PIN(swdio);
+  REG(SIO_GPIO_OE_SET) = PIN(swclk), usb_putc((int) levels()), REG(SIO_GPIO_OE_CLR) = PIN(swclk);
+  REG(SIO_GPIO_OE_SET) = PIN(swdio), usb_putc((int) levels()), REG(SIO_GPIO_OE_CLR) = PIN(swdio); }
 
 static uint32_t parity(uint32_t v) { v ^= v >> 16, v ^= v >> 8, v ^= v >> 4, v ^= v >> 2, v ^= v >> 1; return v & 1u; }
 
@@ -122,10 +144,8 @@ int main(void) {
   REG(RESETS_RESET + REG_SET) = blk;
   REG(RESETS_RESET + REG_CLR) = blk;
   while ((REG(RESETS_RESET_DONE) & blk) != blk) {}
-  for (unsigned i = 0; i < 3; i++) {
-    gpio_init(pins[i]);
-    REG(PADS_BANK0_GPIO(pins[i]) + REG_CLR) = PADS_PDE;
-    REG(PADS_BANK0_GPIO(pins[i]) + REG_SET) = PADS_PUE; }
+  for (unsigned i = 0; i < 3; i++) gpio_init(pins[i]);
+  pulls(1);
   REG(SIO_GPIO_OUT_CLR) = PIN(nrst);
   rate(&p, 1000000u);
   usb_init();
@@ -150,4 +170,5 @@ int main(void) {
     else if (c == 'Z') release(&p);
     else if (c == 'E') p.stop = 0, usb_putc('e');
     else if (c == 'I') puts_("lovswd1\n");
+    else if (c == 'P') wiring(&p);
     else usb_putc('?'); } }
