@@ -508,3 +508,7 @@
    o (trap (_ \ gpio-wire-on {'open (p \ 'enoent)} "/dev/nope" 5 6 7) 0 (a \ b \ [a b]))
    l (trap (_ \ gpio-wire-on {'open (p \ 3) 'ioctl (\ fd rq s 'ebusy)} "/dev/gpiochip9" 5 6 7) 0 (a \ b \ [a b]))
    (test (e = 'eperm) (z = 'einval) (o = ['gpio-open 'enoent]) (l = ['gpio-lines 'ebusy])))
+
+; the device's own io: /dev/null opens, and refuses the line request as no gpio chip
+(: e (trap (_ \ gpio-wire "/dev/null" 5 6 7) 0 (a \ b \ [a b]))
+   (test (e = ['gpio-lines 'enotty])))

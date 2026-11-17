@@ -7,6 +7,7 @@
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire)
 (borrow 'bytes)
+(borrow 'posix)
 (:
  ; the low n bits of x out, then n bits in as a number
  (swd-bits w x n) (n > 0 ? (w 'out (x & 1), swd-bits w (x >> 1) (n - 1)) 0)
