@@ -25,12 +25,18 @@ static love_inline uint8_t *pcm_lay(uint8_t *q, float const *x, uintptr_t n, boo
    *q++ = (uint8_t) t, *q++ = (uint8_t) (t >> 8); }
  return q; }
 
-// one unaligned load where the machine takes it: mooncc lays a byte gather as eight loads
+// one unaligned load where the machine takes it: mooncc lays a byte gather as eight loads. runs
+// may overlap part way (a match under 16 back), which gcc assumes two struct accesses never do
 #if defined(__x86_64__) || defined(__aarch64__)
 #define wideld 1
+#if defined(__mooncc__)
 struct u64u { uint64_t v; } __attribute__((packed, aligned(1)));
 #define ld64(p) (((struct u64u const*)(p))->v)
 #define st64(p, x) (((struct u64u*)(p))->v = (x))
+#else
+static love_inline uint64_t ld64(void const *p) { uint64_t v; __builtin_memcpy(&v, p, 8); return v; }
+static love_inline void st64(void *p, uint64_t x) { __builtin_memcpy(p, &x, 8); }
+#endif
 #else
 #define wideld 0
 #endif

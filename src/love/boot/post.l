@@ -931,7 +931,7 @@
    ; the rest kept -> 1. () where it will not open or seek. the seek is on the raw fd
    (u-at p m off) (cite 'posix 'openfd p m @ fd
                    (charm? fd && 0 <= fd ?
-                      (charm? (cite 'posix 'lseek fd off 0) ? (fdopen fd) (cite 'posix 'close fd, ()))))
+                      (charm? (cite 'posix 'lseek fd off 0) ? (cite 'posix 'fdopen fd) (cite 'posix 'close fd, ()))))
    (uread-at p off n) (u-at p 0 off @ q
      (hot? q ? (: b (cask (n < 65536 ? n 65536))
                   (go k acc) (k < 1 ? acc
@@ -1695,10 +1695,10 @@
                                   [p (map show (filter (v \ prov v = p) (keys prov))) (map show (filter (m \ mods m = p) (keys mods)))
                                      (seen u ? () (pin seen u 1, need u))])
                                ps))
-               cl (cite 'posix 'close)
+               cl (cite 'posix 'close) fdopen (cite 'posix 'fdopen)
                (flush out, flush err,
-                pipe 0 @ pp
-                (fork 0 @ k
+                cite 'posix 'pipe 0 @ pp
+                (cite 'posix 'fork 0 @ k
                   (? (k < 0) (cl <pp, cl >pp, lay (), rec ())
                      (k = 0) (cl <pp,
                               trap (_ \ (lay (), fdopen >pp @ w (say w (show (rec ())), flush w), quit 0)) ()
@@ -2241,7 +2241,7 @@
    ; this build's name: the version and a short hash of the source it carries, off the
    ; carried tree's section crcs. same source, same name; no source, the version alone
    (love-build _)
-    (tree-head 0 @ () "love \(love-version)"
+    (cite 'tree 'tree-head 0 @ () "love \(love-version)"
        h "love \(love-version) \(snip (cite 'hashes 'sha256 (show (map (s \ [<s (s 2) (s 4)]) h))) 0 8)")
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one

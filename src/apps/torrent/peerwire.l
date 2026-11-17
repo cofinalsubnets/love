@@ -17,6 +17,7 @@
 (borrow 'bytes)
 (:
  (close q) (cite 'posix 'close q)
+ connect (cite 'posix 'connect)
  pw-proto "BitTorrent protocol"
  ; f on a task of its own, a watchdog on the clock: the first to finish wins
  (within ms f) (: r (twirl (_ \ [(f ())]) ())

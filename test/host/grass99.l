@@ -1,6 +1,7 @@
 ; grass99 headless: frames, pens in range as the field wilts, sun and moon, the tune reads
 ; a crew module, not in the corpus. run: cat test/00-init.l test/host/00-host.l test/host/grass99.l | out/love
 
+(borrow 'quay)
 (borrow 'grass)    ; the week the sequel runs
 (borrow 'grass99)
 (borrow 'meadow)   ; the field's pens

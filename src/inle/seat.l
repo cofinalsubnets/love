@@ -16,10 +16,12 @@
                    'badarg)
    (environ u) (map (e \ <e + ("=" + >e)) (envt 0)))
 
-; bootargv: the boot line's words, quote-aware. cmdline stays seatless: lush sits mid-cat,
-; so a member's seat firing as it is read would miss kore's applets
+; bootargv: the boot line's words, quote-aware, past the k=v words that lead it (the
+; kernel's, as on linux: the pi's firmware puts its own ahead of cmdline.txt). cmdline stays
+; seatless: lush sits mid-cat, so a member's seat firing as it is read would miss kore's applets
 (: bootargv
-     (: (kw i w s acc)
+     (: (lead l) (two? l && has? <l "=" ? (lead >l) l)
+        (kw i w s acc)
           (#bootline <= i ? (rev (#w ? (w . acc) acc))
              (bootline i @ c
                 ; a char joins a string as a string of one: w + c on mixed bands is w alone
@@ -27,7 +29,7 @@
                    (c = 32) (kw (i + 1) "" 0 (#w ? (w . acc) acc))
                    (c = 34 || c = 39) (kw (i + 1) w c acc)
                    (kw (i + 1) (w + string c) 0 acc))))
-        (kw 0 "" 0 ()))
+        (lead (kw 0 "" 0 ())))
    cmdline ["love"]
    argv cmdline)
 
@@ -104,10 +106,10 @@
    (tether argv) (openpty 0 @ fs
                    (!(two? fs) ? fs
                       (: m <fs sl <>fs sg <>>fs
-                         w (worn ()) sp (fdopen (dup sl))
+                         w (worn ()) sp (cite 'posix 'fdopen (cite 'posix 'dup sl))
                          _ (wear [sp sp sp])
                          p (k-spawn1 argv sl sl sl 0 1)
-                         (wear w, close sp, close sl, twirl (_ \ k-sigs (fdopen sg) p) 0, (p . fdopen m)))))
+                         (wear w, close sp, close sl, twirl (_ \ k-sigs (cite 'posix 'fdopen sg) p) 0, (p . cite 'posix 'fdopen m)))))
    ; a hangup reaches the child that holds the session as well as the group in front
    (k-sigs q p) (see q @ c
                   (c < 0 ? (close q)
@@ -148,7 +150,7 @@
    (k-procrun argv)
      (kproc (k-words argv) (k-words (environ 0)) @ r
         (!(two? r) ? (say err (<argv + ": " + show r), put err 10, 126)
-           (: q (fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
+           (: q (cite 'posix 'fdopen >r) _ (k-pump q) _ (slurp q) _ (close q)
               (kreap <r @ s (charm? s ? s 1)))))
    ; `proc PROG ARGS ..`: love's PROG as a process, woken from the machine's own image
    (proc-main args) (k-procrun args)

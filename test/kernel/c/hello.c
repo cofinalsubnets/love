@@ -2,13 +2,15 @@
  * words, its cwd and its environment are its own, its status goes back. on x64 the kernel's
  * memory is not its own: `peek` reads the kernel's image and faults, `poke` hands it to write,
  * which refuses. `spin F` computes without a call until F turns up, so only the timer gets
- * the machine back; `cat` pours stdin to stdout, which waits on whoever writes the pipe */
+ * the machine back; `cat` pours stdin to stdout, which waits on whoever writes the pipe;
+ * `fork` makes a child whose memory is a copy, a static and a heap block written there alone */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 int main(int argc, char **argv) {
   char d[256];
@@ -20,6 +22,22 @@ int main(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "cat")) {
     for (long n; (n = read(0, d, sizeof d)) > 0;)
       if (write(1, d, (size_t) n) != n) return 1;
+    return 0; }
+  if (argc == 2 && !strcmp(argv[1], "fork")) {
+    static int mark = 1;
+    char *hp = malloc(64);
+    int p[2], st = 0;
+    if (!hp || pipe(p)) return 1;
+    strcpy(hp, "P");
+    pid_t k = fork();
+    if (k < 0) return 2;
+    if (!k) {
+      mark = 2, hp[0] = 'C', close(p[0]);
+      return write(p[1], "kid", 3) == 3 && mark == 2 && getppid() != getpid() ? 9 : 1; }
+    close(p[1]);
+    long n = read(p[0], d, sizeof d);
+    if (waitpid(k, &st, 0) != k) return 3;
+    printf("forked: %.*s %d mark %d heap %s\n", n > 0 ? (int) n : 0, d, WEXITSTATUS(st), mark, hp);
     return 0; }
   char const *h = getenv("HELLO");
   printf("hello from C:");

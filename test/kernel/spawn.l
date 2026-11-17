@@ -1,8 +1,8 @@
 ; test/kernel/spawn.l -- a process starts processes: posix_spawn makes a new one through the
 ; kernel, wait4 brings its status back, kill ends it. the shell runs as a process here: a
-; pipeline of two love processes, a stage of the shell's own in its heap beside a process, a
-; capture, and background jobs -- a process and a stage -- that kill reaches and whose cd
-; stays theirs. the wasm lane runs it, and x64's test_kernel_uproc.
+; pipeline of two love processes, a stage of the shell's own (forked on x64, a task in its heap
+; on wasm) beside a process, a capture, and background jobs -- a process and a stage -- that
+; kill reaches and whose cd stays theirs. the wasm lane runs it, and x64's test_kernel_uproc.
 (: o "/tmp/spawn.out"
    chdir (cite 'posix 'chdir) cwd (cite 'posix 'cwd)
    ; the process's words, with its stdout and stderr on a file -> (status . what it wrote)

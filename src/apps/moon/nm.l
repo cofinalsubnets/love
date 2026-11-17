@@ -486,7 +486,36 @@
        (go () fs))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (? (x64? g || a64? g) (nmhoist g r @ h (h == r ? r (nmfix g h))) (t32? g && !(v6m? g)) (nmlsr g r @ h (h == r ? r (nmfix g h))) r)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmsf g (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (? (x64? g || a64? g) (nmhoist g r @ h (h == r ? r (nmfix g h))) (t32? g && !(v6m? g)) (nmlsr g r @ h (h == r ? r (nmfix g h))) r))))))
+   ; a frame slot read again within a block, while a vreg still holds what was last stored there or
+   ; read from it at that width, is a copy of the vreg. a label, a jump, or a form that might write
+   ; memory past the frame forgets every slot; a store into the frame, the slots it may touch; a
+   ; write to the vreg, its own
+   (nmsfk op) (? (elem op '(ld st)) 'g (elem op '(ldss stss)) 'f 'd)
+   (nmsfc c) (c @ 'g 'mov 'f 'movss _ 'movapd)
+   (nmsfq g) (g 'nmsfq @ () (: q (foldl (t \ o \ pin t o 1) {} (ldops9 + fldops + leaops + xops + fxops + x4ops + m4ops + aluops + flagops + divops +
+                                       wmops + vshops + unops + rafbin +
+                                       '(mov movss movapd li fimm fli la laa lapool set cmov cmp test shl shr sar rol ror ror4
+                                         ucomiss ucomisd ucom0 br movdxr movdrx movqxr movqrx movqrr movrrq cuse cdef
+                                         cvtsi2ss cvtsi2sd cvttss2si cvttsd2si cvtss2sd cvtsd2ss negss negsd sqrtss sqrtsd))) (pins g 'nmsfq q, q)) t t)
+   (nmsf g fs)
+    (: (has k o c) (k @ ([o2 c2 v] . u) (o2 = o && c2 = c ? v (has u o c)) _ ())
+       (near o k) (filter (e \ abs (<e - o) >= 8) k)
+       ; w read again in its block before a write, so the copy keeps it no longer
+       (rd? w u) (u @ (f . u2) (f @ ('label . _) 0 _ (raops g f @ [r d] (elem w r ? 1 (elem w d ? 0 (rd? w u2))) _ 0)) _ 0)
+       (go fs k)
+        (fs @ (f . u)
+              (f @ ([op v 'r4 o] && elem op '(ld ldss ldsd) && charm? o && lovr? v)
+                    (: c (nmsfk op) k2 (filter (e \ e 2 != v) k)
+                       (has k o c @ () (f . go u ([o c v] . k2))
+                                    w (? (w = v) (go u k) (!(rd? w u)) (f . go u ([o c v] . k2)) ([(nmsfc c) v w] . go u k2))))
+                   ([op 'r4 o v] && elem op '(st stss stsd) && charm? o && lovr? v)
+                    (f . go u ([o (nmsfk op) v] . near o k))
+                   ([op 'r4 o _] && elem op stops9 && charm? o) (f . go u (near o k))
+                   _ (!(two? f) || !(nmsfq g <f) ? (f . go u ())
+                        (raops g f @ [_ d] (f . go u (filter (e \ nelem (e 2) d) k)) _ (f . go u ()))))
+              _ ())
+     (abl? g 'sf ? fs (go fs ())))
    ; a 32-bit extension of a vreg whose every reader takes only its low half goes. such a reader:
    ; the extension, a store of 4 bytes or less, or an add, sub, imul, and, or, xor or copy whose
    ; answer is such a vreg in turn or is extended by the next form

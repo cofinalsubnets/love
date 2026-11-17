@@ -6,6 +6,7 @@
 (borrow '(posix rove cli))
 (borrow 'horn)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
+(borrow 'lore)                          ; facets and lace, in C
 (borrow '(view mesh walk))
 (borrow 'vec)                           ; sq
 (borrow 'mixer)

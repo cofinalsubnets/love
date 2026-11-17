@@ -123,7 +123,7 @@ static lvm(lvm_bake) {
  Sp[0] = r;
  love_musttail return Next(1); }
 
-LvDef("bake", bake, 1, NULL);
+LvDef("bake", bake, 1, "image");
 
 // why: image_why's answer for a file that does not wake (0 when it is torn past the header)
 struct g *image_load(char const *path, int *why) {

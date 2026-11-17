@@ -1,6 +1,7 @@
 ; cooperative tasks: twirl starts one (main is pid 0), rest yields or sleeps, catch collects,
 ; landed? asks whether catch would not wait, scoop harvests any finished task
 
+(borrow 'task)                          ; pause, resume
 (test
  (42 = (twirl (x \ x) 42 @ p (catch p)))
  (43 = (twirl (x \ x + 1) 42 @ p (catch p)))

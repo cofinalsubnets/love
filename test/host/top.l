@@ -2,6 +2,7 @@
 ; and renices only sleeps this file spawned, pointed at with -p
 ; run: LOVEBIN=out/love sh -c "cat test/00-init.l test/host/top.l | out/love"
 
+(borrow 'quay)
 (: love (getenv "LOVEBIN")
    bf (cask 65536)
    (waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (do (rest 2) (waitfor pid))))

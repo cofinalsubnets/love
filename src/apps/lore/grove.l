@@ -15,6 +15,7 @@
 (borrow '(view vec))
 (borrow 'sky)                           ; the light a sky casts
 (borrow 'mesh)                          ; the tubes
+(borrow 'lore)                          ; lace, in C
 (:
  (rr g lo hi) (lo + (hi - lo) * rnd g)
  (num? v) (charm? v || gem? v)

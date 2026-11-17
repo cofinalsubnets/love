@@ -118,16 +118,16 @@ static love_inline intptr_t rz_own(struct rz const *r, intptr_t y) {
 // edge on, facing the eye when culling, some pixel centre of this worker's in its box, and
 // nearer than all drawn on some tile it covers
 static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
- int64_t X[3], Y[3];
+ intptr_t X[3], Y[3];   // sixteenths inside the guard band, under 2^30 apart: only the area wants 64 bits
  for (int i = 0; i < 3; i++)
   X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
- int64_t const A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ int64_t const A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
- int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++)
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
   ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
- int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ intptr_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
  if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;
@@ -267,34 +267,34 @@ love_noinline static void rz_planes(struct rz_plane *t, struct rz_v const *p0, s
 
 // edge i runs P[i] to P[i+1] and is above 0 on the inside; a top or a left edge owns the
 // pixels on it, the rest lose them by the bias of one
-love_noinline static void rz_edges(struct rz_plane *t, int64_t const *X, int64_t const *Y) {
+love_noinline static void rz_edges(struct rz_plane *t, intptr_t const *X, intptr_t const *Y) {
  for (int i = 0; i < 3; i++) {
   int const j = (i + 1) % 3;
-  int64_t const dx = X[j] - X[i], dy = Y[j] - Y[i];
-  t->ex[i] = -dy * 16, t->ey[i] = dx * 16;
-  t->ec[i] = dx * (8 - Y[i]) - dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); } }
+  intptr_t const dx = X[j] - X[i], dy = Y[j] - Y[i];
+  t->ex[i] = (int64_t) -dy * 16, t->ey[i] = (int64_t) dx * 16;
+  t->ec[i] = (int64_t) dx * (8 - Y[i]) - (int64_t) dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); } }
 
 // a screen triangle's plane, edges exact in sixteenths so a shared edge's pixels fall to one
 // side, riders over w unless affine; 0 if it draws nothing
 love_noinline static int rz_setup(struct rz *r, struct rz_plane *t, struct rz_v const *p0, struct rz_v const *p1, struct rz_v const *p2) {
  struct rz_v const *P[3] = { p0, p1, p2 };
- int64_t X[3], Y[3];
+ intptr_t X[3], Y[3];
  for (int i = 0; i < 3; i++)
   X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);   // in the guard band: a word
- int64_t A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ int64_t A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0) return 0;
  if (A > 0 && (r->flags & rz_cull)) return 0;   // anticlockwise in gl's y-up faces the eye,
  if (A < 0) {                                  // and is clockwise on the screen's y-down
   struct rz_v const *t = P[1]; P[1] = P[2], P[2] = t;
-  int64_t u = X[1]; X[1] = X[2], X[2] = u;
+  intptr_t u = X[1]; X[1] = X[2], X[2] = u;
   u = Y[1], Y[1] = Y[2], Y[2] = u, A = -A; }
  p0 = P[0], p1 = P[1], p2 = P[2];
  // the pixels whose centres the box holds: none, and done before any plane
- int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++)
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
   ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
- int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ intptr_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
  if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;   // ..or none of them this worker's
@@ -332,13 +332,13 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  if (!rz_setup(r, &t, p0, p1, p2)) return;
  for (intptr_t y = rz_own(r, t.y0); y < t.y1; y = rz_own(r, y + 1)) rz_row(r, &t, lv, nlv, y); }
 
-// clip space to pixels; snapped to whole ones on request
-static void rz_project(struct rz const *r, struct rz_v *v) {
- flo_t const q = 1 / v->w;
- v->x = (v->x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W;
- v->y = ((flo_t) 0.5 - v->y * q * (flo_t) 0.5) * (flo_t) r->H;
- v->z = v->z * q;
- if (r->flags & rz_snap) v->x = rz_floor(v->x + (flo_t) 0.5), v->y = rz_floor(v->y + (flo_t) 0.5); }
+// clip space to pixels into v's place, its w and riders left; snapped to whole ones on request
+static love_inline void rz_place(struct rz const *r, flo_t x, flo_t y, flo_t z, flo_t w, struct rz_v *v) {
+ flo_t const q = 1 / w;
+ x = (x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W, y = ((flo_t) 0.5 - y * q * (flo_t) 0.5) * (flo_t) r->H;
+ if (r->flags & rz_snap) x = rz_floor(x + (flo_t) 0.5), y = rz_floor(y + (flo_t) 0.5);
+ v->x = x, v->y = y, v->z = z * q; }
+static love_inline void rz_project(struct rz const *r, struct rz_v *v) { rz_place(r, v->x, v->y, v->z, v->w, v); }
 
 static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) {
  struct rz_v o;
@@ -395,7 +395,7 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
  int n = 3, in = (o0 & o1 & o2 & 64) != 0;
  if (in) {
   struct rz_v s[3];
-  for (int i = 0; i < 3; i++) s[i].x = p[i].x, s[i].y = p[i].y, s[i].z = p[i].z, s[i].w = p[i].w, rz_project(r, s + i);
+  for (int i = 0; i < 3; i++) rz_place(r, P[i][0], P[i][1], P[i][2], P[i][3], s + i);
   struct rz_v const *const S[3] = { s, s + 1, s + 2 };
   if (!rz_may(r, S)) return; }
  flo_t const *vd = vt->type == love_R ? tray_data(vt) : 0;
@@ -719,7 +719,7 @@ love_noinline static struct g *host_lace(struct g *g) {
 static lvm(lvm_lace) { LvmCall(g, host_lace) }
 
 // FIXME namespace these
-LvDef("facets", raster, 8, NULL);
-LvDef("frame-bytes", frame_bytes, 3, NULL);
-LvDef("frame-paint", frame_paint, 5, NULL);
-LvDef("lace", lace, 1, NULL);
+LvDef("facets", raster, 8, "lore");
+LvDef("frame-bytes", frame_bytes, 3, "lore");
+LvDef("frame-paint", frame_paint, 5, "lore");
+LvDef("lace", lace, 1, "lore");

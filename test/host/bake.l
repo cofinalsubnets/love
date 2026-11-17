@@ -24,7 +24,7 @@
    _ (test (ev 'love-image = "<baked>"))
 
    ; the session rides on past the dump, the file port feeding this script live across it
-   _ (test (bake img = 1))
+   _ (test (cite 'image 'bake img = 1))
 
    _ (open drv "w" @ p (say p "(: _ (putn bake-smoke-marker) (quit 0))", close p))
    r (hark ["out/love" "wake" img drv])
