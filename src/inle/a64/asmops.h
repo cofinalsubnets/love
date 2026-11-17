@@ -31,6 +31,10 @@ static inline void k_daif_mask_all(void) {          // D, A, I, F all masked
 
 static inline void k_daif_unmask_irq(void) {        // DAIF.I = 0
   asm volatile ("msr daifclr, #2"); }
+// irqs off around a few stores an interrupt also makes, then as they were
+static inline uint64_t k_irq_save(void) {
+  uint64_t d; asm volatile ("mrs %0, daif\n msr daifset, #2" : "=r"(d) :: "memory"); return d; }
+static inline void k_irq_restore(uint64_t d) { asm volatile ("msr daif, %0" :: "r"(d) : "memory"); }
 
 // AT answers in PAR_EL1, readable after the isb
 static inline uint64_t k_at_s1e1w_par(void *va) {
@@ -47,6 +51,9 @@ static inline void k_dc_cvau(uintptr_t p) {         // clean D to unification
   asm volatile ("dc cvau, %0" :: "r"(p) : "memory"); }
 static inline void k_ic_ivau(uintptr_t p) {         // invalidate I
   asm volatile ("ic ivau, %0" :: "r"(p) : "memory"); }
+// a buffer another master reads and writes: clean and invalidate D to the point of coherency
+static inline void k_dc_civac(uintptr_t p) {
+  asm volatile ("dc civac, %0" :: "r"(p) : "memory"); }
 
 // EL1t -> EL1h: exception entry uses SP_EL1, which msr cannot write at EL1, so capture sp,
 // select SP_EL1, write sp -- in one asm block, so sp is never garbage across a memory access

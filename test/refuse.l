@@ -7,7 +7,7 @@
    (rf-nest n a) (n < 1 ? a (rf-nest (n - 1) [1 a]))
    rf-deep-a (rf-nest 300000 1)                              ; past any C stack a frame a car would take
    rf-deep-b (rf-nest 300000 2)
-   rf-knobs (tune ()))
+   rf-knobs (tune ())
 
 (test
  ; a tray's shape past any heap: refused before a byte is laid, never indexed past its end
@@ -59,4 +59,4 @@
     (two? (rc ("(" * 200 + "a" + ")" * 200) 1))
     (no? (rc ("a" * 200000) 1))
     (no? (rc ("a|" * 200000 + "a") 1))
-    (two? (rc ("a|" * 1000 + "b") 1))))
+    (two? (rc ("a|" * 1000 + "b") 1)))))

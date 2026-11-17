@@ -16,10 +16,12 @@
                    'badarg)
    (environ u) (map (e \ <e + ("=" + >e)) (envt 0)))
 
-; bootargv: the boot line's words, quote-aware. cmdline stays seatless: lush sits mid-cat,
-; so a member's seat firing as it is read would miss kore's applets
+; bootargv: the boot line's words, quote-aware, past the k=v words that lead it (the
+; kernel's, as on linux: the pi's firmware puts its own ahead of cmdline.txt). cmdline stays
+; seatless: lush sits mid-cat, so a member's seat firing as it is read would miss kore's applets
 (: bootargv
-     (: (kw i w s acc)
+     (: (lead l) (two? l && has? <l "=" ? (lead >l) l)
+        (kw i w s acc)
           (#bootline <= i ? (rev (#w ? (w . acc) acc))
              (bootline i @ c
                 ; a char joins a string as a string of one: w + c on mixed bands is w alone
@@ -27,7 +29,7 @@
                    (c = 32) (kw (i + 1) "" 0 (#w ? (w . acc) acc))
                    (c = 34 || c = 39) (kw (i + 1) w c acc)
                    (kw (i + 1) (w + string c) 0 acc))))
-        (kw 0 "" 0 ()))
+        (lead (kw 0 "" 0 ())))
    cmdline ["love"]
    argv cmdline)
 
