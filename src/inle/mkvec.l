@@ -5,7 +5,8 @@
 ;                         archinit (IDT + PIC + PIT), k_reset/k_halt
 ;   (lay-vec dst "a64")   the 2 KiB-aligned 16 x 0x80 vector table, the IRQ save/restore path,
 ;                         the fault report path, a process's calls, ticks and faults, k_kswap
-;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
+;   (lay-vec dst "rv64")  the kernel's direct-mode trap entry: save, k_trap, restore, sret; a
+;                         process's own (r_user, to k_utrap), r_uret, k_kswap
 ;
 ; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=r8..r15; a64:
 ; rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra. x86 port i/o is register-contracted
@@ -361,6 +362,27 @@
            + v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
            + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]]
            + v-mapi (\ i r ['ldsd r 'sp (128 + 8 * i)]) r-fregs)
+   ;; a process's frame, struct k_rframe (rv64/proc.c): x0..x31 by number at 0, f0..f31 at
+   ;; 256, fcsr 512, sepc 520, sstatus 528; 560 with the machine's word past it. every
+   ;; register by number, gp, tp and x30 among them, before any is touched
+   (r-fsd rs2 off) (le32 (off >> 5 << 25 | rs2 << 20 | 2 << 15 | 3 << 12 | (off & 31) << 7 | 0x27))
+   (r-fld rd off)  (le32 (off << 20 | 2 << 15 | 3 << 12 | rd << 7 | 0x07))
+   u-xs (filter (i \ i != 2) >^32)                 ; x1, x3..x31: sp rides sscratch
+   u-push ([['sub 'sp 'sp 560]]
+           + map (i \ ['raw (r-sd i (8 * i))]) u-xs
+           + map (i \ ['raw (r-fsd i (256 + 8 * i))]) ^32
+           + '((csrr r8 sscratch) (st sp 16 r8)
+               (csrr r8 sepc) (st sp 520 r8) (csrr r8 sstatus) (st sp 528 r8)
+               (la r8 vectors) (csrw stvec r8))                  ; the kernel's traps its own again
+           + [['raw (le32 0x00302573)] ['st 'sp 512 'r0]])               ; frcsr a0
+   u-pop  ([['ld 'r0 'sp 512] ['raw (le32 0x00351073)]]                 ; fscsr a0
+           + '((ld r8 sp 520) (csrw sepc r8) (ld r8 sp 528) (csrw sstatus r8)
+               (add r8 sp 560) (csrw sscratch r8) (la r8 r_user) (csrw stvec r8))
+           + map (i \ ['raw (r-fld i (256 + 8 * i))]) ^32
+           + map (i \ ['raw (r-ld i (8 * i))]) u-xs
+           + [['raw (r-ld 2 16)] ['sret]])
+   ;; k_kswap's save: ra, s0..s11, sstatus -- 112 keeps sp 16-aligned. mooncc lays no fs0..fs11
+   s-save '(lr fp r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
    r-text
     ([['label 'vectors] ['sub 'sp 'sp r-frame]]
      + r-push
@@ -369,7 +391,22 @@
          (csrr r2 stval)
          (call k_trap))
      + r-pop
-     + [['add 'sp 'sp r-frame] ['sret]])
+     + [['add 'sp 'sp r-frame] ['sret]]
+     ;; a process's trap: stvec names this while it runs, sscratch its kernel stack, where
+     ;; the frame goes. k_utrap answers it
+     + [['align 4] ['label 'r_user] '(csrrw sp sscratch sp)] + u-push
+     + '((csrr r0 scause) (mov r1 sp) (call k_utrap))
+     ;; ..and every way back to a process: a call's answer, a tick's, a first turn, a fork's child
+     + [['label 'r_uret]] + u-pop
+     ;; k_kswap(save, load): one kernel stack to another, interrupts masked across it, each
+     ;; stack's SIE its own. a turn that starts returns into r_uret, its frame laid above
+     + [['label 'k_kswap] ['sub 'sp 'sp 112]]
+     + v-mapi (\ i r ['st 'sp (8 * i) r]) s-save
+     + '((csrr r8 sstatus) (st sp 104 r8) (csrci sstatus 2)
+         (st r0 0 sp) (mov sp r1)
+         (ld r8 sp 104) (and r8 r8 2) (csrs sstatus r8))
+     + v-mapi (\ i r ['ld r 'sp (8 * i)]) s-save
+     + '((add sp sp 112) (ret)))
 
    ;; -- the two objects ---------------------------------------------------
    ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS, 8 NOBITS.
@@ -396,6 +433,6 @@
        "rv64"
        (objsecs 'rv64
                 [[".text" 1 6 16 r-text]]
-                '("vectors")             ; arch.c: extern uint8_t vectors[] -> stvec
-                () () ())
+                '("vectors" "k_kswap" "r_uret")   ; arch.c's stvec; rv64/proc.c's turns
+                () () '("r_user"))
        (scare 'mkvec-arch arch)))
