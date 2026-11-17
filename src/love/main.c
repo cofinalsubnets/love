@@ -277,7 +277,7 @@ LvDef("quit", exit, 1, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
 LvDef("exec", exec, 1, NULL);
-LvDef("fexec", fexec, 2, NULL);
+LvDef("fexec", fexec, 2, "posix");
 LvDef("getenv", getenv, 1, NULL);
 LvDef("getpid", getpid, 1, NULL);
 
@@ -482,8 +482,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
-  g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = cats_lib(g);                                   // register every baked module; none is ambient
+  g = cats_egg(g);                                    // prel then ev's half, post and the arch's holo
   g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
   g = shelve(g);                                    // glaze.l's own borrow of holo

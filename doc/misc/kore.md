@@ -94,7 +94,7 @@ carried and not baked).
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear reset which timeout watch |
 | top.l | top (the process table, repainted; `-b` batch) |
-| proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
+| proc.l, the privileged verbs | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount, mkswap (linux's version 1 header), swapon (bare = /proc/swaps), swapoff |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | src/apps/vi/ | vi |
 | ed.l | ed (the line editor), ex (the same buffer by word; its `vi` hands the buffer to vi) |
@@ -958,14 +958,14 @@ over the packages above; util-linux's column added 2026-09-27.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 208 | 389 | 239 | 191 | 107 | 260 | 136 |
-| shared with kore | | 170 | 142 | 136 | 101 | 50 | 12 |
+| names | 211 | 389 | 239 | 191 | 107 | 260 | 136 |
+| shared with kore | | 173 | 145 | 136 | 101 | 50 | 15 |
 | carried by no one else | 12 | 136 | 25 | 47 | 0 | 200 | 75 |
 
 What at least three of the other six carry and kore does not: `blkdiscard`, `blkid`,
 `blockdev`, `chrt`, `dmesg`, `eject`, `fallocate`, `flock`, `fmt`, `fsfreeze`, `hwclock`,
-`ionice`, `linux32`, `logger`, `login`, `losetup`, `mkswap`, `nsenter`, `pivot_root`, `pr`,
-`rfkill`, `rtcwake`, `su`, `swapoff`, `swapon`, `switch_root`, `taskset`, `uncompress`,
+`ionice`, `linux32`, `logger`, `login`, `losetup`, `nsenter`, `pivot_root`, `pr`,
+`rfkill`, `rtcwake`, `su`, `switch_root`, `taskset`, `uncompress`,
 `unshare`.
 
 | tool | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
@@ -1122,7 +1122,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `mkfs.vfat` | ✓ | ✓ |  |  |  |  |  |
 | `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `mkpasswd` |  | ✓ | ✓ |  |  |  |  |
-| `mkswap` |  | ✓ | ✓ |  |  |  | ✓ |
+| `mkswap` | ✓ | ✓ | ✓ |  |  |  | ✓ |
 | `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `modinfo` |  | ✓ | ✓ |  |  |  |  |
 | `more` | ✓ | ✓ |  |  | ✓ |  | ✓ |
@@ -1215,8 +1215,8 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `su` |  | ✓ | ✓ |  |  |  | ✓ |
 | `sulogin` |  | ✓ |  |  |  |  | ✓ |
 | `sum` | ✓ | ✓ |  | ✓ | ✓ | ✓ |  |
-| `swapoff` |  | ✓ | ✓ |  |  |  | ✓ |
-| `swapon` |  | ✓ | ✓ |  |  |  | ✓ |
+| `swapoff` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `swapon` | ✓ | ✓ | ✓ |  |  |  | ✓ |
 | `switch_root` |  | ✓ | ✓ |  |  |  | ✓ |
 | `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `sysctl` |  | ✓ | ✓ |  |  |  |  |

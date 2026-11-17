@@ -1,6 +1,7 @@
 ; test/host/font.l -- src/apps/font.l lays a font off .hex text; quay reads it in C (cb_font_ok,
 ; cb_font_rows, via the `fontrow` nif). both must read every row the same, and C refuse a non-font.
 ;   cat test/00-init.l test/host/font.l | out/love
+(borrow 'quay)
 (borrow "src/apps/font.l")
 (: (hexrow v d) (radix v 16 @ h (zpad d h))           ; v as d hex digits
    (glyph cp d f) (zpad 4 (radix cp 16) + ":" + cats (map (r \ (hexrow (f r) d)) (jot 16)))

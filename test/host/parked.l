@@ -1,6 +1,7 @@
 ; test/host/parked.l -- many tasks parked on many fds, and the wake finds them all. run by
 ; test/host/run.l as a bounded subprocess, since a failure is a hang; checks are `assert`.
 ; no timer runs, so the wake must come from the fd set: a `rest` here would turn a hang into latency.
+(borrow 'posix)
 (: (mk k acc) (k = 0 ? acc (mk (k - 1) (. (pipe 0) acc)))
    ps (mk 16 ())
    q (pipe 0)

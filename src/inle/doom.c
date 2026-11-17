@@ -182,8 +182,8 @@ static lvm(lvm_doom_key) {
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-LvDef("doom", doom, 1, NULL);
-LvDef("doom-start", doom_start, 1, NULL);
-LvDef("doom-tick", doom_tick, 1, NULL);
-LvDef("doom-frame", doom_frame, 1, NULL);
-LvDef("doom-key", doom_key, 2, NULL);
+LvDef("doom", doom, 1, "doom");
+LvDef("doom-start", doom_start, 1, "doom");
+LvDef("doom-tick", doom_tick, 1, "doom");
+LvDef("doom-frame", doom_frame, 1, "doom");
+LvDef("doom-key", doom_key, 2, "doom");

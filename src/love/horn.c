@@ -720,9 +720,9 @@ static lvm(lvm_horn_lag) {
  else lag += io_wpending(g, (struct io*) h) / fb;
  love_musttail return Answer(putcharm((intptr_t) lag)); }
 
-LvDef("horn", horn, 2, NULL);
-LvDef("horn-in", horn_in, 2, NULL);
-LvDef("horn-lag", horn_lag, 1, NULL);
+LvDef("horn", horn, 2, "horn");
+LvDef("horn-in", horn_in, 2, "horn");
+LvDef("horn-lag", horn_lag, 1, "horn");
 
 // the doors under a second name, for a wasm process's table (love.h)
 love_door_user(k_horn_open)

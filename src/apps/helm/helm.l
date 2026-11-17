@@ -4,13 +4,14 @@
 ;   love -l src/apps/helm/unit.l -l src/apps/helm/sup.l -l src/apps/helm/moor.l \
 ;        -l src/apps/helm/helm.l -e '(helm-main ["-c" "src/apps/helm/sample.l"])'
 (module 'helm
-(borrow '(tar cli))
+(borrow '(tar tree cli))
 
 (borrow '(path posix))
 (: helm-usage "helm -- a service supervisor, and a love shell over its socket
 usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first)
        helm check [-c CONF]              read the config and report on it
        helm ctl [WORDS ..]               one command, or a session, over the socket
+       helm extract DIR                  lay the carried source under DIR, once a build
   -c, --config PATH   the unit file (default /etc/helm.l)
   -s, --socket PATH   the control socket (default $XDG_RUNTIME_DIR/helm.sock, or /run)
   -q, --quiet         keep the journal, but do not narrate to stderr
@@ -67,24 +68,31 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
              n  (net (map (hlink1 exe dir) ws))
              (hnote ("underlay " + show n + " names on " + exe),
               n)))))
-   ; --- the extract: the carried tree, inflated into RAM -----------------------
-   ; inle's ramfs is this tree (k_untar); a hosted pid 1 lays it too. paths re-home below the
-   ; tar's top, as a checkout reads; a love linked without its source carries none
+   ; --- the extract: the carried tree, laid once on a disk ----------------------
+   ; `helm extract DIR`, a oneshot of its own, so the unpack's heap goes with its process.
+   ; paths re-home below the tar's top, as a checkout reads; a love linked without its source
+   ; carries none. DIR/.love-build names the tree laid, written last: the same build answers
+   ; 'held, a new one clears what it laid (never /) and lays again
    ; the tar's top dropped: the top entry has no slash and re-homes to nothing
    (hbelow nom)
     (nom @ (_ + "/" + b) b "")
    (hextract root)
-    (tree-tar 0 @ a
-       (? !(string? a) (hnote "extract: this love carries no source", 0)
-          (tar-unpack a @ t
-             (atom? t ? (hnote "extract: the carried tree is torn", 0)
-                (: es (filter (e \ (0 < #(tar-get e 'nom "")))
-                              (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
-                   _  (umkdirs root 493)
-                   w  (tar-extract root es)
-                   (atom? w ? (hnote ("extract: can't write " + root), 0)
-                      (hnote ("extract " + show <>w + " files under " + root),
-                       <>w)))))))
+    (: st (root + "/.love-build")
+       b  (love-build 0)
+       (? (uread st @ [1 s] (s = b + "\n") 0) (hnote ("extract: " + root + " holds " + b), 'held)
+          (tree-tar 0 @ a
+             (? !(string? a) (hnote "extract: this love carries no source", 0)
+                (tar-unpack a @ t
+                   (atom? t ? (hnote "extract: the carried tree is torn", 0)
+                      (: es (filter (e \ (0 < #(tar-get e 'nom "")))
+                                    (map (e \ pin e 'nom (hbelow (tar-get e 'nom ""))) <>t))
+                         _  (two? (lstat st) && root != "/" ? (hark [(selfpath 0) "rm" "-rf" root]) 0)
+                         _  (umkdirs root 493)
+                         w  (tar-extract root es)
+                         (atom? w ? (hnote ("extract: can't write " + root), 0)
+                            (uwrite st (b + "\n"),
+                             hnote ("extract " + show <>w + " files under " + root),
+                             <>w)))))))))
    (helm-pid1 _)
     (getpid 0 @ me
        (me != 1 ? 0
@@ -95,7 +103,6 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
            hmount1 "tmpfs"    "/tmp"  "tmpfs",
            hmount1 "tmpfs"    "/run"  "tmpfs",
            hunderlay "/usr/bin",
-           hextract "/",
            1)))
 
    ; --- helm run --------------------------------------------------------------
@@ -132,15 +139,17 @@ usage: helm [-c CONF] [-s SOCK] [-q]     supervise (pid 1 lays the machine first
      (: t {}
        r (hopts t as)
        w (two? r ? <r "")
-       _ (w = "" || w = "run" || w = "check" || w = "ctl" ? 0 (hbad w))
-       verb (? (w = "check") 'check (w = "ctl") 'ctl 'run)
+       _ (w = "" || w = "run" || w = "check" || w = "ctl" || w = "extract" ? 0 (hbad w))
+       verb (? (w = "check") 'check (w = "ctl") 'ctl (w = "extract") 'extract 'run)
        ; ctl is where our flags end: the words behind it are the remote command's
        words (verb = 'ctl ? >r (hopts t >r))
-       _ (? (verb = 'ctl) 0 (two? words) (hbad <words) 0)
+       _ (? (verb = 'ctl) 0 (verb = 'extract) (#words = 1 || hdie 2 "extract takes one DIR")
+            (two? words) (hbad <words) 0)
        conf (uoptv t 99 @ v (!v ? "/etc/helm.l" v))
        sock (uoptv t 115 @ v (!v ? (helm-sock 0) v))
        (? (verb == 'check) (helm-check conf)
           (verb == 'ctl)   (helm-ctl sock words)
+          (verb == 'extract) (hextract <words @ 0 1 _ 0)
           (helm-run conf sock (peep t 113 0))))))
 
 ; the seat, its own form so the binder above stays body-less: fire helm-main iff `helm`

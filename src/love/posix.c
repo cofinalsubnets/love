@@ -61,6 +61,7 @@
 #if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
 #include <sys/reboot.h>     // reboot(2), linux's commands
+#include <sys/swap.h>       // swapon(2), swapoff(2)
 #if !defined(__moonlibc__)
 #include <sys/syscall.h>    // SYS_reboot, for restart2's argument
 #endif
@@ -673,6 +674,24 @@ static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
+// (swapon path) (swapoff path): a file or part mkswap's rule laid, flags 0
+static lvm(lvm_swapon) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapon(p, 0) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+static lvm(lvm_swapoff) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapoff(p) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+// (ioctl fd req n): linux's ioctl handed one 64-bit word holding n, BLKRRPART's and
+// EXT4_IOC_RESIZE_FS's shape; answers the word after. fd a raw fd or a port
+static lvm(lvm_ioctl) {
+  uint64_t w = charmp(Sp[2]) ? (uint64_t) getcharm(Sp[2]) : 0;
+  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : port_fd(Sp[0]);
+  Sp[2] = fd < 0 || !charmp(Sp[1]) ? badarg(g)
+        : ioctl((int) fd, (unsigned long) getcharm(Sp[1]), &w) < 0 ? love_err(g, errno)
+        : putcharm((intptr_t) w);
+  Sp += 2; love_musttail return Next(1); }
 #if defined(__moonlibc__)
 static int restart2(char const *a) { return reboot2(a); }
 #else
@@ -691,6 +710,9 @@ static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(
 static lvm(lvm_mount) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 static lvm(lvm_mountf) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
 static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapon) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapoff) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_ioctl) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 #endif
 
 static lvm(lvm_chroot) {
@@ -1091,7 +1113,7 @@ static lvm(lvm_fdtray) {
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
-LvDef("glean", reapany, 1, NULL);
+LvDef("glean", reapany, 1, "posix");
 LvDef("sigfd", sigfd, 1, "posix");
 LvDef("sigtake", sigtake, 1, "posix");
 LvDef("sigclear", sigclear, 1, "posix");
@@ -1107,16 +1129,16 @@ LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");
 LvDef("sysconf", posix_sysconf, 1, "posix");
-LvDef("pipe", pipe, 1, NULL);
+LvDef("pipe", pipe, 1, "posix");
 LvDef("openfd", openfd, 2, "posix");
 LvDef("spawnio", spawnio, 7, NULL);
-LvDef("fdopen", fdopen, 1, NULL);
+LvDef("fdopen", fdopen, 1, "posix");
 LvDef("spawnmap", spawnmap, 5, NULL);
-LvDef("getuid", getuid, 1, NULL);
+LvDef("getuid", getuid, 1, "posix");
 LvDef("getgid", getgid, 1, "posix");
-LvDef("fork", fork, 1, NULL);
-LvDef("dup2", dup2, 2, NULL);
-LvDef("dup", dup, 1, NULL);
+LvDef("fork", fork, 1, "posix");
+LvDef("dup2", dup2, 2, "posix");
+LvDef("dup", dup, 1, "posix");
 LvDef("mkdir", mkdir, 2, "posix");
 LvDef("mount", mount, 3, "posix");
 LvDef("mountf", mountf, 4, "posix");
@@ -1124,6 +1146,9 @@ LvDef("umount", umount, 1, "posix");
 LvDef("chroot", chroot, 1, "posix");
 LvDef("sync", sync, 1, "posix");
 LvDef("reboot", reboot, 1, "posix");
+LvDef("swapon", swapon, 1, "posix");
+LvDef("swapoff", swapoff, 1, "posix");
+LvDef("ioctl", ioctl, 3, "posix");
 LvDef("mknod", mknod, 3, "posix");
 LvDef("newns", newns, 1, "posix");
 LvDef("stat", posix_stat, 1, "posix");
@@ -1140,7 +1165,7 @@ LvDef("fdtray", fdtray, 3, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);
-LvDef("setpg", posix_setpg, 2, NULL);
+LvDef("setpg", posix_setpg, 2, "posix");
 LvDef("setenv", posix_setenv, 2, NULL);
 LvDef("environ", posix_environ, 1, NULL);
 // the fs tools' effect ops. (utime path ms): a non-charm ms is now. hardlink is link(2),
@@ -1369,7 +1394,7 @@ LvDef("setids", posix_setids, 3, "posix");
 LvDef("vtfont", posix_vtfont, 1, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
-LvDef("hardlink", posix_hardlink, 2, NULL);
+LvDef("hardlink", posix_hardlink, 2, "posix");
 LvDef("copyfile", posix_copyfile, 2, "posix");
 // the pty wrapper. (tether argv) -> (pid . master-port): hark (main.c) with a pty pair for
 // the stdout pipe; the child's 0/1/2 are the slave. tetherenv sets env's K=V in the child

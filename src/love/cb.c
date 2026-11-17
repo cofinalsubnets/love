@@ -9,21 +9,21 @@
 #include "quay/cleat_8x16.c"
 #include "quay/nif.c"
 
-LvNif("screen", nif_screen, NULL);
-LvNif("scribe", nif_scribe, NULL);
-LvNif("glass", nif_glass, NULL);
-LvNif("gaze", nif_gaze, NULL);
-LvNif("reply", nif_reply, NULL);
-LvNif("clipped", nif_clipped, NULL);
-LvNif("wet", nif_damage, NULL);
-LvNif("fontrow", nif_fontrow, NULL);
-LvNif("tilepx", nif_tilepx, NULL);
-LvNif("dye", nif_dye, NULL);
-LvNif("regrid", nif_regrid, NULL);
-LvNif("peer", nif_peer, NULL);
-LvNif("mouse", nif_mouse, NULL);
-LvNif("pasted", nif_pasted, NULL);
-LvNif("select", nif_select, NULL);
-LvNif("copied", nif_copied, NULL);
-LvNif("picture", nif_picture, NULL);
-LvNif("limned", nif_limned, NULL);
+LvNif("screen", nif_screen, "quay");
+LvNif("scribe", nif_scribe, "quay");
+LvNif("glass", nif_glass, "quay");
+LvNif("gaze", nif_gaze, "quay");
+LvNif("reply", nif_reply, "quay");
+LvNif("clipped", nif_clipped, "quay");
+LvNif("wet", nif_damage, "quay");
+LvNif("fontrow", nif_fontrow, "quay");
+LvNif("tilepx", nif_tilepx, "quay");
+LvNif("dye", nif_dye, "quay");
+LvNif("regrid", nif_regrid, "quay");
+LvNif("peer", nif_peer, "quay");
+LvNif("mouse", nif_mouse, "quay");
+LvNif("pasted", nif_pasted, "quay");
+LvNif("select", nif_select, "quay");
+LvNif("copied", nif_copied, "quay");
+LvNif("picture", nif_picture, "quay");
+LvNif("limned", nif_limned, "quay");

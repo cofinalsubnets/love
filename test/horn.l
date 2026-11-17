@@ -2,6 +2,7 @@
 ; on the host HORN=none is a sink that keeps time and discards, so no card is needed
 
 ; a wait yields: a call that waited 10 ms while the polling task never ran had the scheduler held
+(borrow 'horn)
 (: (hn-witness box) (twirl (_ \ (: (go u) (? (box 'done) () (box 'in) (pin box 'ran 1) (: _ (rest 1) (go 0))) (go 0))) ())
    (hn-waits box f) (: a (clock 0) _ (pin box 'in 1) r (f 0) _ (pin box 'in ())
                        (: _ (? (clock a >= 10) (pin box 'waited 1) 0) r))

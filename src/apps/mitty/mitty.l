@@ -4,7 +4,7 @@
 ; or under shift. pier.l puts its panes in a window through mw-face.
 (module '(mitty mitty-main mitty-keybytes mw-face mw-font mw-args)
 (borrow 'mooring)                       ; hopen moor-to waitfor
-(borrow '(posix bytes window font cli))
+(borrow '(posix bytes window font quay cli))
 (:
  ; --- keys: a set-1 code -> what a terminal sends ------------------------------------
  ; the modifiers as held, each by its two keys: shift ctrl alt

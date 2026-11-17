@@ -357,8 +357,7 @@ struct g {
    n_resize,                      // gauge[13]
    budget,                     // words (minor + 2*major), 0 unbounded
    walk,                          // the most room a walk under one op wanted past the gap: the op takes it, runs again
-   minor0, major0, ratio,         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
-   push_gc;                       // a law's: collect on this many pushes on, 0 none (push-gc)
+   minor0, major0, ratio;         // nursery floor, major step, setpoint: `tune` moves them, a bake drops them
  union {
   intptr_t v0;
   struct {
@@ -745,14 +744,14 @@ static love_inline bool caskp(word _) { return evenp(_) && cell(_)->ap == lvm_ca
 // --- the instruction roster ---
 char const *nif_name(intptr_t);
 lvm_t lvm_kcall,
- lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
- lvm_nilp, lvm_putc, lvm_intern,
+ lvm_seal, lvm_heard, lvm_worn, lvm_myself,
+ lvm_nilp, lvm_intern,
  lvm_saturate, lvm_ceil, lvm_peep, lvm_nifnom, lvm_cask, lvm_bcopy, lvm_xlat,
  lvm_coin, lvm_coinmk, lvm_load, lvm_coinp, lvm_kind, lvm_sub_coin, lvm_quot_coin,
  lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_tan, lvm_atan, lvm_asin, lvm_acos, lvm_atan2, lvm_exp, lvm_sqrt, lvm_log, lvm_pow,
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,
- lvm_bxor, lvm_bsr, lvm_bsl, lvm_puts,
+ lvm_bxor, lvm_bsr, lvm_bsl,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge, lvm_elem, lvm_eleq,
  lvm_sort,  lvm_sortby, lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
@@ -795,7 +794,7 @@ lvm_t lvm_kcall,
 love_noinline noicf lvm_t
  lvm_0, lvm_add_seq, lvm_add_string, lvm_addh, lvm_arg0,
  lvm_atype, lvm_bin_a, lvm_bin_b, lvm_bin_unit, lvm_coinp,
- lvm_dieof, lvm_dig, lvm_gemp, lvm_heard, lvm_hotp,
+ lvm_dig, lvm_gemp, lvm_heard, lvm_hotp,
  lvm_mulh, lvm_myself, lvm_nilp, lvm_quo0, lvm_quom1,
  lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap1z, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
@@ -1115,9 +1114,8 @@ struct tag { union u *head; union u end[]; };
 struct tag *ttag(struct g*, union u*);
 static love_inline union u *tag_head(struct tag *t) {
  return cell(word(t->head) & ~(word) 3); }
-// a cask over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
+// a state over a fresh n-byte string, its first `clear` bytes zeroed, for a host lane to lay a C
 // state into; NULL when the room was refused (*gp is then not ok)
-union u *new_cask(struct g **gp, uintptr_t n, uintptr_t clear);
 union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear);
 
 // a non-allocating walk's scratch, the free room [hp, sp): true only if its vm op packed first
@@ -1222,5 +1220,4 @@ bool
  fn_partialp(union u *k),
  fn_carrier(union u *k),
  in_heap(struct g *c, word x),
- iop(word x),
- lam_isp(struct g *g, word x);
+ iop(word x);

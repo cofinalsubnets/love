@@ -53,7 +53,7 @@ LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$ho/.mksys-cat.l" -q -e "((cite 'moon '$m
 sysp=$!
 
 # machine B: love1 bakes its own compiler image...
-LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
+LOVE_NO_IMAGE=1 "$qemu" "$d/love1" -l "$cat" -e "(? ((cite 'image 'bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
   || fail "love1 bakes mooncc1.image under $qemu"
 
 # ...and rebuilds every TU with it, natively. q holds the running ones, pid=object=source

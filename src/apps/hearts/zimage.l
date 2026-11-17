@@ -59,7 +59,11 @@
      (service app (exec "/bin/love" "/app/run.l") (restart no))
      (oneshot gadget (exec "/bin/love" "/app/gadget.l"))
      (oneshot data (exec "/bin/love" "/app/data.l"))
-     (oneshot boot (exec "/bin/love" "/app/boot.l"))
+     ; boot waits on data, so no part of the card is held while its table is read again
+     (oneshot boot (after data) (exec "/bin/love" "/app/boot.l"))
+     (oneshot swap (after data) (exec "/bin/love" "/app/swap.l"))
+     ; the unpack wants more than the board has free beside wifi and sshd: swap first
+     (oneshot source (after swap) (exec "/bin/love" "/app/source.l"))
      ; the console's own session, so a ^C on the port reaches what runs there; -w keeps one
      ; shell: helm starts a group leader, so setsid forks, and a parent gone is a restart
      (service console (after gadget)
@@ -72,7 +76,7 @@
        (exec "/bin/love" "sshd" "-o" "AuthorizedKeysFile=/etc/ssh/authorized_keys")
        (env "HOME" "/data/root") (log "/data/sshd.log") (restart always))
      (oneshot commit (after boot wifi sshd) (exec "/bin/love" "/app/commit.l"))
-     (target default (wants app console wifi sshd commit))
+     (target default (wants app console wifi sshd swap source commit))
      """
    ; the otg port as a usb serial port: an acm function through configfs, bound to the one udc
    gadget-l """
@@ -92,13 +96,57 @@
             put "UDC" <udc,
             say err ("gadget: acm on " + <udc + "\n"), 0)))
      """
-   ; data's ext4 on /data, read-write; on a refusal a tmpfs stands in, gone at each boot
+   ; data's ext4 on /data, read-write; on a refusal a tmpfs stands in, gone at each boot. a part
+   ; short of the card grows to its last whole group (128 MiB): the MBR entry, checked against
+   ; what the kernel read, then the table read again, then the ext4 online (equal is a no-op)
    data-l """
-     (borrow 'posix)
-     (: r (mount "/dev/mmcblk0p2" "/data" "ext4")
-        _ (nom? r ? (say err ("data: ext4 refused (" + show r + "), a tmpfs instead\n"), mount "tmpfs" "/data" "tmpfs") 0)
+     (borrow '(posix bytes))
+     (: (num p) (uread p @ [1 s] (read s) 0)
+        (tell s) (say err ("data: " + s + "\n"))
+        n    (num "/sys/block/mmcblk0/size")
+        at   (num "/sys/block/mmcblk0/mmcblk0p2/start")
+        had  (num "/sys/block/mmcblk0/mmcblk0p2/size")
+        want ((n - at) // 262144 * 262144)
+        mbr  (open "/dev/mmcblk0" "r" @ q (hot? q ? (see q @ c (unsee q c, chug q @ x (close q, x))) ""))
+        ours (511 < #mbr && rdle mbr 510 2 = 43605 && mbr 466 = 131
+              && rdle mbr 470 4 = at && rdle mbr 474 4 = had)
+        _    (? !(0 < at && had < want) 0
+                !ours (tell "p2 is not the entry the kernel read, left alone")
+                (openfd "/dev/mmcblk0" 4 @ fd (!(charm? fd) ? (tell ("the card refused a write (" + show fd + ")"))
+                   (lseek fd 474 0, (fdopen fd @ p (say p (wrle want 4), close p)), sync 0,
+                    openfd "/dev/mmcblk0" 0 @ d
+                      (ioctl d 4703 0 @ e (fdopen d @ p (close p),
+                         tell ("p2 " + show had + " -> " + show want + " sectors"
+                               + (nom? e ? (", the table held (" + show e + ") till a boot") ""))))))))
+        r (mount "/dev/mmcblk0p2" "/data" "ext4")
+        _ (nom? r ? (tell ("ext4 refused (" + show r + "), a tmpfs instead"), mount "tmpfs" "/data" "tmpfs")
+             (openfd "/data/.grow" 1 @ fd
+                ; EXT4_IOC_RESIZE_FS, in 4K blocks, to the part as the kernel now has it
+                (ioctl fd 1074292240 (num "/sys/block/mmcblk0/mmcblk0p2/size" // 8) @ e
+                   (fdopen fd @ p (close p), unlink "/data/.grow",
+                    nom? e ? (tell ("the ext4 did not grow (" + show e + ")")) 0))))
         (umkdirs "/data/root/.ssh" 448, 0))
      """
+   ; on data's ext4 alone: a tmpfs /data is RAM
+   (on-disk body) ("""
+     (borrow '(posix bytes))
+     (: disk (uread "/proc/mounts" @ [1 s] (has? s "/dev/mmcblk0p2 /data ext4 ") 0)
+        (!disk ? 0
+     """ + "\n" + body + "))\n")
+   ; a 1 GiB swap file: zeros written (no holes), then mkswap's header, so a torn lay has none
+   ; and is laid again
+   swap-l (on-disk """
+     (: f "/data/swap"  n 1073741824
+        (lay _) (unlink f, openfd f 3 @ fd
+                  (charm? fd ? (fdopen fd @ p (zbytes 1048576 @ z (each ^(n // 1048576) (_ \ say p z)), close p),
+                                hark ["/bin/love" "mkswap" f], sync 0) 0))
+        (on _) (swapon f @ e (nom? e ? e (say err ("swap: " + f + " on\n"), 0)))
+        (nom? (on 0) ? (lay 0, (on 0 @ e (nom? e ? (say err ("swap: refused (" + show e + ")\n"), 1) 0))) 0))
+     """)
+   ; the carried source under /data/src, once a build: helm's own extract, in its own process
+   source-l (on-disk """
+     (exec ["/bin/helm" "extract" "/data/src"])
+     """)
    ; the boot FAT on /boot, read-write: an update writes Image.new there
    boot-l """
      (borrow 'posix)
@@ -149,7 +197,8 @@
    app-wifi (map (f \ [f (fil 420 (rd ("src/apps/wifi/" + f)))]) ["dhcp.l" "netlink.l" "wifi.l"])
    (root love ver site)
     (dir [["app" (dir [["boot.l" (fil 420 boot-l)] ["commit.l" (fil 420 commit-l)] ["data.l" (fil 420 data-l)]
-                       ["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)] ["update.l" (fil 420 update-l)]
+                       ["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)] ["source.l" (fil 420 source-l)]
+                       ["swap.l" (fil 420 swap-l)] ["update.l" (fil 420 update-l)]
                        ["wifi" (dir app-wifi)]])]
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)] ["sh" (link "love")]])]
         ["boot" (dir ())] ["data" (dir ())] ["dev" (dir [["console" ['chr 384 [5 1]]]])]

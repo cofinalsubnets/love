@@ -2295,7 +2295,6 @@ void kmain(void) {
   struct g *r = g;
   if (!woke) {
    r = cats_egg(g);
-   r = cats_lib(r);
    r = evals_(r, src_tasks); }
   // seat.l: what this machine is that a host is not, shadowing a woken book's bindings
   r = evals_(r, src_seat);
@@ -2311,10 +2310,11 @@ void kmain(void) {
   // a fresh writable layer, so the shell's defglobs never land in the base
   r = love_open(r);
   // one absent nif the cat mentions would raise missing and bao's file-help quits the machine:
-  // pin a no-op for each this seat lacks, retiring as the real nif lands. signal ignores
+  // pin a no-op for each this seat lacks, in the book or the posix module, retiring as the real
+  // nif lands. signal ignores
   r = evals_(r,
    "(: (signal n h) ())"
-   "(map (\\ n (? (elem n (names ())) () (ev [': [n 'x] ()])))"
+   "(map (\\ n (? (elem n (names ())) () (lit? (cite 'posix n)) () (ev [': [n 'x] ()])))"
    "     '(hardlink spawn spawnmap fork exec herald wait still"
    "       getpid getuid seal ttyfg setpg umask rusage rlimit setrlimit glean pipe fdopen dup dup2 connect listen"
    "       bind accept recv send farend hark tty))");
