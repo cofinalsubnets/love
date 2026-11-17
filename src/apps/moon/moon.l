@@ -111,7 +111,7 @@
    (archdefs tgt)
    ; __CHAR_UNSIGNED__ where plain char is unsigned (parse.l's pchar), as gcc and clang predefine it
    (tgt @ 'a64                          '("__aarch64__" "__CHAR_UNSIGNED__")
-          'rv64                        '("__riscv" "__CHAR_UNSIGNED__")
+          'rv64                        '("__riscv" "__riscv_xlen=64" "__CHAR_UNSIGNED__")
           'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
           'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
