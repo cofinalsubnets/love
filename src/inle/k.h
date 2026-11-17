@@ -10,9 +10,12 @@ void kputc(int c), kputs(char const *s), kputn(uintptr_t n, int base);
 
 // the higher-half direct map: physical P at khhdm + P; 0 = identity-mapped
 extern uintptr_t khhdm;
-// the image window: physical P runs at k_xw + P. x64 and a64 run high, leaving the low half to a process
+// the image window: physical P runs at k_xw + P. x64, a64 and rv64 run high, leaving the low half
+// to a process; sv39's upper half is 256 GiB, so rv64's window sits at its root's [384]
 #if defined(__x86_64__) || defined(__aarch64__)
 #define k_xw 0xffffff8000000000ull
+#elif defined(__riscv) && defined(__LP64__)
+#define k_xw 0xffffffe000000000ull
 #else
 #define k_xw 0ull
 #endif

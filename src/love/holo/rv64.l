@@ -380,6 +380,11 @@
                            [(fix 4 'b13 label base)])))))))
 
    (rv-jmp label)  [(fix 4 'j21 label 0x6F)]
+   ;; an absolute address from a literal laid inline: auipc d, 0; ld d, 16(d); j .+16; nop;
+   ;; the word. 8-aligned behind an (align 8), so the load is aligned, and reach is the whole space
+   (rv-lia d label) (rvn d @ dn
+                      (le32 (dn << 7 | 0x17) + le32 (16 << 20 | (dn << 15 | (3 << 12 | (dn << 7 | 0x03))))
+                       + le32 0x0100006F + le32 0x00000013 + [(fix 8 'abs64 label 0)]))
    (rv-jmpr d)     (rv-i 0 (rvn d) 0 0 0x67)                                 ; jalr x0, 0(d)
    ;; the table and its targets are for the analyses, not the machine
    (rv-jmpt d tl labs) (rv-jmpr d)
@@ -465,7 +470,7 @@
           ('div . rv-div) ('rem . rv-rem) ('udiv . rv-udiv) ('urem . rv-urem)
           ('ldx . rv-ldx) ('stx . rv-stx) ('leax . rv-leax)
           ('ldxb . rv-ldxb) ('ldxh . rv-ldxh) ('stxb . rv-stxb)
-          ('call . rv-call) ('la . rv-la) ('lar . rv-la)
+          ('call . rv-call) ('la . rv-la) ('lar . rv-la) ('lia . rv-lia)
           ('tp . rv-tp)
           ('movsd . rv-fmov) ('movapd . rv-fmov) ('movss . rv-fmov)
           ('addsd . rv-fp3op 'addsd) ('subsd . rv-fp3op 'subsd)
