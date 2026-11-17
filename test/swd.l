@@ -274,17 +274,19 @@
    f (trap (_ \ swd-rd v 0x20000000) 0 (a \ b \ [a b]))
    (test (u = ['swd-align 0x20000002]) (n0 = n1) (f = ['swd-read [4 ()]])))
 
-; a cortex-m core over a bus: dhcsr's debug enable and halt (key 0xA05F, else ignored), the
-; halt seen in bit 17 and a reset since the last read in bit 25; demcr's reset vector catch;
+; a cortex-m core over a bus, as an f4 answers: dhcsr's debug enable and halt (key 0xA05F,
+; else ignored), the halt seen in bit 17 and a reset since the last read in bit 25; a halt
+; asked while nrst is held is not kept, and one asked in the write turning debug on is undefined:
+; the core then loses its vector catch till a reset; demcr's reset vector catch;
 ; aircr's system reset. nrst held keeps it in reset; let go, it reaches its reset vector two
 ; dhcsr reads later; reset by aircr, at once. there it halts if debug is on and it was told to
 ; halt or catch the vector, else runs. 'log is what it did and
 ; every write to it, oldest first
 (: (swdt-core m)
-    (: st {'en 0 'ch 0 'halt 0 'vc 0 'rs 0 'nrst 0 'pend 0 'log ()}
+    (: st {'en 0 'ch 0 'halt 0 'vc 0 'rs 0 'nrst 0 'pend 0 'lost 0 'log ()}
        (ev e) (pin st 'log (e . st 'log))
-       (boot _) (? (st 'en = 1 && (st 'vc = 1 || st 'ch = 1)) (pin st 'halt 1, ev 'caught)
-                   (pin st 'halt 0, ev 'runs))
+       (boot _) (? (st 'en = 1 && (st 'vc = 1 && st 'lost = 0 || st 'ch = 1)) (pin st 'halt 1, pin st 'ch 1, ev 'caught)
+                   (pin st 'halt 0, pin st 'lost 0, ev 'runs))
        {'rd (a \ (? (a = 0xE000EDF0)
                      (: p (st 'pend) _ (p > 0 ? (pin st 'pend (p - 1), (p = 1 ? (boot ()) 0)) 0)
                         v (st 'en | st 'ch << 1 | 1 << 16 | st 'halt << 17 | st 'rs << 25) _ (pin st 'rs 0) v)
@@ -293,7 +295,9 @@
         'wr (\ a v (: _ (ev ['wr a v])
                       (? (a = 0xE000EDF0)
                          (? ((v >> 16) != 0xA05F) (ev 'nokey)
-                            (: _ (pin st 'en (v & 1)) _ (pin st 'ch ((v >> 1) & 1))
+                            (: _ (st 'en = 0 && (v & 3) = 3 ? (pin st 'lost 1, ev 'undefined) 0)
+                               _ (pin st 'en (v & 1))
+                               _ (pin st 'ch (st 'nrst = 1 || st 'lost = 1 ? 0 ((v >> 1) & 1)))
                                (? (st 'nrst = 1) 0
                                   (st 'en = 1 && st 'ch = 1 && st 'halt = 0) (pin st 'halt 1, ev 'halts)
                                   (st 'ch = 0 && st 'halt = 1) (pin st 'halt 0, ev 'resumes)
@@ -313,7 +317,8 @@
 (: t (f4core 2) w <t c (t 1)
    ids (swd-attach w) h (swd-halted? w)
    (test (ids = [f4dp f4ap]) (1 = h) (1 = c 'halted ()) (() = w 'errs ())
-         (c 'log () = ['reset ['wr 0xE000EDF0 0xA05F0003] ['wr 0xE000EDFC 1] 'caught ['wr 0xE000EDFC 0]])))
+         (c 'log () = ['reset ['wr 0xE000EDF0 0xA05F0001] ['wr 0xE000EDF0 0xA05F0003] ['wr 0xE000EDFC 1]
+                       'caught ['wr 0xE000EDFC 0]])))
 
 ; resume lets it go under debug; halt stops it again; run turns debug off, which lets it go,
 ; and resets it free, nothing caught
@@ -322,7 +327,8 @@
    _ (swd-halt w) h (swd-halted? w)
    _ (swd-run w) g (swd-halted? w)
    (test (0 = r) (1 = h) (0 = g) (0 = c 'halted ())
-         (drop n0 (c 'log ()) = [['wr 0xE000EDF0 0xA05F0001] 'resumes ['wr 0xE000EDF0 0xA05F0003] 'halts
+         (drop n0 (c 'log ()) = [['wr 0xE000EDF0 0xA05F0001] 'resumes ['wr 0xE000EDF0 0xA05F0001]
+                                 ['wr 0xE000EDF0 0xA05F0003] 'halts
                                  ['wr 0xE000EDFC 0] ['wr 0xE000EDF0 0xA05F0000] 'resumes ['wr 0xE000ED0C 0x05FA0004]
                                  'sysreset 'runs])))
 
@@ -512,3 +518,11 @@
 ; the device's own io: /dev/null opens, and refuses the line request as no gpio chip
 (: e (trap (_ \ gpio-wire "/dev/null" 5 6 7) 0 (a \ b \ [a b]))
    (test (e = ['gpio-lines 'enotty])))
+
+; what electra's first run did, debug turned on and the halt asked in one write under reset:
+; undefined, the catch lost, the core let go runs, and the halt is never seen
+(: t (f4core 0) w <t c (t 1)
+   _ (w 'rst 1) _ (swd-connect w)
+   _ (swd-wr w 0xE000EDF0 0xA05F0003) _ (swd-wr w 0xE000EDFC 1) _ (w 'rst 0)
+   e (trap (_ \ swd-wait w 10) 0 (a \ b \ [a ((b >> 17) & 1) (b & 1)]))
+   (test (e = ['swd-halt 0 1]) (elem 'undefined (c 'log ())) (0 = c 'halted ())))
