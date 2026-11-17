@@ -7,3 +7,11 @@ static inline unsigned fbits(float x) { union { float f; unsigned u; } b; b.f = 
 static inline float flt(unsigned u) { union { float f; unsigned u; } b; b.u = u; return b.f; }
 #define SGN (1ULL << 63)
 #define FSGN 0x80000000u
+/* double in software (thumb1, thumb2sp, soft rv32 and xtensa): the float forms run on float
+ * bits. with a double unit, widening to the double twin is smaller and as fast */
+#if (defined(__arm__) && !(defined(__ARM_FP) && (__ARM_FP & 8))) || defined(__riscv_float_abi_soft) \
+    || defined(__XTENSA_SOFT_FLOAT__)
+#define fp_dsoft 1
+#else
+#define fp_dsoft 0
+#endif

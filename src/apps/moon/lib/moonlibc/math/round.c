@@ -33,6 +33,7 @@ double rint(double x) {
   volatile double t = x + s;
   double y = t - s;
   return y == 0 ? copysign(0.0, x) : y; }
+#if fp_dsoft
 float truncf(float x) {
   unsigned u = fbits(x); int e = (int) (u >> 23 & 255) - 127;
   if (e >= 23) return x;
@@ -48,6 +49,13 @@ float rintf(float x) {
   volatile float t = x + s;
   float y = t - s;
   return y == 0 ? copysignf(0.0f, x) : y; }
+#else
+float truncf(float x) { return (float) trunc(x); }
+float floorf(float x) { return (float) floor(x); }
+float ceilf(float x) { return (float) ceil(x); }
+float roundf(float x) { return (float) round(x); }
+float rintf(float x) { return (float) rint(x); }
+#endif
 #endif
 double nearbyint(double x) { return rint(x); }
 long lrint(double x) { return (long) rint(x); }

@@ -115,8 +115,9 @@
           'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
           'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
-          ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__")
-          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__")
+          'thumb2                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_FP=14")   ; gcc's fpu bits: half, single, double
+          'thumb2sp                    '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_FP=6")    ; no double: it is soft
+          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__" "__ARM_FP=14")
           'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))

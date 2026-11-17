@@ -55,6 +55,7 @@ double remquo(double x, double y, int *quo) {
   *quo = sx ^ sy ? -(int) q : (int) q;
   return sx ? -x : x; }
 double remainder(double x, double y) { int q; return remquo(x, y, &q); }
+#if fp_dsoft
 /* the float forms, the same division at 23 bits */
 static int __unpackf(unsigned *u, int e) {
   if (e) { *u = (*u & 0x7fffffu) | 1u << 23; return e; }
@@ -104,4 +105,8 @@ float remquof(float x, float y, int *quo) {
   q &= 0x7fffffff;
   *quo = sx ^ sy ? -(int) q : (int) q;
   return sx ? -x : x; }
+#else
+float fmodf(float x, float y) { return (float) fmod(x, y); }
+float remquof(float x, float y, int *q) { return (float) remquo(x, y, q); }
+#endif
 float remainderf(float x, float y) { int q; return remquof(x, y, &q); }
