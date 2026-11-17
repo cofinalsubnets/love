@@ -421,20 +421,20 @@
   ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
   ; ..or, as wx has lowered it, an (iop OP x) of tally's own op
   (jnum? N bnd ops) (charm? N || two? N && two? ops
-                     && (: T (ops 4) h <N
+                     && (: T (ops 5) h <N
                            (2 = #N && (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)
                             || 3 = #N && h == iop && <>N == pick 0 T)))
   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
   ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
   (jotloop1 kind F ps B N Z tw ops)
-   (: lt <>ops pl <>>ops cons (ops 3)
-      n (nom 0) z (nom 0) go (nom 0) e (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
+   (: lt <>ops pl <>>ops cons (ops 3) rv (ops 4)
+      n (nom 0) z (nom 0) go (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
       (? (kind = 0) [[': n N z Z] n [tw F z n] [': [go I A] ['? [lt I n] [go [pl I 1] B] A] [go 0 z]]]
          (kind = 1) [[': n N z Z] n [tw F z n] [': [go I] ['? [lt I n] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
          (kind = 2) [[': n N] n [tw n F] [': [go I] ['? [lt I n] [': e B [go [pl I 1]]]] [go 0]]]
          (kind > 3) (: t [go [pl I 1]] u (kind = 4)
                        [[': n N] n [tw F n] [': [go I] ['? [lt I n] (u ? ['? B t 0] ['? B 1 t]) u] [go 0]]])
-         [[': n N] n [tw F n] [': [go I] ['? [lt I n] [': e B [cons e [go [pl I 1]]]]] [go 0]]]))   ; map: one list, front to back
+         [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
   ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
   ; var and folds a pure-fn call on constant args; pureset is the fold license and a
   ; bnd-shadowed head never folds (the alpha law). it prunes a cond's dead arms and unfolds no

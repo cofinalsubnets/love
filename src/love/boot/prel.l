@@ -215,11 +215,11 @@
    _ (: (foldn f z x) (? (two? x) (foldl f z (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z)))
         (foldrn f z x) (? (two? x) (foldr f z (jot x)) (: n (saturate x) (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0)))
         (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
-        (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i) (? (< i n) (: e (f i) (. e (go (+ i 1))))) (go 0)))
+        (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
         (foldnn f z n) (: (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z))
         (foldrnn f z n) (: (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0))
         (eachnn n f) (: (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0))
-        (mapnn f n) (: (go i) (? (< i n) (: e (f i) (. e (go (+ i 1))))) (go 0))
+        (mapnn f n) (: (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ()))
         (allnn f n) (: (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0))
         (anynn f n) (: (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0))
         (fuse w nm k ar t nt) (: e (. k (. ar (. t (. nt ())))) _ (pin jotfuse nm e) (pin jotfuse w e))
@@ -646,7 +646,7 @@
 (seal-hook 3 opfix)
 (seal-hook 9 (\ p (opfix-past (cap p) (filter two? (cup p)))))
 ; the ops ev's jotin splices into a loop, as values: none a loop's body can shadow
-(pin jotfuse 'ops [whole? (<) (+) (.) tally])
+(pin jotfuse 'ops [whole? (<) (+) (.) rev tally])
 
 ; --- text + sequence batteries ------------------------------------------------
 ; one copy of each, `sep` first so a partial application reads, and -1 for absent.

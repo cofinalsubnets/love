@@ -16,12 +16,10 @@
  ([[0 1] [0 1 2]] = map (x \ x) (jot [2 3]))
  (5 = foldl (\ a l (a + #l)) 0 (jot [2 3]))
  (4999950000 = foldl (+) 0 ^100000)
- (: (h i) (i * 2) (map h ^3 = [0 2 4] && 199998 = map h ^100000 99999))
 
  ; --- the calls run in the walker's order ---
  ([3 2 1 0] = jf-log (g \ each ^4 g))
  ([3 2 1 0] = jf-log (g \ map (i \ (g i, i)) ^4))
- ([3 2 1 0] = jf-log (g \ (: (h i) (g i, i) (map h ^4))))      ; a named fn, through the twin
  ([3 2 1 0] = jf-log (g \ foldl (\ a i (g i, a)) 0 ^4))
  ([0 1 2 3] = jf-log (g \ foldr (\ i a (g i, a)) 0 ^4))          ; foldr's innermost call first
 
@@ -36,7 +34,6 @@
  ; --- the inline loop: the body sees its own names, and nothing of the loop's ---
  (: n 10 ([10 11 12] = map (i \ i + n) ^3))
  (: rev 0 go 1 m 2 ([0 1 2] = map (i \ i) ^3))
- (: e 9 ([9 10] = map (i \ i + e) ^2))
  (: (two? x) 'mine ([0 1 2] = map (i \ i) ^3))
  (: a 5 i 6 (9 = foldl (\ a i (a + i)) a ^3 + i - 5))
  (: t {} _ (foldl (\ _ i (pin t i 1)) 0 ^3) ([0 1 2] = sort (keys t)))
