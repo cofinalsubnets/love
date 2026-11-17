@@ -14,7 +14,7 @@ extern uintptr_t khhdm;
 // to a process; sv39's upper half is 256 GiB, so rv64's window sits at its root's [384]
 #if defined(__x86_64__) || defined(__aarch64__)
 #define k_xw 0xffffff8000000000ull
-#elif defined(__riscv) && __riscv_xlen == 64
+#elif defined(__riscv) && defined(__LP64__)
 #define k_xw 0xffffffe000000000ull
 #else
 #define k_xw 0ull

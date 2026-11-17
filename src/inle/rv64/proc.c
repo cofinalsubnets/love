@@ -178,7 +178,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
    case NR_openat: case NR_unlinkat: case NR_mkdirat: case NR_fchmodat: case NR_faccessat:
     ok = k_ustr(c, b); break;
    case NR_readlinkat: ok = k_ustr(c, b) && k_uokw(c, d, e, true); break;
-   case NR_renameat: ok = k_ustr(c, b) && k_ustr(c, e); break;
+   case NR_renameat: case NR_renameat2: ok = k_ustr(c, b) && k_ustr(c, e); break;
    case NR_chdir: ok = k_ustr(c, a); break;
    case NR_execve: ok = k_ustr(c, a) && k_uvec(c, b) && (!d || k_uvec(c, d)); break;
    case NR_fchdir: ok = true; break;
