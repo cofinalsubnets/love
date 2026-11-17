@@ -438,3 +438,71 @@
    b (trap (_ \ f4-idle x 10) 0 (a \ b \ [a b]))
    n (f4-idle x 100)
    (test (e = ['f4-flash 64]) (b = ['f4-busy 0x10000]) (n = 0)))
+
+; the v2 layouts: a request's size, its offsets, name, config and count where the uapi puts them
+(: cf (gpio-cfg [(gpio-attr 2 4 7)]) rq (gpio-req [5 6 7] "swd" cf)
+   (test (592 = #rq) (272 = #cf) (24 = #(gpio-attr 1 4 2)) (16 = #(gpio-vals 0 7))
+         ([5 6 7] = map (i \ rdle rq (4 * i) 4) ^3) ("swd" = snip rq 256 259) (0 = rq 259)
+         (cf = snip rq 288 560) (3 = rdle rq 560 4) (8 = rdle cf 0 8) (1 = rdle cf 8 4)
+         (2 = rdle cf 32 4) (4 = rdle cf 40 8) (7 = rdle cf 48 8)
+         (272 = #(gpio-cfg (map (_ \ gpio-attr 2 0 1) ^10)))))
+
+; a gpio chip under the wire, as the kernel answers it, the line levels relayed to a target t:
+; clk rising while swdio is an output clocks its level out; a values read while it is an
+; input clocks the target's bit in; the config's direction is the target's 'own; nrst low
+; holds its reset. it refuses setting an input line ('eperm) and a wrong size ('einval).
+; 'calls is what it was asked, oldest first
+(: (swdt-gpio t)
+    (: st {'v 0 'in 0 'calls ()}
+       (call c) (pin st 'calls (c . st 'calls))
+       (setlv v) (: was (st 'v) _ (pin st 'v v)
+                    _ ((v & 4) != (was & 4) ? (t 'rst ((v & 4) = 0 ? 1 0)) 0)
+                    ((was & 1) = 0 && (v & 1) = 1 && st 'in = 0 ? (t 'out ((v >> 1) & 1)) 0))
+       (cfg s) (: as (map (i \ snip s (32 + 24 * i) (56 + 24 * i)) ^(rdle s 8 4))
+                  inp (any (a \ rdle a 0 4 = 1 && (rdle a 8 8 & 4) != 0 && (rdle a 16 8 & 2) != 0) as)
+                  ov (filter (a \ rdle a 0 4 = 2) as)
+                  _ (inp != st 'in ? (pin st 'in inp, t 'own (inp ? 0 1)) 0)
+                  (two? ov ? (: a <ov m (rdle a 16 8) (setlv ((st 'v - (st 'v & m)) | (rdle a 8 8 & m)))) 0))
+       {'open (p \ (call ['open p], 3))
+        'close (fd \ call ['close fd])
+        'ioctl (\ fd rq s
+                 (? (rq = 0xC250B407)
+                     (? (#s != 592) 'einval
+                        (: _ (call ['line (map (i \ rdle s (4 * i) 4) ^(rdle s 560 4)) (snip s 256 259)])
+                           _ (cfg (snip s 288 560))
+                           (snip s 0 588 + wrle 4 4)))
+                    (rq = 0xC110B40D) (? (#s != 272) 'einval (: _ (cfg s) s))
+                    (rq = 0xC010B40F)
+                     (? (#s != 16) 'einval
+                        (: v (rdle s 0 8) m (rdle s 8 8)
+                           (? ((m & 2) != 0 && st 'in = 1) (call 'eperm, 'eperm)
+                              (: _ (setlv ((st 'v - (st 'v & m)) | (v & m))) s))))
+                    (rq = 0xC010B40E)
+                     (? (#s != 16) 'einval
+                        (: m (rdle s 8 8)
+                           b (st 'in = 1 && (m & 2) != 0 ? (t 'in ()) ((st 'v >> 1) & 1))
+                           (wrle ((st 'v - (st 'v & 2)) | (b << 1)) 8 + snip s 8 16)))
+                    'enotty))
+        'calls (_ \ rev (st 'calls)) 'level (_ \ st 'v)}))
+
+; the whole stack over a gpio chip: attach, the ids, a flash written and read back, nothing
+; refused, the target's wire clean, the lines asked for by name and nrst let go at the end
+(: t (f4chip 2) g (swdt-gpio <t) w (gpio-wire-on g "/dev/gpiochip9" 5 6 7)
+   ids (swd-attach w) fid (f4-ids w)
+   s "a flash written over three gpio lines"
+   r (f4-flash w 0x08004000 s) back (f4-read w 0x08004000 #s)
+   cl (g 'calls ())
+   _ (w 'close ())
+   (test (ids = [f4dp f4ap]) (fid = [0x10006421 512]) (1 = r) (back = s)
+         (<cl = ['open "/dev/gpiochip9"]) (cl 1 = ['line [5 6 7] "swd"]) (!(elem 'eperm cl))
+         (() = <t 'errs ()) (4 = (g 'level ()) & 4)
+         (g 'calls () @ c (drop (#c - 2) c) = [['close 4] ['close 3]])))
+
+; the chip refuses an input set, and the wire's failures scare: a chip that will not open, and
+; lines it will not give
+(: g (swdt-gpio (swdt-target (f4port 0))) w (gpio-wire-on g "/dev/gpiochip9" 5 6 7)
+   _ (w 'own 0)
+   e (g 'ioctl 4 0xC010B40F (gpio-vals 0 7)) z (g 'ioctl 4 0xC010B40F "short")
+   o (trap (_ \ gpio-wire-on {'open (p \ 'enoent)} "/dev/nope" 5 6 7) 0 (a \ b \ [a b]))
+   l (trap (_ \ gpio-wire-on {'open (p \ 3) 'ioctl (\ fd rq s 'ebusy)} "/dev/gpiochip9" 5 6 7) 0 (a \ b \ [a b]))
+   (test (e = 'eperm) (z = 'einval) (o = ['gpio-open 'enoent]) (l = ['gpio-lines 'ebusy])))

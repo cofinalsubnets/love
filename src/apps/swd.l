@@ -4,7 +4,8 @@
 ; or lets it go (0). bits go lsb first
 (module (swd swd-bits swd-sample swd-par swd-xfer swd-line swd-dp swd-dpw swd-ap swd-apw swd-connect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-halt swd-attach swd-resume swd-run
-             f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash)
+             f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
+             gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire)
 (borrow 'bytes)
 (:
  ; the low n bits of x out, then n bits in as a number
@@ -145,5 +146,46 @@
      b (f4-read w a #s)
      (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
      (at 0))
+
+ ; linux's gpio character device, its v2 uapi: a request of 592 bytes (64 line offsets, the
+ ; consumer's name at 256, a config at 288, the line count at 560), its line fd answered at
+ ; 588; a config of 272 (flags, then up to 10 attributes of 24 from 32); values 16, bits then
+ ; mask. attribute 1 is flags (4 input, 8 output), 2 output values
+ (gpio-le n v) (wrle v n)
+ (gpio-zs n) (string (map (_ \ 0) ^n))
+ (gpio-attr id v m) (gpio-le 4 id + gpio-zs 4 + gpio-le 8 v + gpio-le 8 m)
+ (gpio-cfg as) (gpio-le 8 8 + gpio-le 4 #as + gpio-zs 20 + join "" as + gpio-zs (24 * (10 - #as)))
+ (gpio-req ls who cf) (join "" (map (gpio-le 4) ls) + gpio-zs (256 - 4 * #ls) + who + gpio-zs (32 - #who)
+                       + cf + gpio-le 4 #ls + gpio-zs 28)
+ (gpio-vals v m) (gpio-le 8 v + gpio-le 8 m)
+ ; a wire over three lines of a chip through io's 'open, 'ioctl and 'close: clk bit 0, dio 1,
+ ; nrst 2 (high lets go), all outputs to begin with, nrst high. swdio turns input while the
+ ; target holds it, and a values call then masks it out, since setting an input is refused.
+ ; a bit goes out with clk low and in at its rise; one comes in read with clk low
+ GetLine 0xC250B407 SetCfg 0xC110B40D GetVals 0xC010B40E SetVals 0xC010B40F
+ (gpio-wire-on io chip clk dio rst)
+  (: fd (io 'open chip)
+     _ (charm? fd ? 0 (scare 'gpio-open fd))
+     r (io 'ioctl fd GetLine (gpio-req [clk dio rst] "swd" (gpio-cfg [(gpio-attr 2 4 7)])))
+     _ (string? r ? 0 (scare 'gpio-lines r))
+     lf (rdle r 588 4)
+     st {'v 4 'own 1}
+     (ok what r) (string? r ? r (scare what r))
+     (put v) (: _ (pin st 'v v) (ok 'gpio-set (io 'ioctl lf SetVals (gpio-vals v (st 'own = 1 ? 7 5)))))
+     (lvl v b m) ((v - (v & m)) | (b ? m 0))
+     {'out (b \ (: v (lvl (st 'v) (b & 1) 2) _ (put (v - (v & 1))) (put (v | 1))))
+      'in (_ \ (: _ (put (st 'v - (st 'v & 1)))
+                  g (ok 'gpio-get (io 'ioctl lf GetVals (gpio-vals 0 2)))
+                  _ (put (st 'v | 1))
+                  (((rdle g 0 1) >> 1) & 1)))
+      'own (b \ (: _ (pin st 'own b)
+                   _ (ok 'gpio-own (io 'ioctl lf SetCfg (gpio-cfg (b = 1 ? [(gpio-attr 2 (st 'v) 7)]
+                                                                  [(gpio-attr 1 4 2) (gpio-attr 2 (st 'v) 5)]))))
+                   b))
+      'rst (b \ put (lvl (st 'v) (b = 0) 4))
+      'close (_ \ (io 'close lf, io 'close fd))})
+ ; the device itself
+ (gpio-wire chip clk dio rst)
+  (gpio-wire-on {'open (p \ openfd p 6) 'ioctl ioctl 'close (fd \ fdopen fd @ p (close p))} chip clk dio rst)
 )
 ) ; module swd
