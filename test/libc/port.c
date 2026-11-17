@@ -2,7 +2,8 @@
  * through sscanf and back out through PRI, ffs, the sync and delay open bits read back off a file, TCP_NODELAY set
  * and read on a socket, termios's cflag bits and numeric speeds on a pty, alarm's seconds left
  * and its signal, gethostname against uname, gethostbyname's one answer and its _r, wcscmp/wcsstr, the passwd and group files by
- * name, id and walk with their _r forms, ptsname_r, rand_r's sequence, and tmpnam_r */
+ * name, id and walk with their _r forms, ptsname_r, rand_r's sequence, tmpnam_r, strsignal's texts,
+ * and getlogin with its _r */
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <inttypes.h>
@@ -165,4 +166,12 @@ int main(void) {
   say_n("tmpnam_r.null", tmpnam_r(0) == 0);
   char *tp = tmpnam_r(tn);
   say_n("tmpnam_r", tp == tn && strncmp(tn, "/tmp/", 5) == 0 && strlen(tn) < L_tmpnam && access(tn, F_OK) < 0);
+  for (int i = -1; i <= 66; i++) say_s("strsignal", strsignal(i));
+  errno = 0;
+  char *lg = getlogin();
+  say_s("getlogin", lg ? lg : "(none)"); say_n("getlogin.errno", lg ? 0 : errno);
+  char lb[64];
+  int lr = getlogin_r(lb, sizeof lb);
+  say_n("getlogin_r", lr); say_n("getlogin_r.same", lr ? !lg : lg && strcmp(lb, lg) == 0);
+  say_n("getlogin_r.short", lg ? getlogin_r(lb, 2) == ERANGE : 1);
   return 0; }

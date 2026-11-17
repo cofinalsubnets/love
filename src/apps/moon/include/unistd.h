@@ -42,7 +42,8 @@ unsigned int getuid(void), geteuid(void), getegid(void), getgid(void);
 int getpid(void), getppid(void), setsid(void), isatty(int);
 unsigned int alarm(unsigned int);
 int pause(void), gethostname(char*, unsigned long), ftruncate(int, off_t),
-    truncate(char const*, off_t);
+    truncate(char const*, off_t), getlogin_r(char*, size_t);
+char *getlogin(void);
 long pathconf(char const*, int);
 /* glibc's numbers */
 #define _PC_LINK_MAX         0

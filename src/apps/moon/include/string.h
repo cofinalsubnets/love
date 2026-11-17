@@ -21,7 +21,7 @@ char *strcasestr(char const*, char const*), *strcpy(char*, char const*),
      *strrchr(char const*, int), *strstr(char const*, char const*), *strdup(char const*),
      *strndup(char const*, size_t);
 size_t strnlen(char const*, size_t);
-char *strerror(int);
+char *strerror(int), *strsignal(int);
 int   strerror_r(int, char*, size_t);          /* xsi: 0 or ERANGE */
 size_t strlcpy(char*, char const*, size_t), strlcat(char*, char const*, size_t),
        strspn(char const*, char const*), strcspn(char const*, char const*);
