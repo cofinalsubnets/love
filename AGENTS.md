@@ -34,7 +34,11 @@ Instructions for any coding agent in this tree.
 ; guidelines for working in this tree:
 ; - keep comments short, calm lowercase, inline when possible, no paragraphs
 ; - comments should not log history, cite fixed bugs, or refer outside the present code
-; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
+; - C code may not keep state that belongs to one love thread (a struct g) in a mutable global or
+;   static; truly per-process state, C runtime internals, and tables built once and never modified
+;   may be statics. a table built lazily publishes its ready flag with a release, read with an acquire
+; - C code may call malloc/free where it must, since moonlibc is ours; the love heap is preferred
+;   wherever it serves
 ; - makefiles must be compatible with our make (cook)
 ; - shell scripts must be compatible with our shell (lush)
 ; - `make test` is the fast gate to check if something works
