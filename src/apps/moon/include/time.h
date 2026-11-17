@@ -29,6 +29,8 @@ double     difftime(time_t, time_t);
 unsigned long strftime(char*, unsigned long, char const*, struct tm const*);
 #define CLOCK_REALTIME  0
 #define CLOCK_MONOTONIC 1
-int clock_gettime(int, struct timespec*), nanosleep(struct timespec const*, struct timespec*);
+int clock_gettime(int, struct timespec*), nanosleep(struct timespec const*, struct timespec*),
+    clock_nanosleep(int, int, struct timespec const*, struct timespec*);
+#define TIMER_ABSTIME 1
 time_t time(time_t*);
 clock_t clock(void);

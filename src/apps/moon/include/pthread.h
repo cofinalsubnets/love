@@ -1,10 +1,13 @@
 #pragma once
-/* minimal threads, linux only (elsewhere create answers EAGAIN), 8M stacks, attributes but a
-   mutex's kind ignored. errno is process-wide and stdio takes no lock */
+/* threads on linux and the 64-bit BSDs (macos's create answers EAGAIN), 8M stacks unless an
+   attribute says, a mutex's kind ignored. errno is each thread's; stdio takes no lock */
 #include <sys/types.h>
 #include <time.h>
 typedef unsigned long pthread_t;
-typedef struct { int __unused; } pthread_attr_t;
+typedef struct { int __detach; unsigned long __stack; } pthread_attr_t;
+typedef struct { int __lock, __seq; unsigned __n, __in; } pthread_barrier_t;
+typedef struct { int __unused; } pthread_barrierattr_t;
+typedef volatile int pthread_spinlock_t;
 typedef struct { int __lock, __kind, __count; unsigned long __owner; } pthread_mutex_t;
 typedef struct { int __kind; } pthread_mutexattr_t;
 typedef struct { int __seq; } pthread_cond_t;
@@ -23,6 +26,11 @@ typedef unsigned int pthread_key_t;
 #define PTHREAD_ONCE_INIT 0
 #define PTHREAD_KEYS_MAX 128
 #define PTHREAD_DESTRUCTOR_ITERATIONS 4
+#define PTHREAD_STACK_MIN 16384
+#define PTHREAD_CREATE_JOINABLE 0
+#define PTHREAD_CREATE_DETACHED 1
+#define PTHREAD_BARRIER_SERIAL_THREAD (-1)
+#define PTHREAD_PROCESS_PRIVATE 0
 int pthread_mutex_init(pthread_mutex_t *, pthread_mutexattr_t const *),
     pthread_mutex_destroy(pthread_mutex_t *), pthread_mutex_lock(pthread_mutex_t *),
     pthread_mutex_trylock(pthread_mutex_t *),
@@ -51,4 +59,14 @@ int pthread_setspecific(pthread_key_t, void const *),
 void pthread_exit(void *) __attribute__((noreturn));
 pthread_t pthread_self(void);
 int pthread_equal(pthread_t, pthread_t), pthread_attr_init(pthread_attr_t *),
-    pthread_attr_destroy(pthread_attr_t *);
+    pthread_attr_destroy(pthread_attr_t *), pthread_attr_setstacksize(pthread_attr_t *, size_t),
+    pthread_attr_getstacksize(pthread_attr_t const *, size_t *),
+    pthread_attr_setdetachstate(pthread_attr_t *, int), pthread_attr_getdetachstate(pthread_attr_t const *, int *),
+    pthread_detach(pthread_t), pthread_kill(pthread_t, int),
+    pthread_atfork(void (*)(void), void (*)(void), void (*)(void)),
+    pthread_setname_np(pthread_t, char const *), pthread_getname_np(pthread_t, char *, size_t),
+    pthread_barrier_init(pthread_barrier_t *, pthread_barrierattr_t const *, unsigned),
+    pthread_barrier_wait(pthread_barrier_t *), pthread_barrier_destroy(pthread_barrier_t *),
+    pthread_spin_init(pthread_spinlock_t *, int), pthread_spin_lock(pthread_spinlock_t *),
+    pthread_spin_trylock(pthread_spinlock_t *), pthread_spin_unlock(pthread_spinlock_t *),
+    pthread_spin_destroy(pthread_spinlock_t *);

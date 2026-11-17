@@ -14,3 +14,8 @@ int sigprocmask(int how, sigset_t const *s, sigset_t *o) {
   if (r < 0) { errno = (int) -r; return -1; }
   if (o) { memset(o, 0, sizeof *o); o->__v[0] = ko; }
   return 0; }
+/* sigprocmask answering an error number, errno untouched */
+int pthread_sigmask(int how, sigset_t const *s, sigset_t *o) {
+  int e = errno, r = sigprocmask(how, s, o) < 0 ? errno : 0;
+  errno = e;
+  return r; }

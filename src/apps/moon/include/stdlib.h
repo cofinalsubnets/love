@@ -11,8 +11,8 @@ void *malloc(size_t), *calloc(size_t, size_t), *realloc(void*, size_t),
      *reallocarray(void*, size_t, size_t), free(void*), *aligned_alloc(size_t, size_t);
 int   posix_memalign(void**, size_t, size_t);
 const char *getprogname(void);
-void exit(int), abort(void);
-int   atexit(void (*)(void));
+void exit(int), abort(void), _Exit(int), quick_exit(int);
+int   atexit(void (*)(void)), at_quick_exit(void (*)(void));
 void qsort(void*, size_t, size_t, int (*)(void const*, void const*)),
      *bsearch(void const*, void const*, size_t, size_t, int (*)(void const*, void const*));
 char *getenv(char const*), *mktemp(char*), *realpath(char const*, char*);

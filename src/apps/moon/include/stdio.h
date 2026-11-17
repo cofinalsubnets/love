@@ -42,7 +42,7 @@ void   rewind(FILE*);
 int    fflush(FILE*);
 void   perror(char const*);
 int rename(char const*, char const*), remove(char const*), fileno(FILE*), ferror(FILE*),
-    feof(FILE*);
+    feof(FILE*), renameat(int, char const*, int, char const*);
 void   clearerr(FILE*);
 FILE *fdopen(int, char const*), *open_memstream(char **, size_t *), *tmpfile(void);
 void   setbuf(FILE*, char*);
