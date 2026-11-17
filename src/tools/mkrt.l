@@ -6,7 +6,7 @@
 ;   love wake out/mooncc0.image src/tools/mkrt.l out.o ARCH GRP.a..   the join
 ;
 ; a group is a few members of one ISA (out/rt/<isa>/<grp>.a); the join reads every group,
-; the ISA off its directory. per name in {id, base, x64, a64, rv64, i386, arm, wasm}, 8-aligned:
+; the ISA off its directory. per name in {id, base, x64, a64, rv64, i386, arm, rv32, wasm}, 8-aligned:
 ;
 ;   rtzst_<nm>_len   an 8-byte little-endian length
 ;   rtzst_<nm>       the bytes behind it: `base` the build ISA's .a as one zstd frame, each ISA's
@@ -82,7 +82,7 @@
        ; and runtime-ar pays two decodes for the one it wants
        base (rt-isa arch grps)
        (one tgt) (z? tgt (zstde-by (tgt = arch ? base (rt-isa tgt grps)) base 19))
-       isas '(x64 a64 rv64 i386 arm wasm)
+       isas '(x64 a64 rv64 i386 arm rv32 wasm)
        forms (rt-forms "id" cid
               + rt-forms "base" (z? arch (zstde base 19))
               + foldl (a \ t \ a + rt-forms (string t) (one t)) () isas)

@@ -937,8 +937,8 @@
    ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error)
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (elem tgt '(i386 arm) && elem os '(freebsd netbsd)) ()
-       (elem tgt '(x64 a64 rv64 i386 arm wasm) && string tgt @ nm
+       (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(x64 a64 rv64 i386 arm rv32 wasm) && string tgt @ nm
           (!(string? nm) || string? home && rtcid home != runtime-ar "id" ? ()
              (runtime-ar nm @ a
                 (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))
@@ -982,9 +982,9 @@
            (foldl (a \ k \ snip k #d #k @ sub
                              (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
-       ; i386 and arm32 have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
-       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
-        + (elem tgt '(x64 a64 rv64 i386 arm) ? [["mksys.o" "" ()]] ())))
+       ; i386, arm32 and rv32 have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
+       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm rv32) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
+        + (elem tgt '(x64 a64 rv64 i386 arm rv32) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it)
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
    ; one roster member, compiled -> [name bytes]
