@@ -871,6 +871,12 @@ struct twin { lvm_t *ap; union { word re; flo_t dre; }; union { word im; flo_t d
 // payloads through the union, never a stack temporary, whose address costs a caller its sibcalls
 _Static_assert(sizeof(flo_t) == sizeof(uintptr_t), "float box assumes flo_t is pointer-width");
 static love_inline flo_t gem_get(word x) { return ((struct gem*) x)->d; }
+int int_flo_cmp(word, flo_t);
+// two numbers, a float among them, exactly: -1 0 1, 2 unordered
+static love_inline int numf_cmp(word a, word b) {
+ if (gemp(a) && gemp(b)) { flo_t x = gem_get(a), y = gem_get(b); return x < y ? -1 : x > y ? 1 : x == y ? 0 : 2; }
+ int const c = gemp(a) ? int_flo_cmp(b, gem_get(a)) : int_flo_cmp(a, gem_get(b));
+ return c == 2 || !gemp(a) ? c : -c; }
 // the one float box-write, under Have(gem_req): NaN collapses to () so the order stays total;
 // glaze's lanes emit the same collapse
 static love_inline word mk_gem(word **hpp, flo_t v) {

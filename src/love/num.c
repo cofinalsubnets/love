@@ -144,6 +144,37 @@ int big_cmp(word a, word b) {
  int c = mag_cmp(la, nla, lb, nlb);
  return aneg ? -c : c; }
 
+// an exact integer against a float, exactly: -1 0 1, 2 for a nan. under 2^mantissa the
+// conversion keeps the order; from there up the float is an integer, laid out as limbs
+int int_flo_cmp(word a, flo_t f) {
+ if (f != f) return 2;
+ flo_t const lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24));
+ if (f > -lim && f < lim) {                               // a bignum is past lim either way
+  if (bigp(a)) return big(a)->slen < 0 ? -1 : 1;
+  flo_t const x = (flo_t) toint(a);
+  return x < f ? -1 : x > f; }
+ love_limb sa[wlimbs], lf[1024 / limb_bits + 2] = {0}; love_limb const *la; bool na;
+ int const nla = load_int_mag(a, sa, &la, &na);
+ bool const aneg = na && nla > 0, fneg = f < 0;
+ if (aneg != fneg) return aneg ? -1 : 1;
+ if (f - f != 0) return fneg ? 1 : -1;                     // an infinity
+ uint64_t m; int e;
+#if Bits == 64
+ uint64_t u; memcpy(&u, &f, sizeof u);
+ e = (int) (u >> 52 & 0x7ff) - 1075, m = (u & ((1ull << 52) - 1)) | 1ull << 52;
+#else
+ uint32_t u; memcpy(&u, &f, sizeof u);
+ e = (int) (u >> 23 & 0xff) - 150, m = (u & ((1u << 23) - 1)) | 1u << 23;
+#endif
+ int const q = e / limb_bits, r = e % limb_bits;             // e >= 0: |f| >= lim
+ uint64_t const lo = m << r, hi = r ? m >> (64 - r) : 0;
+ for (int i = 0; i < 128 / limb_bits; i++)
+  lf[q + i] = (love_limb) (i * limb_bits < 64 ? lo >> (i * limb_bits) : hi >> (i * limb_bits - 64));
+ int nf = q + 128 / limb_bits;
+ while (nf > 0 && !lf[nf - 1]) nf--;
+ int const c = mag_cmp(la, nla, lf, nf);
+ return aneg ? -c : c; }
+
 // the smallest tier: the one sink that keeps the tiers disjoint, so eqv and keys hold
 word big_canon(word **hp, love_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
@@ -1294,7 +1325,7 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
    if (ar != br) return ar < br ? -1 : 1;
    flo_t ai = twinp(a) ? twin_im(a) : 0, bi = twinp(b) ? twin_im(b) : 0;
    return ai < bi ? -1 : ai > bi ? 1 : 0; }
-  if (gemp(a) || gemp(b)) { flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
+  if (gemp(a) || gemp(b)) { int c = numf_cmp(a, b); return c == 2 ? 0 : c; }
   return big_cmp(a, b); }
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
  if (chainp(a)) return *go = CmpChain, 0;
@@ -1442,7 +1473,7 @@ static lvm(lvm_cmp_ord) {
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
               : vcmp_flo(op, twinp(a) ? twin_im(a) : 0, twinp(b) ? twin_im(b) : 0); }
- else if (gemp(a) || gemp(b)) r = vcmp_flo(op, toflo(a), toflo(b));
+ else if (gemp(a) || gemp(b)) { int c = numf_cmp(a, b); r = c != 2 && vcmp_int(op, c, 0); }
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
  love_musttail return Push(r ? putcharm(1) : zero); }

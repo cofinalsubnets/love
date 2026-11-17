@@ -617,7 +617,7 @@ static int eq_value(struct g *g, word a, word b, word *base, word *top) {
       && (twinp(a) ? twin_im(a) : 0) == (twinp(b) ? twin_im(b) : 0);
  if (coinp(a) || coinp(b))
   return numband(g, a) && numband(g, b) ? love_cmp3(g, a, b) == 0 : eql_at(g, a, b, base, top);
- if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && (toflo(a) == toflo(b));
+ if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && numf_cmp(a, b) == 0;
  return eql_at(g, a, b, base, top); }
 
 lvm(lvm_eq) {
@@ -694,7 +694,8 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
   return r > 0 ? putcharm(1) : zero; }                         // spent: obin_run takes the room
  if (op >= vop_lt) {
   if (!isnum(a) || !isnum(b)) return zero;       // a twin is unordered
-  intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
+  int const c = gemp(a) || gemp(b) ? numf_cmp(a, b) : 0;
+  intptr_t t = (gemp(a) || gemp(b)) ? c != 2 && vcmp_int(op, c, 0)
              : (bigp(a) || bigp(b)) ? vcmp_int(op, big_cmp(a, b), 0)
                                     : vcmp_int(op, toint(a), toint(b));
   return t ? putcharm(1) : zero; }

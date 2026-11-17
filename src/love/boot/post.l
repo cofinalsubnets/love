@@ -1041,6 +1041,13 @@
                          q))
         (val v) (coin? v && ok? (load v) ? (measure v) v)   ; a rational as its measure, anything else itself
         (num? v) (nstar? v || coin? v && ok? (load v))      ; a number or a rational, never a text or a list
+        ; an exact (n d) against a float, exactly: -1 0 1, () for a nan. the floor q first, then
+        ; the fraction's binary digits against the float's; doubling and less 1.0 never round
+        (rqf x f) (: n <x d <>x t (n // d) q (n < 0 && t * d != n ? (t - 1) t) r (n - q * d)
+                     (bits r g) (? (g = 0) (r > 0 ? 1 0) (r = 0) -1
+                                  (: r2 (2 * r) g2 (2.0 * g) b (d <= r2) c (1.0 <= g2)
+                                     (b != c ? (b ? 1 -1) (bits (b ? (r2 - d) r2) (c ? (g2 - 1.0) g2)))))
+                     (? !(f <= 0 || 0 < f) () (f < q) 1 (q + 1 <= f) -1 (bits r (q = f ? 0.0 (f - q)))))
         (div x y) (ok? x && ok? y && <y != 0 ?              ; invert and multiply; by zero -> ()
                    (q (reduce (<x * <>y) (<>x * <y))))
         ; an inexact operand: the op over the measures, and the inexact answer wins
@@ -1049,10 +1056,14 @@
         c (coin '/// (z \ {'star 1                               ; a rational is a star
          'net measure
          '< (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, exact (d > 0)
-             (ok? x && ok? y ? (<x * <>y < <y * <>x)
+             (? (ok? x && ok? y) (<x * <>y < <y * <>x)
+                (ok? x && gem? b) (-1 = rqf x b)
+                (gem? a && ok? y) (1 = rqf y a)
                 (val a < val b))))                         ; against a non-number: by the measure
          '= (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, so 7/2 = 3.5
-             (ok? x && ok? y ? (<x * <>y = <y * <>x)
+             (? (ok? x && ok? y) (<x * <>y = <y * <>x)
+                (ok? x && gem? b) (0 = rqf x b)
+                (gem? a && ok? y) (0 = rqf y a)
                 (val a = val b))))
          'int (c \ (load c @ p (<p // <>p)))                 ; toward zero
          'ceil (c \ (: p (load c) k (<p // <>p)                ; d > 1, so the quotient is never whole:
