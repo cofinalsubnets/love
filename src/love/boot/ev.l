@@ -840,7 +840,7 @@
     (: test (ana c <b)
        then (ana c <>b)
        rest (clauses >>b)
-       (kim = pro test ? (peek 3 test ? then rest)   ; constant test -> pick a branch
+       (kim = pro test ? (peek 3 test ? (then * tojoin) rest)   ; constant test -> pick a branch
         (x \ (test (n \
          (: k (push c 'alt * rest x)                  ; k = the false branch (the rest)
             j (then (tojoin k) $ 2 + n)                    ; true: then, jump to join, into k
