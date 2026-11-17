@@ -1630,30 +1630,26 @@
                                  (x \ cggtir tgt syms ps x selfnm Lbody))
                (cggir tgt syms ps e))))
    ; mkhir: one function. a value body (it conses) takes cggvir with no tco; an int body takes cggtir.
-   ; an all-integer group on x64 and a64 runs on love's stack (lspark below); any other's frames ride
+   ; an all-integer group on x64, a64 and rv64 runs on love's stack (lspark below); any other's frames ride
    ; the machine stack, which no yield keeps: a peer waiting at the countdown takes OVF, and the twin
    ; runs the call again (the group is rerun-safe), yielding at its first call. a call deeper than
    ; gdepth bytes below the outer's anchor deopts, so deep recursion runs on the heap stack
    gdepth 262144                                                                   ; well inside inle's 1 MiB kernel stack
    (mkhir tgt syms nm ps body)
     (: k #ps Lbody (mint 0) ls (peep gkn 1 0)
-       ir (bcat [[['label nm]] (ls ? (lsroom tgt) [['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)])
-                 (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 (ls ? (lspark tgt k) [['jmp 'OVF]]))
-                 (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
-                 (restargsir tgt k) (hrest tgt) ['(ret)]])
-       (ls ? (lstag tgt ir) ir))
-   ; the love-stack group (x64 and a64, an all-integer group): the machine sp rides love's stack below
+       (bcat [[['label nm]] (ls ? (lsroom tgt) [['lea 'r9 (govf tgt) (0 - gdepth)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)])
+              (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]] (fairck tgt 'r10 'r9 (ls ? (lspark tgt k) [['jmp 'OVF]]))
+              (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
+              (restargsir tgt k) (hrest tgt) ['(ret)]]))
+   ; the love-stack group (x64, a64 and rv64, an all-integer group): the machine sp rides love's stack below
    ; Sp, so a call keeps call/ret and the depth bound is the heap gap. no collection runs inside a group,
    ; so its raw words need hiding only at a yield: lspark copies the segment into a string, whose bytes
-   ; the collector moves whole and never reads. lstag unwraps ('raw x)
+   ; the collector moves whole and never reads
    (lsroom tgt) [['lea 'r9 (greg tgt 'hp) (wd tgt * 4096)] ['lea 'r10 'sp 0] ['cmp 'r10 'r9] '(br below OVF)]
-   (lstag tgt ir) (map (i \ (i @ ('raw x) x  ('push R) (lpush tgt R)  i)) ir)
-   ; a push onto love's stack fills its whole slot, so a 16-byte slot's second word walks too
-   (lpush tgt R) (slotsz tgt = 16 ? ['pushd R] ['push R])
    ; the switch onto love's stack: sp to Sp aligned down to a slot, the machine sp pushed there, the
    ; anchor on it; a 16-byte slot keeps Sp's offset below it, tagged, in its second word
    (lsenter tgt) (: S (greg tgt 'sp)
-      (slotsz tgt = 16 ? [['lea 'r10 'sp 0] ['and 'r9 S -16] ['lea 'sp 'r9 0] (lpush tgt 'r10) ['sub 'r9 S 'r9]
+      (slotsz tgt = 16 ? [['lea 'r10 'sp 0] ['and 'r9 S -16] ['lea 'sp 'r9 0] ['push 'r10] ['sub 'r9 S 'r9]
                            ['leax 'r9 'r9 'r9 1 1] ['st 'sp 8 'r9]]
                          [['lea 'r10 'sp 0] ['lea 'sp S 0] ['push 'r10]]))
    (lsorig tgt OV) (: S (greg tgt 'sp)                                              ; Sp again, off the anchor
@@ -1666,25 +1662,25 @@
    (lspark tgt k) (saveargsir tgt k + [(reach tgt 'r10 14) ['callr 'r10]] + restargsir tgt k)
    (gpark tgt) (: S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) A (greg tgt 'acc) HP (greg tgt 'hp)
                   W (wd tgt) OV (govf tgt) ss (slotsz tgt) bb (mint 0) sk (mint 0)
-                  l1 (mint 0) l2 (mint 0) l3 (mint 0) l4 (mint 0) (raw l) (map (i \ ['raw i]) l)
-      (lstag tgt ([['label 'gbase]] + hsave tgt
+                  l1 (mint 0) l2 (mint 0) l3 (mint 0) l4 (mint 0)
+      ([['label 'gbase]] + hsave tgt
       + [['lea 'r10 'sp 0] ['lea 'r9 OV ss] ['sub 'r9 'r9 'r10]                      ; r9 = the segment's bytes
          ['lea T HP (3 * W)] ['add T T 'r9] ['cmp 'r10 T] ['br 'below sk]
          (reach tgt T 1) ['st HP 0 T] ['st HP W 'r9] ['lea A HP (2 * W)]              ; [str, len, words.., 0]
          ['label l1] ['cmp 'r9 0] ['br 'eq l2] ['ld T 'r10 0] ['st A 0 T] ['add 'r10 'r10 W] ['add A A W]
          ['sub 'r9 'r9 W] ['jmp l1] ['label l2] ['li T 0] ['st A 0 T] ['mov T HP] ['lea HP A W] ['mov A T]]
       + lsorig tgt OV + [['ld 'r10 OV 0] ['lea 'sp 'r10 0]]
-      + raw (restargsir tgt 4 + [['pop OV]] + hrest tgt)
+      + restargsir tgt 4 + [['pop OV]] + hrest tgt
       + [['st S (-1 * W) A] ['st S (-2 * W) IP] ['sub S S (2 * W)]
          ['li T 1] ['st S (-3 * W) T] ['lar T bb] ['lar 'r10 'gbase] ['sub T T 'r10] ['leax T T T 1 1]
          ['st S (-2 * W) T] ['st S (-1 * W) 'r10] (reach tgt IP 12) ['sub S S (3 * W)] ['ld T IP 0] ['jmpr T]
          ['label bb] ['add S S W] ['ld IP S 0] ['ld A S W] ['add S S (2 * W)]]
-      + raw (hsave tgt + [['push OV]] + saveargsir tgt 4)
+      + hsave tgt + [['push OV]] + saveargsir tgt 4
       + lsenter tgt + [['lea OV 'sp 0]
          ['ld 'r9 A W] ['sub 'r9 'r9 ss] ['lea 'r10 OV 0] ['sub 'r10 'r10 'r9] ['lea 'sp 'r10 0] ['add A A (2 * W)]
          ['label l3] ['cmp 'r9 0] ['br 'eq l4] ['ld T A 0] ['st 'r10 0 T] ['add A A W] ['add 'r10 'r10 W]
          ['sub 'r9 'r9 W] ['jmp l3] ['label l4] ['label sk]]
-      + hrest tgt + ['(ret)])))
+      + hrest tgt + ['(ret)]))
    ; mkouterir: the entry's outer -- anchor = sp, kind-guard and push the args, call H_entry, putfix + Continue.
    ; OVF restores sp from the anchor, abandoning the group's frames, then falls into deopt
    (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: a value-typed entry stores acc as-is, with no putfix
@@ -1705,7 +1701,7 @@
        epi (valt ? [['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]]
                  [['adds A A A] '(br vs DEOPT) ['or A A 1] ['st S 0 A] ['add IP IP (2 * wd tgt)] ['ld T IP 0] ['jmpr T]])
        ls (peep gkn 1 0)
-       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) ['sar A 1]] [(lpush tgt A)]])) () (rangeL 0 k))
+       lsargs (foldl (\ a i (bcat [a [['ld A S (wd tgt * i)] ['test A 1] '(br eq OVF) ['sar A 1] ['push A]]])) () (rangeL 0 k))
        (ls ? (bcat [(hsave tgt) [['push OVFR]] (saveargsir tgt 4)
                     (lsenter tgt) [['lea OVFR 'sp 0]] lsargs                                  ; the anchor holds the machine sp
                     [['call entry] ['add 'sp 'sp (ss * k)] ['ld 'r10 'sp 0] ['lea 'sp 'r10 0]] (restargsir tgt 4) [['pop OVFR]] (hrest tgt)
@@ -1817,7 +1813,7 @@
        bufmask (kmask 2)
        cmask (kmask 3)
        pmask (kmask 4)
-       _ (pin gkn 1 (elem tgt '(x64 a64) && !valt && all (f \ !(hasl (f 2))) parse
+       _ (pin gkn 1 (elem tgt '(x64 a64 rv64) && !valt && all (f \ !(hasl (f 2))) parse
                      && all (f \ all (j \ !(two? (jgir-kind km <f j))) (rangeL 0 #(f 1))) parse))
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)

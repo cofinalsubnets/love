@@ -113,8 +113,8 @@
    ; on the ap. tiling tighter than the C's stride answers slot 0 for every value in silence;
    ; looser drives ld's counter backwards, so `. =` per slot is also a check.
    ; one row per class: the stride the C compiles under and ld is told. it must clear the
-   ; fattest sentinel body (a64 4, x64 8, thumb2 60, rv64 88); lean's 16 leaves room for endbr64.
-   mx-strides '((lean 16  ("__x86_64__" "__aarch64__"))
+   ; fattest sentinel body (a64 4, x64 8, riscv 10, thumb2 60); lean's 16 leaves room for endbr64.
+   mx-strides '((lean 16  ("__x86_64__" "__aarch64__" "__riscv"))
                 (fat  128 ()))              ; no predicate: the #else
    ; whether the sections are laid: 0 asks the sentinels by name (wasm, love0). the image
    ; carries an ap as its index in image_extra_aps, so no layout crosses binaries.
