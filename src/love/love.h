@@ -1122,8 +1122,10 @@ static love_inline size_t llen(word l) {
  size_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
+// a failed g keeps its stack: a scare's words are what the exit face reads
 static love_inline struct g*pop(struct g*g, uintptr_t n) {
- return core_of(g)->sp += n, g; }
+ if (ok(g)) g->sp += n;
+ return g; }
 #define avm_unit(a, b) \
  if (mintp(a) || mintp(b)) love_musttail return Push(ZeroPoint)
 #define cmp_lt(nom, vop) lvm(nom) { \
