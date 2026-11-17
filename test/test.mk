@@ -625,11 +625,12 @@ test_microbit: host
 	   sh test/gate/skip.sh gate-skip "test_microbit: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
 	  $(MAKE) -C test/boards/microbit || { echo "FAIL microbit build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_microbit: firmware (all-mooncc thumb2sp), OUR linker and flatten, boot image verified"
-# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa
+# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa.
+# the swd probe (probe.c, usb.c) beside it, packed as a uf2
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
-	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
+	@echo "test_rp2040: firmware and swd probe (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten, runtime and uf2 -- no foreign file, flash R|X, boot surface verified"
 # the boards' batteries on silicon, flashed over swd on a host with the board's cap
 test_rp2040_board: test_rp2040
 	@echo TEST out/rp2040/love.bin "(on silicon)"
