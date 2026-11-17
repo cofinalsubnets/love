@@ -1,4 +1,5 @@
 #include "../impl.h"
+#include "fpbits.h"
 
 /* libc math over lm.c; tan, log2, log10 and the hyperbolics are derived, a few ulp looser */
 double lm_sqrt(double), lm_exp(double), lm_log(double);
@@ -21,21 +22,32 @@ double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
 double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
-/* float twins: the double result narrowed once */
+/* float twins: the double result narrowed once, but where double is soft: there lm's own
+ * float twins, within 1.5 ulp (tan, log2, log10 and the arcs miss it, or go through double) */
+#if fp_dsoft
+float lm_sinf(float), lm_cosf(float), lm_expf(float), lm_logf(float), lm_sqrtf(float), lm_powf(float, float);
+float sinf(float x) { return lm_sinf(x); }
+float cosf(float x) { return lm_cosf(x); }
+float expf(float x) { return lm_expf(x); }
+float logf(float x) { return lm_logf(x); }
+float sqrtf(float x) { return lm_sqrtf(x); }
+float powf(float x, float y) { return lm_powf(x, y); }
+#else
 float sinf(float x) { return (float) sin(x); }
 float cosf(float x) { return (float) cos(x); }
+float expf(float x) { return (float) exp(x); }
+float logf(float x) { return (float) log(x); }
+float sqrtf(float x) { return (float) sqrt(x); }
+float powf(float x, float y) { return (float) pow(x, y); }
+#endif
 float tanf(float x) { return (float) tan(x); }
 float asinf(float x) { return (float) asin(x); }
 float acosf(float x) { return (float) acos(x); }
 float atanf(float x) { return (float) atan(x); }
-float expf(float x) { return (float) exp(x); }
-float logf(float x) { return (float) log(x); }
 float log2f(float x) { return (float) log2(x); }
 float log10f(float x) { return (float) log10(x); }
-float sqrtf(float x) { return (float) sqrt(x); }
 float fabsf(float x) { return x <= 0 ? 0.0f - x : x; }
 float atan2f(float y, float x) { return (float) atan2(y, x); }
-float powf(float x, float y) { return (float) pow(x, y); }
 double frexp(double x, int *e) {
   union { double d; unsigned long long u; } b;
   b.d = x;
