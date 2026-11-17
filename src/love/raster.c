@@ -694,29 +694,28 @@ static lvm(lvm_frame_paint) {
 
 // (lace cols): columns laced into one float tray, row i the i-th of each (facets's verts); a
 // column is a tray, or a number in every row; () when lengths differ or a column is neither
-love_noinline static struct g *host_lace(struct g *g) {
+static lvm(lvm_lace) {
  uintptr_t k = 0, n = 0;
  int seen = 0;
- for (word l = g->sp[0]; chainp(l); l = B(l), k++) {
+ for (word l = Sp[0]; chainp(l); l = B(l), k++) {
   word const c = A(l);
   if (galaxyp(c)) {
    uintptr_t const m = tray_nelem(tray(c));
-   if (seen && m != n) { g->sp[0] = ZeroPoint; return g; }
+   if (seen && m != n) love_musttail return Answer(ZeroPoint);
    n = m, seen = 1; }
-  else if (!isnum(c)) { g->sp[0] = ZeroPoint; return g; } }
+  else if (!isnum(c)) love_musttail return Answer(ZeroPoint); }
  uintptr_t const w = b2w(tray_bytes(love_R, 1, k * n));
- if (!ok(g = have(g, w))) return g;
- struct tray *o = ini_tray(bump(g, w), love_R, 1);
+ Have(w);
+ struct tray *o = ini_tray((void*) Hp, love_R, 1);
+ Hp += w;
  o->shape[0] = k * n;
  flo_t *d = tray_data(o);
  uintptr_t j = 0;
- for (word l = g->sp[0]; chainp(l); l = B(l), j++) {   // re-walked: the bump may have moved it
+ for (word l = Sp[0]; chainp(l); l = B(l), j++) {
   word const c = A(l);
   if (galaxyp(c)) for (uintptr_t i = 0; i < n; i++) d[i * k + j] = tray_get_flo(tray(c), i);
   else { flo_t const v = toflo(c); for (uintptr_t i = 0; i < n; i++) d[i * k + j] = v; } }
- g->sp[0] = word(o);
- return g; }
-static lvm(lvm_lace) { LvmCall(g, host_lace) }
+ love_musttail return Answer(word(o)); }
 
 // FIXME namespace these
 LvDef("facets", raster, 8, "lore");
