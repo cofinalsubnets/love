@@ -7,9 +7,9 @@
 double fmax(double x, double y) { return x >= y ? x : x < y ? y : y != y ? x : y; }
 double fmin(double x, double y) { return x <= y ? x : x > y ? y : y != y ? x : y; }
 double fdim(double x, double y) { return x != x || y != y ? x + y : x > y ? x - y : 0.0; }
-float fmaxf(float x, float y) { return (float) fmax(x, y); }
-float fminf(float x, float y) { return (float) fmin(x, y); }
-float fdimf(float x, float y) { return (float) fdim(x, y); }
+float fmaxf(float x, float y) { return x >= y ? x : x < y ? y : y != y ? x : y; }
+float fminf(float x, float y) { return x <= y ? x : x > y ? y : y != y ? x : y; }
+float fdimf(float x, float y) { return x != x || y != y ? x + y : x > y ? x - y : 0.0f; }
 
 /* ---- the neighbours ---- */
 double nextafter(double x, double y) {

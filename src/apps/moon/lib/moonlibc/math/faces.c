@@ -21,7 +21,6 @@ double sinh(double x) { double e = lm_exp(x); return (e - 1.0 / e) / 2.0; }
 double cosh(double x) { double e = lm_exp(x); return (e + 1.0 / e) / 2.0; }
 double tanh(double x) { double e = lm_exp(2.0 * x); return (e - 1.0) / (e + 1.0); }
 double fabs(double x) { return x <= 0 ? 0.0 - x : x; }
-double floor(double), ceil(double), fmod(double, double); /* math/round.c and math/fmod.c */
 /* float twins: the double result narrowed once */
 float sinf(float x) { return (float) sin(x); }
 float cosf(float x) { return (float) cos(x); }
@@ -34,12 +33,9 @@ float logf(float x) { return (float) log(x); }
 float log2f(float x) { return (float) log2(x); }
 float log10f(float x) { return (float) log10(x); }
 float sqrtf(float x) { return (float) sqrt(x); }
-float fabsf(float x) { return (float) fabs(x); }
-float floorf(float x) { return (float) floor(x); }
-float ceilf(float x) { return (float) ceil(x); }
+float fabsf(float x) { return x <= 0 ? 0.0f - x : x; }
 float atan2f(float y, float x) { return (float) atan2(y, x); }
 float powf(float x, float y) { return (float) pow(x, y); }
-float fmodf(float x, float y) { return (float) fmod(x, y); }
 double frexp(double x, int *e) {
   union { double d; unsigned long long u; } b;
   b.d = x;

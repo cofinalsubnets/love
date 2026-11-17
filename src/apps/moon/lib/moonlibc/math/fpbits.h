@@ -6,3 +6,4 @@ static inline double dbl(u64 u) { union { double d; u64 u; } b; b.u = u; return 
 static inline unsigned fbits(float x) { union { float f; unsigned u; } b; b.f = x; return b.u; }
 static inline float flt(unsigned u) { union { float f; unsigned u; } b; b.u = u; return b.f; }
 #define SGN (1ULL << 63)
+#define FSGN 0x80000000u

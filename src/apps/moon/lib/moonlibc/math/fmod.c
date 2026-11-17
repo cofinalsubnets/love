@@ -1,4 +1,4 @@
-/* src/apps/moon/lib/moonlibc/math/fmod.c -- fmod and remquo, exact on the bits; the float forms go through double */
+/* src/apps/moon/lib/moonlibc/math/fmod.c -- fmod and remquo, exact on the bits */
 #include "../impl.h"
 #include <math.h>
 #include "fpbits.h"
@@ -55,5 +55,53 @@ double remquo(double x, double y, int *quo) {
   *quo = sx ^ sy ? -(int) q : (int) q;
   return sx ? -x : x; }
 double remainder(double x, double y) { int q; return remquo(x, y, &q); }
-float remquof(float x, float y, int *q) { return (float) remquo(x, y, q); }
-float remainderf(float x, float y) { int q; return (float) remquo(x, y, &q); }
+/* the float forms, the same division at 23 bits */
+static int __unpackf(unsigned *u, int e) {
+  if (e) { *u = (*u & 0x7fffffu) | 1u << 23; return e; }
+  int k = 0; unsigned i = *u << 9;
+  for (; i >> 31 == 0; k--, i <<= 1);
+  *u <<= -k + 1; return k; }
+float fmodf(float x, float y) {
+  unsigned ux = fbits(x), uy = fbits(y), sx = ux & FSGN;
+  int ex = (int) (ux >> 23 & 255), ey = (int) (uy >> 23 & 255);
+  if ((uy << 1) == 0 || ex == 255 || y != y) return (x * y) / (x * y);
+  if ((ux << 1) <= (uy << 1)) return (ux << 1) == (uy << 1) ? 0 * x : x;
+  ex = __unpackf(&ux, ex); ey = __unpackf(&uy, ey);
+  for (; ex > ey; ex--) {
+    unsigned i = ux - uy;
+    if (i >> 31 == 0) { if (i == 0) return 0 * x; ux = i; }
+    ux <<= 1; }
+  unsigned i = ux - uy;
+  if (i >> 31 == 0) { if (i == 0) return 0 * x; ux = i; }
+  for (; ux >> 23 == 0; ux <<= 1, ex--);
+  if (ex > 0) ux = (ux - (1u << 23)) | (unsigned) ex << 23;
+  else ux >>= -ex + 1;
+  return flt(ux | sx); }
+float remquof(float x, float y, int *quo) {
+  unsigned ux = fbits(x), uy = fbits(y);
+  int sx = (int) (ux >> 31), sy = (int) (uy >> 31);
+  int ex = (int) (ux >> 23 & 255), ey = (int) (uy >> 23 & 255);
+  unsigned q = 0;
+  *quo = 0;
+  if ((uy << 1) == 0 || ex == 255 || y != y) return (x * y) / (x * y);
+  if ((ux << 1) == 0) return x;
+  ex = __unpackf(&ux, ex); ey = __unpackf(&uy, ey);
+  if (ex + 1 < ey) return x;
+  if (ex >= ey) {
+    for (; ex > ey; ex--) {
+      unsigned i = ux - uy;
+      if (i >> 31 == 0) { ux = i; q++; }
+      ux <<= 1; q <<= 1; }
+    unsigned i = ux - uy;
+    if (i >> 31 == 0) { ux = i; q++; }
+    if (ux == 0) ex = -30;
+    else for (; ux >> 23 == 0; ux <<= 1, ex--); }
+  if (ex > 0) ux = (ux - (1u << 23)) | (unsigned) ex << 23;
+  else ux >>= -ex + 1;
+  x = flt(ux);
+  float ay = fabsf(y);
+  if (ex == ey || (ex + 1 == ey && (2 * x > ay || (2 * x == ay && (q & 1))))) { x -= ay; q++; }
+  q &= 0x7fffffff;
+  *quo = sx ^ sy ? -(int) q : (int) q;
+  return sx ? -x : x; }
+float remainderf(float x, float y) { int q; return remquof(x, y, &q); }

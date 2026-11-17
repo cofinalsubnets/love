@@ -1,4 +1,4 @@
-/* src/apps/moon/lib/moonlibc/math/round.c -- trunc and the roundings built on it; the float forms go through double */
+/* src/apps/moon/lib/moonlibc/math/round.c -- trunc and the roundings built on it */
 #include "../impl.h"
 #include <math.h>
 #include "fpbits.h"
@@ -11,6 +11,11 @@ double floor(double x) { __asm__("frintm %d0, %d1" : "=w"(x) : "w"(x)); return x
 double ceil(double x) { __asm__("frintp %d0, %d1" : "=w"(x) : "w"(x)); return x; }
 double round(double x) { __asm__("frinta %d0, %d1" : "=w"(x) : "w"(x)); return x; }
 double rint(double x) { __asm__("frintx %d0, %d1" : "=w"(x) : "w"(x)); return x; }
+float truncf(float x) { __asm__("frintz %s0, %s1" : "=w"(x) : "w"(x)); return x; }
+float floorf(float x) { __asm__("frintm %s0, %s1" : "=w"(x) : "w"(x)); return x; }
+float ceilf(float x) { __asm__("frintp %s0, %s1" : "=w"(x) : "w"(x)); return x; }
+float roundf(float x) { __asm__("frinta %s0, %s1" : "=w"(x) : "w"(x)); return x; }
+float rintf(float x) { __asm__("frintx %s0, %s1" : "=w"(x) : "w"(x)); return x; }
 #else
 double trunc(double x) {
   u64 u = bits(x); int e = (int) (u >> 52 & 2047) - 1023;
@@ -28,17 +33,29 @@ double rint(double x) {
   volatile double t = x + s;
   double y = t - s;
   return y == 0 ? copysign(0.0, x) : y; }
+float truncf(float x) {
+  unsigned u = fbits(x); int e = (int) (u >> 23 & 255) - 127;
+  if (e >= 23) return x;
+  if (e < 0) return flt(u & FSGN);
+  return flt(u & ~((1u << (23 - e)) - 1)); }
+float floorf(float x) { float t = truncf(x); return t > x ? t - 1.0f : t; }
+float ceilf(float x) { float t = truncf(x); return t < x ? t + 1.0f : t; }
+float roundf(float x) { float t = truncf(x); return fabsf(x - t) >= 0.5f ? t + copysignf(1.0f, x) : t; }
+float rintf(float x) {
+  unsigned u = fbits(x);
+  if ((u >> 23 & 255) >= 127 + 23) return x;
+  float s = u >> 31 ? -8388608.0f : 8388608.0f;
+  volatile float t = x + s;
+  float y = t - s;
+  return y == 0 ? copysignf(0.0f, x) : y; }
 #endif
 double nearbyint(double x) { return rint(x); }
 long lrint(double x) { return (long) rint(x); }
 long long llrint(double x) { return (long long) rint(x); }
 long lround(double x) { return (long) round(x); }
 long long llround(double x) { return (long long) round(x); }
-float truncf(float x) { return (float) trunc(x); }
-float roundf(float x) { return (float) round(x); }
-float rintf(float x) { return (float) rint(x); }
-float nearbyintf(float x) { return (float) rint(x); }
-long lrintf(float x) { return (long) rint(x); }
-long long llrintf(float x) { return (long long) rint(x); }
-long lroundf(float x) { return (long) round(x); }
-long long llroundf(float x) { return (long long) round(x); }
+float nearbyintf(float x) { return rintf(x); }
+long lrintf(float x) { return (long) rintf(x); }
+long long llrintf(float x) { return (long long) rintf(x); }
+long lroundf(float x) { return (long) roundf(x); }
+long long llroundf(float x) { return (long long) roundf(x); }
