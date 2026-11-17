@@ -39,6 +39,15 @@
 #include <netinet/in.h>
 
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
+/* a test-and-set: a plain swap where the core has no exclusive load (v6-m, xtensa's lx6),
+ * whose one thread the swap serves */
+#if defined(__ARM_ARCH_6M__) || defined(__xtensa__)
+static int __love_tas(int volatile *p, int v) { int o = *p; *p = v; return o; }
+static void __love_rel(int volatile *p) { *p = 0; }
+#else
+# define __love_tas(p, v) __sync_lock_test_and_set(p, v)
+# define __love_rel(p) __sync_lock_release(p)
+#endif
 /* the tables compile everywhere but wasm; without the sigtramp netbsd's sigaction refuses by name */
 #if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
 # define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
