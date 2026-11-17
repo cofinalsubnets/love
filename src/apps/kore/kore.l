@@ -943,7 +943,7 @@
             'bc bc-main 'dc dc-main
             'patch patch-main
             'wget wget-main
-            'openssl openssl-main   ; certificates, digests and a tls peer, openssl 3's spelling
+            'openssl openssl-main   ; certificates, digests and a tls peer, openssl 4's spelling
             'grep grep-main 'sed sed-main
             'lex lex-main   ; a scanner spec to the tables dfa.c walks (src/apps/kore/lex.l)
             'yacc yacc-main ; a grammar to the LALR(1) tables lr.c walks (src/apps/kore/yacc.l)
