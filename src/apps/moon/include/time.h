@@ -20,20 +20,15 @@ void tzset(void);
 extern char *tzname[2];
 extern long timezone;
 extern int daylight;
-struct tm* localtime(time_t const*);
-struct tm* gmtime(time_t const*);
-struct tm* localtime_r(time_t const*, struct tm*);
-struct tm* gmtime_r(time_t const*, struct tm*);
+struct tm * localtime(time_t const*), * gmtime(time_t const*),
+          * localtime_r(time_t const*, struct tm*), * gmtime_r(time_t const*, struct tm*);
 time_t     mktime(struct tm*);
-char*      ctime(time_t const*);
-char*      ctime_r(time_t const*, char*);
-char*      asctime(struct tm const*);
-char*      asctime_r(struct tm const*, char*);
+char *      ctime(time_t const*), *      ctime_r(time_t const*, char*),
+     *      asctime(struct tm const*), *      asctime_r(struct tm const*, char*);
 double     difftime(time_t, time_t);
 unsigned long strftime(char*, unsigned long, char const*, struct tm const*);
 #define CLOCK_REALTIME  0
 #define CLOCK_MONOTONIC 1
-int clock_gettime(int, struct timespec*);
-int nanosleep(struct timespec const*, struct timespec*);
+int clock_gettime(int, struct timespec*), nanosleep(struct timespec const*, struct timespec*);
 time_t time(time_t*);
 clock_t clock(void);

@@ -6,13 +6,15 @@ void __love_tiofb(struct termios const *t, struct __fb_termios *f) { }
 void __love_tiocan(struct __fb_termios const *f, struct termios *t) { }
 void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur) { }
 #else
-/* termios rows are {canonical bit, freebsd bit}; an unnamed bit drops. speeds copy verbatim */
+/* termios rows are {canonical bit, freebsd bit}; an unnamed bit drops. speeds are numbers
+ * both sides; the canonical cflag keeps linux's code beside */
 static unsigned int const os_tio_i[][2] = {   /* c_iflag */
   {1, 1}, {2, 2}, {4, 4}, {8, 8}, {16, 16}, {32, 32}, {64, 64}, {128, 128},
   {256, 256}, {0x400, 0x200} /* IXON */, {0x1000, 0x400} /* IXOFF */,
   {0x800, 0x800}, {0x2000, 0x2000} };
 static unsigned int const os_tio_o[][2] = {   /* c_oflag */
-  {1, 1} /* OPOST */, {4, 2} /* ONLCR */ };
+  {1, 1} /* OPOST */, {4, 2} /* ONLCR */, {8, 0x10} /* OCRNL */, {0x10, 0x20} /* ONOCR */,
+  {0x20, 0x40} /* ONLRET */ };
 static unsigned int const os_tio_c[][2] = {   /* c_cflag: freebsd is linux<<4 */
   {0x10, 0x100}, {0x20, 0x200} /* CSIZE */, {0x40, 0x400} /* CSTOPB */,
   {0x80, 0x800} /* CREAD */, {0x100, 0x1000} /* PARENB */,
@@ -62,6 +64,7 @@ void __love_tiocan(struct __fb_termios const *f, struct termios *t) {
     if (os_tio_cc[i] >= 0) {
       unsigned char c = f->c_cc[(int) os_tio_cc[i]];
       t->c_cc[i] = c == 0xff && i != 5 && i != 6 ? 0 : c; }
+  t->c_cflag |= __love_bcode(f->c_ospeed) | (f->c_ispeed != f->c_ospeed ? __love_bcode(f->c_ispeed) << 16 : 0);
   t->c_ispeed = f->c_ispeed; t->c_ospeed = f->c_ospeed; }
 
 #ifdef LvMac

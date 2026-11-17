@@ -142,6 +142,8 @@ struct _IO_FILE {
 #define NR_fb_getpriority   100   /* the nice itself, where linux answers 20 - nice */
 #define NR_fb_setpriority    96
 #define NR_fb_kill           37
+#define NR_fb_setitimer      83
+#define NR_fb_getitimer      86
 #define NR_fb_fcntl          92
 #define NR_fb_fsync          95
 #define NR_fb_fdatasync     550
@@ -246,6 +248,8 @@ struct _IO_FILE {
 #define NR_unshare         97
 #define NR_clock_gettime  113
 #define NR_kill           129
+#define NR_setitimer      103
+#define NR_getitimer      102
 #define NR_rt_sigaction   134
 #define NR_rt_sigprocmask 135
 #define NR_setpgid        154
@@ -357,6 +361,8 @@ struct _IO_FILE {
 #define NR_setpriority     97
 #define NR_statx          397
 #define NR_kill            37
+#define NR_setitimer      104
+#define NR_getitimer      105
 #define NR_fcntl          221   /* fcntl64 */
 #define NR_fsync          118
 #define NR_fdatasync      148
@@ -477,6 +483,8 @@ struct _IO_FILE {
 #define NR_setpriority     97
 #define NR_statx          383
 #define NR_kill            37
+#define NR_setitimer      104
+#define NR_getitimer      105
 #define NR_fcntl          221   /* fcntl64 */
 #define NR_fsync          118
 #define NR_fdatasync      148
@@ -595,6 +603,8 @@ struct _IO_FILE {
 #define NR_statfs         137
 #define NR_fstatfs        138
 #define NR_kill            62
+#define NR_setitimer       38
+#define NR_getitimer       36
 #define NR_fcntl           72
 #define NR_fsync           74
 #define NR_fdatasync       75
@@ -663,19 +673,13 @@ extern long __love_osdetect(void);
 /* inle's door: it answers the canonical numbers, so a negative osv reads as linux */
 extern long __love_inle(long n, long a, long b, long c, long d, long e, long f);
 extern int __love_efault(void);
-extern long __love_nrfb(long n);
-extern long __love_errfb(long e);
-extern long __love_sigfb(long sig);
-extern long __love_sigcan(long sig);
+extern long __love_nrfb(long n), __love_errfb(long e), __love_sigfb(long sig),
+            __love_sigcan(long sig);
 /* a native siginfo -> the canonical one signal.h spells */
 extern void __love_sicanon(void const *native, siginfo_t *out);
-extern unsigned long __love_maskfb(unsigned long m);
-extern unsigned long __love_maskcan(unsigned long m);
-extern long __love_ofb(long fl);
-extern long __love_ocan(long fl);
-extern long __love_mapfb(long fl);
-extern long __love_safb(long fl);
-extern long __love_sacan(long fl);
+extern unsigned long __love_maskfb(unsigned long m), __love_maskcan(unsigned long m);
+extern long __love_ofb(long fl), __love_ocan(long fl), __love_mapfb(long fl), __love_safb(long fl),
+            __love_sacan(long fl);
 extern long __love_affb(long af);          /* socket family: inet6 moves, the rest agree */
 extern long __love_afcan(long af);
 extern long __love_sotype(long t);         /* SOCK_* flag bits move high */
@@ -714,8 +718,8 @@ extern long __love_macsigact(long sig, struct __mac_osigact const *a, struct __m
 #endif
 /* the syscall path, one copy in os.c: __love_call translates canonical numbers, __love_fb
  * takes a kernel's own; both answer a parked BSD error as its canonical errno */
-long __love_call(long n, long a, long b, long c, long d, long e, long f);
-long __love_fb(long n, long a, long b, long c, long d, long e, long f);
+long __love_call(long n, long a, long b, long c, long d, long e, long f),
+     __love_fb(long n, long a, long b, long c, long d, long e, long f);
 /* xnu's unix calls answer in their class: the BSD number with this bit */
 #define LvMacUnix 0x2000000L
 #if defined(__ARM_EABI__) || defined(__i386__)
@@ -869,8 +873,15 @@ struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 spe
 };
 extern void __love_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
 extern void __love_tiofb(struct termios const *t, struct __fb_termios *f);   /* ostio.c's rows */
-extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur);
-extern void __love_tiocan(struct __fb_termios const *f, struct termios *t);
+extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur),
+            __love_tiocan(struct __fb_termios const *f, struct termios *t);
+extern unsigned int __love_bcode(speed_t);   /* signal/cfspeed.c: a rate as linux's CBAUD code */
+extern speed_t __love_bnum(unsigned int);
+struct __lx_termios2 {                /* TCGETS2's: the speeds a BOTHER code stands for */
+  unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
+  unsigned char c_line, c_cc[19];
+  unsigned int c_ispeed, c_ospeed;
+};
 
 /* netbsd reuses freebsd's classic numbers and tables; its own are these shapes, the
  * versioned numbers, the padded args and the sigtramp the kernel does not provide */
@@ -972,16 +983,15 @@ extern void __love_mac_sigtramp(void);
 extern void __love_macstat(struct __mac_stat const *f, struct stat *st);
 extern void __love_macsofl(int fd, long t);   /* SOCK_CLOEXEC/NONBLOCK, by fcntl */
 extern int __love_macat(long n, long *w);   /* an *at call's args, made xnu's: 1 if it was one */
-extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m);
-extern void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
+extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m),
+            __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
 
 #if defined(__aarch64__) || defined(__riscv)
 /* the probe's leaves: netbsd/aarch64 reads the svc immediate and SIGSYSes the register
  * form, so these set x8 and the immediate (a7 and t6 on riscv). freebsd, which SIGILLs
  * any nonzero immediate, is parted out by crt0 first */
 extern void __love_fencei(void);
-extern long __love_nbp20(long);
-extern long __love_nbp202(long, long, long, long, long, long);
+extern long __love_nbp20(long), __love_nbp202(long, long, long, long, long, long);
 #endif
 #define FfLeft 1
 #define FfZero 2
@@ -1007,9 +1017,8 @@ extern char const *__love_progname;
 void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long long v, unsigned base,
               int neg, int prec, int width, int fl, int up);
 int __fmtsgn(int neg, int fl);
-void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
-void __femit(void *ctx, int c);
-void __semit(void *ctx, int c);
+void __pad(void (*put)(void *, int), void *ctx, int n, int ch), __femit(void *ctx, int c),
+     __semit(void *ctx, int c);
 int (*__ctclass(char const *nm, size_t n))(int);
 int __ctname(char const *nm, size_t n);            /* wctype's index for a name not nul-ended */
 int __ctwide(int t, unsigned w);                    /* class t past ascii, whatever the locale */
@@ -1032,6 +1041,5 @@ extern unsigned char __ibuf[4096];
 /* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
  * how far the stream sits behind its fd; and putting the fd back at the stream's position */
 void __love_fopened(FILE *f);
-long __rfill(FILE *f);
-long __rahead(FILE *f);
+long __rfill(FILE *f), __rahead(FILE *f);
 int __rsync(FILE *f);

@@ -1237,15 +1237,17 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg ()}
+                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg () 'dl ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
     (as @ ()
-          (pins t 'is (rev (t 'is)) 'isy (rev (t 'isy)) 'ia (rev (t 'ia))
+          (two? (t 'dl) && (t 'so || t 'ip)
+           ? (udie 2 "cc: \(<(t 'dl)) wants a loader to read it, and a dynamic link lays none yet")
+           (pins t 'is (rev (t 'is)) 'isy (rev (t 'isy)) 'ia (rev (t 'ia))
                   'ds (rev (t 'ds))
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
-                  'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
+                  'libs (rev (t 'libs)) 'fws (rev (t 'fws))))
           ("-c" . r) (flags r (pin t 'c 1))
           ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
           ; -g form rides through tol?
@@ -1263,6 +1265,11 @@
           ((a . r) && elem a '("-Wl,-z,noexecstack" "-Wl,-znoexecstack")) (flags r t)
           ; the link warns of nothing, so there is no warning to make fatal (kbuild's host link)
           ("-Wl,--fatal-warnings" . r) (flags r t)
+          ; the exports and run path only a loader reads: nothing to a static link, refused
+          ; at the end of the line on a dynamic one
+          ((a . r) && elem a '("-rdynamic" "-Wl,-E" "-Wl,--export-dynamic")) (flags r (fpush t 'dl a))
+          ((a . d . r) && elem a '("-Wl,-rpath" "-Wl,--rpath") && starts? d "-Wl,") (flags r (fpush t 'dl a))
+          ((a . r) && any (starts? a) '("-Wl,-rpath," "-Wl,-rpath=" "-Wl,--rpath," "-Wl,--rpath=")) (flags r (fpush t 'dl a))
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
           ; library each comes from (a DT_NEEDED libNAME.so; -l:FILE names FILE as it is, libc.so.6).
           ; without -shared, -l rides through

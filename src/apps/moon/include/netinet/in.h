@@ -64,7 +64,5 @@ extern struct in6_addr const in6addr_any, in6addr_loopback;
    && ((unsigned const*)(a))[1] == ((unsigned const*)(b))[1] \
    && ((unsigned const*)(a))[2] == ((unsigned const*)(b))[2] \
    && ((unsigned const*)(a))[3] == ((unsigned const*)(b))[3])
-unsigned short htons(unsigned short);
-unsigned short ntohs(unsigned short);
-unsigned int   htonl(unsigned int);
-unsigned int   ntohl(unsigned int);
+unsigned short htons(unsigned short), ntohs(unsigned short);
+unsigned int htonl(unsigned int), ntohl(unsigned int);

@@ -12,11 +12,10 @@ typedef struct { int count; unsigned value; } mbstate_t;
 #define WCHAR_MAX 2147483647
 #endif
 wint_t btowc(int);
-int wctob(wint_t);
-int mbsinit(mbstate_t const *);
-size_t mbrlen(char const *, size_t, mbstate_t *);
-size_t mbrtowc(wchar_t *, char const *, size_t, mbstate_t *);
-size_t wcrtomb(char *, wchar_t, mbstate_t *);
-size_t mbsrtowcs(wchar_t *, char const **, size_t, mbstate_t *);
-size_t wcsrtombs(char *, wchar_t const **, size_t, mbstate_t *);
-size_t wcslen(wchar_t const *);
+int wctob(wint_t), mbsinit(mbstate_t const *);
+size_t mbrlen(char const *, size_t, mbstate_t *),
+       mbrtowc(wchar_t *, char const *, size_t, mbstate_t *), wcrtomb(char *, wchar_t, mbstate_t *),
+       mbsrtowcs(wchar_t *, char const **, size_t, mbstate_t *),
+       wcsrtombs(char *, wchar_t const **, size_t, mbstate_t *), wcslen(wchar_t const *);
+int wcscmp(wchar_t const *, wchar_t const *);
+wchar_t *wcsstr(wchar_t const *, wchar_t const *);
