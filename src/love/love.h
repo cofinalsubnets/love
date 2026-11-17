@@ -447,6 +447,11 @@ extern struct port_vt const love_horn_vt;
 struct g *love_horn_writen(struct g*, unsigned char const*, uintptr_t);
 intptr_t love_horn_readn(struct g*, unsigned char*, uintptr_t);
 void love_horn_shut(struct io*);               // `close` on one: shut the device under it
+// the duct (io.c): a buffered port a love pump feeds and drains; close and seal shut its halves
+extern struct port_vt const love_duct_vt;
+bool io_duct(struct io const*), duct_ready(struct io const*);
+void duct_shut(struct io*, int how);
+lvm_t lvm_duct_seal;
 // its C face, 16-bit stereo: open -> 0 | -1; write -> bytes, 0 full, -1 gone; lag -> frames
 // queued. inle/hda.c the body, horn.c the weak refusals
 int k_horn_open(int rate);

@@ -13,7 +13,7 @@
    (wr f "five!")
    ("five!" = rd f)
    (5 = <(stat f))
-   (1600000000000 < <>(stat f))                 ; born wearing the clock's date
+   (clock 0 - 60000 < <>(stat f) <= clock 0)    ; born wearing the clock's date, dated or not
    (32768 = 61440 & <>>(stat f))
    (elem "a" (readdir d))
    (open (d + "/b") "a" @ q (port? q ? (close q, 1) 0))
@@ -86,7 +86,7 @@
    !(utime f 1600000000000)
    (1600000000000 = <>(stat f))
    !(utime f ())
-   (1600000000000 < <>(stat f))
+   (clock 0 - 60000 < <>(stat f) <= clock 0)    ; () is the clock's now
    ('badarg = chmod 7 384)
    ('enoent = chmod (d + "/ghost") 384)
    ; -- the environment: a tablet behind the host's three doors; HOME and COLORTERM come

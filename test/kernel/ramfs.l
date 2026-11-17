@@ -73,6 +73,31 @@
    ; zero has no end: read a byte, never slurp
    (: q (open "/dev/zero" "r") a (see q) (close q, (0 = a)))))
 
+; /dev/urandom is the machine's rng, the end at once where it has none. /proc/board is the
+; firmware's rows where there is a firmware to ask (the pi), and that board has an rng
+(: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   board (rd "/proc/board")
+   q (open "/dev/urandom" "r")
+   bs (map (_ \ see q) ^32)
+   _ (close q)
+   (rows k) (filter (l \ snip l 0 #k = k) (split "\n" board))
+ (test
+   (string? board)
+   (#board = 0 ? (-1 = <bs)
+      (0 = #(filter (c \ !(0 <= c < 256)) bs) && 0 < #(filter (c \ c != <bs) bs)))
+   (#board = 0 || 1 = #(rows "revision 0x"))
+   (#board = 0 || 1 = #(rows "serial 0x"))
+   (#board = 0 || 1 = #(rows "mac "))))
+
+; /dev/ecm is a usb link's frames: the end at once with no link, and on the pi, whose link no
+; host holds here, nothing yet
+(: board (open "/proc/board" "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   q (open "/dev/ecm" "r")
+   ok (port? q)
+   r (ok && (#board = 0 ? (see q = -1) (cue? q = 0)))
+   _ (ok ? (close q) 0)
+ (test ok r))
+
 ; symlinks: k_walk follows one at every component, so a directory can be a link. /bin, /sbin
 ; and /usr/sbin all name /usr/bin
 (: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))

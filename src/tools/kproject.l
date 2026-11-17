@@ -11,6 +11,8 @@
     ; x64's image runs in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
             "a64"  ['a64 0x40200000 "a64boot" 0]
+            ; the pi's firmware enters at the start of the flat image, so boot leads
+            "a64pi" ['a64 0x80000 "a64boot" 0]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
             "rv64" ['rv64  0x80200000 "rvboot" 0]
             (scare 'kproject-arch arch))
@@ -133,7 +135,7 @@
        (: v (doors nm)
           f (va2off v)
           rel (<(glo nm) - (bias + v))
-          [v (arch @
+          [v (show tgt @
               "x64" (0xe9 + (rel - 5 & 0xffffffff) * 256 + (rle32 pie (f + 5) & 0xffffff) * 1099511627776)
               "a64" (0x14000000 + (rel // 4 & 0x3ffffff) + rle32 pie (f + 4) * 4294967296)
               ; rv64: auipc t0, then jalr through it

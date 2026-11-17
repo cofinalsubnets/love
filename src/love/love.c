@@ -445,12 +445,13 @@ lvm(lvm_lazy) {
  love_musttail return Continue(); }
 
 // (cue? p): would `see` answer without parking? any of the park law's three terms (pushback, a
-// buffered run, the fd). a hung-up fd is ready (see answers -1); a non-port asks stdin
+// buffered run, the fd or a duct's fed side). a hung-up fd is ready (see answers -1); a non-port
+// asks stdin
 static lvm(lvm_key) {
  Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &love_stdin);
  struct io *i = (struct io*) Sp[0];
  Sp[0] = (getcharm(i->ungetc_buf) != EOF || io_pending(g, i)
-          || ready((int) io_fd(i), wait_in)) ? putcharm(1) : zero;
+          || (io_duct(i) ? duct_ready(i) : ready((int) io_fd(i), wait_in))) ? putcharm(1) : zero;
  Ip += 1;
  love_musttail return Continue(); }
 // (heed p ms): cue? that waits: 1 once p has input, 0 when ms pass first. the task parks on

@@ -1035,14 +1035,17 @@
    (rdsp g f)                                         ; -> [reads defs pure?] | 'bar
     (: t (g 'rdarms @ () (: t9 (rdmk 0) _ (pin g 'rdarms t9) t9) t8 t8)
        (peep t <f 'bar @ 'bar 'bar a (a g f)))
-   ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp
+   ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp;
+   ; then thumb2's q4 is r4
    a4base (: t (foldl (t \ o \ pin t o 2) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
            t (foldl (t \ o \ pin t o 1) t (stops9 + stxops + fstxops + siops + '(cmpm)))
          (pin t 'alurm 4))
    (a4ize fs)
     (: (go (f . u))
         (: bp (two? f ? (peep a4base <f -1) -1)
-         (. (0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) (go u)))
+         (. ((0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) @ f2 (q4? f2 ? (q4r f2) f2)) (go u)))
+        (q4? x) (? (atom? x) (x = 'q4) (any q4? x))
+        (q4r x) (? (atom? x) (x = 'q4 ? 'r4 x) (map q4r x))
      (go fs))
    ; v6-M: ld/st encode only positive immediates and sp moves around calls, so r4 is a second base
    ; at the frame bottom: an fp-negative slot becomes r4 + (frame + off). after a4ize
@@ -1613,19 +1616,21 @@
           r (go fs ())
           (any lone? r ? (nolane g "a frame record split\(ontgt g)") r))))
    ; thumb2's frame by register list: the saves and the frame record push as one, each exit pops them
-   ; with pc. the saves sit just under fp (r4 pads them to an even count), so every negative fp offset
+   ; with pc. the saves sit just under fp (a free one pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
    (t2pm g fs)
     (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
                       !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
        (: r0 (drop 4 fs)
+          cs '(r4 r5 r6 r7 r8 r9 r10)
           sb (<r0 @ ('sub 'sp 'sp n) (charm? n ? [<r0]) ())
-          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r (cspool g) && !(any (x \ <x = r) acc) ?
+          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r cs && two? (cspool g) && !(any (x \ <x = r) acc) ?
                                              (svs >l ([r k] . acc)) [acc l])
                           [acc l])
           sv (two? sb ? (svs >r0 ()) [() r0])
           sl <sv
-          rs (filter (r \ any (x \ <x = r) sl || #sl % 2 = 1 && r = 'r4) '(r4 r5 r6 r7 r8 r9 r10))
+          pad (#sl % 2 = 1 ? (filter (r \ !(any (x \ <x = r) sl)) cs) ())
+          rs (filter (r \ any (x \ <x = r) sl || two? pad && r = <pad) cs)
           P (4 * #rs)
           (sh f) (? (elem <f (ldops9 + fldops + leaops) && f 2 = 'fp)
                      (charm? (f 3) && f 3 < 0 ? [<f <>f 'fp (f 3 - P)] (charm? (f 3) && 0 < f 3 ? f 'bad))
@@ -1661,8 +1666,10 @@
           ; a body that names neither sp nor fp past its pushes and exits keeps no frame below the saves
           (fr? x) (? (atom? x) (x = 'fp || x = 'sp) (any fr? x))
           sb2 (any (f \ (two? f && nelem <f '(push pop spfp) && fr? f)) body ? sb ())
+          ; an odd list, every one written, keeps sp's eight by four more below
+          sb3 (#rs % 2 = 0 ? sb2 [['sub 'sp 'sp (two? sb2 ? (<sb2 3 + 4) 4)]])
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb2 + t2sp body (P + (two? sb2 ? (<sb2 3) 0)))))))
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
    ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
    ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
    ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
