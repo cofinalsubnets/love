@@ -96,10 +96,13 @@
  (swd-wait w k) (? (swd-halted? w) 1 (k > 0) (swd-wait w (k - 1)) (scare 'swd-halt (swd-rd w dhcsr)))
  (swd-halt w) (: _ (swd-wr w dhcsr 0xA05F0001) _ (swd-wr w dhcsr 0xA05F0003) (swd-wait w 100))
  ; connect under reset: nrst held through the switch, debug on and the reset vector caught
- ; (a halt asked under reset is not kept, so the catch is what stops it), nrst let go, the
- ; halt awaited and the catch put back: connect's ids
+ ; (a halt asked under reset is not kept, so the catch is what stops it), the catch read back
+ ; before nrst goes, since a write is posted and a reset drops one still in flight, nrst let
+ ; go, the halt awaited and the catch put back: connect's ids
  (swd-attach w) (: _ (w 'rst 1) ids (swd-connect w)
                    _ (swd-wr w dhcsr 0xA05F0001) _ (swd-wr w dhcsr 0xA05F0003) _ (swd-wr w demcr 1)
+                   c (swd-rd w demcr)
+                   _ ((c & 1) = 1 ? 0 (scare 'swd-catch c))
                    _ (w 'rst 0) _ (swd-wait w 100) _ (swd-wr w demcr 0)
                    ids)
  ; the core let go where it stopped, still under debug; or reset and run from the top, free

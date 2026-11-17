@@ -162,14 +162,17 @@
 
 ; swdt-mem a bus of words by address, 'mem its tablet. a debug port under swdt-target: dpidr
 ; id; ctrl/stat's power acks answer their asks n reads late; select's bank; ap reads posted to
-; rdbuff, the first a stale 0. its ap is a mem-ap over bus, nrst passed on to it: csw (its reset value aps 0) and tar, drw reading and
+; rdbuff, the first a stale 0. its ap is a mem-ap over bus, nrst passed on to it; a drw write
+; is posted, landing at the port's next access, and an nrst change drops one still pending, as
+; the board did: csw (its reset value aps 0) and tar, drw reading and
 ; writing at tar, which steps by 4 when csw says, wrapping in its 1K block. an ap transfer while
 ; the power is down faults and sets stickyerr (ctrl/stat bit 5); while it is set every transfer
 ; faults but reads of dpidr and ctrl/stat and writes of abort, whose bit 2 clears it. 'writes
 ; is every write the port took, in order
 (: (swdt-mem _) (: m {} {'rd (a \ peep m a 0) 'wr (\ a v (pin m a v)) 'mem (_ \ m)})
    (swdt-dp id aps n bus)
-    (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w () 'csw (peep aps 0 0) 'tar 0}
+    (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w () 'csw (peep aps 0 0) 'tar 0 'pw ()}
+       (land _) (: p (st 'pw) _ (pin st 'pw ()) (two? p ? (bus 'wr <p (p 1)) 0))
        (reg a) ((st 'sel & 0xF0) | a)
        (step _) ((st 'csw >> 4 & 3) = 1 ? (: t (st 'tar) (pin st 'tar ((t - (t & 1023)) | ((t + 4) & 1023)))) 0)
        (apget r) (? (r = 0) (st 'csw) (r = 4) (st 'tar)
@@ -183,22 +186,22 @@
                            (st 'sticky = 1) 4
                            (ap = 1 && st 'acks != 0xA0000000) (pin st 'sticky 1, 4)
                            1))
-        'rd (\ ap a (? (ap = 1) (: v (st 'rb) _ (pin st 'rb (apget (reg a))) v)
+        'rd (\ ap a (: _ (land ()) (? (ap = 1) (: v (st 'rb) _ (pin st 'rb (apget (reg a))) v)
                        (a = 0) id
                        (a = 4) (cs ())
                        (a = 12) (st 'rb)
-                       0))
-        'wr (\ ap a v (: _ (pin st 'w ([ap a v] . st 'w))
+                       0)))
+        'wr (\ ap a v (: _ (land ()) _ (pin st 'w ([ap a v] . st 'w))
                          (? (ap = 1) (: r (reg a)
                                         (? (r = 0) (pin st 'csw v) (r = 4) (pin st 'tar v)
-                                           (r = 12) (bus 'wr (st 'tar) v, step ())
+                                           (r = 12) (pin st 'pw [(st 'tar) v], step ())
                                            0))
                             (a = 0) (v & 4 ? (pin st 'sticky 0) 0)
                             (a = 4) (pin st 'ask (v & 0x50000000), pin st 'left n, pin st 'acks 0)
                             (a = 8) (pin st 'sel v)
                             0)))
-        'rst (b \ peep bus 'rst (_ \ 0) b)
-        'writes (_ \ rev (st 'w)) 'mem (_ \ bus 'mem ())}))
+        'rst (b \ (pin st 'pw (), peep bus 'rst (_ \ 0) b))
+        'writes (_ \ rev (st 'w)) 'mem (_ \ (land (), bus 'mem ()))}))
 
 ; the board's ids: an stm32f4's sw-dp, and its ahb-ap
 (: f4dp 0x2BA01477 f4ap 0x24770011
@@ -322,7 +325,7 @@
 
 ; resume lets it go under debug; halt stops it again; run turns debug off, which lets it go,
 ; and resets it free, nothing caught
-(: t (f4core 0) w <t c (t 1) _ (swd-attach w) n0 #(c 'log ())
+(: t (f4core 0) w <t c (t 1) _ (swd-attach w) _ (swd-halted? w) n0 #(c 'log ())
    _ (swd-resume w) r (swd-halted? w)
    _ (swd-halt w) h (swd-halted? w)
    _ (swd-run w) g (swd-halted? w)
@@ -404,7 +407,7 @@
 ; locked to begin with: a word written is refused with wrperr and nothing changes; a wrong
 ; key locks it till a reset, where unlock scares; a reset frees it
 (: t (f4chip 3) w <t f (t 1) _ (swd-attach w)
-   _ (swd-wr w 0x08000000 0) e (f 'sr ()) v (swd-rd w 0x08000000)
+   _ (swd-wr w 0x08000000 0) e (swd-rd w 0x40023C0C) v (swd-rd w 0x08000000)
    _ (swd-wr w 0x40023C0C 0x1F3)
    _ (swd-wr w 0x40023C04 0x12345678)
    s (trap (_ \ f4-unlock w) 0 (a \ b \ a))
@@ -526,3 +529,13 @@
    _ (swd-wr w 0xE000EDF0 0xA05F0003) _ (swd-wr w 0xE000EDFC 1) _ (w 'rst 0)
    e (trap (_ \ swd-wait w 10) 0 (a \ b \ [a ((b >> 17) & 1) (b & 1)]))
    (test (e = ['swd-halt 0 1]) (elem 'undefined (c 'log ())) (0 = c 'halted ())))
+
+; a posted write in flight when nrst goes is dropped: the catch written and nrst let go at once
+; is lost, the core runs; read back first, it lands and catches
+(: t (f4core 0) w <t c (t 1)
+   _ (w 'rst 1) _ (swd-connect w) _ (swd-wr w 0xE000EDF0 0xA05F0001) _ (swd-wr w 0xE000EDFC 1)
+   _ (w 'rst 0) a (c 'halted ())
+   u (f4core 0) v <u d (u 1)
+   _ (v 'rst 1) _ (swd-connect v) _ (swd-wr v 0xE000EDF0 0xA05F0001) _ (swd-wr v 0xE000EDFC 1)
+   k (swd-rd v 0xE000EDFC) _ (v 'rst 0) _ (swd-wait v 10)
+   (test (0 = a) (1 = k) (1 = d 'halted ())))
