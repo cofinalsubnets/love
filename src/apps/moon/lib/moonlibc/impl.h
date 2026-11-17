@@ -679,10 +679,11 @@ struct _IO_FILE {
 #define NR_inle_spawn  0x4100
 
 
-/* errno is one object, defined beside __errno_location */
-extern int __errno_v;
+/* errno and h_errno: the process's until a thread starts, then the hook's (errno.c) */
+extern int __errno_v, __h_errno_v;
+extern int *(*__love_errat)(int);
 static long er(long r) {
-  if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return -1; }
+  if ((unsigned long) r > (unsigned long) -4096L) { errno = (int) -r; return -1; }
   return r; }
 
 /* __love_sys parks a BSD carry answer below linux's band, as -(errno+4096).
@@ -1051,7 +1052,7 @@ extern unsigned char __obuf[8192];
 /* threads: the clone leaf starts the child calling sp[0](sp[1]); __love_tp reads the
  * thread pointer clone set */
 struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128];
-                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
+                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp, *mself; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
 /* the pt_tls template (tlsimg 0 without one): a thread's copy lies tlsoff from its thread pointer */
 void __love_tlscopy(void *tp);

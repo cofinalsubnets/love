@@ -17,11 +17,11 @@ void *mmap(void *a, long n, int prot, int fl, int fd, off_t off) {
   {
     if (__love_osv >= 2) fl = (int) __love_mapfb(fl);   /* netbsd took its own door above */
 #ifdef __ILP32__
-    if (off & 4095) { __errno_v = EINVAL; return (void *) -1; }
+    if (off & 4095) { errno = EINVAL; return (void *) -1; }
     r = sc6(NR_mmap, (long) a, n, prot, fl, fd, (long) (off >> 12));   /* mmap2: the offset in pages */
 #else
     r = sc6(NR_mmap, (long) a, n, prot, fl, fd, off);
 #endif
   }
-  if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return (void *) -1; }
+  if ((unsigned long) r > (unsigned long) -4096L) { errno = (int) -r; return (void *) -1; }
   return (void *) r; }

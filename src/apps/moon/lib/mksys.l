@@ -164,6 +164,12 @@
          (label clone-out)
          (ret)
 
+         ; -- __love_tp: the word at fs:0, a thread record's self. only once pthread_create
+         ;    has given the first thread a base: before that fs:0 is address 0
+         (label __love_tp)
+         (raw (100 72 139 4 37 0 0 0 0))   ; mov rax, fs:[0]
+         (ret)
+
          ; -- __love_sys7(n,a..g): netbsd reads a 7th argument at [rsp+8], so g overwrites
          ;    the f slot once drained
          (label __love_sys7)
@@ -1231,7 +1237,7 @@
        ; what each lane exports; the 32-bit lanes lay no __love_sys7 and no probes
        (objelf arch ir ()
                (? (arch = 'x64)
-                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone"
+                  '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_nb_sigtramp" "__love_clone" "__love_tp"
                     "__love_mac_sigtramp" "__love_macfork" "__love_macpipe")
                   (arch = 'a64)
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"

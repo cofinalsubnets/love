@@ -7,7 +7,7 @@
  * linux clears tid and wakes its futex when the thread is gone, which is all a join waits
  * for; freebsd's thr_exit sets gone instead, and netbsd's _lwp_wait waits on tid */
 struct __pthread { void *self; void *(*fn)(void *); void *arg; void *ret; void *map; unsigned long len; volatile int tid;
-                   volatile long gone; void *tsd[128]; };
+                   volatile long gone; int err, herr; void *tsd[128]; };
 #define PtStack (8UL << 20)
 #define PtFlags 0x3d0f00L   /* VM FS FILES SIGHAND THREAD SYSVSEM SETTLS PARENT_SETTID CHILD_CLEARTID */
 #define PtMain ((pthread_t) 1)  /* the first thread: no record, and no record sits at 1 */
@@ -31,14 +31,7 @@ enum { NbUc = 632, NbGr = 56, NbPc = 31, NbSp = 1, NbArg = 9, NbTls = 3, NbRa = 
 
 pthread_t pthread_self(void) {
   if (!__love_mt.threads) return PtMain;
-#if defined(__x86_64__)
-  void *tp = 0;
-  if (__love_osv == 2) fb2(165, 128, (long) &tp);             /* sysarch(AMD64_GET_FSBASE) */
-  else if (__love_osv == 3) tp = (void *) fb1(316, 0);        /* _lwp_getprivate */
-  else sc2(NR_arch_prctl, 0x1003, (long) &tp);                /* ARCH_GET_FS */
-#else
-  void *tp = __love_tp();
-#endif
+  void *tp = __love_tp();                       /* x64's first thread has a base by now */
   if (!tp || tp == __love_mt.mtp) return PtMain;
 #if defined(__aarch64__)
   if (__love_mt.tlsimg) tp = *(void **) tp;
@@ -46,6 +39,13 @@ pthread_t pthread_self(void) {
   return (pthread_t) tp; }
 
 int pthread_equal(pthread_t a, pthread_t b) { return a == b; }
+
+/* errno.c's hook once a thread starts: the calling thread's errno (0) or h_errno (1) */
+static int *__pt_errat(int w) {
+  pthread_t t = pthread_self();
+  if (t == PtMain) return w ? &__h_errno_v : &__errno_v;
+  struct __pthread *d = (struct __pthread *) t;
+  return w ? &d->herr : &d->err; }
 int pthread_attr_init(pthread_attr_t *a) { a->__unused = 0; return 0; }
 int pthread_attr_destroy(pthread_attr_t *a) { return 0; }
 
@@ -126,6 +126,7 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   if (__love_mt.tlsimg) __love_tlscopy(d), low -= __love_mt.tlsblk;
 #endif
   d->fn = fn; d->arg = arg; d->ret = 0; d->map = m; d->len = PtStack; d->tid = 0; d->gone = 0;
+  d->err = d->herr = 0;
   memset(d->tsd, 0, sizeof d->tsd);
   void **sp = (void **) (((unsigned long) low - 16) & ~15UL);
   sp[0] = (void *) __pt_start; sp[1] = d;     /* the leaf calls sp[0](sp[1]) */
@@ -140,6 +141,17 @@ int pthread_create(pthread_t *t, pthread_attr_t const *at, void *(*fn)(void *), 
   sp[2] = (void *) (long) (__love_mt.tls * 8 + 3);
   tls = &u;
 #endif
+#if defined(__x86_64__)
+  /* fs:0 must read a self in every thread before the first one starts: the first
+   * thread with no tls template takes a one-word record */
+  if (!__love_mt.mtp) {
+    void *tp = __love_mt.mself = &__love_mt.mself;
+    if (__love_osv == 2) fb2(165, 129, (long) &tp);           /* sysarch(AMD64_SET_FSBASE) */
+    else if (__love_osv == 3) fb1(317, (long) tp);            /* _lwp_setprivate */
+    else sc2(NR_arch_prctl, 0x1002, (long) tp);               /* ARCH_SET_FS */
+    __love_mt.mtp = tp; }
+#endif
+  __love_errat = __pt_errat;
   __love_mt.threads = 1;                        /* before the child can reach malloc */
 #ifdef LvBsdThreads
   long r = __love_osv >= 2 ? __pt_bsd(d, (void **) (((unsigned long) low - 16) & ~15UL), tls)

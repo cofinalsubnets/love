@@ -159,8 +159,8 @@ int pthread_setspecific(pthread_key_t k, void const *v) {
  * raises __w then sleeps only while __v is 0: seq_cst both, so one sees the other's store */
 #include <semaphore.h>
 int sem_init(sem_t *s, int shared, unsigned v) {
-  if (shared) { __errno_v = ENOSYS; return -1; }          /* the futex ops are private */
-  if (v > INT_MAX) { __errno_v = EINVAL; return -1; }
+  if (shared) { errno = ENOSYS; return -1; }          /* the futex ops are private */
+  if (v > INT_MAX) { errno = EINVAL; return -1; }
   s->__v = (int) v; s->__w = 0; return 0; }
 int sem_destroy(sem_t *s) { return 0; }
 int sem_post(sem_t *s) {
@@ -172,18 +172,18 @@ static int __sem_take(sem_t *s) {
   while (v > 0)
     if (__atomic_compare_exchange_n(&s->__v, &v, v - 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_ACQUIRE)) return 1;
   return 0; }
-int sem_trywait(sem_t *s) { if (__sem_take(s)) return 0; __errno_v = EAGAIN; return -1; }
+int sem_trywait(sem_t *s) { if (__sem_take(s)) return 0; errno = EAGAIN; return -1; }
 static int __sem_wait(sem_t *s, struct timespec const *abs) {
   for (;;) {
     if (__sem_take(s)) return 0;
     struct timespec rel;
-    if (abs && !__pt_left(abs, &rel)) { __errno_v = ETIMEDOUT; return -1; }
+    if (abs && !__pt_left(abs, &rel)) { errno = ETIMEDOUT; return -1; }
     __atomic_fetch_add(&s->__w, 1, __ATOMIC_SEQ_CST);
     int r = __fx_wait(&s->__v, 0, abs ? &rel : 0);
     __atomic_fetch_sub(&s->__w, 1, __ATOMIC_SEQ_CST);
-    if (r == -EINTR) { __errno_v = EINTR; return -1; } } }
+    if (r == -EINTR) { errno = EINTR; return -1; } } }
 int sem_wait(sem_t *s) { return __sem_wait(s, 0); }
 int sem_timedwait(sem_t *s, struct timespec const *abs) {
-  if (abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) { __errno_v = EINVAL; return -1; }
+  if (abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) { errno = EINVAL; return -1; }
   return __sem_wait(s, abs); }
 int sem_getvalue(sem_t *s, int *v) { *v = __atomic_load_n(&s->__v, __ATOMIC_ACQUIRE); return 0; }

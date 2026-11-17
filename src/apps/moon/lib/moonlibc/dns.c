@@ -180,7 +180,6 @@ int gethostbyname_r(char const *host, struct hostent *h, char *buf, size_t n, st
   *res = h;
   return 0; }
 /* ..and the plain one into the process's one hostent */
-int h_errno;
 static struct { struct hostent h; char *b[40]; } __hb;   /* room for a 255-byte name */
 struct hostent *gethostbyname(char const *host) {
   struct hostent *r;

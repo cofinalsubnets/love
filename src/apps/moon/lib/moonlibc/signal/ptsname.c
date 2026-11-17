@@ -27,4 +27,4 @@ int ptsname_r(int fd, char *b, size_t n) {
 char *ptsname(int fd) {
   static char nb[64];
   int e = ptsname_r(fd, nb, sizeof nb);
-  return e ? (__errno_v = e, (char *) 0) : nb; }
+  return e ? (errno = e, (char *) 0) : nb; }

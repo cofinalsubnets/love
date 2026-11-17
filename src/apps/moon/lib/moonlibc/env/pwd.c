@@ -64,10 +64,10 @@ static int dbnext(FILE *fp, int grp, void *rec, char *buf, size_t n,
     if (!e && (!ok || ok(rec, key))) { free(ln); return 0; } } }
 static int dbfind(char const *path, int grp, void *rec, char *buf, size_t n, void **res,
                   int (*ok)(void const *, void const *), void const *key) {
-  int sv = __errno_v;
+  int sv = errno;
   FILE *fp = fopen(path, "re");
   *res = 0;
-  if (!fp) return __errno_v == ENOENT ? (__errno_v = sv, 0) : __errno_v;
+  if (!fp) return errno == ENOENT ? (errno = sv, 0) : errno;
   int e = dbnext(fp, grp, rec, buf, n, ok, key);
   fclose(fp);
   if (!e) *res = rec;
@@ -116,9 +116,9 @@ static void *dbplain(int grp, int (*f)(void *rec, char *b, size_t n, void **res,
   if (!*b && !(*b = malloc(*n = 1024))) return 0;
   for (;;) {
     int e = f(rec, *b, *n, &res, k);
-    if (e != ERANGE) { if (e && e != ENOENT) __errno_v = e; return res; }
+    if (e != ERANGE) { if (e && e != ENOENT) errno = e; return res; }
     char *q = realloc(*b, *n * 2);
-    if (!q) { __errno_v = ENOMEM; return 0; }
+    if (!q) { errno = ENOMEM; return 0; }
     *b = q, *n *= 2; } }
 static int pnam(void *r, char *b, size_t n, void **res, void const *k) { return getpwnam_r(k, r, b, n, (struct passwd **) res); }
 static int puid(void *r, char *b, size_t n, void **res, void const *k) { return getpwuid_r(*(uid_t const *) k, r, b, n, (struct passwd **) res); }
