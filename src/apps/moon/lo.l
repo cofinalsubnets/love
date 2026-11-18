@@ -1528,7 +1528,7 @@
                    (sgo l o acc) (l @ (x . u) ((x @ ['w2 _ n] (aup o n) ['at _ _ f] f _ o) @ p (sgo u (p + x 2) (acc + stk x p))) [o acc])
                    so (sgo sk sh ()) sfs (so 1) blk (aup <so 16)
                    res (? (rt = 'void) ()
-                          (lofl? rt && soft? g) [(rt = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])]
+                          (lofl? rt && sfa? g) [(rt = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])]
                           (lofl? rt) ((ia32? g ? [['fix () lokl [['raw (x87raw g (rt = 'float) 1)]]]]) + [['movapd d 'f0]])
                           (d128? rt) (lowmv d (lowabi g))
                           (pair? g rt) [['mov <d 'r0] ['mov <>d (ia32? g ? 'r2 'r1)]]
@@ -1625,8 +1625,8 @@
         (l @ () (rev acc)
              ((ty . u) && lonil? g ty) (go u gi m ov (['e] . acc))
              (ty . u)
-              (: hb (!va && t32f? g && stru? ty && t32hfa? g ty ? (hfab g ty))
-                 (? (hb || !va && t32f? g && lofl? ty)
+              (: hb (!va && t32vfp? g && stru? ty && t32hfa? g ty ? (hfab g ty))
+                 (? (hb || !va && t32vfp? g && lofl? ty)
                      (: b (hb || ty) w (tsz g b) n (hb ? (tsz g ty // w) 1) sl (w // 4 * n)
                         ((w = 8 ? (vfpn m sl 2) (vfpn m sl 1)) @ k
                            (0 <= k ? (go u gi (vfpm m k sl) ov (['f k n b] . acc))
@@ -1771,7 +1771,7 @@
     (: sz (tsz g ty)
        (? (ia32? g) (cxf32? g ty ? [['int 0 4] ['int 4 4]])   ; a float complex answers on edx:eax
           (t32? g)
-           (? (t32f? g && t32hfa? g ty) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
+           (? (t32vfp? g && t32hfa? g ty) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
               (sz <= 4) [['int 0 sz]]
               ())
           (a64? g)
@@ -1856,7 +1856,7 @@
                    ; an int's upper half is the caller's to extend; lp64 has it leave sign-extended, unsigned too
                    ([vt r fs] && pair? g rt && losv? vt)
                     (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov (ia32? g ? 'r2 'r1) h]] + epj))
-                   ([vt r fs] && lofl? rt && losv? vt && soft? g)
+                   ([vt r fs] && lofl? rt && losv? vt && sfa? g)
                     (lotr g [vt r fs] rt @ [_ c f2] (f2 + [(rt = 'float ? ['movdrx 'r0 c] ['movrrq 'r0 'r1 c])] + epj))
                    ([vt r fs] && losv? rt && losv? vt)
                     (lotr g [vt r fs] (elem rt '(int uint) && losc? vt ? (g 'tgt = 'rv64 ? 'int 'long) rt) @ [_ c f2] (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)]
@@ -2187,7 +2187,7 @@
           _ (rv? g || xt? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) (map cap (filter lovq? (f 2)))) 'lowhy () 'losret sr
-                  'loret (? (rt = 'void) () (lofl? rt) (soft? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) (lowabi g) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) (sfa? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) (lowabi g) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           ; ..past the a0-a7 block a riscv variadic fn pushes
           ovo (ovb g + (va && rv64? g ? 64 0))

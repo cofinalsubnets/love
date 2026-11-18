@@ -446,12 +446,24 @@
     (: wn (map name wu)
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
-   ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
-   (picla tgt pc fs)
+   ; arm under -fpic: an address this unit lays is pc-relative, movw/movt from the pc an add
+   ; reads; any other is its got slot's word, pooled as R_ARM_GOT_PREL (-8 counts the word to
+   ; the add's pc) and loaded, which the link makes a nop where it lays the name itself
+   (picla tgt pc laid fs)
     (? !pc fs
-       (tgt = 'arm) (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs)
+       (tgt = 'arm) (catall (map (f \ (? !(two? f && <f = 'la) [f]
+                                         (peep laid (lkey (f 2)) 0) [('lap . >f)]
+                                         [['align 4] ['lapool (f 1)] ['raw [['fix 4 'gotprel (f 2) -8]]]
+                                          ['addpc (f 1)] ['ld (f 1) (f 1) 0]]))
+                                 fs))
        (tgt = 'i386) (pic386 fs)
        fs)
+   (lkey x) (string? x ? (intern x) x)
+   ; the names a unit's forms lay, as picla asks them
+   (laidin ns fss)
+    (: t (foldl (\ t n (pin t (lkey n) 1)) {} ns)
+       (go x) (two? x ? (<x = 'label && two? >x ? (pin t (lkey <>x) 1) (each x go)))
+       (each fss go, t))
    ; i386 under -fpic: an address is lar's, pc-relative; a symbol's word reads through a register,
    ; the load's own or one pushed aside
    (pic386 fs)
@@ -516,8 +528,9 @@
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 tforms (lpool tgt pc (picla tgt pc (wkla tgt wu tforms)))
-                 xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc (wkla tgt wu forms))) al]) xfns)
+                 laid (tgt = 'arm && pc ? (laidin (fns + gns + lnames + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
+                 tforms (lpool tgt pc (picla tgt pc laid (wkla tgt wu tforms)))
+                 xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc laid (wkla tgt wu forms))) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                      + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                      + bpsecs bp + cfsecs cf tgt)
@@ -731,7 +744,8 @@
                     (call __libc_start_main))
    ; ..and atexit, weak: glibc keeps it out of libc.so (libc_nonshared's) and bionic in its crt,
    ; both as __cxa_atexit(f, 0, the exe's handle 0); the push keeps x64's stack aligned
-   (crt-atexit tgt) (tgt = 'x64 ? '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
+   (crt-atexit tgt) (? (tgt = 'x64) '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
+                       (tgt = 'arm) '((label atexit) (push lr) (push r4) (li r1 0) (li r2 0) (call __cxa_atexit) (pop r4) (pop lr) (ret))
                        '((label atexit) (push lr) (li r1 0) (li r2 0) (call __cxa_atexit) (pop lr) (ret)))
    crt0-glibc-rv '((mov r5 r0)
                    (ld r1 sp 0)
@@ -750,7 +764,7 @@
                     (call __libc_start_main))
    ; ..bionic's __libc_init takes the kernel's block, main, and the exe's structors, here three
    ; empty slots on the stack (it never returns). bionic's loader runs an exe's init array but
-   ; not its fini array, so a walker of it is registered first, to run after every atexit. a64 alone
+   ; not its fini array, so a walker of it is registered first, to run after every atexit
    crt0-bionic-a64 '((lea r0 sp 0)
                      (mov r19 r0)
                      (la r0 c0b-fini) (li r1 0) (li r2 0)
@@ -774,6 +788,30 @@
                      (jmp c0b-next)
                      (label c0b-done)
                      (pop r20) (pop r19) (pop lr)
+                     (ret))
+   ; ..arm's the same, its addresses pc-relative (a pie), its stack kept 8-aligned
+   crt0-bionic-arm '((mov r4 sp)
+                     (lap r0 c0ba-fini) (li r1 0) (li r2 0)
+                     (call __cxa_atexit)
+                     (mov r0 r4)
+                     (sub sp sp 16)
+                     (li r3 0) (st sp 0 r3) (st sp 4 r3) (st sp 8 r3)
+                     (mov r3 sp)
+                     (li r1 0)
+                     (lap r2 main)
+                     (call __libc_init)
+                     (label c0ba-fini)
+                     (push lr) (push r4) (push r5) (push r6)
+                     (lap r4 __fini_array_start) (lap r5 __fini_array_end)
+                     (label c0ba-next)
+                     (cmp r5 r4)
+                     (br eq c0ba-done)
+                     (sub r5 r5 4)
+                     (ld r6 r5 0)
+                     (callr r6)
+                     (jmp c0ba-next)
+                     (label c0ba-done)
+                     (pop r6) (pop r5) (pop r4) (pop lr)
                      (ret))
    ; the riscv entry: a non-zero a0 is freebsd's vector, handed down as 2; linux and netbsd
    ; are asked. linux exits by 94 in a7, netbsd 1 in t6 (holo's scratch, set raw), freebsd 1 in t0
@@ -1079,7 +1117,7 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static 'ip ip}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static 'ip ip 'xk xk}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
@@ -1115,8 +1153,8 @@
        ; (android's under /system), what it lacks imported from the -l libraries
        dx (string? ip)
        _ (dx && (so || static || mac? || arm?) && udie 2 "cc: -dynamic-linker lays a hosted executable: no -shared, -static or bare link")
-       _ (dx && !(elem tgt '(x64 a64 rv64)) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64")
        bionic (dx && starts? ip "/system/")
+       _ (dx && !(elem tgt '(x64 a64 rv64) || bionic && tgt = 'arm) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64, and arm under /system")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
@@ -1127,8 +1165,10 @@
        runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
                (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
                [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
-       _ (bionic && tgt != 'a64 && udie 1 "cc: -dynamic-linker under /system links on a64")
-       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'rv64 crt0-glibc-rv crt0-glibc-x64)
+       _ (bionic && !(elem tgt '(a64 arm)) && udie 1 "cc: -dynamic-linker under /system links on a64 and arm")
+       ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
+       _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
+       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
              mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        ent (dx ? ["_start" "atexit"] '("__love_start"))
        all (arm? || so ? srcs
@@ -1141,8 +1181,8 @@
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
-             (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()))
-             (ldlink tgt pie org set prod rdme))
+             (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()) (elem 'sfp xk))
+             (ldlink tgt pie org set prod rdme (elem 'sfp xk)))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
@@ -1402,6 +1442,8 @@
           ; arm's asks: thumb-2 is what it lays, aapcs-linux the arm target's own abi, and a soft
           ; float abi refuses the float file as -msoft-float does
           ("-mfloat-abi=soft" . r) (flags r (pin (fpush t 'a32 "-mfloat-abi=soft") 'nofp 1))
+          ; ..softfp the float file computing, every float at a call in the words
+          ("-mfloat-abi=softfp" . r) (flags r (xkon (fpush t 'a32 "-mfloat-abi=softfp") 'sfp))
           ((a . r) && elem a ["-mthumb" "-mabi=aapcs-linux"]) (flags r (fpush t 'a32 a))
           ; no lane of ours would use these, so asking for none of them asks nothing
           ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
@@ -1471,7 +1513,7 @@
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
-       ntv (elem love-arch '(x64 a64 rv64) ? love-arch 'x64)     ; unknown grounds keep x64
+       ntv (elem love-arch '(x64 a64 rv64 arm) ? love-arch 'x64)     ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; -I dirs want a trailing slash: normalised in the tablet, before anything reads
        _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
@@ -1504,6 +1546,11 @@
        _ (elem 'thki (f 'xk) && !(elem (f 'tgt) '(x64 i386)) && udie 2 "cc: -mretpoline lays on x86 only")
        _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        _ (f 'pic && f 'tgt = 'i386 && pin f 'njt 1)                       ; ..and i386's table holds absolute words
+       ; an arm exe under a system loader is a pie: absolute movw/movt in its text could not slide
+       _ (string? (f 'ip) && f 'tgt = 'arm && !(f 'pic) &&
+          (f 'npic ? (udie 2 "cc: -dynamic-linker on arm lays a pie: drop -fno-pic") (pin f 'pic "-fpie")))
+       ; ..and android's arm abi is softfp: its libraries take a float in the words
+       _ (string? (f 'ip) && starts? (f 'ip) "/system/" && f 'tgt = 'arm && !(f 'nofp) && xkon f 'sfp)
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)

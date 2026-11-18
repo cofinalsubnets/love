@@ -210,7 +210,7 @@
              rd (peep o 'readme ())
              rdme (? (string? rd) (uread rd @ t (two? t ? <>t (udie 2 ("ld: cannot open " + rd)))) ())
              srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) ins)
-             ps (ldlink tgt (o 'pie) (peep o 'org ()) srcs ("love " + <(usplit 43 love-version)) rdme)
+             ps (ldlink tgt (o 'pie) (peep o 'org ()) srcs ("love " + <(usplit 43 love-version)) rdme ())
              (ld-write (o 'out) ps, chmod (o 'out) 493, 0))))
 
    ; nm: VALUE type NAME over link.l's ld-syms. the letter is ELF's facts: U undefined,
