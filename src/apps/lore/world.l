@@ -2180,6 +2180,7 @@
                                st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
+                               _ (mesh-gpu st)         ; its helper built while loading, not in a frame
                                (world-watch (world-size st w (h // 2)))))
                'stick [119 115 97 100 87] 'tap world-tap
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
