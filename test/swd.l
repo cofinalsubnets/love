@@ -719,3 +719,80 @@
 (: b (rpbus 0) r (swd-mdconnect <b (rpts 1)) c0 (b 1 0) c1 (b 1 1)
    p (swdt-probe <(rpbus 0)) q (swd-mdconnect (probe-wire-on p) (rpts 0))
    (test (r = [rpdp rpap]) (q = [rpdp rpap]) (() = c0 'reqs ()) (() = c1 'errs ()) (0 < #(c1 'reqs ()))))
+
+; a cmsis-dap under its reports, over a port's handler h, as the firmware answers: an ap read's
+; posted value fetched through rdbuff, a batch stopping at its first ack not 1. 'lines the bit
+; sequences asked, 'cmds every command
+(: (swdt-dap h)
+    (: st {'r "" 'lines () 'cmds ()}
+       (xf s n i at acc)
+        (? (i = n) [i 1 acc]
+           (: q (s at) ap (q & 1) rd (q >> 1 & 1) a ((q >> 2 & 3) << 2) ack (h 'ack ap rd a)
+              (? (ack != 1) [i ack acc]
+                 (rd = 1) (: v (ap = 1 ? (h 'rd 1 a, h 'rd 0 12) (h 'rd 0 a)) (xf s n (i + 1) (at + 1) (acc + wrle v 4)))
+                 (: _ (h 'wr ap a (rdle s (at + 1) 4)) (xf s n (i + 1) (at + 5) acc)))))
+       (reply s) (? ((s 0) = 5) (: x (xf s (s 2) 0 3 "") (string [5 <x (x 1)] + x 2))
+                    ((s 0) = 0x12) (pin st 'lines ([(s 1) (snip s 2 #s)] . st 'lines), string [0x12 0])
+                    ((s 0) = 0) (string [0 4] + "dap1")
+                    ((s 0) = 2) (string [2 1])
+                    (string [(s 0) 0]))
+       {'send (s \ (pin st 'cmds (s . st 'cmds), pin st 'r (reply s)))
+        'recv (_ \ st 'r) 'close (_ \ 0)
+        'lines (_ \ rev (st 'lines)) 'cmds (_ \ rev (st 'cmds))})
+   (swdt-rq ap rd a) (: d (a >> 2 & 3) (1 | ap << 1 | rd << 2 | d << 3 | swd-par (ap | rd << 1 | d << 2) << 5 | 1 << 7)))
+
+; connect through a dap: the switch one 136-bit sequence, the port's writes as over bits, each
+; command inside a report
+(: h (f4port 3) d (swdt-dap h) w (dap-wire-on d) r (swd-connect w)
+   ff (string (map (_ \ 255) ^7))
+   (test (r = [f4dp f4ap]) ("dap1" = w 'id ())
+         (d 'lines () = [[136 (ff + string [0x9E 0xE7] + ff + string [0])]])
+         (h 'writes () = [[0 0 0x1E] [0 4 0x50000000] [0 8 0xF0]])
+         (all (s \ #s <= 64) (d 'cmds ()))))
+
+; runs through a dap, the read it holds back kept across calls: an f4's port, and an adiv6
+; port's ap at 0x2000
+(: (runs h w) (: _ (swd-connect w) ws (map (i \ 0x1000 * i + 7) ^300)
+                 n (swd-wrs w 0x200003F0 ws) back (swd-rds w 0x200003F0 300)
+                 one (swd-rd w 0x20000400) odd (swd-rds w 0x200007FC 2)
+                 [(300 = n) (back = ws) (one = ws 4) (odd = [(ws 259) (ws 260)])])
+   (test (all id (runs 0 (dap-wire-on (swdt-dap (f4port 0)))))
+         (all id (runs 0 (swd-use (dap-wire-on (swdt-dap (r6port ()))) 0x2000)))))
+
+; a batch past a report, and one an ack stops: every item answered, in order; after a fault
+; the rest 0s, unasked
+(: id0 [1 f4dp (swd-par f4dp)]
+   d (swdt-dap (f4port 0)) w (dap-wire-on d)
+   rd (swdt-rq 0 1 0) ap (swdt-rq 1 1 0)
+   long (w 'xfer (map (_ \ [rd 0]) ^30)) n0 #(filter (s \ s 0 = 5) (d 'cmds ()))
+   cut (w 'xfer ([[rd 0] [rd 0] [ap 0]] + map (_ \ [rd 0]) ^20))
+   (test (long = map (_ \ id0) ^30) (3 = n0)
+         (cut = [id0 id0 [4 () ()]] + map (_ \ [0 () ()]) ^20)
+         (4 = #(filter (s \ s 0 = 5) (d 'cmds ())))))
+
+; an nrf52's nvmc over a bus: flash below 0x80000 in 4K pages, a write clearing bits only while
+; config says write, erasepage setting a page to ones only while it says erase; the ficr's part
+; and page counts; ready always. 'erased the pages, in order
+(: (swdt-nrf _)
+    (: m {} st {'cf 0 'er ()} nv 0x4001E000
+       (rd a) (? (a = 0x10000100) 0x52833 (a = 0x10000010) 4096 (a = 0x10000014) 128
+                 (a = nv + 0x400) 1 (a < 0x80000) (peep m a 0xFFFFFFFF) (peep m a 0))
+       (wr a v) (? (a = nv + 0x504) (pin st 'cf v)
+                   (a = nv + 0x508) (st 'cf = 2 ? (pin st 'er (v . st 'er), map (i \ pin m (v + 4 * i) 0xFFFFFFFF) ^1024) 0)
+                   (a < 0x80000) (st 'cf = 1 ? (pin m a (rd a & v)) 0)
+                   (pin m a v))
+       {'rd rd 'wr wr 'mem (_ \ m) 'erased (_ \ rev (st 'er))}))
+
+; a flash through a dap: the pages it covers erased and no other, the rest of its last word
+; ones, a page past it as it was; nothing, or past the flash, scares untouched
+(: b (swdt-nrf ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   _ (map (i \ pin (b 'mem ()) (0x1000 + 4 * i) 0x12345678) ^3072)
+   s (string (map (i \ i * 7 + 3 & 255) ^5001))
+   r (nrf-flash w 0x1000 s)
+   ids (nrf-ids w)
+   e (trap (_ \ nrf-flash w 0x1000 "") 0 (a \ b \ a))
+   f (trap (_ \ nrf-flash w 0x7FFFE "abc") 0 (a \ b \ a))
+   (test (1 = r) (b 'erased () = [0x1000 0x2000]) (ids = [0x52833 4096 128])
+         (f4-read w 0x1000 5001 = s) ((b 'mem () 0x2388) = (s 5000 | 0xFFFFFF00))
+         (0x12345678 = b 'mem () 0x3000) ('nrf-empty = e) ('nrf-range = f)
+         (b 'erased () = [0x1000 0x2000])))
