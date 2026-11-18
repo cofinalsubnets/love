@@ -788,9 +788,12 @@ test_gcstress_full: host $(love0) out/gcs0/love0 out/lib/corpus.list $(ho)/moonc
 	@sh test/gate/l0stress.sh .
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---
 # each gate skips, saying so, when its checker is missing
-COQC     ?= $(shell command -v coqc 2>/dev/null)
-OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
-LEAN     ?= $(shell command -v lean 2>/dev/null)
+coqc_at     := $(shell command -v coqc 2>/dev/null)
+ocamlopt_at := $(shell command -v ocamlopt 2>/dev/null)
+lean_at     := $(shell command -v lean 2>/dev/null)
+COQC     ?= $(coqc_at)
+OCAMLOPT ?= $(ocamlopt_at)
+LEAN     ?= $(lean_at)
 # the scratch coqc strews beside a .v, and what an extracted ocaml ref leaves
 vclean = rm -f $(foreach n,$1,test/proof/rocq/$n.vo test/proof/rocq/$n.vok test/proof/rocq/$n.vos test/proof/rocq/$n.glob test/proof/rocq/.$n.aux)
 dclean = rm -f $(foreach n,$1,test/proof/rocq/$n_ref.ml test/proof/rocq/$n_ref.mli test/proof/rocq/$n_drive)
@@ -1062,7 +1065,8 @@ test_uefi_stay: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(k_stayd) $$fw x64 "efihello: one two"; fi
 endif
 
-QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
+qemu_a64_at := $(shell command -v qemu-system-aarch64 2>/dev/null)
+QEMU_A64 ?= $(qemu_a64_at)
 ifeq ($(QEMU_A64),)
 test_uefi_a64:
 	@sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (qemu-system-aarch64 needed)"
@@ -1122,7 +1126,8 @@ test_kernel_rpi3: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-a64pi.img - a64pi
 endif
 
-QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
+qemu_rv64_at := $(shell command -v qemu-system-riscv64 2>/dev/null)
+QEMU_RV64 ?= $(qemu_rv64_at)
 ifeq ($(QEMU_RV64),)
 test_kernel_rv64:
 	@sh test/gate/skip.sh gate-skip "test_kernel_rv64: skipped (need qemu-system-riscv64)"
@@ -1133,8 +1138,10 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 endif
 
-NODE ?= $(shell command -v node 2>/dev/null)
-WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
+node_at := $(shell command -v node 2>/dev/null)
+wasmopt_at := $(shell command -v wasm-opt 2>/dev/null)
+NODE ?= $(node_at)
+WASMOPT ?= $(wasmopt_at)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int
 holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
 ifeq ($(NODE),)
