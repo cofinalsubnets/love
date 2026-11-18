@@ -257,8 +257,8 @@
 (: h (f4port 0) w (swdt-target h) _ (swd-connect w) n0 #(h 'writes ())
    v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
    (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010)
-         (drop n0 (h 'writes ()) = [[0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010] [1 12 0xDEADBEEF]
-                                 [0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010]])))
+         (drop n0 (h 'writes ()) = [[0 8 0] [1 0 0x23000012] [1 4 0x20000010] [1 12 0xDEADBEEF]
+                                 [1 0 0x23000012] [1 4 0x20000010]])))
 
 ; runs across 1K boundaries: tar set again at each, every word where it belongs
 (: h (f4port 0) w (swdt-target h) _ (swd-connect w)
@@ -296,7 +296,7 @@
    v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
    ws (map (i \ 0x1000 * i + 7) ^300) n (swd-wrs w 0x200003F0 ws) back (swd-rds w 0x200003F0 300)
    (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010) (300 = n) (back = ws)
-         (take 5 (drop n0 (h 'writes ())) = [[0 8 0x2D00] [1 0 0x23000012] [0 8 0x2D00] [1 4 0x20000010] [1 12 0xDEADBEEF]])
+         (take 5 (drop n0 (h 'writes ())) = [[0 8 0x2D00] [1 0 0x23000012] [1 4 0x20000010] [1 12 0xDEADBEEF] [1 0 0x23000012]])
          (() = w 'errs ())))
 
 ; a cortex-m core over a bus, as an f4 answers: dhcsr's debug enable and halt (key 0xA05F,
@@ -584,9 +584,10 @@
         'recv (n \ (: a (st 'a) _ (pin st 'a (snip a n #a)) (snip a 0 n)))
         'close (_ \ 0) 'sent (_ \ rev (st 'sent))})
    ; a probe in love over a bit wire: the commands decoded and each transfer one swd-xfer1,
-   ; a batch's transfers after its first ack not 1 answering 0, unclocked
+   ; a batch's transfers after its first ack not 1 answering 0, unclocked; 'sends counts the
+   ; host's writes, its round trips
    (swdt-probe bw)
-    (: st {'out "" 'stop 0 'n 0}
+    (: st {'out "" 'stop 0 'n 0 'sends 0}
        (emit s) (pin st 'out (st 'out + s))
        (tx rq rd v) (: r (swd-xfer1 bw rq rd v)
                        _ (pin st 'n (st 'n + 1))
@@ -610,9 +611,9 @@
                  (c = 73) (: _ (emit "lovswd1\n") (cmd s (i + 1)))
                  (c = 90) (cmd s (i + 1))
                  (scare 'swdt-probe c))))
-       {'send (s \ (cmd s 0, 0))
+       {'send (s \ (pin st 'sends (st 'sends + 1), cmd s 0, 0))
         'recv (n \ (: o (st 'out) _ (#o < n && scare 'swdt-probe-short n) _ (pin st 'out (snip o n #o)) (snip o 0 n)))
-        'close (_ \ 0) 'n (_ \ st 'n)}))
+        'close (_ \ 0) 'n (_ \ st 'n) 'sends (_ \ st 'sends)}))
 
 ; a batch: each transfer's bytes, 'E' after them; answers by the lengths the requests foretell,
 ; and after a fault the transfers the probe did not clock answer 0
@@ -721,7 +722,7 @@
    (test (r = [rpdp rpap]) (q = [rpdp rpap]) (() = c0 'reqs ()) (() = c1 'errs ()) (0 < #(c1 'reqs ()))))
 
 ; a cmsis-dap under its reports, over a port's handler h, as the firmware answers: an ap read's
-; posted value fetched through rdbuff, a batch stopping at its first ack not 1. 'lines the bit
+; posted value fetched through rdbuff, a transfer or a block stopping at its first ack not 1. 'lines the bit
 ; sequences asked, 'cmds every command
 (: (swdt-dap h)
     (: st {'r "" 'lines () 'cmds ()}
@@ -731,7 +732,15 @@
               (? (ack != 1) [i ack acc]
                  (rd = 1) (: v (ap = 1 ? (h 'rd 1 a, h 'rd 0 12) (h 'rd 0 a)) (xf s n (i + 1) (at + 1) (acc + wrle v 4)))
                  (: _ (h 'wr ap a (rdle s (at + 1) 4)) (xf s n (i + 1) (at + 5) acc)))))
+       ; a block: one request n times, a write's words after it
+       (xb q s n i at acc)
+        (? (i = n) [i 1 acc]
+           (: ap (q & 1) rd (q >> 1 & 1) a ((q >> 2 & 3) << 2) ack (h 'ack ap rd a)
+              (? (ack != 1) [i ack acc]
+                 (rd = 1) (: v (ap = 1 ? (h 'rd 1 a, h 'rd 0 12) (h 'rd 0 a)) (xb q s n (i + 1) at (acc + wrle v 4)))
+                 (: _ (h 'wr ap a (rdle s at 4)) (xb q s n (i + 1) (at + 4) acc)))))
        (reply s) (? ((s 0) = 5) (: x (xf s (s 2) 0 3 "") (string [5 <x (x 1)] + x 2))
+                    ((s 0) = 6) (: x (xb (s 4) s (rdle s 2 2) 0 5 "") (wrle <x 2 @ c (string [6 (c 0) (c 1) (x 1)] + x 2)))
                     ((s 0) = 0x12) (pin st 'lines ([(s 1) (snip s 2 #s)] . st 'lines), string [0x12 0])
                     ((s 0) = 0) (string [0 4] + "dap1")
                     ((s 0) = 2) (string [2 1])
@@ -760,15 +769,27 @@
          (all id (runs 0 (swd-use (dap-wire-on (swdt-dap (r6port ()))) 0x2000)))))
 
 ; a batch past a report, and one an ack stops: every item answered, in order; after a fault
-; the rest 0s, unasked
+; the rest 0s, unasked. thirty of one request go as two blocks; a block a fault stops answers
+; the same way
 (: id0 [1 f4dp (swd-par f4dp)]
    d (swdt-dap (f4port 0)) w (dap-wire-on d)
+   (reps _) #(filter (s \ s 0 = 5 || s 0 = 6) (d 'cmds ()))
    rd (swdt-rq 0 1 0) ap (swdt-rq 1 1 0)
-   long (w 'xfer (map (_ \ [rd 0]) ^30)) n0 #(filter (s \ s 0 = 5) (d 'cmds ()))
-   cut (w 'xfer ([[rd 0] [rd 0] [ap 0]] + map (_ \ [rd 0]) ^20))
-   (test (long = map (_ \ id0) ^30) (3 = n0)
-         (cut = [id0 id0 [4 () ()]] + map (_ \ [0 () ()]) ^20)
-         (4 = #(filter (s \ s 0 = 5) (d 'cmds ())))))
+   long (w 'xfer (map (_ \ [rd 0]) ^30)) n0 (reps 0)
+   cut (w 'xfer ([[rd 0] [rd 0] [ap 0]] + map (_ \ [rd 0]) ^20)) n1 (reps 0)
+   blk (w 'xfer (map (_ \ [ap 0]) ^20))
+   (test (long = map (_ \ id0) ^30) (2 = n0)
+         (cut = [id0 id0 [4 () ()]] + map (_ \ [0 () ()]) ^20) (4 = n1)
+         (blk = [[4 () ()]] + map (_ \ [0 () ()]) ^19) (5 = reps 0)))
+
+; a 300-word write and read through a dap: blocks of 14 and 15 to a report, 29 and 31 reports
+; where one a word took 600
+(: d (swdt-dap (f4port 0)) w (dap-wire-on d) _ (swd-connect w)
+   (reps _) #(filter (s \ s 0 = 5 || s 0 = 6) (d 'cmds ()))
+   n0 (reps 0) ws (map (i \ 0x1000 * i + 7) ^300)
+   _ (swd-wrs w 0x200003F0 ws) nw (reps 0 - n0)
+   back (swd-rds w 0x200003F0 300) nr (reps 0 - n0 - nw)
+   (test (back = ws) (nw <= 32) (nr <= 32) (0 < #(filter (s \ s 0 = 6) (d 'cmds ())))))
 
 ; an nrf52's nvmc over a bus: flash below 0x80000 in 4K pages, a write clearing bits only while
 ; config says write, erasepage setting a page to ones only while it says erase; the ficr's part
@@ -796,3 +817,47 @@
          (f4-read w 0x1000 5001 = s) ((b 'mem () 0x2388) = (s 5000 | 0xFFFFFF00))
          (0x12345678 = b 'mem () 0x3000) ('nrf-empty = e) ('nrf-range = f)
          (b 'erased () = [0x1000 0x2000])))
+
+; flashed again, the same bytes erase nothing; one byte changed in the second page erases that
+; page alone, and both read back
+(: b (swdt-nrf ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   s (string (map (i \ i * 7 + 3 & 255) ^5001))
+   _ (nrf-flash w 0x1000 s) e0 (b 'erased ())
+   r1 (nrf-flash w 0x1000 s) e1 (b 'erased ())
+   t (snip s 0 4100 + string [(s 4100 ^ 0xFF)] + snip s 4101 5001)
+   r2 (nrf-flash w 0x1000 t) e2 (b 'erased ())
+   (test (e0 = [0x1000 0x2000]) (1 = r1) (e1 = e0) (1 = r2) (e2 = e0 + [0x2000])
+         (f4-read w 0x1000 5001 = t)))
+
+; --- batching: a run's transfers in few batches ---
+
+; a batch whose third transfer waits: the wait asked again from it, alone with the rest, and
+; every answer in order; a fault or a read's bad parity ends the answers at it; 100 transfers go as 64 and 36
+(: id 0x2BA01477 ok (string [1] + wrle id 4 + string [0])
+   l (swdt-link (ok + ok + string [2 0 0] + "e" + ok + ok + ok + "e"))
+   r (swd-batch (probe-wire-on l) (map (_ \ [0 1 0 0]) ^5))
+   s (l 'sent ())
+   f (swd-batch (probe-wire-on (swdt-link (ok + string [4 0] + "e"))) (map (_ \ [0 1 0 0]) ^3))
+   m (swdt-link (join "" (map (_ \ ok) ^64) + "e" + join "" (map (_ \ ok) ^36) + "e"))
+   g (swd-batch (probe-wire-on m) (map (_ \ [0 1 0 0]) ^100))
+   bp (swd-batch (probe-wire-on (swdt-link (string [1] + wrle id 4 + string [1 0] + "e"))) (map (_ \ [0 1 0 0]) ^2))
+   (test (r = map (_ \ [1 id]) ^5) (#s = 2) (bp = [[-1 id]]) (s 1 = join "" (map (_ \ "T" + string [0xA5]) ^3) + "E")
+         (f = [[1 id] [4 ()]]) (#g = 100) (map (x \ #x) (m 'sent ()) = [129 73])))
+
+; through the sim probe a run reads and writes as over bits, in a few round trips: 300 words
+; from a block's last 44, a 1K boundary inside, and back
+(: t (f4chip 0) p (swdt-probe <t) w (probe-wire-on p) _ (swd-attach w)
+   vs (map (i \ (i * 2654435761) % 4294967296) ^300)
+   a 0x20000FD4
+   n0 (p 'sends ())
+   k (swd-wrs w a vs) n1 (p 'sends ())
+   back (swd-rds w a 300) n2 (p 'sends ())
+   (test (k = 300) (back = vs) (n1 - n0 < 16) (n2 - n1 < 16)))
+
+; select is written only to change it: three reads after connect write it once. a select
+; forgets it: core 1's connect after core 0's, its ap id through the same bank, writes core 1's select
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w)
+   _ (map (_ \ swd-rd w 0x20000000) ^3) a #(filter (e \ e = [0 8 0]) (h 'writes ()))
+   b (rpbus 0) v <b _ (swd-mdconnect v (rpts 0))
+   c1 (swd-mdconnect v (rpts 1))
+   (test (1 = a) (c1 = [rpdp rpap])))

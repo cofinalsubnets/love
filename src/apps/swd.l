@@ -5,7 +5,7 @@
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
 ; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set. the
 ; love swd probe and cmsis-dap are probe wires
-(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
+(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-batch swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
@@ -36,9 +36,9 @@
  ; register a's bits 2 and 3: [ack v], a read's value or the one written. ack 1 is ok; a wait
  ; (2) is asked again after 8 idle clocks, 64 times at most; a fault (4) or no answer (7)
  ; answers its ack, and a read whose parity is wrong the ack -1
+ (swd-rq ap rd a) (: ad (a >> 2 & 3) (1 | ap << 1 | rd << 2 | ad << 3 | swd-par (ap | rd << 1 | ad << 2) << 5 | 1 << 7))
  (swd-xfer w ap rd a v)
-  (: ad (a >> 2 & 3)
-     rq (1 | ap << 1 | rd << 2 | ad << 3 | swd-par (ap | rd << 1 | ad << 2) << 5 | 1 << 7)
+  (: rq (swd-rq ap rd a)
      pw (swd-probe? w)
      (go k) (: r (pw ? <(w 'xfer [[rq (rd = 1 ? 0 v)]]) (swd-xfer1 w rq rd v)) ack <r
                (? (ack = 2 && k > 0) (pw || swd-bits w 0 8, go (k - 1))
@@ -46,12 +46,33 @@
                   (rd = 1) [(r 2 = swd-par (r 1) ? ack -1) (r 1)]
                   [ack v]))
      (go 64))
+ ; transfers [[ap rd a v] ..] in order: [[ack x] ..] as swd-xfer's, ending at the first ack
+ ; not 1. a probe wire takes them 64 to a batch, and a wait is asked again from the transfer
+ ; that waited, the rest of its batch unclocked; a bit wire takes them one at a time
+ (swd-batch w ts)
+  (: (one ts acc) (? !(two? ts) (rev acc)
+                     (: r (swd-xfer w <(<ts) (<ts 1) (<ts 2) (<ts 3))
+                        (<r = 1 ? (one >ts (r . acc)) (rev (r . acc)))))
+     (bat ts k acc)
+      (? !(two? ts) (rev acc)
+         (: c (snip ts 0 64)
+            rs (w 'xfer (map (t \ [(swd-rq <t (t 1) (t 2)) (t 1 = 1 ? 0 (t 3))]) c))
+            (walk c rs i acc)
+             (? !(two? c) (bat (snip ts i #ts) 64 acc)
+                (: t <c r <rs ack <r
+                   (? (ack = 1 && t 1 = 1)
+                       (r 2 = swd-par (r 1) ? (walk >c >rs (i + 1) ([1 (r 1)] . acc)) (rev ([-1 (r 1)] . acc)))
+                      (ack = 1) (walk >c >rs (i + 1) ([1 (t 3)] . acc))
+                      (ack = 2 && (i > 0 || k > 0)) (bat (snip ts i #ts) (i > 0 ? 64 (k - 1)) acc)
+                      (rev ([ack ()] . acc)))))
+            (walk c rs 0 acc)))
+     (swd-probe? w ? (bat ts 64 ()) (one ts ())))
 
  ; the switch: a line reset, the jtag-to-swd sequence, a line reset again, then idle; to a
  ; probe the same 136 bits as bytes, lsb first
  ones (string (map (_ \ 255) ^7))
  (swd-line w)
-  (swd-probe? w ? (w 'line [(ones + string [0x9E 0xE7] + ones + string [0]) 136])
+  (pin w 'sel (), swd-probe? w ? (w 'line [(ones + string [0x9E 0xE7] + ones + string [0]) 136])
      (w 'own 1, swd-bits w -1 56, swd-bits w 0xE79E 16, swd-bits w -1 56, swd-bits w 0 8))
 
  ; dp v2's multidrop. the wake from dormant: 8 ones, the 128-bit selection alert, 4 zeros, the
@@ -66,17 +87,19 @@
  ; the wake, then targetsel (dp 0xC) naming the one target that answers until the next line
  ; reset: its tinstance, partno and designer as the target's own targetid lays them
  (swd-select w ts)
-  (swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
+  (pin w 'sel (), swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
      (: _ (w 'own 1) _ (map (i \ swd-bits w (swd-wake i) 8) ^#swd-wake) _ (swd-noack w 0x99 ts) 1))
 
  ; the debug port's registers by address, each [ack v]; an access port's through select's bank:
  ; apsel 0's, or with the wire's 'ap set (swd-use) the adiv6 ap at that base, whose adiv5 map
  ; lies at base + 0xD00 and select takes the address's top 28 bits. an ap read is posted, its
- ; value the next one's, so rdbuff (dp 12) answers it
+ ; value the next one's, so rdbuff (dp 12) answers it. the wire's 'sel is select as last
+ ; written, forgotten at a line reset or a select, so an ap access writes it only to change it
  (swd-dp w a) (swd-xfer w 0 1 a 0)
- (swd-dpw w a v) (swd-xfer w 0 0 a v)
+ (swd-dpw w a v) (swd-xfer w 0 0 a v @ r (a = 8 ? (pin w 'sel (<r = 1 ? v ()), r) r))
  (swd-use w base) (pin w 'ap base, w)
- (swd-sel w a) (w 'ap @ b (charm? b ? (: f (b + 0xD00 + a) (swd-dpw w 8 (f - (f & 15)))) (swd-dpw w 8 (a & 0xF0))))
+ (swd-sel w a) (: s (w 'ap @ b (charm? b ? (: f (b + 0xD00 + a) (f - (f & 15))) (a & 0xF0)))
+                  (w 'sel = s ? [1 s] (swd-dpw w 8 s)))
  (swd-ap w a) (: s (swd-sel w a) r (<s = 1 ? (swd-xfer w 1 1 a 0) s) (<r = 1 ? (swd-dp w 12) r))
  (swd-apw w a v) (: s (swd-sel w a) (<s = 1 ? (swd-xfer w 1 0 a v) s))
 
@@ -112,20 +135,23 @@
      (run a n) (n < 1 ? ()
                 (: k (min n ((1024 - (a & 1023)) // 4))
                    _ (swd-ok 'swd-tar (swd-apw w 4 a))
-                   vs (map (_ \ swd-ok 'swd-read (swd-xfer w 1 1 12 0)) ^k)
-                   last (swd-ok 'swd-read (swd-dp w 12))
-                   (>vs + [last] + run (a + 4 * k) (n - k))))
+                   rs (swd-batch w (map (_ \ [1 1 12 0]) ^k + [[0 1 12 0]]))
+                   vs (map (r \ swd-ok 'swd-read r) rs)
+                   _ (#vs = k + 1 || swd-ok 'swd-read [0 ()])
+                   (>vs + run (a + 4 * k) (n - k))))
      (run a n))
  (swd-rd w a) <(swd-rds w a 1)
- ; a run of words written from a, answering how many
+ ; a run of words written from a, answering how many: each 1K block's drw writes one batch
  (swd-wrs w a vs)
   (: _ (swd-at a)
      _ (swd-ok 'swd-csw (swd-apw w 0 csw))
-     _ (swd-ok 'swd-tar (swd-apw w 4 a))
      (run a vs k) (!(two? vs) ? k
-                   (: _ ((a & 1023) = 0 && k > 0 ? (swd-ok 'swd-tar (swd-apw w 4 a)) 0)
-                      _ (swd-ok 'swd-write (swd-xfer w 1 0 12 <vs))
-                      (run (a + 4) >vs (k + 1))))
+                   (: m (min #vs ((1024 - (a & 1023)) // 4))
+                      _ (swd-ok 'swd-tar (swd-apw w 4 a))
+                      rs (swd-batch w (map (v \ [1 0 12 v]) (snip vs 0 m)))
+                      _ (map (r \ swd-ok 'swd-write r) rs)
+                      _ (#rs = m || swd-ok 'swd-write [0 ()])
+                      (run (a + 4 * m) (snip vs m #vs) (k + m))))
      (run a vs 0))
  (swd-wr w a v) (: _ (swd-wrs w a [v]) v)
 
@@ -207,14 +233,16 @@
  (nrf-mode w m) (nrf-idle w 100000, swd-wr w (nv + 0x504) m)
  (nrf-erase w a) (nrf-mode w 2, swd-wr w (nv + 0x508) a, nrf-mode w 0)
  (nrf-write w a s) (nrf-mode w 1, swd-wrs w a (f4-words s), nrf-mode w 0)
- ; erase the pages s covers from a, write it, read it back: 1, or where it differs first;
- ; nothing to write, or bytes past the flash, scare before the chip is touched
+ ; each page s covers from a that holds other bytes erased and written, the rest left alone,
+ ; then all of it read back: 1, or where it differs first. nothing to write, or bytes past
+ ; the flash, scare before the chip is touched
  (nrf-flash w a s)
   (: ids (nrf-ids w) ps (ids 1)
      _ (!(string? s) || #s = 0 ? (scare 'nrf-empty a))
      _ (!(0 <= a && a + #s <= ps * ids 2) ? (scare 'nrf-range [a #s]))
-     _ (map (p \ nrf-erase w (ps * p)) (drop (a // ps) ^((a + #s - 1) // ps + 1)))
-     _ (nrf-write w a s)
+     (part p) (: lo (max a (ps * p)) hi (min (a + #s) (ps * (p + 1))) [lo (snip s (lo - a) (hi - a))])
+     (put p) (part p @ [lo t] (f4-read w lo #t = t ? 0 (nrf-erase w (ps * p), nrf-write w lo t)))
+     _ (map put (drop (a // ps) ^((a + #s - 1) // ps + 1)))
      b (f4-read w a #s)
      (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
      (at 0))
@@ -302,13 +330,14 @@
  ; a cmsis-dap wire over a link of reports through io's 'send s (a command, padded to its
  ; report), 'recv () (a whole reply) and 'close: daplink and its kin, over swd. dap_transfer
  ; answers an ap read's own value, its posted read seen to, so the wire keeps each back and
- ; answers the one before, as the port does; rdbuff answers the last either way. a batch goes
- ; 12 transfers a report. a write whose ack no one reads (multidrop's targetsel) it cannot send
+ ; answers the one before, as the port does; rdbuff answers the last either way. a write whose
+ ; ack no one reads (multidrop's targetsel) it cannot send
  (dap-wire-on io)
   (: st {'rb 0}
      (ask s) (: _ (io 'send s) r (io 'recv ()) (#r > 0 && r 0 = s 0 ? r (scare 'dap-reply [(s 0) r])))
      (ok what r) (r 1 = 0 ? 1 (scare what r))
-     (one it) (: q (<it >> 1 & 1 | (<it >> 2 & 1) << 1 | (<it >> 3 & 3) << 2)
+     (dq rq) (rq >> 1 & 1 | (rq >> 2 & 1) << 1 | (rq >> 3 & 3) << 2)
+     (one it) (: q (dq <it)
                  (? (#it = 3) (scare 'dap-noack (it 1)) (q & 2) (string [q]) (string [q] + wrle (it 1) 4)))
      ; a report's answers: [ack v par] for each done, the ack it stopped on (-1 a bad parity),
      ; then 0s
@@ -320,10 +349,19 @@
                           ([1 b (swd-par b)] . got >its n last r (at + 4) (i + 1)))))
          (i = n) ([(last & 8 ? -1 (last & 7)) () ()] . got >its n last r at (i + 1))
          ([0 () ()] . got >its n last r at (i + 1)))
+     ; a leading run of one request goes as dap_transferblock, 15 reads or 14 writes a report;
+     ; else up to 12 transfers, to the next such run, as dap_transfer
+     (lead its q k m) (k < m && two? its && #(<its) = 2 && <(<its) = q ? (lead >its q (k + 1) m) k)
+     (sing its k) (k < 12 && two? its && !(two? >its && <(<its) = <(<>its)) ? (sing >its (k + 1)) k)
      (xfer its) (? !(two? its) ()
-                   (: h (take 12 its) r (ask (string [5 0 #h] + join "" (map one h)))
-                      a (got h (r 1) (r 2) r 3 0)
-                      (all (x \ <x = 1) a ? (a + xfer (drop 12 its)) (a + map (_ \ [0 () ()]) (drop 12 its)))))
+                   (: q <(<its) rd ((q >> 2 & 1) = 1) b (lead its q 0 (rd ? 15 14))
+                      a (b > 1 ? (: h (take b its)
+                                    r (ask (string [6 0] + wrle b 2 + string [(dq q)] + (rd ? "" (join "" (map (it \ wrle (it 1) 4) h)))))
+                                    (got h (rdle r 1 2) (r 3) r 4 0))
+                                 (: h (take (max 1 (sing its 0)) its) r (ask (string [5 0 #h] + join "" (map one h)))
+                                    (got h (r 1) (r 2) r 3 0)))
+                      n #a
+                      (all (x \ <x = 1) a ? (a + xfer (drop n its)) (a + map (_ \ [0 () ()]) (drop n its)))))
      (line s n) (n > 0 ? (: k (min n 256) m ((k + 7) // 8)
                             (ok 'dap-line (ask (string [0x12 (k & 255)] + snip s 0 m)), line (snip s m #s) (n - k))) 1)
      w {'xfer xfer
