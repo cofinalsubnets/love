@@ -24,13 +24,6 @@
 //   an envelope or a glide is stepped a frame at a time by a constant factor, a sine a polynomial:
 //   no libm call a frame. | () for a bad argument
 #include "love.h"
-#if Bits == 64
-double lm_exp(double);
-#define tn_exp lm_exp
-#else
-float lm_expf(float);
-#define tn_exp lm_expf
-#endif
 
 enum { tn_row = 49, tn_segs = 6, tn_seg0 = 19 };
 #if Bits == 64
@@ -82,10 +75,10 @@ static void tn_enter(struct tn_env *E, flo_t t, flo_t dt) {
  if (E->seg < 0) { E->v = E->e = E->d = 0, E->rv = 0, E->re = E->rd = 1; return; }
  flo_t const *p = E->s + 5 * E->seg, tau = t - p[0];
  int const k = (int) p[1];
- if (k == 0) E->v = tn_exp(-(p[2] + p[3] * tau) * tn_ln10_20), E->rv = tn_exp(-p[3] * dt * tn_ln10_20);
+ if (k == 0) E->v = love_exp(-(p[2] + p[3] * tau) * tn_ln10_20), E->rv = love_exp(-p[3] * dt * tn_ln10_20);
  else if (k == 1) E->v = p[2] + p[3] * tau, E->rv = p[3] * dt;
- else E->e = tn_exp(-p[2] * tau), E->re = tn_exp(-p[2] * dt),
-      E->d = tn_exp(-p[3] * tau * tn_ln10_20), E->rd = tn_exp(-p[3] * dt * tn_ln10_20); }
+ else E->e = love_exp(-p[2] * tau), E->re = love_exp(-p[2] * dt),
+      E->d = love_exp(-p[3] * tau * tn_ln10_20), E->rd = love_exp(-p[3] * dt * tn_ln10_20); }
 static love_inline flo_t tn_amp(struct tn_env *E) {
  if (E->seg < 0) return 0;
  flo_t const *p = E->s + 5 * E->seg;
@@ -115,14 +108,14 @@ static void tn_op(flo_t const *o, flo_t const *mod, flo_t *y, flo_t *L, flo_t *R
   flo_t t = (flo_t) (f0 + i - at) * dt;
   struct tn_env E = { .seg = -1, .nseg = ns, .s = o + tn_seg0 };
   tn_enter(&E, t, dt);
-  flo_t ek = k != 0 ? tn_exp(k * t) : 0, rk = k != 0 ? tn_exp(k * dt) : 1,
-        ed = g != 0 ? tn_exp(-ka * t) : 0, rd = g != 0 ? tn_exp(-ka * dt) : 1;
+  flo_t ek = k != 0 ? love_exp(k * t) : 0, rk = k != 0 ? love_exp(k * dt) : 1,
+        ed = g != 0 ? love_exp(-ka * t) : 0, rd = g != 0 ? love_exp(-ka * dt) : 1;
   flo_t const vamp = vib != 0 && vr != 0 ? f * vib / (vr * (flo_t) 6.283185307179586) : 0;
   flo_t tg = 1, vx = 0;
   for (; i < n; i++, t += dt) {
    if (t >= E.next) tn_enter(&E, t, dt);
    if (!(i & tn_lfo)) {
-    if (trem != 0) tg = tn_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
+    if (trem != 0) tg = love_exp(-trem * ((flo_t) 0.5 - (flo_t) 0.5 * tn_sin(tr * t + (flo_t) 0.25)) * tn_ln10_20);
     if (vamp != 0) vx = vamp * (1 - tn_sin(vr * t + (flo_t) 0.25)); }
    flo_t a = tn_amp(&E) * lvl * tg;
    flo_t x = k != 0 ? f * (ek - 1) / k : f * t;

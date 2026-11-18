@@ -238,8 +238,7 @@ static void sha1_block(uint32_t h[5], const uint8_t *p) {
 static void md5_block(uint32_t h[4], const uint8_t *p) {
  uint32_t m[16], a = h[0], b = h[1], c = h[2], d = h[3];
  for (int i = 0; i < 16; i++)
-  m[i] = (uint32_t) p[4*i] | (uint32_t) p[4*i+1] << 8
-       | (uint32_t) p[4*i+2] << 16 | (uint32_t) p[4*i+3] << 24;
+  m[i] = ld32le(p + 4*i);
  for (int i = 0; i < 64; i++) {
   uint32_t f; int g;
   if (i < 16)      { f = (b & c) | (~b & d); g = i; }
@@ -500,7 +499,7 @@ static lvm(lvm_bsdsum) {
  love_musttail return Nextp(1, 1); }
 
 // crc32 (IEEE 802.3, reflected 0xedb88320), sliced by eight. the tables are built on first
-// call, idempotent: a second thread needs only the flag to land after the table (cksum's too)
+// call, idempotent; the flag is a release once they are laid, read with an acquire (cksum's too)
 static uint32_t crc_t[8][256], crcc_t[8][256];
 static int crc_ready, crcc_ready;
 
@@ -527,12 +526,12 @@ static love_noinline uint32_t crc_walk(uint32_t const t[8][256], uint32_t c, con
 
 // the callers complement c on the way in and out
 static uint32_t crc32_run(uint32_t c, const uint8_t *p, uintptr_t n) {
- if (!crc_ready) crc_tables(crc_t, 0xedb88320), crc_ready = 1;
+ if (!__atomic_load_n(&crc_ready, __ATOMIC_ACQUIRE)) crc_tables(crc_t, 0xedb88320), __atomic_store_n(&crc_ready, 1, __ATOMIC_RELEASE);
  return crc_walk(crc_t, c, p, n); }
 
 // crc32c (castagnoli, reflected 0x82f63b78): crc32's walk, held to love's by test/digest.l
 static uint32_t crc32c_run(uint32_t c, const uint8_t *p, uintptr_t n) {
- if (!crcc_ready) crc_tables(crcc_t, 0x82f63b78), crcc_ready = 1;
+ if (!__atomic_load_n(&crcc_ready, __ATOMIC_ACQUIRE)) crc_tables(crcc_t, 0x82f63b78), __atomic_store_n(&crcc_ready, 1, __ATOMIC_RELEASE);
  return crc_walk(crcc_t, c, p, n); }
 
 static uint32_t crc32c_of(const uint8_t *p, uintptr_t n) { return ~crc32c_run(0xffffffff, p, n); }
@@ -578,11 +577,11 @@ static love_noinline void ck_init(void) {
   for (k = 1; k < 8; k++) {
    c = (c << 8) ^ ck_t[0][(c >> 24) & 0xff];
    ck_t[k][i] = c; } }
- ck_ready = 1; }
+ __atomic_store_n(&ck_ready, 1, __ATOMIC_RELEASE); }
 
 // sliced by eight, as crc32
 static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
- if (!ck_ready) ck_init();
+ if (!__atomic_load_n(&ck_ready, __ATOMIC_ACQUIRE)) ck_init();
  for (; n >= 8; p += 8, n -= 8) {
   uint32_t a = c ^ ld32be(p), b = ld32be(p + 4);
   c = ck_t[7][(a >> 24) & 0xff] ^ ck_t[6][(a >> 16) & 0xff]
@@ -594,7 +593,7 @@ static uint32_t ck_run(uint32_t c, const uint8_t *p, uintptr_t n) {
 
 // the length, low byte first, a byte at a time
 static uint32_t ck_len(uint32_t c, uint64_t len) {
- if (!ck_ready) ck_init();
+ if (!__atomic_load_n(&ck_ready, __ATOMIC_ACQUIRE)) ck_init();
  for (; len; len >>= 8) {
   uint8_t b = (uint8_t) (len & 0xff);
   c = (c << 8) ^ ck_t[0][((c >> 24) ^ b) & 0xff]; }
@@ -612,16 +611,16 @@ static lvm(lvm_cksum) {
  love_musttail return Next(1); }
 
 // cksum's register, nothing folded after, no complement; the crc field (bytes 22..25) as zeros
-static love_inline struct g *host_ogg_crc(struct g *g) {
+static lvm(lvm_ogg_crc) {
+ Have(wbig_req);
  word r = ZeroPoint;
- if (strp(g->sp[0]) && oddp(g->sp[1]) && oddp(g->sp[2])) {
-  struct str *s = str(g->sp[0]);
-  intptr_t o = getcharm(g->sp[1]), n = getcharm(g->sp[2]);
+ if (strp(Sp[0]) && oddp(Sp[1]) && oddp(Sp[2])) {
+  struct str *s = str(Sp[0]);
+  intptr_t o = getcharm(Sp[1]), n = getcharm(Sp[2]);
   if (o >= 0 && n >= 27 && (uintptr_t) (o + n) <= s->len) {
    const uint8_t *p = (const uint8_t*) s->bytes + o, z[4] = {0};
-   r = mk_uword(&g->hp, ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
- return g->sp[2] = r, g->sp += 2, g; }
-static lvm(lvm_ogg_crc) { Have(wbig_req); LvmCall(g, host_ogg_crc) }
+   r = mk_uword(&Hp, ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
+ love_musttail return Answerp(2, r); }
 
 // the streams: the one-shots' compression functions, the state in a cask love never reads.
 // big-endian throughout, so an image carrying one wakes on any box. the block digests' is
@@ -645,10 +644,8 @@ static void dig_ld(const uint8_t *st, uint32_t *h, int words, uint64_t *len) {
  *len = ld64be(st + 4 * words); }
 
 static void dig_st(uint8_t *st, const uint32_t *h, int words, uint64_t len) {
- for (int k = 0; k < words; k++) {
-  st[4*k]   = (uint8_t) (h[k] >> 24); st[4*k+1] = (uint8_t) (h[k] >> 16);
-  st[4*k+2] = (uint8_t) (h[k] >> 8);  st[4*k+3] = (uint8_t)  h[k]; }
- for (int k = 0; k < 8; k++) st[4*words + k] = (uint8_t) (len >> (56 - 8*k)); }
+ for (int k = 0; k < words; k++) st32be(st + 4*k, h[k]);
+ st64be(st + 4*words, len); }
 
 // (X-init b) -> b | () for anything not a cask of X's width
 static word dig_init(word x, const struct digspec *d) {

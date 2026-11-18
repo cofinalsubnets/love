@@ -1,6 +1,6 @@
 // a USB CDC-ACM console's class half, for any board's device controller: the descriptors,
 // endpoint 0's requests, the line state and both byte paths. the controller includes this
-// after naming UCDC_VID, UCDC_PID and UCDC_PRODUCT, defines the usbhw_ hooks, and calls
+// after naming UCDC_VID, UCDC_PID and UCDC_PRODUCT (and UCDC_SERIAL, "1" unless named), defines the usbhw_ hooks, and calls
 // ucdc_setup, ucdc_ep0_out, ucdc_rx and ucdc_reset from its interrupt. endpoint 2 bulk both
 // ways is the data; 3 in is the notification the class asks for, never sent. bytes go out
 // only while a host holds DTR, so a port nobody opened never stalls the console.
@@ -31,6 +31,10 @@ static int usbhw_ecm_tx_busy(void);
 static void usbhw_ecm_notify(void const *src, uint32_t n);   // in on endpoint 4
 #endif
 
+#ifndef UCDC_SERIAL
+#define UCDC_SERIAL "1"
+#endif
+
 #ifndef UCDC_ECM
 static uint8_t const ucdc_dev[18] = {
   18, 1, 0x00, 0x02, 2, 0, 0, ucdc_pkt, UCDC_VID & 0xFF, UCDC_VID >> 8, UCDC_PID & 0xFF, UCDC_PID >> 8,
@@ -46,7 +50,7 @@ static uint8_t const ucdc_cfg[67] = {
   9, 4, 1, 0, 2, 0x0A, 0, 0, 0,
   7, 5, 0x02, 2, ucdc_pkt, 0, 0,
   7, 5, 0x82, 2, ucdc_pkt, 0, 0 };
-static char const *const ucdc_str[4] = { 0, "love", UCDC_PRODUCT, "1" };
+static char const *const ucdc_str[4] = { 0, "love", UCDC_PRODUCT, UCDC_SERIAL };
 #else
 // a composite of two functions, each under an interface association
 static uint8_t const ucdc_dev[18] = {
@@ -75,7 +79,7 @@ static uint8_t const ucdc_cfg[154] = {
   7, 5, 0x05, 2, ucdc_pkt, 0, 0,
   7, 5, 0x85, 2, ucdc_pkt, 0, 0 };
 static char ucdc_mac[13] = "020000000001";   // the host's end, twelve hex digits; the controller may set it
-static char const *const ucdc_str[5] = { 0, "love", UCDC_PRODUCT, "1", ucdc_mac };
+static char const *const ucdc_str[5] = { 0, "love", UCDC_PRODUCT, UCDC_SERIAL, ucdc_mac };
 #endif
 
 static volatile uint32_t ucdc_cfgd, ucdc_dtr, ucdc_lc_wanted, ucdc_parked, ucdc_boot;

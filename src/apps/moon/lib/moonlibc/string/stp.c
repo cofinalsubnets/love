@@ -14,10 +14,11 @@ void *memrchr(void const *p, int c, size_t n) {
   unsigned char const *b = p;
   while (n--) if (b[n] == (unsigned char) c) return (void *) (b + n);
   return 0; }
-/* a store the compiler may not drop: the barrier says the bytes are read after */
+/* a store the compiler may not drop: memset reached through a volatile pointer, which no
+ * compiler may see through, on every isa (xtensa has no asm) */
 void explicit_bzero(void *p, size_t n) {
-  memset(p, 0, n);
-  __asm__ volatile("" : : "r"(p) : "memory"); }
+  static void *(*const volatile set)(void *, int, size_t) = memset;
+  set(p, 0, n); }
 
 /* glibc's: digit runs compare as numbers, a run of leading zeros as a fraction. the state is
  * what came before (none, integer, fraction, zeros), the class x, digit or 0 */

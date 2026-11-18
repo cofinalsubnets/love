@@ -10,15 +10,11 @@
 // c: u32 pos, u32 depth, u16 states; c' then u8 status (0 more, 1 accept, 2 error, 3 a kind to
 //   say at pos) and u32 n, n reductions (u16 rule, u32 pos)
 #include "love.h"
+#include "bytes.h"
 
 #define LrSteps 4096
 
-static love_inline uintptr_t lr16(unsigned char const *p, uintptr_t x) {
- return (uintptr_t) p[2 * x] | (uintptr_t) p[2 * x + 1] << 8; }
-static love_inline uintptr_t lr32(unsigned char const *p) {
- return (uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16 | (uintptr_t) p[3] << 24; }
-static love_inline void lrput16(unsigned char *p, uintptr_t v) { p[0] = (unsigned char) v, p[1] = (unsigned char) (v >> 8); }
-static love_inline void lrput32(unsigned char *p, uintptr_t v) { lrput16(p, v & 0xffff), lrput16(p + 2, v >> 16); }
+static love_inline uintptr_t lr16(unsigned char const *p, uintptr_t x) { return ld16le(p + 2 * x); }
 
 // would kind shift, after the reductions it calls for? the stack is read, not written: what the
 // reductions push rides an overlay, and a chain too long to follow says yes
@@ -52,7 +48,7 @@ static love_inline struct g *host_lr_run(struct g *g) {
   return g->sp[0] = ZeroPoint, g;
  unsigned char const *h = (unsigned char const*) txt(t);
  uintptr_t T = lr16(h, 0), N = lr16(h, 1), S = lr16(h, 2), R = lr16(h, 3), AN = lr16(h, 4), GN = lr16(h, 5),
-           d0 = lr32((unsigned char const*) txt(c) + 4);
+           d0 = ld32le((unsigned char const*) txt(c) + 4);
  if (len(t) != 2 * (6 + 2 * R + 2 * S + 2 * N + 2 * AN + 2 * GN) || !T || d0 < 1 || d0 > 0xffffff || len(c) < 8 + 2 * d0)
   return g->sp[0] = ZeroPoint, g;
  uintptr_t most = 8 + 2 * (d0 + LrSteps) + 5 + 6 * LrSteps;
@@ -67,7 +63,7 @@ static love_inline struct g *host_lr_run(struct g *g) {
  // states grow in place, the log runs at the far end and moves down behind them
  struct str *o = (struct str*) g->hp;
  unsigned char *b = (unsigned char*) o->bytes, *st = b + 8, *lg = st + 2 * (d0 + LrSteps) + 5;
- uintptr_t nk = len(k) / 2, pos = lr32(C), d = d0, look = (uintptr_t) getcharm(lk), n = 0, z = 0, steps = 0;
+ uintptr_t nk = len(k) / 2, pos = ld32le(C), d = d0, look = (uintptr_t) getcharm(lk), n = 0, z = 0, steps = 0;
  memcpy(st, C + 8, 2 * d0);
  for (;; steps++) {
   if (steps == LrSteps) { z = 0; break; }
@@ -85,16 +81,16 @@ static love_inline struct g *host_lr_run(struct g *g) {
   if (!a) { z = 2; break; }
   if (a < 0x8000) {
    if (!kind) { z = 1; break; }   // a shift of $end is the accept
-   lrput16(st + 2 * d++, a), pos++, look = 0xffff;
+   st16le(st + 2 * d++, a), pos++, look = 0xffff;
    continue; }
   uintptr_t r = a - 0x8000, L = r < R ? lr16(rlen, r) : d, A = r < R ? lr16(rlhs, r) : N;
   if (L >= d || A >= N) { z = 2; break; }                       // a rule or its lhs past the tables
   d -= L;
   uintptr_t q = lr16(st, d - 1), i = lr16(gbase, A) + q;
-  lrput16(st + 2 * d++, i < GN && lr16(gchk, i) == A ? lr16(gtab, i) : lr16(gdef, A));
-  lrput16(lg + 6 * n, r), lrput32(lg + 6 * n + 2, pos), n++; }
+  st16le(st + 2 * d++, i < GN && lr16(gchk, i) == A ? lr16(gtab, i) : lr16(gdef, A));
+  st16le(lg + 6 * n, r), st32le(lg + 6 * n + 2, pos), n++; }
  uintptr_t at = 8 + 2 * d, m = at + 5 + 6 * n, w = str_width(m);
- lrput32(b, pos), lrput32(b + 4, d), b[at] = (unsigned char) z, lrput32(b + at + 1, n);
+ st32le(b, pos), st32le(b + 4, d), b[at] = (unsigned char) z, st32le(b + at + 1, n);
  memmove(b + at + 5, lg, 6 * n);
  memset(b + m, 0, (w - str_type_width) * sizeof(word) - m);
  o->ap = lvm_str, o->len = m, g->hp += w;

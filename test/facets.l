@@ -133,4 +133,8 @@
       ; a 2x2 frame laid first under a 4x4, each of its pixels 2 by 2: the near face there stands
       ; over the far drawn after, the far there gives way to the near, none there the ground
       (fc-n (fc-under [[0 1 2 -1]] [[3 4 5 -1]]) blue = 16) (fc-n (fc-under [[3 4 5 -1]] [[0 1 2 -1]]) blue = 16)
-      (fc-n (fc-under [] []) 7 = 16) (fc-n (fc-under [[3 4 5 -1]] []) red = 16)))
+      (fc-n (fc-under [] []) 7 = 16) (fc-n (fc-under [[3 4 5 -1]] []) red = 16)
+      ; lace: row i the i-th of each column, a number in every row; () on a ragged or odd column
+      (lace [@(1 2) 5 @(3.5 4)] @ x (shape x = [6] && aall (x = @(1.0 5.0 3.5 2.0 5.0 4.0))))
+      (show (lace [@(7) (70 2)]) = "@(7.0 1.1805916207174113e21)")
+      (lace [@(1 2) @(1 2 3)] = ()) (lace [@(1 2) 'a] = ())))

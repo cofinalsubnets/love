@@ -210,7 +210,7 @@
              rd (peep o 'readme ())
              rdme (? (string? rd) (uread rd @ t (two? t ? <>t (udie 2 ("ld: cannot open " + rd)))) ())
              srcs (map (f \ (uread f @ r2 (two? r2 ? [f <>r2] (udie 2 ("ld: cannot open " + f))))) ins)
-             ps (ldlink tgt (o 'pie) (peep o 'org ()) srcs ("love " + <(usplit 43 love-version)) rdme)
+             ps (ldlink tgt (o 'pie) (peep o 'org ()) srcs ("love " + <(usplit 43 love-version)) rdme ())
              (ld-write (o 'out) ps, chmod (o 'out) 493, 0))))
 
    ; nm: VALUE type NAME over link.l's ld-syms. the letter is ELF's facts: U undefined,
@@ -1007,7 +1007,7 @@
             'bc bc-main 'dc dc-main
             'patch patch-main
             'wget wget-main
-            'openssl openssl-main   ; certificates, digests and a tls peer, openssl 3's spelling
+            'openssl openssl-main   ; certificates, digests and a tls peer, openssl 4's spelling
             'grep grep-main 'sed sed-main
             'lex lex-main   ; a scanner spec to the tables dfa.c walks (src/apps/kore/lex.l)
             'yacc yacc-main ; a grammar to the LALR(1) tables lr.c walks (src/apps/kore/yacc.l)

@@ -9,7 +9,6 @@
 #include <stdint.h>
 #include <string.h>
 
-void serial_putc(int);
 static void hputs(char const *s) { bput_s(serial_putc, s); }
 static void hputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 
@@ -349,7 +348,6 @@ void k_horn_close(void) {
 // dma: one kmallocw block (>= 3840 bytes, 128-aligned) for the rings, for the machine's life
 void k_hda_init(void *dma) {
   if (!dma) return;
-  void *kmallocw(uintptr_t);
   khda.ring = kmallocw(b2w(hda_ring));
   hda_scan(dma);
   if (khda.mm) {

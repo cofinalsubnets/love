@@ -9,13 +9,8 @@
 #include "asmops.h"
 #include "../k.h"
 
-extern void *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-extern void kfree(void *p), k_drop(void *p);
-extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e, long f);
 extern void k_kswap(uint64_t *save, uint64_t load), a_uret(void);
-extern void **k_proc_seat(long pid);
 extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the transpose
-extern uintptr_t k_clock_ms(void);
 
 #define K_RESTART -512                     // sys.c's: the call must wait, and is asked again
 #define k_ustack (1u << 20)                // a process's stack

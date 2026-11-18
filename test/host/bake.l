@@ -49,8 +49,13 @@
    ; a baked binary inflates a native's code at first call: foldl is native before it runs,
    ; and keys a tablet the same before and after
    r4 (hark ["out/love" "-e" "(: t {foldl 1} n (nat? foldl) s (foldl (+) 0 [1 2 3]) _ (putx [n s (t foldl) (nat? foldl)]) (quit 0))"])
-   (test (two? r4) (<r4 = 0) (>r4 = "(1 6 1 1)"),
+   _ (test (two? r4) (<r4 = 0) (>r4 = "(1 6 1 1)"))
 
-    unlink img, unlink drv,
+   ; a scare the bake never hears is reported with its own two words, past the boot texts after it
+   _ (open drv "w" @ p (say p "(scare 'bake-lawx 7)", close p))
+   r5 (hark ["sh" "-c" ("LOVE_NO_IMAGE=1 out/love bake -o " + img + ".x -l " + drv + " 2>&1")])
+   (test (two? r5) (<r5 != 0) (>r5 = ";; bake-lawx 7\n"),
+
+    unlink img, unlink drv, unlink (img + ".x"),
     test_fin (),
     puts "bake: ok\n"))

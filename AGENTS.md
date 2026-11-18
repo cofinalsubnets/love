@@ -34,7 +34,11 @@ Instructions for any coding agent in this tree.
 ; guidelines for working in this tree:
 ; - keep comments short, calm lowercase, inline when possible, no paragraphs
 ; - comments should not log history, cite fixed bugs, or refer outside the present code
-; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
+; - C code may not keep state that belongs to one love thread (a struct g) in a mutable global or
+;   static; truly per-process state, C runtime internals, and tables built once and never modified
+;   may be statics. a table built lazily publishes its ready flag with a release, read with an acquire
+; - C code may call malloc/free where it must, since moonlibc is ours; the love heap is preferred
+;   wherever it serves
 ; - makefiles must be compatible with our make (cook)
 ; - shell scripts must be compatible with our shell (lush)
 ; - `make test` is the fast gate to check if something works
@@ -195,7 +199,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/tfm.l`, `test/gate/tfm.sh`, `test/gate/tfm.l` -> `test_tfm` `test_caja`, which caja borrows for its fonts
 - `src/apps/pic/*`, `test/gate/fzgen.l` -> `test_gpic` `test_grap` `test_chem`
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_core`
-- the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
+- the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*` -> `test_gcstress`, in the queue's union; a `Makefile` or `common.mk` change owes it only by judgment, when it changes how the C core compiles (name it in the row); a `.l`, doc, app or test diff never owes it
 - what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
 - `src/love/boot/glaze.l` -> `test_inle`, whose kernels run the glaze too
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)

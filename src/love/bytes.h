@@ -13,6 +13,10 @@ static love_inline uint32_t ld16le(uint8_t const *p) { return p[0] | (uint32_t) 
 static love_inline uint32_t ld24le(uint8_t const *p) { return ld16le(p) | (uint32_t) p[2] << 16; }
 static love_inline uint32_t ld32le(uint8_t const *p) { return ld24le(p) | (uint32_t) p[3] << 24; }
 static love_inline uint64_t ld64le(uint8_t const *p) { return (uint64_t) ld32le(p + 4) << 32 | ld32le(p); }
+static love_inline void st64be(uint8_t *p, uint64_t v) { st32be(p, (uint32_t) (v >> 32)), st32be(p + 4, (uint32_t) v); }
+static love_inline void st16le(uint8_t *p, uint32_t v) { p[0] = (uint8_t) v, p[1] = (uint8_t) (v >> 8); }
+static love_inline void st32le(uint8_t *p, uint32_t v) { st16le(p, v & 0xffff), st16le(p + 2, v >> 16); }
+static love_inline void st64le(uint8_t *p, uint64_t v) { st32le(p, (uint32_t) v), st32le(p + 4, (uint32_t) (v >> 32)); }
 
 // n samples scaled by v, laid as f32le (f) or s16le (clamped, rounded half away from zero) -> past the last
 static love_inline uint8_t *pcm_lay(uint8_t *q, float const *x, uintptr_t n, bool f, double v) {

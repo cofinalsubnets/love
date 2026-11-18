@@ -9,6 +9,7 @@
 ;   (gpu-buf g id verts tris st) buf id: facets's verts (st numbers a vertex, 8, or 11 with the
 ;                                sun's r g b) and tris (4 a triangle, a texture's id, -1 none,
 ;                                -2 a glow, -3 - t a glass of t), flat trays
+;   (gpu-verts g id verts st)    buf id's verts laid again, as many and as wide, its tris kept
 ;   (gpu-sun g sv sd bias)       the sun's view kept: its matrix sv and depths sd, facets's
 ;   (gpu-drop g id)
 ;   (gpu-base g w h t)           the next frame's ground, w*h colours, below 0 bare
@@ -37,7 +38,7 @@
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-tex gpu-buf gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-tex gpu-buf gpu-verts gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -51,13 +52,22 @@
               (hot? q ? (slurp q @ t (close q, t))
                  (open "src/apps/lore/glhelp.c" "r" @ q (hot? q ? (slurp q @ t (close q, t)) ()))))
  (here? p) (two? (stat p))
- ; ..the system loader a mooncc build names, by the machine, and the libraries it names:
- ; android's bionic, else glibc
- (droid? _) (here? "/system/bin/linker64")
- (loader m) (droid? () ? (m = "aarch64" ? "/system/bin/linker64" ())
-               (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1"
-                    "riscv64" "/lib/ld-linux-riscv64-lp64d.so.1" ()))
- (libs _) (droid? () ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
+ ; ..the system loader a mooncc build names: the one the system's own shell names (its
+ ; PT_INTERP), else by the machine; and the libraries it names, bionic's or glibc's
+ (le t o n) (: (go i a) (i < 0 ? a (go (i - 1) (a * 256 + peep t (o + i) 0))) (go (n - 1) 0))
+ (elf-interp t) (? !(string? t && 64 <= #t && snip t 0 4 = "\x7fELF" && t 5 = 1) ()
+                   (: w (t 4 = 2) at (le t (w ? 32 28) (w ? 8 4)) sz (le t (w ? 54 42) 2) k (le t (w ? 56 44) 2)
+                      (go i) (i >= k ? ()
+                               (: h (at + i * sz) off (le t (h + (w ? 8 4)) (w ? 8 4)) len (le t (h + (w ? 32 16)) (w ? 8 4))
+                                  (le t h 4 = 3 && 1 < len && off + len <= #t ? (snip t off (off + len - 1)) (go (i + 1)))))
+                      (go 0)))
+ (interp f) (open f "r" @ q (hot? q ? (slurp q @ t (close q, elf-interp t)) ()))
+ (shell-loader _) (: (go l) (atom? l ? () (interp <l @ p (string? p && here? p ? p (go >l)))) (go ["/system/bin/sh" "/bin/sh"]))
+ (loader m) (shell-loader () @ p (string? p ? p
+              (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1"
+                   "riscv64" "/lib/ld-linux-riscv64-lp64d.so.1" ())))
+ (droid? ld) (string? ld && 18 <= #ld && snip ld 0 18 = "/system/bin/linker")
+ (libs ld) (droid? ld ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
  (run argv) (: p (spawnio argv -1 -1 -1 () -1 0) (charm? p && 0 <= p ? (wait p) -1))
  ; ..argv to start the helper, built if the cache lacks it: mooncc first unless told
  (helper-argv _)
@@ -71,7 +81,7 @@
            _ (here? cf ? 0 (open (cf + tmp) "w" @ q (say q src, close q, rename (cf + tmp) cf)))
            (made f argv) (here? f || (0 = run (argv (f + tmp)) && !(rename (f + tmp) f)))
            (moon? _) (how != 'cc && string? ld && here? ld
-                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-dynamic-linker" ld "-o" o cf] + libs ())))
+                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-dynamic-linker" ld "-o" o cf] + libs ld)))
            (cc? _) (how != 'moon && made cb (o \ ["cc" "-O2" "-o" o cf]))
            (? (moon? ()) [mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
@@ -109,6 +119,8 @@
   (: nv (#verts // st) nt (#tris // 4) c (cask (4 * st * nv + 16 * nt))
      _ ((cite 'guts 'pinf) c 0 4 verts) _ ((cite 'guts 'pinv) c (4 * st * nv) 4 4 tris)
      (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0 \(show st)"))
+ (gpu-verts g id verts st) (: nv (#verts // st) c (cask (4 * st * nv)) _ ((cite 'guts 'pinf) c 0 4 verts)
+   (put! g c, ask g "verts \(show id) \(show nv) 0 \(show st)"))
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
     (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
  (gpu-drop g id) (ask g "drop \(show id)")
@@ -128,14 +140,19 @@
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
  ; place, so an order counts: lore moves and relights a batch in place, so what it holds names
- ; it; [id]. one not drawn for a while is dropped
+ ; it; [id x t nv]. a name [m x] keeps one buf for m, laid again as x moves: its verts alone
+ ; where its tris are the very ones. one not drawn for a while is dropped
  (batch s i v t k st) (? (k = 'once) (once s i v t st) (: nt (#t // 4) b (s 'bufs)
-   key (k = () ? [st #v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k k st]) e (peep b key ())
+   nm (two? k && #k = 2)
+   key (k = () ? [st #v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k (nm ? <k k) st]) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
-   (? (two? e) e
+   (kept r f) (string? r ? r (pin b key f, f))
+   (lay id) (gpu-buf (s 'g) id v t st @ () (: _ (id = s 'n ? (pin s 'n (id + 1))) (kept () [id (nm ? (k 1) ()) t #v])) r r)
+   (? (two? e) (? (!nm || e 1 = k 1) e
+                  (e 2 == t && e 3 = #v) (gpu-verts (s 'g) (e 0) v st @ () (kept () [(e 0) (k 1) t #v]) r r)
+                  (lay (e 0)))
       (nt = 0) [-1]
-      (: id (s 'n) r (gpu-buf (s 'g) id v t st)
-         (? (string? r) r (: e [id] (pins s 'n (id + 1), pin b key e, e)))))))
+      (lay (s 'n)))))
  ; ..a batch laid anew in the i-th slot
  (once s i v t st) (: o (s 'once) id (peep o i () @ () (: n (s 'n) (pins s 'n (n + 1), pin o i n, n)) n n)
    (#t < 4 ? [-1] (gpu-buf (s 'g) id v t st @ () [id] r r)))

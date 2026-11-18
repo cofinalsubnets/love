@@ -574,7 +574,8 @@ static intptr_t xs_feed(struct xs_st *S, const uint8_t *in, uintptr_t n, int end
  return (intptr_t) at; }
 
 // --- crc64 ----------------------------------------------------------------------------------
-// eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent
+// eight bytes a step, as hash.c's crc32; the tables are write-once and idempotent, the flag a
+// release once they are laid, read with an acquire
 static uint64_t crc64_t[8][256];
 static int crc64_ready;
 static void crc64_init(void) {
@@ -585,10 +586,10 @@ static void crc64_init(void) {
  for (unsigned i = 0; i < 256; i++) {           // table k is table 0 shifted k bytes on
   uint64_t v = crc64_t[0][i];
   for (int k = 1; k < 8; k++) v = crc64_t[0][v & 255] ^ v >> 8, crc64_t[k][i] = v; }
- crc64_ready = 1; }
+ __atomic_store_n(&crc64_ready, 1, __ATOMIC_RELEASE); }
 static uint64_t xz_crc64_on(uint64_t c0, const uint8_t *p, uintptr_t n) {
  uint64_t c = ~c0;
- if (!crc64_ready) crc64_init();
+ if (!__atomic_load_n(&crc64_ready, __ATOMIC_ACQUIRE)) crc64_init();
  for (; n >= 8; p += 8, n -= 8) {
   uint64_t x = c ^ ld64le(p);
   c = crc64_t[7][x & 255] ^ crc64_t[6][x >> 8 & 255] ^ crc64_t[5][x >> 16 & 255] ^ crc64_t[4][x >> 24 & 255]
@@ -649,12 +650,12 @@ static struct lz_model *lz_new(unsigned lclp) {
 
 #ifndef XZ_STANDALONE
 // the nifs: str0 may collect, so a string is re-read off the stack after it
-love_noinline static struct g *host_lzma2len(struct g *g) {
- word sw = g->sp[0];
+static lvm(lvm_lzma2len) {
+ word const sw = Sp[0];
  uintptr_t end;
- g->sp[0] = strp(sw) && l2_walk((const uint8_t*) txt(sw), len(sw), &end) >= 0
-            ? putcharm((intptr_t) end) : ZeroPoint;
- return g; }
+ word const r = strp(sw) && l2_walk((const uint8_t*) txt(sw), len(sw), &end) >= 0
+                ? putcharm((intptr_t) end) : ZeroPoint;
+ love_musttail return Answer(r); }
 
 // a raw LZMA2 stream into exactly cap bytes, for a caller with no g -> cap, or -1
 intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uintptr_t cap) {
@@ -665,18 +666,21 @@ intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uin
  if (m) alloc(m, 0);
  return ok ? (intptr_t) cap : -1; }
 
-love_noinline static struct g *host_lzma2d(struct g *g) {
- word sw = g->sp[0];
+static lvm(lvm_lzma2d) {
+ word const sw = Sp[0];
  uintptr_t end;
- int64_t want = strp(sw) ? l2_walk((const uint8_t*) txt(sw), len(sw), &end) : -1;
- if (want < 0) { g->sp[0] = ZeroPoint; return g; }
- if ((uint64_t) want > XZ_MAX) { g->sp[0] = putcharm(1); return g; }
- if (!ok(g = str0(g, (uintptr_t) want))) return g;   // pushes: out over s
+ int64_t const want = strp(sw) ? l2_walk((const uint8_t*) txt(sw), len(sw), &end) : -1;
+ if (want < 0) love_musttail return Answer(ZeroPoint);
+ if ((uint64_t) want > XZ_MAX) love_musttail return Answer(putcharm(1));
+ word o = EmptyString;
+ if (want) {
+  uintptr_t const w = str_width((uintptr_t) want);
+  Have(w);
+  o = word(ini_str(str(Hp), (uintptr_t) want)), Hp += w; }
  struct lz_model *m = lz_new(4);
- int ok = m && !l2_dec((const uint8_t*) txt(g->sp[1]), (uint8_t*) txt(g->sp[0]), (uintptr_t) want, m, 0);
+ int const good = m && !l2_dec((const uint8_t*) txt(sw), (uint8_t*) txt(o), (uintptr_t) want, m, 0);
  if (m) alloc(m, 0);
- g->sp[1] = ok ? g->sp[0] : ZeroPoint;
- return g->sp++, g; }
+ love_musttail return Answer(good ? o : ZeroPoint); }
 
 love_noinline static struct g *host_lzma2e(struct g *g) {
  word sw = g->sp[0], dw = g->sp[1];
@@ -822,23 +826,27 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
  return g->sp[1] = word(c), g->sp += 1, g; }
 
 
-love_noinline static struct g *host_crc64(struct g *g) {
- if (!strp(g->sp[0])) { g->sp[0] = ZeroPoint; return g; }
- if (!ok(g = str0(g, 8))) return g;
- uint64_t c = xz_crc64((const uint8_t*) txt(g->sp[1]), len(g->sp[1]));
- for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
- g->sp[1] = g->sp[0];
- return g->sp++, g; }
+static lvm(lvm_crc64) {
+ word const sw = Sp[0];
+ if (!strp(sw)) love_musttail return Answer(ZeroPoint);
+ uintptr_t const req = str_width(8);
+ Have(req);
+ struct str *o = ini_str(str(Hp), 8);
+ Hp += req;
+ uint64_t const c = xz_crc64((const uint8_t*) txt(sw), len(sw));
+ st64le((uint8_t*) txt(o), c);
+ love_musttail return Answer(word(o)); }
 
-love_noinline static struct g *host_crc64_on(struct g *g) {
- word cw = g->sp[0], sw = g->sp[1];
- if (!strp(cw) || len(cw) != 8 || !strp(sw)) return g->sp[1] = ZeroPoint, g->sp += 1, g;
- if (!ok(g = str0(g, 8))) return g;              // pushes: out over c and s
- uint64_t c = 0;
- for (int i = 0; i < 8; i++) c |= (uint64_t) ((const uint8_t*) txt(g->sp[1]))[i] << 8 * i;
- c = xz_crc64_on(c, (const uint8_t*) txt(g->sp[2]), len(g->sp[2]));
- for (int i = 0; i < 8; i++) ((uint8_t*) txt(g->sp[0]))[i] = (uint8_t) (c >> 8 * i);
- return g->sp[2] = g->sp[0], g->sp += 2, g; }
+static lvm(lvm_crc64_on) {
+ word const cw = Sp[0], sw = Sp[1];
+ if (!strp(cw) || len(cw) != 8 || !strp(sw)) love_musttail return Answerp(1, ZeroPoint);
+ uintptr_t const req = str_width(8);
+ Have(req);
+ struct str *o = ini_str(str(Hp), 8);
+ Hp += req;
+ uint64_t const c = xz_crc64_on(ld64le((const uint8_t*) txt(cw)), (const uint8_t*) txt(sw), len(sw));
+ st64le((uint8_t*) txt(o), c);
+ love_musttail return Answerp(1, word(o)); }
 
 #define L2_HEAD ((sizeof(struct l2_st) + 7) & ~(uintptr_t) 7)
 static struct str *l2_cask(word x) {
@@ -901,20 +909,16 @@ static struct g *xs_lay1(struct g *g, int end) {
 love_noinline static struct g *host_lzma2e_feed(struct g *g) { return xs_lay1(g, 0); }
 love_noinline static struct g *host_lzma2e_end(struct g *g) { return xs_lay1(g, 1); }
 
-static LvmWrap(lvm_crc64_on, host_crc64_on)
 static LvmWrap(lvm_lzma2e_new, host_lzma2e_new)
 static LvmWrap(lvm_lzma2e_feed, host_lzma2e_feed)
 static LvmWrap(lvm_lzma2e_end, host_lzma2e_end)
 static LvmWrap(lvm_lzma2_new, host_lzma2_new)
 static LvmWrap(lvm_lzma2_chunk, host_lzma2_chunk)
-static LvmWrap(lvm_lzma2len, host_lzma2len)
-static LvmWrap(lvm_lzma2d, host_lzma2d)
 static LvmWrap(lvm_lzma2e, host_lzma2e)
 static LvmWrap(lvm_lzma2e_by, host_lzma2e_by)
 static LvmWrap(lvm_lzma2d_by, host_lzma2d_by)
 static LvmWrap(lvm_lzma_new, host_lzma_new)
 static LvmWrap(lvm_lzma_feed, host_lzma_feed)
-static LvmWrap(lvm_crc64, host_crc64)
 
 LvDef("lzma2len", lzma2len, 1, "xz");
 LvDef("lzma2d", lzma2d, 1, "xz");

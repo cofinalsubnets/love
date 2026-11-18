@@ -7,7 +7,6 @@
 #include "asmops.h"
 #include "k.h"
 
-void kq(uint8_t);                      // kmain's input queue, one byte
 void kmain(void);
 bool k_fb_reseat(unsigned w, unsigned h, unsigned pitch, unsigned scale);  // kmain's paper door
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
@@ -62,10 +61,6 @@ void k_tick_sync(void) {
 // no keyboard interrupt: keys come when a task asks (k_kb_poll) and after an idle, never past
 // the queue's room. a pointer record: how, button, pad, then y and x as le16. a paste is
 // taken as the queue has room, its bracket's room kept back, and closed once dry
-void k_kb_poll(void);
-void k_pointer(uint32_t how, uint32_t b, uint32_t y, uint32_t x);
-void k_paste_in(uint8_t const *s, long n);
-void k_paste_end(void);
 static void k_point_sync(void) {
   unsigned char r[8 * 8];
   long const n = __love_sys(hc_point, (long) r, sizeof r, 0, 0, 0, 0);
@@ -87,8 +82,6 @@ void k_copy_out(uint8_t const *s, uintptr_t n) { __love_sys(hc_copy, (long) s, (
 void k_hold_out(bool on) { __love_sys(hc_hold, on, 0, 0, 0, 0, 0); }
 
 // machine.js's scan lane, for a game's armed tap (k_scan_put), else dropped so it never fills
-void k_scan_put(uint8_t b);
-bool k_scan_armed(void);
 void k_scan_sync(void) {
   unsigned char b[16];
   long n = __love_sys(hc_scan, (long) b, sizeof b, 0, 0, 0, 0);
@@ -117,9 +110,6 @@ bool k_nap(uintptr_t ms) {
 void k_fb_touch(void) { __love_sys(hc_drew, 0, 0, 0, 0, 0, 0); }
 
 // the worker fetches url (the page's origin, or --origin under node) into the ramfs file at path
-int k_fs_open(char const *p, uintptr_t pn, char m);
-long k_fd_write(int fd, void const *b, long n);
-long k_fd_close(int fd);
 long k_fetch(char const *url, uintptr_t un, char const *path, uintptr_t pn) {
   long n = __love_sys(hc_fetch_open, (long) url, (long) un, 0, 0, 0, 0), r = 0;
   if (n < 0) return n;
@@ -197,21 +187,5 @@ bool k_fb_resize(uintptr_t w, uintptr_t h, uintptr_t scale) {
   return k_fb_reseat((unsigned) w, (unsigned) h, (unsigned) w, (unsigned) scale); }
 
 // no carried runtimes here: plain definitions, so a seat that grows them collides
-const unsigned char rtzst_x64[1] = {0};
-const uintptr_t rtzst_x64_len = 0;
-const unsigned char rtzst_a64[1] = {0};
-const uintptr_t rtzst_a64_len = 0;
-const unsigned char rtzst_rv64[1] = {0};
-const uintptr_t rtzst_rv64_len = 0;
-const unsigned char rtzst_i386[1] = {0};
-const uintptr_t rtzst_i386_len = 0;
-const unsigned char rtzst_arm[1] = {0};
-const uintptr_t rtzst_arm_len = 0;
-const unsigned char rtzst_rv32[1] = {0};
-const uintptr_t rtzst_rv32_len = 0;
-const unsigned char rtzst_wasm[1] = {0};
-const uintptr_t rtzst_wasm_len = 0;
-const unsigned char rtzst_base[1] = {0};
-const uintptr_t rtzst_base_len = 0;
-const unsigned char rtzst_id[1] = {0};
-const uintptr_t rtzst_id_len = 0;
+const unsigned char rtzst_tab[1] = {0};
+const uintptr_t rtzst_tab_len = 0;

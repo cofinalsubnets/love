@@ -67,7 +67,6 @@ enum {
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5 };
 
 #define EGLFNS(X) \
- X(EGLDisplay, eglGetPlatformDisplay, (GLenum, void *, const intptr_t *)) \
  X(unsigned, eglInitialize, (EGLDisplay, EGLint *, EGLint *)) \
  X(unsigned, eglChooseConfig, (EGLDisplay, const EGLint *, EGLConfig *, EGLint, EGLint *)) \
  X(unsigned, eglBindAPI, (GLenum)) \
@@ -94,6 +93,7 @@ enum {
  X(void, glGenBuffers, (GLsizei, GLuint *)) X(void, glBindBuffer, (GLenum, GLuint)) \
  X(void, glDeleteBuffers, (GLsizei, const GLuint *)) \
  X(void, glBufferData, (GLenum, intptr_t, const void *, GLenum)) \
+ X(void, glBufferSubData, (GLenum, intptr_t, intptr_t, const void *)) \
  X(void, glGenVertexArrays, (GLsizei, GLuint *)) X(void, glBindVertexArray, (GLuint)) \
  X(void, glDeleteVertexArrays, (GLsizei, const GLuint *)) \
  X(void, glVertexAttribPointer, (GLuint, GLint, GLenum, unsigned char, GLsizei, const void *)) \
@@ -123,11 +123,15 @@ enum {
 #define DECL(r, n, a) static r (*n) a;
 EGLFNS(DECL)
 GLFNS(DECL)
+static EGLDisplay (*eglGetPlatformDisplay) (GLenum, void *, const intptr_t *);   // egl 1.5: not before android 10
+// ..a 32-bit libc's off_t is its own width, not our headers': its 64-bit names take a long long
+static long long (*seek64) (int, long long, int);
+static void *(*map64) (void *, size_t, int, int, int, long long);
 
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
-struct buf { int id; GLuint vao, vb, ib; int nrun; struct run *runs; };
+struct buf { int id, nv, S; GLuint vao, vb, ib; int nrun; struct run *runs; };
 struct helper {
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
@@ -150,12 +154,12 @@ static void *need(void *h, const char *n) {
 // the shared file, mapped whole again once it has grown
 static unsigned char *bytes(struct helper *H, size_t off, size_t n) {
  // ..its size by lseek: a struct stat laid by our headers is not the system libc's
- off_t const e = lseek(H->fd, 0, SEEK_END);
+ long long const e = seek64(H->fd, 0, SEEK_END);
  if (e < 0) return NULL;
  if ((size_t) e != H->sz) {
   if (H->map) munmap(H->map, H->sz);
   H->sz = (size_t) e;
-  H->map = H->sz ? mmap(NULL, H->sz, PROT_READ | PROT_WRITE, MAP_SHARED, H->fd, 0) : NULL;
+  H->map = H->sz ? map64(NULL, H->sz, PROT_READ | PROT_WRITE, MAP_SHARED, H->fd, 0) : NULL;
   if (H->map == MAP_FAILED) H->map = NULL, H->sz = 0; }
  return H->map && off <= H->sz && n <= H->sz - off ? H->map + off : NULL; }
 
@@ -244,11 +248,16 @@ static int setup(struct helper *H) {
  if (!egl) egl = dlopen("libEGL.so", RTLD_NOW);
  if (!gl) gl = dlopen("libGLESv2.so", RTLD_NOW);
  if (!egl || !gl) { dprintf(1, "err no gles: %s\n", dlerror()); return 0; }
+ void *libc = dlopen(NULL, RTLD_NOW);   // the program and its libraries: bionic's RTLD_DEFAULT is not 0
+ seek64 = (long long (*) (int, long long, int)) (libc ? dlsym(libc, "lseek64") : NULL);
+ map64 = (void *(*) (void *, size_t, int, int, int, long long)) (libc ? dlsym(libc, "mmap64") : NULL);
+ if (!seek64 || !map64) { dprintf(1, "err no lseek64\n"); return 0; }
 #define LOADE(r, n, a) if (!(n = (r (*) a) need(egl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
 #define LOADG(r, n, a) if (!(n = (r (*) a) need(gl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
  EGLFNS(LOADE)
  GLFNS(LOADG)
- EGLDisplay d = eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL);
+ eglGetPlatformDisplay = (EGLDisplay (*) (GLenum, void *, const intptr_t *)) need(egl, "eglGetPlatformDisplay");
+ EGLDisplay d = eglGetPlatformDisplay ? eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL) : NULL;
  EGLint ma, mi, n = 0;
  if (!d || !eglInitialize(d, &ma, &mi)) d = eglGetDisplay(NULL);
  if (!d || !eglInitialize(d, &ma, &mi)) { dprintf(1, "err no egl display\n"); return 0; }
@@ -381,7 +390,18 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S)
  glBufferData(GL_ELEMENT_ARRAY_BUFFER, 12 * (intptr_t) nt, ix, GL_STATIC_DRAW);
  glBindVertexArray(0);
  free(tr); free(ix);
- b->runs = runs, b->nrun = nrun;
+ b->runs = runs, b->nrun = nrun, b->nv = nv, b->S = S;
+ dprintf(1, "ok\n"); }
+
+// a buf's vertices laid again, its triangles kept: as many, as wide
+static void cmd_verts(struct helper *H, int id, int nv, size_t off, int S) {
+ struct buf *b = buf_of(H, id);
+ if (!b || b->nv != nv || b->S != S) { dprintf(1, "err verts not that buf\n"); return; }
+ unsigned char const *p = bytes(H, off, 4 * (size_t) S * nv);
+ if (!p) { dprintf(1, "err verts bytes\n"); return; }
+ glBindBuffer(GL_ARRAY_BUFFER, b->vb);
+ glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * (intptr_t) S * nv, p);
+ glBindBuffer(GL_ARRAY_BUFFER, 0);
  dprintf(1, "ok\n"); }
 
 static void cmd_under(struct helper *H, int cw, int ch, size_t off) {
@@ -668,6 +688,7 @@ int main(int argc, char **argv) {
   int id, a, b, c, k; long off; double tone;
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
+  else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
   else if (!strncmp(l, "sun ", 4)) cmd_sun(H, l + 4);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
