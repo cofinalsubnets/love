@@ -4,7 +4,7 @@
 ; bits go lsb first. a probe wire moves whole transfers: 'xfer [[rq wdata] ..] answers
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
 ; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set
-(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
+(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire)
@@ -67,12 +67,16 @@
   (swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
      (: _ (w 'own 1) _ (map (i \ swd-bits w (swd-wake i) 8) ^#swd-wake) _ (swd-noack w 0x99 ts) 1))
 
- ; the debug port's registers by address, each [ack v]; an access port's (apsel 0) through
- ; select's bank. an ap read is posted, its value the next one's, so rdbuff (dp 12) answers it
+ ; the debug port's registers by address, each [ack v]; an access port's through select's bank:
+ ; apsel 0's, or with the wire's 'ap set (swd-use) the adiv6 ap at that base, whose adiv5 map
+ ; lies at base + 0xD00 and select takes the address's top 28 bits. an ap read is posted, its
+ ; value the next one's, so rdbuff (dp 12) answers it
  (swd-dp w a) (swd-xfer w 0 1 a 0)
  (swd-dpw w a v) (swd-xfer w 0 0 a v)
- (swd-ap w a) (: s (swd-dpw w 8 (a & 0xF0)) r (<s = 1 ? (swd-xfer w 1 1 a 0) s) (<r = 1 ? (swd-dp w 12) r))
- (swd-apw w a v) (: s (swd-dpw w 8 (a & 0xF0)) (<s = 1 ? (swd-xfer w 1 0 a v) s))
+ (swd-use w base) (pin w 'ap base, w)
+ (swd-sel w a) (w 'ap @ b (charm? b ? (: f (b + 0xD00 + a) (swd-dpw w 8 (f - (f & 15)))) (swd-dpw w 8 (a & 0xF0))))
+ (swd-ap w a) (: s (swd-sel w a) r (<s = 1 ? (swd-xfer w 1 1 a 0) s) (<r = 1 ? (swd-dp w 12) r))
+ (swd-apw w a v) (: s (swd-sel w a) (<s = 1 ? (swd-xfer w 1 0 a v) s))
 
  ; the port up: the switch, its id, abort clearing the sticky flags, both power domains asked
  ; and their acks awaited, 100 polls at most, then the access port's id: [dpidr apidr], or a

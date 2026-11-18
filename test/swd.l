@@ -170,10 +170,15 @@
 ; faults but reads of dpidr and ctrl/stat and writes of abort, whose bit 2 clears it. 'writes
 ; is every write the port took, in order
 (: (swdt-mem _) (: m {} {'rd (a \ peep m a 0) 'wr (\ a v (pin m a v)) 'mem (_ \ m)})
-   (swdt-dp id aps n bus)
+   (swdt-dp id aps n bus) (swdt-dpr (sel \ a \ (sel & 0xF0) | a) id aps n bus)
+   ; ..its register select a function of select and the transfer's address: an adiv6 port's
+   ; mem-ap at base answers its adiv5 map at base + 0xD00, nothing elsewhere (-1)
+   (swdt-dp6 base id aps n bus)
+    (swdt-dpr (sel \ a \ (: o ((sel - (sel & 15)) + a - base - 0xD00) (0 <= o < 256 ? o -1))) id aps n bus)
+   (swdt-dpr rg id aps n bus)
     (: st {'ask 0 'left 0 'acks 0 'sel 0 'rb 0 'sticky 0 'w () 'csw (peep aps 0 0) 'tar 0 'pw ()}
        (land _) (: p (st 'pw) _ (pin st 'pw ()) (two? p ? (bus 'wr <p (p 1)) 0))
-       (reg a) ((st 'sel & 0xF0) | a)
+       (reg a) (rg (st 'sel) a)
        (step _) ((st 'csw >> 4 & 3) = 1 ? (: t (st 'tar) (pin st 'tar ((t - (t & 1023)) | ((t + 4) & 1023)))) 0)
        (apget r) (? (r = 0) (st 'csw) (r = 4) (st 'tar)
                     (r = 12) (: v (bus 'rd (st 'tar)) _ (step ()) v)
@@ -276,6 +281,23 @@
    _ (pin on 'f 1)
    f (trap (_ \ swd-rd v 0x20000000) 0 (a \ b \ [a b]))
    (test (u = ['swd-align 0x20000002]) (n0 = n1) (f = ['swd-read [4 ()]])))
+
+; an adiv6 port: the rp2350's dp v3 and its core 0 ahb-ap at 0x2000. with no 'ap the ap at
+; apsel 0 is asked and nothing answers there; with it, connect reads the ap's id at 0x2DFC, and
+; memory goes through csw and tar at 0x2D00 and drw beside them
+(: r6dp 0x4C013477 r6ap 0x34770008
+   r6aps {0xFC r6ap 0x00 0x23000040}
+   (r6port _) (swdt-dp6 0x2000 r6dp r6aps 0 (swdt-mem ())))
+(: h (r6port ()) w (swdt-target h) bare (swd-connect w)
+   g (r6port ()) v (swd-use (swdt-target g) 0x2000) r (swd-connect v)
+   (test (bare = [r6dp 0]) (r = [r6dp r6ap]) (0x2000 = v 'ap) (() = v 'errs ())
+         (drop 2 (h 'writes ()) = [[0 8 0xF0]]) (drop 2 (g 'writes ()) = [[0 8 0x2DF0]])))
+(: h (r6port ()) w (swd-use (swdt-target h) 0x2000) _ (swd-connect w) n0 #(h 'writes ())
+   v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
+   ws (map (i \ 0x1000 * i + 7) ^300) n (swd-wrs w 0x200003F0 ws) back (swd-rds w 0x200003F0 300)
+   (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010) (300 = n) (back = ws)
+         (take 5 (drop n0 (h 'writes ())) = [[0 8 0x2D00] [1 0 0x23000012] [0 8 0x2D00] [1 4 0x20000010] [1 12 0xDEADBEEF]])
+         (() = w 'errs ())))
 
 ; a cortex-m core over a bus, as an f4 answers: dhcsr's debug enable and halt (key 0xA05F,
 ; else ignored), the halt seen in bit 17 and a reset since the last read in bit 25; a halt
