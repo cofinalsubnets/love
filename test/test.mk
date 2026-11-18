@@ -755,9 +755,9 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the riscv
-# and aarch64 tables both ways (rvcodec, a64codec) and gas reading each against llvm-mc (rvgas, a64gas)
-# alongside
+# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
+# riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
+# last two against llvm-mc (rvgas, a64gas) alongside
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
@@ -765,6 +765,7 @@ test_as: host
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
 	@$(gsh) test/gate/decode.sh "$m" $(ho)
+	@$(gsh) test/gate/x64codec.sh "$m" $(ho)
 	@$(gsh) test/gate/objdump.sh "$m" $(ho)
 	@$(gsh) test/gate/rvcodec.sh "$m" $(ho)
 	@$(gsh) test/gate/a64codec.sh "$m" $(ho)
