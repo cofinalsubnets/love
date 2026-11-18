@@ -544,8 +544,9 @@ out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
-# a kernel built for another arch is that arch's lane: its love is the one projected
-xa ?= $(if $(filter-out $(hosta),$a),$a,$(if $(filter a64,$a),x64,a64))
+# a kernel built for another arch on the roster is that arch's lane: its love is the one
+# projected. wasm is no lane's
+xa ?= $(if $(filter x64 a64 rv64 arm,$(filter-out $(hosta),$a)),$a,$(if $(filter a64,$a),x64,a64))
 xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64 arm),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64 arm)
