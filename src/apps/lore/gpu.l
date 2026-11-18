@@ -218,7 +218,9 @@
                  (? (string? e) (pin s 'g (), ())
                     !(peep s 'pipe 0) (now () @ () () q (q 0))
                     (two? pr) (pins s 'pend p 'last pr, pr)
-                    (s 'last @ () (now () @ () () q (pin s 'last q, q)) l (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))
+                    ; ..the last shown again while this one draws, but a kept one, whose frame this one drew over
+                    (: (fresh _) (now () @ () () q (pin s 'last q, q))
+                       (s 'last @ () (fresh ()) l (nom? (l 0) ? (fresh ()) (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))))
  ; ..a frame sent as [w h c], taken: [f c], or the helper's words
  (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..and one sent and no longer wanted, the last shown forgotten with it
