@@ -577,7 +577,7 @@
               (? (c = 84) (: rq (s (i + 1)) rd ((rq >> 2) & 1)
                              _ (st 'stop = 1 ? (emit (string [0])) (tx rq rd (rd = 1 ? 0 (rdle s (i + 2) 4))))
                              (cmd s (i + (rd = 1 ? 2 6))))
-                 (c = 78) (: _ (swd-xfer1 bw (s (i + 1)) 0 (rdle s (i + 2) 4)) (cmd s (i + 6)))
+                 (c = 78) (: _ (swd-noack bw (s (i + 1)) (rdle s (i + 2) 4)) (cmd s (i + 6)))
                  (c = 66) (: n (rdle s (i + 1) 2)
                              _ (bw 'own 1)
                              _ (map (j \ bw 'out ((s (i + 3 + j // 8) >> (j % 8)) & 1)) ^n)
@@ -626,3 +626,74 @@
    r (f4-flash w 0x08003FF0 s)
    (test (ids = [0x2BA01477 0x24770011]) (1 = r) (f4-read w 0x08003FF0 40 = s)
          ([['erase 0] ['erase 1]] = filter (e \ <e = 'erase) ((t 1) 'log ())) (0 < p 'n ())))
+
+; --- multidrop: dp v2 targets on one bus, each dormant until the wake, one selected ---
+
+; a dp v2 front for a bit-level target t, its targetsel ts: dormant until the selection alert
+; and the activation code (adiv5.2's, laid here apart from swd.l's), then awake, which hands t
+; the switch; after each line reset it reads
+; the first request (t sees the reset whole), and a targetsel (rq 0x99) selects it when the word is ts, else deselects
+; it, answering nothing either way, and a targetsel whose turnaround is not five clocks
+; deselects it too. a request it is selected for, and all to the next line
+; reset, pass to t; unselected it answers nothing, swdio left high
+(: (swdt-md t ts)
+    (: alert [0x92 0xF3 0x09 0x62 0x95 0x2D 0x85 0x86 0xE9 0xAF 0xDD 0xE3 0xA2 0x0E 0xBC 0x19]
+       pat (foldl (a \ x \ a + map (j \ x >> j & 1) ^8) () alert + [0 0 0 0] + map (j \ 0x1A >> j & 1) ^8)
+       st {'s 'dormant 'tail () 'ones 0 'buf () 'sel 0 'tk 0}
+       (go s) (pin st 's s)
+       (fwd l) (map (b \ t 'out b) l)
+       (host b)
+        (: s (st 's) ones (b = 1 ? (st 'ones + 1) 0) _ (pin st 'ones ones)
+           (? (s = 'dormant)
+               (: l (st 'tail + [b]) l2 (#l > 140 ? >l l) _ (pin st 'tail l2)
+                  (l2 = pat ? (swdt-select t, go 'deaf)))
+              (ones >= 50) (fwd (ones = 50 ? (map (_ \ 1) ^50) [b]), go 'lr)
+              (s = 'lr) (fwd [b], b = 0 && go 'look)
+              (s = 'look) (b = 0 ? (fwd [b]) (pin st 'buf [b], go 'req))
+              (s = 'req)
+               (: l (st 'buf + [b]) _ (pin st 'buf l)
+                  r (foldl (a \ i \ a | l i << i) 0 ^#l)
+                  (? (#l < 8) 0
+                     (r = 0x99) (pin st 'buf (), pin st 'tk 0, go 'ts)
+                     (st 'sel = 1) (fwd l, go 'on)
+                     (go 'off)))
+              (s = 'ts)
+               (: l (st 'buf + [b]) _ (pin st 'buf l)
+                  (#l < 33 ? 0
+                     (: v (foldl (a \ i \ a | l i << i) 0 ^32)
+                        _ (pin st 'sel (v = ts && l 32 = swd-par v && st 'tk = 5 ? 1 0))
+                        (go 'look))))
+              (s = 'on) (fwd [b])
+              0))
+       {'out host 'own (b \ t 'own b) 'rst (b \ t 'rst b)
+        'in (_ \ (? (st 's = 'on) (t 'in 0) (st 's = 'ts) (pin st 'tk (st 'tk + 1), 1) 1))
+        'errs (_ \ t 'errs ()) 'reqs (_ \ t 'reqs ()) 'state (_ \ st 's)})
+   ; wires on one swdio: the host's bits to each, and the line low when any drives it low
+   (swdt-bus ws)
+    {'out (b \ (map (w \ w 'out b) ws, 0)) 'own (b \ (map (w \ w 'own b) ws, 0))
+     'rst (b \ (map (w \ w 'rst b) ws, 0)) 'in (_ \ foldl (a \ w \ min a (w 'in 0)) 1 ws)}
+   ; an rp2040's three: two cores' sw-dps behind one dpidr, each a port with an ahb-ap, and
+   ; the rescue dp alone
+   rpdp 0x0BC12477 rpap 0x04770031
+   rpts [0x01002927 0x11002927 0xF1002927]
+   (rpbus _)
+    (: cs (map (ts \ swdt-md (swdt-target (swdt-dp rpdp {0xFC rpap} 0 (swdt-mem ()))) ts) (snip rpts 0 2))
+       r (swdt-md (swdt-target (swdt-regs 0x10212927 1)) (rpts 2))
+       [(swdt-bus (cs + [r])) (cs + [r])]))
+
+; dormant, a plain switch finds no one; awake, each targetsel reaches its own dp alone, and one
+; no target answers to leaves the line high
+(: b (rpbus 0) w <b c0 (b 1 0) c1 (b 1 1) rs (b 1 2)
+   plain (swd-line w, swd-dp w 0)
+   a0 (swd-select w (rpts 0), swd-dp w 0) n0 #(c0 'reqs ()) n1 #(c1 'reqs ())
+   a1 (swd-select w (rpts 1), swd-dp w 0)
+   ar (swd-select w (rpts 2), swd-dp w 0)
+   no (swd-select w 0x21002927, swd-dp w 0)
+   (test (plain = [7 ()]) (a0 = [1 rpdp]) (a1 = [1 rpdp]) (ar = [1 0x10212927]) (no = [7 ()])
+         (n0 = 1) (n1 = 0) (#(c0 'reqs ()) = 1) (#(c1 'reqs ()) = 1) (#(rs 'reqs ()) = 1)
+         (() = c0 'errs () + c1 'errs () + rs 'errs ())))
+
+; a multidrop connect, over bits and through a probe: the wake and the select, then the ids
+(: b (rpbus 0) r (swd-mdconnect <b (rpts 1)) c0 (b 1 0) c1 (b 1 1)
+   p (swdt-probe <(rpbus 0)) q (swd-mdconnect (probe-wire-on p) (rpts 0))
+   (test (r = [rpdp rpap]) (q = [rpdp rpap]) (() = c0 'reqs ()) (() = c1 'errs ()) (0 < #(c1 'reqs ()))))
