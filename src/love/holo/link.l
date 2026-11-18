@@ -345,16 +345,16 @@
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
              "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
              "__preinit_array_start" "__preinit_array_end")
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls?), global noms
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
-       (go i ds us)
-        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob])]
+       (go i ds us ss)
+        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss]
            (: sy (sy9 i) bind (sy 1)
-              (? !(elem bind '(1 2)) (go (i + 1) ds us)
-                 (0 < sy 3) (go (i + 1) (<sy . ds) us)
-                 (bind = 1) (go (i + 1) ds (<sy . us))
-                 (go (i + 1) ds us))))    ; a weak undef resolves to 0, owing nothing
-       (go 1 () ()))
+              (? !(elem bind '(1 2)) (go (i + 1) ds us ss)
+                 (0 < sy 3) (go (i + 1) (<sy . ds) us (bind = 1 ? (<sy . ss) ss))
+                 (bind = 1) (go (i + 1) ds (<sy . us) ss)
+                 (go (i + 1) ds us ss))))    ; a weak undef resolves to 0, owing nothing
+       (go 1 () () ()))
    ; --- writing one: `ar rcs`, deterministic (date/uid/gid 0, mode 644) and always indexed.
    ; `ms` is ((name bytes)..), names unique: a repeated one is unreachable through the index.
    (ld-arp w s) (#s < w ? (ld-arp w (s + " ")) s)
@@ -405,9 +405,9 @@
        (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
          + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
-   ; a set of objects -> (dt owed tls?): dt every nom defined or synthesized, a tablet the
+   ; a set of objects -> (dt owed tls? sd): dt every nom defined or synthesized, a tablet the
    ; caller pins into; owed the strong undefineds left; tls? whether one carries a thread
-   ; template. __start_X/__stop_X are ldres's to answer.
+   ; template; sd the noms one defines strongly. __start_X/__stop_X are ldres's to answer.
    (ld-bracket? nm)
     (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
@@ -419,7 +419,8 @@
                                             || ld-bracket? nm ? a2 (nm . a2)))
                                   a <>du))
                    () duos)
-         (any (du \ du 2) duos)]))
+         (any (du \ du 2) duos)
+         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)]))
    ; pull the members the index names for owed noms, each pull's undefineds joining the owed,
    ; until none hits -> (picked-srcs owed); `dt` grows in place.
    (arpull path s dt owed mach)
@@ -1325,7 +1326,7 @@
                     (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 n0 (n0 - base - sk) (<en - n0) 0 0 16 0)     ; from the first row
                     (shf (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; the -pie table (empty non-pie)
                     (shf (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)
                     (shf (snm 6) 1 3 ist isho iszr 0 0 16 0)
@@ -1522,7 +1523,7 @@
                     (shf (snm 0) 1 6 hdrsz hdrsz (t1 - hdrsz) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 t1 (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (fo d0) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (fo <ed) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 n0 (fo n0) (<en - n0) 0 0 16 0)
                     (shf (snm 4) 6 3 dy0 (fo dy0) (dynz * ndy) 10 0 wz dynz)      ; link=.dynstr
                     (shf (snm 5) 1 3 got0 (fo got0) (wz * ni) 0 0 wz wz)
                     (shf (snm 6) (w32 ? 9 4) 2 ra0 (fo ra0) (relz * nr) 8 0 wz relz)        ; link=.dynsym

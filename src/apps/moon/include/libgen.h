@@ -1,3 +1,2 @@
 #pragma once
-char *basename(char *);
-char *dirname(char *);
+char *basename(char *), *dirname(char *);

@@ -1,3 +1,2 @@
 #pragma once
-int swapon(char const *, int);
-int swapoff(char const *);
+int swapon(char const *, int), swapoff(char const *);

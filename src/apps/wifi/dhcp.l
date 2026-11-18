@@ -4,7 +4,8 @@
 ;   (dhcp ifindex mac ms) -> (ip plen router dns lease) as quads and seconds, () on none in time
 ;   (dhcp-frame mac xid opts) (dhcp-read b xid) -> a request's ip packet; a reply as (type yiaddr opts)
 ;   (quad-show q) -> "a.b.c.d"
-(module (dhcp dhcp dhcp-frame dhcp-read dhcp-opts quad-show ip-sum within)
+;   (dhcp-name s) -> the kernel's hostname s as option 12, in a list; () for none
+(module (dhcp dhcp dhcp-frame dhcp-read dhcp-opts dhcp-name quad-show ip-sum within)
 (borrow '(posix bytes hashes))
 (:
    (quad-show q) (join "." (map (i \ show (q i)) ^4))
@@ -15,6 +16,9 @@
        (fold a) (a > 65535 ? (fold ((a & 65535) + (a >> 16))) a)
        ((fold (go 0 0)) ^ 65535))
    (opt c v) (string c + string #v + v)
+   ; the kernel says (none) until something names it
+   (dhcp-name s) (: n (snip s 0 (? (0 < #s && s (#s - 1) = 10) (#s - 1) #s))
+                   (0 < #n && n != "(none)" ? [(opt 12 n)] ()))
    any (zbytes 4)
    all (string [255 255 255 255])
    (dhcp-frame mac xid opts)
@@ -57,15 +61,16 @@
           (: xid (rdbe (hex2b (sha1 (mac + show (clock 0)))) 0 4)
              cid (opt 61 (string 1 + mac))
              ask (opt 55 (string [1 3 6 15 51 54]))
+             nm (uread "/proc/sys/kernel/hostname" @ [1 s] (dhcp-name s) ())
              bc (string [255 255 255 255 255 255])
              (out opts) (send p [bc 2048] (dhcp-frame mac xid opts))
              (try k)
               (k = 0 ? ()
-                 (: _ (out [(opt 53 (string 1)) cid ask])
+                 (: _ (out ([(opt 53 (string 1)) cid ask] + nm))
                     o (await p xid [2] ms)
                     (? !(two? o) (try (k - 1))
                        (: sid (get (o 2) 54 "")
-                          _ (out [(opt 53 (string 3)) cid (opt 50 (o 1)) (opt 54 sid) ask])
+                          _ (out ([(opt 53 (string 3)) cid (opt 50 (o 1)) (opt 54 sid) ask] + nm))
                           a (await p xid [5 6] ms)
                           (? (!(two? a) || <a = 6) (try (k - 1))
                              (: os (a 2) m (get os 1 (string [255 255 255 0]))

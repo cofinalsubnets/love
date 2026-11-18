@@ -11,5 +11,4 @@ struct statfs {
 #endif
   int f_fsid[2];
   long f_namelen, f_frsize, f_flags, f_spare[4]; };
-int statfs(char const*, struct statfs*);
-int fstatfs(int, struct statfs*);
+int statfs(char const*, struct statfs*), fstatfs(int, struct statfs*);

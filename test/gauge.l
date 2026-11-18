@@ -1,7 +1,7 @@
 ; the vm instrument panel: clock (ms), nclock (monotonic ns), gauge (stats in words, the
 ; worst pauses at 14 and 15), and please, a collection on demand (() minor, a charm major)
 ; answering the count
-(test (charm? (clock 0)) (0 <= nclock (nclock 0)) (17 = tally (gauge 0)))
+(test ((word ? charm? sun?) (clock 0)) (0 <= nclock (nclock 0)) (17 = tally (gauge 0)))   ; epoch ms pass a 32-bit word's charms
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
  (test (c1 < c2)))
 

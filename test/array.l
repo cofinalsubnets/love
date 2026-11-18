@@ -123,7 +123,8 @@
  (galaxy = star-tray)
  (star-tray = tier (galaxy [2] [1 2])) (gem-tray = tier (galaxy [2] [1.5 2])) (twin-tray = tier (galaxy [2] [1 (1 ~ 1)]))
  (twin-tray = tier (galaxy [3] [(1 ~ 1) 1.5 1])) (star-tray = tier (galaxy [0] []))
- (star-tray = tier (galaxy [2] [(2 ** 62) (0 - 2 ** 62)])) (star-tray = tier (galaxy [2] [(2 ** 63 - 1) (0 - 2 ** 63)]))
+ (: w (word ? 63 31)                                            ; the word's bits less the sign
+    (star-tray = tier (galaxy [2] [(2 ** (w - 1)) (0 - 2 ** (w - 1))]) && star-tray = tier (galaxy [2] [(2 ** w - 1) (0 - 2 ** w)])))
  (top-tray = tier (galaxy [1] [(2 ** 63)])) (top-tray = tier (galaxy [1] [(0 - 2 ** 63 - 1)])) (top-tray = tier (galaxy [1] [(2 ** 70)]))
  (top-tray = tier (galaxy [1] [(1 /// 2)])) (gem-tray = tier (galaxy [2] ['a 1.5]))
  (aall (@(0 2) = galaxy [2] ['a 2])) (aall (@(1.0 2.0) = gem-tray [2] [1 2]))
@@ -196,7 +197,8 @@
  (aall (@(5 0) = pin @(0 0) @(0 0) @(4 5)))
  (aall (@(1 2) = pin @(1 2) @(-1 9) @(7 8)))
  ; a float into an int tray saturates, as floor does, on every isa
- (aall (@(9223372036854775807 -9223372036854775808 9223372036854775807 2) = pin (pin (pin (pin @(0 0 0 0) 0 1e30) 1 -1e30) 2 9223372036854775808.0) 3 2.7))
+ (: m (word ? (2 ** 63 - 1) (2 ** 31 - 1))
+    (aall (star-tray '(4) [m (0 - m - 1) m 2] = pin (pin (pin (pin @(0 0 0 0) 0 1e30) 1 -1e30) 2 9223372036854775808.0) 3 2.7)))
  (star-tray = tier (pin @(1 2) @(0) @(3.5))) (aall (@(3 2) = pin @(1 2) @(0) @(3.5)))
  (aall (@(1 2) = pin @(1 2) @(0 1) @(5)))                    ; values the wrong length: untouched
  (: a @(1 2) _ (pin a @(0) 9) (aall (a = @(1 2))))           ; the tray pinned is left as it was
@@ -216,3 +218,11 @@
  ([5 7] = map @(5 6 7) [0 2]) (peep @(5 6 7) 3 0 = 0)
  (aall (@(2.0 4.0 8.0) = 2 ** @(1 2 3))) (aall (@(1 4 9) = @(1 2 3) ** 2))
  (aall (@(1.0 8.0) = @(1 2) ** @(2 3))) (aall (@(2.0) = 4.0 ** @(0.5))))
+
+; an int tray against floats compares exactly, at the edge of the word's float mantissa
+(: m (word ? (53 2) (24 2)) z (star-tray '(2) [(m + 1) m]) f (gem-tray '(2) [(m + 0.0) (m + 0.0)])
+   b (70 2) fb (gem-tray '(1) [(b + 0.0)])
+   (test (aall (@(0 1) = (z = f))) (aall (@(1 0) = (z > f))) (aall (@(1 0) = (f < z)))
+         (aall (@(0 1) = (z = m + 0.0))) (aall (@(1 1) = (z >= m + 0.0))) !(elem z [f])
+         (aall (@(1) = (fb = b))) (aall (@(1) = (fb < b + 1))) (aall (@(0) = (fb = b + 1)))
+         (aall (@(1 1) = (z < 1 / 0.0)))))

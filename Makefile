@@ -299,7 +299,7 @@ else
 moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                         src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h)
 # out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
-# pole (three ISAs' runtime members, ~80 s of cpu cold) -- behind the TU list they start as
+# pole (six ISAs' runtime members, ~200 s of cpu cold) -- behind the TU list they start as
 # they finish and run alone. ahead of them they ride beside them, and -j loses that time.
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
@@ -509,7 +509,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64 i386
+rt_isas = x64 a64 rv64 i386 arm rv32 wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -518,21 +518,22 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-# i386 has no 64-bit divide: its roster carries rt.c's helpers too
+# i386, arm and rv32 have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
 rt_groups_i386 = $(rt_groups) rt
+rt_groups_arm = $(rt_groups) rt
+rt_groups_rv32 = $(rt_groups) rt
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,$(if $(filter wasm,$(1)),,mksys),$$(call rt_src,$(2)))
 endef
 $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
-# arm's, not carried: built only for a port whose own linker pulls members (teensy41's kernel)
-rt_arm_a = $(foreach g,$(rt_groups) rt,out/rt/arm/$g.a)
-$(foreach g,$(rt_groups) rt,$(eval $(call rtgroup,arm,$g)))
+# arm's, for a port whose own linker pulls members (teensy41's kernel)
+rt_arm_a = $(foreach g,$(rt_groups_arm),out/rt/arm/$g.a)
 out/rt/arm.list: force_dist_list $(rt_arm_a)
 	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_arm_a)' > $$tf; \
 	 $(note)
@@ -543,7 +544,8 @@ out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
-xa ?= $(if $(filter a64,$a),x64,a64)
+# a kernel built for another arch is that arch's lane: its love is the one projected
+xa ?= $(if $(filter-out $(hosta),$a),$a,$(if $(filter a64,$a),x64,a64))
 xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64 arm),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64 arm)
@@ -571,6 +573,10 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# baked where it runs, so a kernel projected from it wakes as the host lane's does
+$(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
+	@echo 'BAKE	'$@
+	@sh src/tools/xbake.sh $(ho)/love $(xa) $(xqemu) $< $(ho)/.dist-cat.l $@
 # the lane's objects by name, for a port that links them (src/inle/teensy41's kernel face)
 $(xd)/o.list: force_dist_list $(x_o)
 	@tf=$@.$$$$.tmp; echo '$(x_o)' > $$tf; \
@@ -782,10 +788,11 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(kproject_l)); } > $@
 
 # at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
-# past its data and bound to its doors, and it WAKES the image the binary carries. $(k_pie)
-# is the other lane -- a machine this one cannot run, built from source, which carries no
-# image and WARMS the egg instead. one gate apiece: test_disk rides the projection,
-# test_kernel_a64 the pie.
+# past its data and bound to its doors, and it WAKES the image the binary carries. an arch
+# whose processes run love (a src/inle/<arch>/proc.c) projects the cross lane's love the
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh).
+# $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
+# link, the kernel's bodies bound in. test_disk rides the projection, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
 k_pie_o =
@@ -793,6 +800,12 @@ ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
+else
+ifneq ($(and $(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+# rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
+k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
+k_pie_o = $(xkart_o)
+endif
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@

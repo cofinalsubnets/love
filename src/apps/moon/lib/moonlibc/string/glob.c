@@ -56,8 +56,8 @@ int glob(char const *pat, int fl, int (*errf)(char const *, int), glob_t *gl) {
       char const *dn = *cur.v[i] ? cur.v[i] : ".";
       DIR *d = opendir(dn);
       if (!d) {
-        if (__errno_v != ENOENT && __errno_v != ENOTDIR &&
-            ((errf && errf(dn, __errno_v)) || (fl & GLOB_ERR))) r = GLOB_ABORTED;
+        if (errno != ENOENT && errno != ENOTDIR &&
+            ((errf && errf(dn, errno)) || (fl & GLOB_ERR))) r = GLOB_ABORTED;
         continue; }
       struct dirent *e;
       int ff = (esc ? 0 : FNM_NOESCAPE) | (fl & GLOB_PERIOD ? 0 : FNM_PERIOD);

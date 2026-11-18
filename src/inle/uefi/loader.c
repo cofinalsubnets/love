@@ -130,6 +130,7 @@ static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
  if (wb == 8 || dev == 8) return die("the firmware's MAIR has no write-back or device slot");
  for (u64 i = 0; i < 512; i++) pt[4 * 512 + i] = (i << 21) | 0x401 | dev << 2;
  for (u64 i = 1; i < 4; i++) pt[3 * 512 + i] = (i << 30) | 0x701 | wb << 2;
+ pt[512 + 511] = (u64) &pt[3 * 512] | 3;         // the image window, in the firmware's attributes
  if (stayheap(handle, kb)) return 1;
  kb->tsc_khz = rdfrq() / 1000;
  kb->tsc0 = rdpct();
@@ -287,6 +288,7 @@ u64 efi_main(void *handle, void *st) {
  pt[0] = (u64) &pt[2 * 512] | 3;                                  // TTBR0[0]
  // PXNTable | UXNTable: no fetch under the hhdm. efi_go reads TTBR1's root at pt + 4096
  pt[512 + 256] = (u64) &pt[3 * 512] | 3 | (3ull << 59);            // TTBR1[256]
+ pt[512 + 511] = (u64) &pt[2 * 512] | 3;                           // ..[511] the image window, identity's twin
 #else
  for (u64 i = 0; i < 2048; i++) pt[3 * 512 + i] = (i << 21) | 0x83;
  for (u64 i = 0; i < 4; i++) pt[2 * 512 + i] = (u64) &pt[(3 + i) * 512] | 3;

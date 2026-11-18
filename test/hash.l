@@ -43,3 +43,12 @@
 ; a big tablet keeps one key for -0.0 and 0.0
 (: zt (pin (pin (foldl (t \ i \ pin t (i + 0.5) i) {} ^200) 0.0 'a) -0.0 'b))
 (test ('b = peep zt 0.0 0) (201 = #(keys zt)))
+
+; a tablet is a key by its serial: distinct ones hash apart, order as made, and 2000 key one
+(: ta {} tb {} tc {}
+   ts (map (_ \ tablet 0) ^2000)
+   tk (foldl (t \ x \ pin t x #t) (tablet 0) ts))
+(test
+ (dig ta != dig tb) (dig ta = dig ta)
+ ([ta tb tc] = sort [tc ta tb])
+ (jot 2000 = map tk ts))

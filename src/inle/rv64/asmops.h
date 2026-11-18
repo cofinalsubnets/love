@@ -9,6 +9,17 @@ static inline void k_fence(void) { asm volatile ("fence" ::: "memory"); }
 
 static inline uint64_t k_rd_time(void) {
   uint64_t v; asm volatile ("csrr %0, time" : "=r"(v)); return v; }
+// satp names a root; the translations it held go with it
+static inline uint64_t k_rd_satp(void) {
+  uint64_t v; asm volatile ("csrr %0, satp" : "=r"(v)); return v; }
+static inline void k_wr_satp(uint64_t v) {
+  asm volatile ("csrw satp, %0\n\tsfence.vma" :: "r"(v) : "memory"); }
+static inline void k_sfence(void) { asm volatile ("sfence.vma" ::: "memory"); }
+// fence.i: what was written as data now runs
+static inline void k_fence_i(void) { asm volatile ("fence.i" ::: "memory"); }
+// which counters U reads: cycle, time, instret
+static inline void k_wr_scounteren(uint64_t v) {
+  asm volatile ("csrw scounteren, %0" :: "r"(v)); }
 static inline void k_wr_stvec(uintptr_t v) {
   asm volatile ("csrw stvec, %0" :: "r"(v) : "memory"); }
 static inline void k_sie_set(uint64_t bits) {

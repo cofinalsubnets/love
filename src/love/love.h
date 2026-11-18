@@ -11,12 +11,27 @@ struct g; union u;
 // --- the word and its tags ---
 #define love_inline inline __attribute__((always_inline))
 #define love_noinline __attribute__((noinline))
-// a hosted body inle's kernel defines too: a link with it takes the kernel's, a projection
-// patches this one with a jump there, in a section of its own so the jump spills into no body
-#if defined(__mooncc__)
-#define love_door __attribute__((weak, noinline, aligned(16), section(".text.door")))
+// a hosted body inle's kernel defines too. natively the name is a weak stub calling through
+// n##__slot, which points here and which a kernel image points at its own body: a word of
+// data, never written at run time. elsewhere the weak body itself. a link with the kernel's
+// body drops the stub either way. love_doorv for void, love_doorlvm for an instruction
+#if defined(__mooncc__) && !defined(__wasm__)
+#define love_door(T, n, ps, as) T n##__host ps; \
+ T (*volatile n##__slot) ps = n##__host; \
+ __attribute__((weak, noinline)) T n ps { return n##__slot as; } \
+ T n##__host ps
+#define love_doorv(n, ps, as) void n##__host ps; \
+ void (*volatile n##__slot) ps = n##__host; \
+ __attribute__((weak, noinline)) void n ps { n##__slot as; } \
+ void n##__host ps
+#define love_doorlvm(n) lvm(n##__host); \
+ lvm_t *volatile n##__slot = n##__host; \
+ __attribute__((weak)) lvm(n) { love_musttail return Ap(n##__slot, g); } \
+ lvm(n##__host)
 #else
-#define love_door __attribute__((weak, noinline))
+#define love_door(T, n, ps, as) __attribute__((weak, noinline)) T n ps
+#define love_doorv(n, ps, as) __attribute__((weak, noinline)) void n ps
+#define love_doorlvm(n) __attribute__((weak)) lvm(n)
 #endif
 // no identical-code folding: the data sentinels' bodies match, and their address is the type tag
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
@@ -224,7 +239,7 @@ struct cask { lvm_t *ap; struct str *str; };
 // a mint: a nameless point, its hot and serial
 struct mint {
  lvm_t *ap;
- uintptr_t serial; };   // the order key; () is serial 0, every fresh mint ++next_serial
+ uintptr_t serial[8 / sizeof(uintptr_t)]; };   // the order key, 64 bits on every word; () is 0, every fresh mint ++next_serial
 // a nom: an interned named point; dig caches the spelling hash, so bucket order is not intern history
 struct nom {
  lvm_t *ap;
@@ -259,6 +274,21 @@ extern const struct str0 { lvm_t *ap; uintptr_t len; char bytes[8]; } str_empty;
 // (): the one serial-0 mint, a const shared by every core so it bakes; serial 0 is never drawn
 extern const struct mint mint_zero;
 #define ZeroPoint ((word) &mint_zero)
+// a serial's words, one on 64 bits and two on 32: a mint's and a tablet's
+static love_inline uint64_t serial_get(uintptr_t const *s) {
+#if UINTPTR_MAX > 0xffffffffu
+ return s[0];
+#else
+ return s[0] | (uint64_t) s[1] << 32;
+#endif
+}
+static love_inline void serial_set(uintptr_t *s, uint64_t v) {
+ s[0] = (uintptr_t) v;
+#if UINTPTR_MAX <= 0xffffffffu
+ s[1] = (uintptr_t) (v >> 32);
+#endif
+}
+static love_inline uint64_t mint_serial(word x) { return serial_get(sym(x)->serial); }
 
 // --- the core ---
 struct port_vt;
@@ -299,8 +329,8 @@ struct g {
  // the one scratch word: a port refill, a write's count, a Have's ask. set it as the last
  // act before the return that hands it back
  word b;
- uintptr_t next_serial,
-           next_wake_at, // the next snapshot's wake_at; 0 always runnable
+ uint64_t next_serial;  // mints, tablets and pids draw it
+ uintptr_t next_wake_at, // the next snapshot's wake_at; 0 always runnable
            clock_at;     // the last sweep tick's clock
  word symbols;          // the weak intern map
  uintptr_t len;         // main pool words: the core at its base, [end,hp) young
@@ -313,7 +343,7 @@ struct g {
  struct code *code;
  struct cfree *cfree;
  // binary addresses a native reads off g, as a blob holding one could not ride an image
- word reach[12];
+ word reach[15];
  intptr_t fair;   // right past reach, where the glaze reads it: native code's countdown, a step
                   // or a call takes one, at 0 it refills
  uintptr_t ticks; // the refills and the vm's fairness yields: work in 64-step units
@@ -362,6 +392,9 @@ struct g {
      // prel's tap/jug poke this layout by index: a word added renumbers there
     } *io; }; }; };
  intptr_t end[]; };
+// the glaze reads these off g by place: fair right past reach, the run ring and the parked at words 3 and 4
+_Static_assert(offsetof(struct g, fair) == offsetof(struct g, reach) + 15 * sizeof(word), "fair rides past reach");
+_Static_assert(offsetof(struct g, tasks) == 3 * sizeof(word) && offsetof(struct g, parked) == 4 * sizeof(word), "the native's peer test");
 
 // --- nif registration ---
 // .k a nif's threaded code, .ap an lvm_, .x a word; every one immortal (defn). m the module,
@@ -521,11 +554,12 @@ intptr_t inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t)
          inflate_shared(unsigned char const*, uintptr_t, unsigned char*, uintptr_t, void*);
 uintptr_t inflate_tabs_size(void);
 int inflate_tabs_load(unsigned char const*, uintptr_t, void*), inflate_shared_is(unsigned char const*, uintptr_t);
-uintptr_t zstde_dict(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t const*, uintptr_t, int, unsigned char*, uintptr_t),
-          zstde_with(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, int, unsigned char*, uintptr_t),
+uintptr_t zstde_dict(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t const*, uintptr_t, int, unsigned char*, uintptr_t,
+                     unsigned char*, uintptr_t, uintptr_t*),
           zstde_cap(uintptr_t), zstd_dict_size(void);
 int zstd_dict_load(void*, unsigned char const*, uintptr_t);
 intptr_t zstd_dict_into(void const*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+unsigned char *zstd_whole(unsigned char const*, uintptr_t, unsigned char const*, uintptr_t, uintptr_t*);
 intptr_t bz2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t),
          lzma2_into(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 uint32_t crc32(unsigned char const*, uintptr_t);
@@ -548,7 +582,7 @@ struct g *lovefs_port(struct g *g, uintptr_t i);
 extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
-uintptr_t love_clock(void);
+uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
 intptr_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
@@ -692,11 +726,20 @@ static love_inline uintptr_t rot(uintptr_t x) {
 // any value -> its enum q, a tray refined by element tier
 enum q kind(word);
 extern union u const numap_drive[], obin_drive[];          // [ap; swap; ret0], runs (num-ap n x)
-lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox; // the data sentinels (+ ap)
+lvm_t lvm_ap, lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox, lvm_tab; // the data sentinels (+ ap)
 // the sentinels tile one section at data_stride in enum d order from lvm_sym: the slot is the kind
 #if data_section
+#if data_stride == 16
+#define data_shift 4
+#elif data_stride == 128
+#define data_shift 7
+#else
+#error "data_stride: give data_shift its log2"
+#endif
+// a slot exactly: the offset rotated by the grain is the kind, any other word lands high
 static love_inline bool in_data(void *a) {
- return (uintptr_t) ((char*) a - (char*) lvm_sym) < (uintptr_t) (data_n * data_stride); }
+ uintptr_t o = (uintptr_t) ((char*) a - (char*) lvm_sym);
+ return (o >> data_shift | o << (8 * sizeof o - data_shift)) < data_n; }
 static love_inline enum d love_typ(union u *o) {
  return (enum d) ((uintptr_t) ((char*) o->ap - (char*) lvm_sym) / data_stride); }
 #else
@@ -704,7 +747,7 @@ static love_inline enum d love_typ(union u *o) {
 static love_inline bool in_data(void *a) {
  lvm_t *p = (lvm_t*) a;
  return p == lvm_chain || p == lvm_nom || p == lvm_str || p == lvm_sym || p == lvm_big
-     || p == lvm_tray || p == lvm_gembox || p == lvm_twinbox; }
+     || p == lvm_tray || p == lvm_gembox || p == lvm_twinbox || p == lvm_tab; }
 static love_inline enum d love_typ(union u *o) {
  lvm_t *p = o->ap;
  return p == lvm_chain  ? DChain
@@ -714,6 +757,7 @@ static love_inline enum d love_typ(union u *o) {
       : p == lvm_big    ? DBig
       : p == lvm_tray   ? DTray
       : p == lvm_gembox ? DGem
+      : p == lvm_tab    ? DTab
       :                   DTwin; }
 #endif
 #define typ(_) love_typ(cell(_))
@@ -774,6 +818,7 @@ lvm_t lvm_kcall,
  lvm_nifx,        // ..with an extras word at Ip+32, GC-walked, so value[1] stays the plain twin
  lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes)
  lvm_reach_offset,       // g->reach's byte offset, what the emitter loads from
+ lvm_end_offset,         // g->end's byte offset: the nursery's floor
  lvm_natp,        // (nat? f): code in the arena
  lvm_arena,       // (arena 0): the code arena's [mapped bumped free spans]
  lvm_lazy,        // a woken native's entry, until its chunk of the image's code is seated
@@ -789,7 +834,7 @@ love_noinline noicf lvm_t
  lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap1z, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
  // the data sentinels: byte-identical bodies kept apart by address (noicf)
- data_num_apply, data_sym_apply, data_string_apply, data_pair_apply, data_tray_apply,
+ data_num_apply, data_sym_apply, data_string_apply, data_pair_apply, data_tray_apply, data_tab_apply,
  lvm_sym, lvm_nom, lvm_gembox, lvm_twinbox,
  lvm_big, lvm_tray, lvm_str, lvm_chain,
  lvm_addn, lvm_fquotn, lvm_muln,
@@ -800,8 +845,9 @@ lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 #define str_type_width (Width(struct str))
 // header, bytes, and the NUL
 #define str_width(n) (str_type_width + b2w((n) + 1))
-static love_inline struct mint *ini_missing(struct mint *y, uintptr_t serial) {
- return y->ap = lvm_sym, y->serial = serial, y; }
+static love_inline struct mint *ini_missing(struct mint *y, uint64_t serial) {
+ y->ap = lvm_sym, serial_set(y->serial, serial);
+ return y; }
 static love_inline struct nom *ini_nom(struct nom *y, uintptr_t name, uintptr_t dig) {
  return y->ap = lvm_nom, y->name = name, y->dig = dig, y; }
 static love_inline struct str *ini_str(struct str *s, uintptr_t len) {
@@ -876,6 +922,21 @@ struct twin { lvm_t *ap; union { word re; flo_t dre; }; union { word im; flo_t d
 // payloads through the union, never a stack temporary, whose address costs a caller its sibcalls
 _Static_assert(sizeof(flo_t) == sizeof(uintptr_t), "float box assumes flo_t is pointer-width");
 static love_inline flo_t gem_get(word x) { return ((struct gem*) x)->d; }
+int int_flo_cmp(word, flo_t);
+// the same for a machine int, as a typed tray holds one: past the word a float settles by sign
+static love_inline int zf_cmp(intptr_t i, flo_t f) {
+ if (f != f) return 2;
+ flo_t const lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24)), top = (flo_t) ((uintptr_t) 1 << (Bits - 1));
+ if (f > -lim && f < lim) { flo_t const x = (flo_t) i; return x < f ? -1 : x > f; }
+ if (f >= top) return -1;
+ if (f < -top) return 1;
+ intptr_t const k = (intptr_t) f;                         // whole, and in the word
+ return i < k ? -1 : i > k; }
+// two numbers, a float among them, exactly: -1 0 1, 2 unordered
+static love_inline int numf_cmp(word a, word b) {
+ if (gemp(a) && gemp(b)) { flo_t x = gem_get(a), y = gem_get(b); return x < y ? -1 : x > y ? 1 : x == y ? 0 : 2; }
+ int const c = gemp(a) ? int_flo_cmp(b, gem_get(a)) : int_flo_cmp(a, gem_get(b));
+ return c == 2 || !gemp(a) ? c : -c; }
 // the one float box-write, under Have(gem_req): NaN collapses to () so the order stays total;
 // glaze's lanes emit the same collapse
 static love_inline word mk_gem(word **hpp, flo_t v) {
@@ -903,17 +964,48 @@ static love_inline intptr_t wbig_get(word x) {
  uintptr_t u = 0;
  for (int i = 0; i < n && i < wlimbs; i++) u |= (uintptr_t) b->limb[i] << (limb_bits * i);
  return (intptr_t) (sl < 0 ? (uintptr_t) 0 - u : u); }
-// a word past the charm range as a bignum, under Have(wbig_req); never 0, as callers demote
-static love_inline word mk_wbig(word **hpp, intptr_t v) {
+// a word's magnitude m as a bignum, under Have(wbig_req); never 0, as callers demote
+static love_inline word mk_mbig(word **hpp, uintptr_t m, bool neg) {
  struct big *b = (struct big*) *hpp;
- bool neg = v < 0;
- uintptr_t m = neg ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v;   // |INTPTR_MIN| survives unsigned
  int n = wlimbs;
  for (int i = 0; i < wlimbs; i++) b->limb[i] = (love_limb) (m >> (limb_bits * i));
  while (n > 1 && b->limb[n-1] == 0) n--;
  ini_big(b, neg ? -n : n);
  *hpp += b2w(sizeof(struct big) + (size_t) n * sizeof(love_limb));
  return word(b); }
+// a word past the charm range as a bignum, under Have(wbig_req)
+static love_inline word mk_wbig(word **hpp, intptr_t v) {
+ return mk_mbig(hpp, v < 0 ? (uintptr_t) 0 - (uintptr_t) v : (uintptr_t) v, v < 0); }   // |INTPTR_MIN| survives unsigned
+// an unsigned word as a number: a fixnum when it fits, else a bignum under Have(wbig_req)
+static love_inline word mk_uword(word **hpp, uintptr_t m) {
+ return m <= (uintptr_t) maxcharm ? putcharm((intptr_t) m) : mk_mbig(hpp, m, false); }
+// a 64-bit integer as a number, a fixnum when it fits, under Have(i64_req); toi64 the way back,
+// a bignum's low 64 bits
+#define i64_req b2w(sizeof(struct big) + 8)
+static love_inline word mk_i64(word **hpp, int64_t v) {
+ uint64_t m = v < 0 ? (uint64_t) 0 - (uint64_t) v : (uint64_t) v;
+ love_limb l[64 / limb_bits];
+ for (int i = 0; i < 64 / limb_bits; i++) l[i] = (love_limb) (m >> (limb_bits * i));
+ return big_canon(hpp, l, 64 / limb_bits, v < 0); }
+static love_inline int64_t toi64(word x) {
+ if (charmp(x)) return getcharm(x);
+ struct big *b = (struct big*) x;
+ intptr_t sl = b->slen;
+ int n = (int) (sl < 0 ? -sl : sl);
+ uint64_t u = 0;
+ for (int i = 0; i < n && i < 64 / limb_bits; i++) u |= (uint64_t) b->limb[i] << (limb_bits * i);
+ return (int64_t) (sl < 0 ? (uint64_t) 0 - u : u); }
+// the scheduler's clock: love_clock modulo tick_span, so a deadline is a nonnegative charm and a
+// held task's negation stays apart. deadlines order by signed difference, sound within half the
+// span: beyond reach on a 64-bit word, about 6 days on a 32-bit one, the longest single wait
+#define tick_span ((uintptr_t) 1 << (Bits - 2))
+#define tick_max (tick_span / 2 - 1)
+static love_inline uintptr_t tick_of(uint64_t ms) { uintptr_t t = (uintptr_t) (ms & (tick_span - 1)); return t ? t : 1; }   // 0 is none
+static love_inline uintptr_t love_tick(void) { return tick_of(love_clock()); }
+static love_inline uintptr_t tick_add(uintptr_t t, uintptr_t ms) { return tick_of((uint64_t) t + (ms < tick_max ? ms : tick_max)); }
+static love_inline intptr_t tick_cmp(uintptr_t a, uintptr_t b) {   // a - b
+ uintptr_t d = (a - b) & (tick_span - 1);
+ return d > tick_max ? (intptr_t) d - (intptr_t) tick_span : (intptr_t) d; }
 // love admits no irreflexive value: = reads two NaNs as one
 static love_inline bool same_flo(flo_t a, flo_t b) { return a == b || (a != a && b != b); }
 // truncation toward zero and float remainder, no libm
@@ -1011,27 +1103,24 @@ void bc_open(struct bcast *w, struct tray *va, struct tray *vb,
 void bc_step(struct bcast *w);
 
 // --- maps ---
-// a map: a fixed header [lvm_map_lookup, backing, serial, tag] and an open-addressed backing
-// [lvm_map_data, len, cap, k,v.., tag] that growth swaps, so aliases see later inserts. both
-// plain threads, empty slots map_gap. mutable, so the serial is its order, never its contents
-lvm_t lvm_map_lookup, lvm_map_data;
-static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_map_lookup; }
+// a map: a data object [lvm_tab, backing, serial, len, cap], its serial, len and cap raw, over an
+// open-addressed backing [k,v.., tag] that growth swaps, so aliases see later inserts. the
+// backing is a plain thread only its tablet names, its word 0 any key; empty slots map_gap.
+// mutable, so the serial is its order, never its contents
+static love_inline bool tabp(word _) { return evenp(_) && cell(_)->ap == lvm_tab; }
 extern const word map_gap_cell;
 #define map_gap ((word) &map_gap_cell)
 #define map_min_cap 4
-// serial, len and cap are charms, so gc scans both as threads
-struct tablet { lvm_t *ap; word back, serial; };
-struct tablet_back { lvm_t *ap; word len, cap, slot[]; };   // slot: cap k,v pairs
+struct tablet { lvm_t *ap; word back; uintptr_t serial[8 / sizeof(uintptr_t)], len, cap; };
 #define tablet(_) ((struct tablet*)(_))
-#define tablet_back(_) ((struct tablet_back*)(_))
-enum { map_head = sizeof(struct tablet) / sizeof(word) + 1 };   // tag included
-static love_inline uintptr_t map_back_words(uintptr_t cap) { return Width(struct tablet_back) + 1 + 2 * cap; }
+#define tab_req Width(struct tablet)
+static love_inline uintptr_t map_back_words(uintptr_t cap) { return 2 * cap + 1; }   // tag included
 static love_inline word map_back(word m) { return tablet(m)->back; }
-static love_inline uintptr_t map_serial(word m) { return getcharm(tablet(m)->serial); }
-static love_inline word *map_slots(word m) { return tablet_back(map_back(m))->slot; }
-static love_inline uintptr_t map_len(word m) { return getcharm(tablet_back(map_back(m))->len); }
-static love_inline uintptr_t map_cap(word m) { return getcharm(tablet_back(map_back(m))->cap); }
-static love_inline void map_len_set(word m, uintptr_t n) { tablet_back(map_back(m))->len = putcharm(n); }
+static love_inline uint64_t map_serial(word m) { return serial_get(tablet(m)->serial); }
+static love_inline word *map_slots(word m) { return ptr(map_back(m)); }
+static love_inline uintptr_t map_len(word m) { return tablet(m)->len; }
+static love_inline uintptr_t map_cap(word m) { return tablet(m)->cap; }
+static love_inline void map_len_set(word m, uintptr_t n) { tablet(m)->len = n; }
 word
  mapget(struct g*, word, word, word),
  stacklook(struct g*, word, word),
@@ -1094,11 +1183,11 @@ static love_inline bool in_live_pool(struct g *g, word const *p) {
  return p >= g->major_base && p < g->major_base + g->major_len; }
 static love_inline union u *tagthread(union u *h, uintptr_t len) {
   return h[len].x = word(h) | thread_tag, h; }
-// a tablet's header at h over backing b, tagged: the word callers hold
-static love_inline word ini_tablet(union u *h, word b, word serial) {
+// a tablet's header at h over backing b of cap slots, len of them full
+static love_inline word ini_tablet(union u *h, word b, uint64_t serial, uintptr_t len, uintptr_t cap) {
  struct tablet *t = tablet(h);
- t->ap = lvm_map_lookup, t->back = b, t->serial = serial;
- return word(tagthread(h, Width(struct tablet))); }
+ t->ap = lvm_tab, t->back = b, serial_set(t->serial, serial), t->len = len, t->cap = cap;
+ return word(h); }
 #define topof(g) ((word*)g+g->len)
 struct tag { union u *head; union u end[]; };
 struct tag *ttag(struct g*, union u*);
@@ -1152,7 +1241,7 @@ static love_inline word *task_io(struct g *g) { return &g->tasks[7].x; }
 // def1 for the image codec; a count, as an extern array has no complete type
 extern struct def const *const love_def1;
 extern uintptr_t const def1_n;
-extern union u const callout_drive[], callout_resume[];
+extern union u const callout_drive[], callout_resume[], callout_fair[], callout_setcup[];
 extern union u const yield_c[];
 struct bio *bio_of(struct g *g, struct io *i);
 char *code_install(struct g *g, char const *src, size_t n), *code_adopt(struct g *g, char const *src, size_t n),
@@ -1180,7 +1269,7 @@ int nif_cell(union u const *k);
 int love_once(void), ops_fill(void);
 size_t code_len(char *code);
 // g->reach's slots: the emitter's `reach` law names them the same
-enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap };
+enum { ReachChain, ReachStr, ReachMap, ReachNom, ReachMint, ReachGem, ReachCask, ReachDrive, ReachResume, ReachCur, ReachUnc, ReachGap, ReachFair, ReachSetcup, ReachPark };
 union u *fn_base(union u *k, int *nargs);
 struct g
  *eval(struct g *g),

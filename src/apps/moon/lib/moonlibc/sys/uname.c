@@ -20,7 +20,7 @@ int uname(struct utsname *u) {
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
   if (v < 2) return (int) er(sc1(NR_uname, (long) u));
-  if (!u) { __errno_v = EFAULT; return -1; }
+  if (!u) { errno = EFAULT; return -1; }
   memset(u, 0, sizeof *u);
   uts_mib(CTL_KERN, KERN_OSTYPE, u->sysname);
   uts_mib(CTL_KERN, KERN_HOSTNAME, u->nodename);
