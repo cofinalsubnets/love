@@ -14,4 +14,12 @@ int tcgetattr(int fd, struct termios *t) {
     long r = er(fb3(NR_fb_ioctl, fd, 0x402c7413L, (long) &f));   /* TIOCGETA */
     if (r >= 0) __love_tiocan(&f, t);
     return (int) r; }
-  return ioctl(fd, 21505, t); }                                  /* TCGETS */
+  if (ioctl(fd, 21505, t) < 0) return -1;                        /* TCGETS */
+  unsigned int c = t->c_cflag & CBAUD, ci = (t->c_cflag & CIBAUD) >> 16;
+  struct __lx_termios2 k;
+  if ((c == BOTHER || ci == BOTHER) && !ioctl(fd, 0x802c542aUL, &k)) {   /* TCGETS2 */
+    t->c_ispeed = k.c_ispeed, t->c_ospeed = k.c_ospeed;
+    return 0; }
+  t->c_ospeed = __love_bnum(c);
+  t->c_ispeed = ci ? __love_bnum(ci) : t->c_ospeed;
+  return 0; }

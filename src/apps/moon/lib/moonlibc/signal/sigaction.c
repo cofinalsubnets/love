@@ -29,7 +29,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
      * user's shape, its tramp returning, or the kernel's with ours (mksys's
      * __love_mac_sigtramp) riding in. the old one comes back in the user's shape */
     long fs = __love_sigfb(sig);
-    if (fs <= 0) { __errno_v = EINVAL; return -1; }
+    if (fs <= 0) { errno = EINVAL; return -1; }
     struct __mac_sigact ka;
     struct __mac_osigact ko;
     memset(&ko, 0, sizeof ko);
@@ -51,7 +51,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     if (r == LvNoDoor) r = fb3(46, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
     else if (__love_parked(r)) r = -__love_errfb(-r - 4096);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
-                 __errno_v = (int) -r; return -1; }
+                 errno = (int) -r; return -1; }
     if (old) {
       memset(old, 0, sizeof *old);
       old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
@@ -61,7 +61,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #endif
   if (__love_osv == 2) {
     long fs = __love_sigfb(sig);
-    if (fs <= 0) { __errno_v = EINVAL; return -1; }
+    if (fs <= 0) { errno = EINVAL; return -1; }
     struct __fb_sigact ka, ko;
     memset(&ko, 0, sizeof ko);
     void (*prev)(int) = __sighand[fs];
@@ -79,7 +79,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
       ka.mask[1] = (unsigned int) ((unsigned long long) __love_maskfb((unsigned long) a->sa_mask.__v[0]) >> 32); }
     long r = sc3(NR_rt_sigaction, fs, a ? (long) &ka : 0, old ? (long) &ko : 0);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
-                 __errno_v = (int) -r; return -1; }
+                 errno = (int) -r; return -1; }
     if (old) {
       memset(old, 0, sizeof *old);
       old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
@@ -91,12 +91,12 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
   if (__love_osv == 3) {
 #ifndef LvNbTramp
     /* no netbsd signal return path on this ISA */
-    __errno_v = ENOSYS; return -1;
+    errno = ENOSYS; return -1;
 #else
     /* netbsd's record puts the mask before the flags, and the kernel has no return
      * path: __love_nb_sigtramp (version 2) is registered with each call */
     long fs = __love_sigfb(sig);
-    if (fs <= 0) { __errno_v = EINVAL; return -1; }
+    if (fs <= 0) { errno = EINVAL; return -1; }
     struct __nb_sigact ka, ko;
     memset(&ko, 0, sizeof ko);
     void (*prev)(int) = __sighand[fs];
@@ -115,7 +115,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     long r = __love_fb(NR_nb_sigaction_sigtramp, fs, a ? (long) &ka : 0, old ? (long) &ko : 0,
                      (long) __love_nb_sigtramp, 2, 0);
     if (r < 0) { if (a) __sighand[fs] = prev, __sigsi[fs] = prevsi;
-                 __errno_v = (int) -r; return -1; }
+                 errno = (int) -r; return -1; }
     if (old) {
       memset(old, 0, sizeof *old);
       old->sa_handler = (ko.h == (void *) __love_sigshim) ? prev : (void (*)(int)) ko.h;
@@ -142,7 +142,7 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
 #endif
     memcpy(ka.mask, &a->sa_mask.__v[0], 8); }
   long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
-  if (r < 0) { __errno_v = (int) -r; return -1; }
+  if (r < 0) { errno = (int) -r; return -1; }
   if (old) {
     memset(old, 0, sizeof *old);
     old->sa_handler = (void (*)(int)) ko.h;

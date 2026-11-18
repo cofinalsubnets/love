@@ -63,7 +63,7 @@ static long sp_inle(char const *f, posix_spawn_file_actions_t const *fa,
     struct __spawn_act const *a = &fa->a[i];
     int src = a->src;
     if (a->kind == 3) {
-      if ((src = open(a->path, a->flags | O_CLOEXEC, a->mode)) < 0) { r = -__errno_v; break; }
+      if ((src = open(a->path, a->flags | O_CLOEXEC, a->mode)) < 0) { r = -errno; break; }
       tmp[opened++] = src; }
     op[3 * i] = a->kind == 2 ? 2 : 1, op[3 * i + 1] = a->fd, op[3 * i + 2] = src; }
   if (!r) {
@@ -81,7 +81,7 @@ static int sp_go(pid_t *pid, char const *f, posix_spawn_file_actions_t const *fa
     if (pid) *pid = (pid_t) r;
     return 0; }
   pid_t c = fork();
-  if (c < 0) return __errno_v;
+  if (c < 0) return errno;
   if (!c) {
     short fl = at ? at->flags : 0;
     if (fl & POSIX_SPAWN_SETPGROUP && setpgid(0, at->pgroup)) _exit(127);

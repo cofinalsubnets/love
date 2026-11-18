@@ -49,9 +49,13 @@
  (charm? (B100 / B100))
  (gem? (B100 / 7))
  ; operands past the float range answer their ratio
- (abs ((2 ** 1100) / (3 * 2 ** 1099) - 2 / 3) < 1e-15)
- (abs ((0 - 2 ** 2000) / (3 * 2 ** 1000) / (2.0 ** 1000) + 1 / 3) < 1e-15)
- (abs ((2 ** 1000) / (3 * 2 ** 2000) * (2.0 ** 1000) - 1 / 3) < 1e-15)
+ (abs ((2 ** 1100) / (3 * 2 ** 1099) - 2 / 3) < (word ? 1e-15 1e-6))   ; a 32-bit word's float is single
+ (word ? (abs ((0 - 2 ** 2000) / (3 * 2 ** 1000) / (2.0 ** 1000) + 1 / 3) < 1e-15) 1)   ; 2.0 ** 1000 is inf in f32
+ (word ? (abs ((2 ** 1000) / (3 * 2 ** 2000) * (2.0 ** 1000) - 1 / 3) < 1e-15) 1)
+ ; an integer against a float compares exactly, never through the float
+ (: h (70 2) f (h + 1.0)
+    (!((h + 1) = f) && (h = f) && (f < h + 1) && (h + 1 > f) && !(f < h) && (0 - h - 1 < 0 - f)
+     && (9007199254740993 > 9007199254740992.0) && (3 = 3.0) && (max h f = h) && (h < 1 / 0.0)))
  (25 = F25 // F24)
 
  ; --- divmod identities: a == (a//b)*b + a%b ---

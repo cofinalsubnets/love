@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <sys/socket.h>
 /* glibc's field order: ai_addr before ai_canonname */
 struct addrinfo {
@@ -27,3 +28,21 @@ struct addrinfo {
 int  getaddrinfo(char const*, char const*, struct addrinfo const*, struct addrinfo**);
 void freeaddrinfo(struct addrinfo*);
 char const *gai_strerror(int);
+/* the old resolver: _r lays its answer in the caller's buffer, the plain one in libc's,
+ * the next call's to overwrite */
+struct hostent {
+  char *h_name;
+  char **h_aliases;
+  int h_addrtype;
+  int h_length;
+  char **h_addr_list;
+};
+#define h_addr h_addr_list[0]
+#define HOST_NOT_FOUND 1
+#define TRY_AGAIN      2
+#define NO_RECOVERY    3
+#define NO_DATA        4
+int *__h_errno_location(void);
+#define h_errno (*__h_errno_location())   /* the calling thread's */
+struct hostent *gethostbyname(char const*);
+int gethostbyname_r(char const*, struct hostent*, char*, size_t, struct hostent**, int*);

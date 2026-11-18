@@ -10,9 +10,10 @@
     (9000000000000000000 = (ev '((\ x (* x x)) 3000000000)))        ; applied inline, deopts to a bignum
     (3 = (ev '(: g (\ x (cap x)) (g '(3 4)))))                      ; a chain body: the amble owns it
     ; --- a float-result leaf boxes a gem, == interp, deopts on a non-float arg
-    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; the float lane fires
+    (: n (peep fires () 0)  fr (ev '(: f (\ x (+ (* x 1.5) 2.0)) f))         ; the float lane fires, where there is one
+       fl (cite 'glaze 'targets love-arch 'float)
        (gem? (fr 4) && 8.0 = (fr 4) && (fr 4 = ((x \ (x * 1.5) + 2.0) 4))      ; == the interpreter
-        && fired? n && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))            ; ..and a non-float arg deopts
+        && (!fl || fired? n) && (fr 'nope = ((x \ (x * 1.5) + 2.0) 'nope))))   ; ..and a non-float arg deopts
     ; --- an N-var loop (fib): a native back-edge, == interp
     (: n (peep fires () 0)  fib (ev '(: f (\ m ((: (go i a b) (? (< i m) (go (+ i 1) b (+ a b)) a)) 0 0 1)) f))
        (55 = (fib 10) && fired? n
@@ -142,6 +143,18 @@
        _ (ev '(module (gzh gzh-sum) (: (gzh-sum l acc) (? (two? l) (gzh-sum >l (acc + gzh-sq <l)) acc) (gzh-sq x) (x * x))))
        f (cite 'gzh 'gzh-sum)
        (fired? n && nat? f && 14 = (f [1 2 3] 0)))
+    ; --- the cons-tail loop: a tail (. X (self ..)) runs as a loop, its list front to back
+    (: n (peep fires () 0)
+       f (ev '(: (gt1 h m i) (? (< i m) (. (h i) (gt1 h m (+ i 1))) ()) gt1))
+       r (f (x \ [x x]) 300000 0)                                                  ; deep, its cells moved by collections
+       (fired? n && nat? f && 300000 = #r && [299999 299999] = last r && [5 5] = r 5
+        && [0 1 2] = f (x \ x) 3 0 && () = f (x \ x) 0 0))
+    (: n (peep fires () 0)
+       f (ev '(: (gt2 h m i) (? (< m i) () (= 0 (% i 3)) (gt2 h m (+ i 1)) (. (h i) (gt2 h m (+ i 1)))) gt2))
+       (fired? n && [1 2 4 5] = f (i \ i) 6 0))                                            ; a plain tail self-call between
+    (: n (peep fires () 0)
+       f (ev '(: (gt3 l) (? (two? l) (. (peep (cap l) 'a 0) (gt3 (cup l))) ()) gt3))
+       (fired? n && [1 2 0 4] = f [{'a 1} {'a 2} 7 {'a 4}]))                    ; a deopt with the hole open: the twin answers the rest
     ; --- a computed head: its value is the callee, a closure, a text or a tablet, applied as a param is
     (: n (peep fires () 0)
        f (ev '(: (ga fs x) (? (two? fs) (ga (cup fs) ((cap fs) x)) x) ga))
@@ -158,7 +171,7 @@
     (: n (peep fires () 0)
        f (ev '(: (gzf16 a b c d e f g h i j k l m n o p) (? (tablet? o) 0 1)
                  (gzfmk m) (: g (gauge 0)  r (- (- (g 0) (g 1)) (g 2))
-                              _ (? (> r (+ m 64)) (cask (* 8 (- (- r m) 16))))
+                              _ (? (> r (+ m 64)) (cask (* (? (charm? 1099511627776) 8 4) (- (- r m) 16))))
                               (tablet 0))
                  (gzfrun m bad) (? (< m 0) bad
                                    (: x (list m m)

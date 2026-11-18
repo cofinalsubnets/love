@@ -69,7 +69,13 @@
          = lv [['li 'n0 1] ['st 'r4 -8 'n0] ['mov 'n1 'n0] ['add 'n2 'n1 'n0] ['ld 'n3 'r4 -8] ['label 'L] ['ld 'n4 'r4 -8] ['ret]])
       (nmsf g '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)) = '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)))
       ; a literal under not is one literal; an unsigned divide by 16 shifts its own copy, not its source
-      (nmlit (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
+      (nmlit g (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
+      ; ..and under a literal shift as the word lays it; a shl past the word stays, a known count rides the immediate
+      (nmlit g (lv [['li 'n0 -1] ['shr 'n0 4]]) = lv [['li 'n0 1152921504606846975]])
+      (nmlit g (lv [['li 'n0 -9] ['sar 'n0 1]]) = lv [['li 'n0 -5]])
+      (nmlit g (lv [['li 'n0 1] ['shl 'n0 40]]) = lv [['li 'n0 1099511627776]])
+      (nmlit g (lv [['li 'n0 3] ['shl 'n0 63]]) = lv [['li 'n0 3] ['shl 'n0 63]])
+      (nmlit g (lv [['li 'r1 63] ['shrv 'n0 'r1]]) = lv [['shr 'n0 63]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
          = lv [['mov 'n0 'r6] ['mov 'n2 'n0] ['shr 'n2 4] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
       ; a loop's head keeps the bounds its ways in agree on: the or of two 32-bit values needs no extension

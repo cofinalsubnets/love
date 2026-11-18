@@ -122,6 +122,7 @@
     ([0 (1 /// 1) 2] = sort [2 (1 /// 1) 0])
     ; exact, never through a double, which would round these together
     (2 3 40 @ h (!(1 /// h = 1 /// (h + 1)) && !((h + 1) /// h = 1.0)))
+    (70 2 @ h (!((h + 1) /// h = 1.0) && (1.0 < (h + 1) /// h) && ((h - 1) /// h < 1.0) && (5 /// 8 = 0.625)))
     ; an ordinary newtype stays opaque
     (coin 'metre (z \ {}) @ m (!(m 5 = 5) && !(5 = m 5) && (m 5 = m 5)))
 

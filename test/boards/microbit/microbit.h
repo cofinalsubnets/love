@@ -26,9 +26,10 @@
 #define GPIO_OUTCLR(p) ((p) + 0x50Cu)
 #define GPIO_DIRSET(p) ((p) + 0x518u)
 #define GPIO_CNF(p, n) ((p) + 0x700u + 4u * (n))
-// the matrix's centre: row 3 high, column 3 low lights it
-#define LED_ROW 15u      // P0
-#define LED_COL 31u      // P0
+// the 5x5 matrix: a row driven high and a column held low light the led between them.
+// rows P0.21 22 15 24 19, columns P0.28 11 31, P1.05, P0.30
+#define LED_N   5
+#define LED_MAX 8        // a cell's level: 0 dark .. LED_MAX full
 
 // --- UART0, the legacy non-dma uart: P0.06 TX, P1.08 RX, the daplink's vcp --
 #define UART0 0x40002000u
@@ -74,6 +75,33 @@ void arm_dsb_isb(void);
 void arm_wfi(void);
 void arm_irq_off(void);
 
+// --- TEMP: the die's temperature in quarter degrees --------------------------
+#define TEMP_START   0x4000C000u
+#define TEMP_DATARDY 0x4000C100u
+#define TEMP_TEMP    0x4000C508u
+
+// --- RADIO, ble 1 Mbit: only the advertising transmit --------------------------
+#define RADIO_TXEN        0x40001000u
+#define RADIO_DISABLE     0x40001010u
+#define RADIO_DISABLED    0x40001110u
+#define RADIO_SHORTS      0x40001200u
+#define RADIO_PACKETPTR   0x40001504u
+#define RADIO_FREQUENCY   0x40001508u
+#define RADIO_TXPOWER     0x4000150Cu
+#define RADIO_MODE        0x40001510u
+#define RADIO_PCNF0       0x40001514u
+#define RADIO_PCNF1       0x40001518u
+#define RADIO_BASE0       0x4000151Cu
+#define RADIO_PREFIX0     0x40001524u
+#define RADIO_TXADDRESS   0x4000152Cu
+#define RADIO_CRCCNF      0x40001534u
+#define RADIO_CRCPOLY     0x40001538u
+#define RADIO_CRCINIT     0x4000153Cu
+#define RADIO_DATAWHITEIV 0x40001554u
+#define FICR_DEVICEADDR0  0x100000A4u
+#define FICR_DEVICEADDR1  0x100000A8u
+#define ADV_PDU_MAX 39   // header, length, the 6-byte address and 31 bytes of ad data
+
 // microbit.c
 void clocks_init(void);
 int  clock_xtal(void);
@@ -84,4 +112,10 @@ void serial_putc(int c);
 int  serial_rx_ready(void);
 int  serial_getc(void);
 uint32_t clock_ms(void);
+uint32_t clock_us(void);
 void led_put(int on);
+void led_scan(uint8_t const *lv);
+int32_t temp_read(void);
+void ble_init(void);
+void ble_addr(uint8_t *a);
+void ble_adv(uint8_t const *pdu);

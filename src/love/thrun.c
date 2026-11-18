@@ -159,7 +159,7 @@ static struct g *thrun(struct g *g) {
  for (uintptr_t want = 0;; want = 2 * want + 64) {
   if (want && !ok(g = have(g, want))) return g;
   word *sp = g->sp, *hp0 = g->hp, cfgv[1 + ThrTwo];
-  uintptr_t sn = g->next_serial;
+  uint64_t sn = g->next_serial;
   intptr_t nc = 0;
   for (word l = sp[3]; chainp(l) && nc <= ThrTwo; l = B(l)) cfgv[nc++] = A(l);
   int r = 0;
