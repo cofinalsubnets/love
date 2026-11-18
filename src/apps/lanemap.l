@@ -70,10 +70,10 @@
      ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
-     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]
+     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool" "test_hearts_x64"] ""]
      ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
-                "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
+                "test_hearts" "test_hearts_boot" "test_hearts_x64" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
