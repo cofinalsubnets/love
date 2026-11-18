@@ -764,7 +764,8 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect and decode alongside
+# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump and the riscv
+# and aarch64 tables both ways (rvcodec, a64codec) alongside
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
@@ -772,6 +773,9 @@ test_as: host
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
 	@$(gsh) test/gate/decode.sh "$m" $(ho)
+	@$(gsh) test/gate/objdump.sh "$m" $(ho)
+	@$(gsh) test/gate/rvcodec.sh "$m" $(ho)
+	@$(gsh) test/gate/a64codec.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 writer judged by Linux under qemu-arm: thumb write+exit returns 42
 gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l byte-compared with objcopy, both formats; skips without
