@@ -81,10 +81,8 @@ void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 extern struct def const __start_knifs[], __stop_knifs[];
 // the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
-// where the pie's base landed and its data copy, for x64/proc.c; unpatched, none
+// where the pie's base landed and its data copy, for an arch's proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
-// ..and the door pages' unpatched copy: where, how many, and each page's place in the pie
-uintptr_t const k_pie_door[18] = { 0 };
 
 #include "quay.h"
 #include <stdarg.h>

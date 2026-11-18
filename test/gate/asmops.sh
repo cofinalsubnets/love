@@ -47,7 +47,7 @@ seq() {
         if (line !~ /^(isb|dsb|dmb|wfi|wfe|eret|mrs|msr|at|tlbi|ic|dc|brk|udf|hlt|hvc|smc)( |$)/) next
         gsub(/ [xw][0-9]+/, " R", line); gsub(/,[xw][0-9]+/, ",R", line)
       } else {
-        if (line !~ /^(wfi|fence|ecall|ebreak|unimp|sfence\.vma|csr[a-z]*|rd(time|cycle|instret))( |$)/) next
+        if (line !~ /^(wfi|fence|fence\.i|ecall|ebreak|unimp|sfence\.vma|csr[a-z]*|rd(time|cycle|instret))( |$)/) next
         gsub(/ (a[0-7]|t[0-6]|s[0-9]+|ra|sp)/, " R", line); gsub(/,(a[0-7]|t[0-6]|s[0-9]+|ra|sp)/, ",R", line)
       }
       print "  " line

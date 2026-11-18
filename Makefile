@@ -544,7 +544,9 @@ out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
-xa ?= $(if $(filter a64,$a),x64,a64)
+# a kernel built for another arch on the roster is that arch's lane: its love is the one
+# projected. wasm is no lane's
+xa ?= $(if $(filter x64 a64 rv64 arm,$(filter-out $(hosta),$a)),$a,$(if $(filter a64,$a),x64,a64))
 xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64 arm),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64 arm)
@@ -572,6 +574,10 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# baked where it runs, so a kernel projected from it wakes as the host lane's does
+$(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
+	@echo 'BAKE	'$@
+	@sh src/tools/xbake.sh $(ho)/love $(xa) $(xqemu) $< $(ho)/.dist-cat.l $@
 # the lane's objects by name, for a port that links them (src/inle/teensy41's kernel face)
 $(xd)/o.list: force_dist_list $(x_o)
 	@tf=$@.$$$$.tmp; echo '$(x_o)' > $$tf; \
@@ -783,10 +789,12 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(kproject_l)); } > $@
 
 # at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
-# past its data and bound to its doors, and it WAKES the image the binary carries. $(k_pie)
-# is the other lane -- a machine this one cannot run, built from source, which carries no
-# image and WARMS the egg instead. one gate apiece: test_disk rides the projection,
-# test_kernel_a64 the pie.
+# past its data and bound to its doors, and it WAKES the image the binary carries. an arch
+# whose processes run love (a src/inle/<arch>/proc.c) projects the cross lane's love the
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
+# board (kb=) has metal files of its own, so it takes the pie.
+# $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
+# link, the kernel's bodies bound in. test_disk rides the projection, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
 k_pie_o =
@@ -794,6 +802,12 @@ ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
+else
+ifneq ($(and $(if $(kb),,1),$(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+# rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
+k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
+k_pie_o = $(xkart_o)
+endif
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@

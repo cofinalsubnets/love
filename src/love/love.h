@@ -11,12 +11,27 @@ struct g; union u;
 // --- the word and its tags ---
 #define love_inline inline __attribute__((always_inline))
 #define love_noinline __attribute__((noinline))
-// a hosted body inle's kernel defines too: a link with it takes the kernel's, a projection
-// patches this one with a jump there, in a section of its own so the jump spills into no body
-#if defined(__mooncc__)
-#define love_door __attribute__((weak, noinline, aligned(16), section(".text.door")))
+// a hosted body inle's kernel defines too. natively the name is a weak stub calling through
+// n##__slot, which points here and which a kernel image points at its own body: a word of
+// data, never written at run time. elsewhere the weak body itself. a link with the kernel's
+// body drops the stub either way. love_doorv for void, love_doorlvm for an instruction
+#if defined(__mooncc__) && !defined(__wasm__)
+#define love_door(T, n, ps, as) T n##__host ps; \
+ T (*volatile n##__slot) ps = n##__host; \
+ __attribute__((weak, noinline)) T n ps { return n##__slot as; } \
+ T n##__host ps
+#define love_doorv(n, ps, as) void n##__host ps; \
+ void (*volatile n##__slot) ps = n##__host; \
+ __attribute__((weak, noinline)) void n ps { n##__slot as; } \
+ void n##__host ps
+#define love_doorlvm(n) lvm(n##__host); \
+ lvm_t *volatile n##__slot = n##__host; \
+ __attribute__((weak)) lvm(n) { love_musttail return Ap(n##__slot, g); } \
+ lvm(n##__host)
 #else
-#define love_door __attribute__((weak, noinline))
+#define love_door(T, n, ps, as) __attribute__((weak, noinline)) T n ps
+#define love_doorv(n, ps, as) __attribute__((weak, noinline)) void n ps
+#define love_doorlvm(n) __attribute__((weak)) lvm(n)
 #endif
 // no identical-code folding: the data sentinels' bodies match, and their address is the type tag
 #if defined(__GNUC__) && !defined(__clang__) && !defined(__mooncc__)
