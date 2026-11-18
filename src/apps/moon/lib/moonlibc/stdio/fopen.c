@@ -6,6 +6,8 @@ FILE *fopen(char const *path, char const *mode) {
   else if (mode[0] == 'a') { fl = O_WRONLY | O_CREAT | O_APPEND; wr = 1; }
   for (char const *m = mode + 1; *m; m++)
     if (*m == '+') { fl = (fl & ~3) | O_RDWR; wr = 1; }
+    else if (*m == 'e') fl |= O_CLOEXEC;       /* glibc's letters: close on exec, */
+    else if (*m == 'x') fl |= O_EXCL;          /* and a create that must be new */
   int fd = open(path, fl, 438);              /* 0666, the umask trims it */
   if (fd < 0) return 0;
   FILE *f = malloc(sizeof(FILE) + 4096);

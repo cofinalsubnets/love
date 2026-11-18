@@ -458,6 +458,23 @@ a64_run "$r" || fail "the $pretty batch did not come back"
 if [ $tgt = rv32 ]; then
   [ "$(cat "$r/res/bssb.t.rc")" -eq 42 ] || { cat "$r/res/bssb.t.out" >&2; fail "bss: a bare rv32 link answers $(cat "$r/res/bssb.t.rc") for its .bss brackets"; }
   echo "bss: a bare rv32 link brackets its own .bss with __bss_start__/__bss_end__"
+  # the hosted leg: what the board cannot link runs over moonlibc on linux, held to the arm
+  # build (ilp32 and an unsigned char too, itself held to gcc by test_ccarm)
+  if have qemu-arm; then
+    nh=0
+    for b in $nolibc; do
+      f=test/cc/$b.c
+      moonrun -t rv32 -o "$d/$b.h" "$f" > "$d/$b.hlog" 2>&1 || { cat "$d/$b.hlog" >&2; fail "$b: a hosted rv32 link failed"; }
+      moonrun -t arm -o "$d/$b.ha" "$f" > "$d/$b.halog" 2>&1 || { cat "$d/$b.halog" >&2; fail "$b: the arm witness failed to build"; }
+      { timeout 60 qemu-riscv32 "$d/$b.h"; echo "rc $?"; } > "$d/$b.hout" 2>&1
+      { timeout 60 qemu-arm "$d/$b.ha"; echo "rc $?"; } > "$d/$b.haout" 2>&1
+      cmp -s "$d/$b.hout" "$d/$b.haout" || { diff "$d/$b.haout" "$d/$b.hout" | head -10 >&2; fail "$b: hosted rv32 and arm disagree"; }
+      nh=$((nh + 1))
+    done
+    echo "hosted: $nh programs the board cannot link run over moonlibc on qemu-riscv32 as on arm"
+  else
+    gate_partly "  (the hosted rv32 leg skipped: no qemu-arm for its witness)"
+  fi
 fi
 if [ $tgt = a64 ]; then
   [ "$(cat "$r/res/sa279.t.rc")" -eq 0 ] || { cat "$r/res/sa279.t.out" >&2; fail "strict-align: 279-packed-bitfield.c answers wrong under -mstrict-align"; }

@@ -236,6 +236,10 @@ test_hook: host
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_NO_IMAGE=1 $m" "glaze-hook: ok" test/glaze-hook.l
 	@echo TEST test/glaze-tail.l "(a native's tail call holds no frame, under a 64 MB budget)"
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_BUDGET_MB=64 $m" "glaze-tail: ok" test/glaze-tail.l
+	@echo TEST test/glaze-yield.l "(a native loop yields to a waiting peer, every lane)"
+	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-yield: ok" test/glaze-yield.l
+	@echo TEST test/glaze-group.l "(the group lane answers what the interpreter does)"
+	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-group: ok" test/glaze-group.l
 # test_glazebench -- each bench, by stdin and by file, beats LOVE_NO_GLAZE=1 by a floor ratio
 test_glazebench: host
 	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"
@@ -397,13 +401,14 @@ mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:k
          test/uuinfvc.l:src/love/compress/inf.l:inf-vc:inf-ok \
          src/love/compress/bz_gen.h:src/love/compress/bz.l:bz-h:bz-ok test/uuzbvc.l:src/love/compress/bz.l:bz-vc:bz-ok \
          src/love/compress/lz_gen.h:src/love/compress/lz.l:lz-h:lz-ok test/uuzxvc.l:src/love/compress/lz.l:lz-vc:lz-ok \
-         src/love/mag_gen.h:src/love/mag.l:mag-h:mag-ok test/uumagvc.l:src/love/mag.l:mag-vc:mag-ok
+         src/love/mag_gen.h:src/love/mag.l:mag-h:mag-ok test/uumagvc.l:src/love/mag.l:mag-vc:mag-ok \
+         src/love/gpark_gen.h:src/love/gpark.l:gpark-h:gpark-ok
 # \# is load-bearing: a bare # in a make variable starts a comment
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 # the egg lane: the crew in the warm book shadows names these generators use
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l on $m)"
+	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l gpark_gen.h "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l + gpark.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # each header depends on its table alone ($(m) would close a loop); with no love it stands
@@ -418,6 +423,7 @@ endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
 src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
+src/love/gpark_gen.h: src/love/boot/glaze.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
 test_clay: host
@@ -426,7 +432,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h and uumagvc.l regenerate identically"
+	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h, uumagvc.l and gpark_gen.h regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c, xz.c and num.c holds the clay vc.l laid)"
 	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
@@ -963,6 +969,10 @@ test_wake: $(ho)/love
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the woken image storms"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
+	@$(ho)/love bake -l test/gate/wakekeys.l $(ho)/wakekeys.image > /dev/null
+	@if $(ho)/love wake $(ho)/wakekeys.image -q -e "(quit (wakekeys 0 ? 0 1))"; \
+	  then echo "test_wake: green (serial keys found after the wake)"; rm -f $(ho)/wakekeys.image; \
+	  else echo "test_wake: FAILED -- a serial key is lost across the bake"; rm -f $(ho)/wakekeys.image; exit 1; fi
 
 # --- the metal gates; kernel build rules stay in the root Makefile ---
 

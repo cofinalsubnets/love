@@ -14,7 +14,7 @@ int futimens(int fd, struct timespec const *ts) {
   if (__love_osv == 4) {                           /* futimes, at microseconds */
     struct timeval tv[2];
     if (ts) for (int i = 0; i < 2; i++) {
-      if (ts[i].tv_nsec == UTIME_NOW || ts[i].tv_nsec == UTIME_OMIT) { __errno_v = EINVAL; return -1; }
+      if (ts[i].tv_nsec == UTIME_NOW || ts[i].tv_nsec == UTIME_OMIT) { errno = EINVAL; return -1; }
       tv[i].tv_sec = ts[i].tv_sec, tv[i].tv_usec = ts[i].tv_nsec / 1000; }
     return (int) er(fb2(139, fd, ts ? (long) tv : 0)); }
   return utimensat(fd, 0, ts, 0); }

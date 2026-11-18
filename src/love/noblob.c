@@ -5,16 +5,24 @@
 const unsigned char
  srctree[1] = {0},
  rootfs[1] = {0},
+ rtzst_base[1] = {0},
  rtzst_x64[1] = {0},
  rtzst_a64[1] = {0},
  rtzst_rv64[1] = {0},
  rtzst_i386[1] = {0},
+ rtzst_arm[1] = {0},
+ rtzst_rv32[1] = {0},
+ rtzst_wasm[1] = {0},
  rtzst_id[1] = {0};
 const uintptr_t
  rootfs_len = 0,
  srctree_len = 0,
+ rtzst_base_len = 0,
  rtzst_x64_len = 0,
  rtzst_a64_len = 0,
  rtzst_rv64_len = 0,
  rtzst_i386_len = 0,
+ rtzst_arm_len = 0,
+ rtzst_rv32_len = 0,
+ rtzst_wasm_len = 0,
  rtzst_id_len = 0;

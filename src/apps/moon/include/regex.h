@@ -20,7 +20,7 @@ enum { REG_NOERROR, REG_NOMATCH, REG_BADPAT, REG_ECOLLATE, REG_ECTYPE, REG_EESCA
        REG_EBRACK, REG_EPAREN, REG_EBRACE, REG_BADBR, REG_ERANGE, REG_ESPACE, REG_BADRPT, REG_EEND,
        REG_ESIZE, REG_ERPAREN };
 
-int regcomp(regex_t *, char const *, int);
-int regexec(regex_t const *, char const *, size_t, regmatch_t *, int);
+int regcomp(regex_t *, char const *, int),
+    regexec(regex_t const *, char const *, size_t, regmatch_t *, int);
 size_t regerror(int, regex_t const *, char *, size_t);
 void regfree(regex_t *);

@@ -970,19 +970,16 @@
    (rtcid home)
     (mcmemo "moon-rtcid 1" (mcsrcshape home)
      (_ \ sha256 "moon-rtc 1\n\(mcsrctext home)"))
-   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-zst), served
+   ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-ar), served
    ; only when the home hashes to the stamped id. cut under -os linux: impl.h parts the kernels
    ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error)
    (rtcarried home tgt os)
     (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (elem tgt '(i386 arm) && elem os '(freebsd netbsd)) ()
-       (elem tgt '(x64 a64 rv64 i386) && string tgt @ nm
-          (!(string? nm) ? ()
-             (runtime-zst nm @ z
-                (!(string? z) ? ()
-                   (: ok (string? home ? (rtcid home = runtime-zst "id") 1)
-                      a (ok && zstd-d z)
-                      (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))))
+       (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)) ()
+       (elem tgt '(x64 a64 rv64 i386 arm rv32 wasm) && string tgt @ nm
+          (!(string? nm) || string? home && rtcid home != runtime-ar "id" ? ()
+             (runtime-ar nm @ a
+                (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))
    ; the carried archive first; the cache key is cut only on the lane it refused
    (rtarch home tgt os vb)
     (rtcarried home tgt os @ cr
@@ -1023,9 +1020,9 @@
            (foldl (a \ k \ snip k #d #k @ sub
                              (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
-       ; i386 and arm32 have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
-       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
-        + (elem tgt '(x64 a64 rv64 i386 arm) ? [["mksys.o" "" ()]] ())))
+       ; i386, arm32 and rv32 have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
+       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm rv32) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
+        + (elem tgt '(x64 a64 rv64 i386 arm rv32) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it)
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
    ; one roster member, compiled -> [name bytes]
@@ -1035,17 +1032,20 @@
                     (string (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
-   (rtpull srcs tgt os nostd vb imp?)
+   (rtpull srcs tgt os nostd vb imp? bare)
     (: mach (peep elf-machines tgt 0)
-       ; a thread template owes the startup that lays the first thread's copy
-       lg (ldledger srcs mach) dt <lg owed (lg 2 ? ("__love_start" . <>lg) <>lg)
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
+       ; pulls it. a bare link has no crt0 to call it. a thread template owes it regardless,
+       ; for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
+       lg (ldledger srcs mach) dt <lg
+       home (!nostd && mhome ())
+       owed (!(lg 3 "__love_start") && (lg 2 || !bare && !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
-       home (two? owed && !nostd && mhome ())
        ; owed and no runtime in reach: the certain fact first
        (two? owed && !(string? home) && !vb
         && udie 1 "cc: undefined reference to \(qfew owed); no runtime in reach to supply it either (looked in \(mfew (mroots ()))) -- check the spelling, then the nest",
-        nostd || !(string? home) && !vb ? ()
+        nostd || !(two? owed) || !(string? home) && !vb ? ()      ; nothing owed compiles nothing
           (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach @ pr
              ; the owe left at the end is exactly what nothing defines, said whole
              (two? <>pr && !imp? && undie <>pr,
@@ -1094,8 +1094,9 @@
        entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
-       owed0 (ledger bsyms)
-       home (two? owed0 && !nostd && mhome ())
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
+       home (!nostd && mhome ())
+       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
@@ -1177,7 +1178,7 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld?))
+       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
@@ -1280,15 +1281,17 @@
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
                     'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
-                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg ()}
+                   'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg () 'dl ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
    ; pattern, and one with none after it falls through to the dash refusal below
    (flags as t)
     (as @ ()
-          (pins t 'is (rev (t 'is)) 'isy (rev (t 'isy)) 'ia (rev (t 'ia))
+          (two? (t 'dl) && (t 'so || t 'ip)
+           ? (udie 2 "cc: \(<(t 'dl)) wants a loader to read it, and a dynamic link lays none yet")
+           (pins t 'is (rev (t 'is)) 'isy (rev (t 'isy)) 'ia (rev (t 'ia))
                   'ds (rev (t 'ds))
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
-                  'libs (rev (t 'libs)) 'fws (rev (t 'fws)))
+                  'libs (rev (t 'libs)) 'fws (rev (t 'fws))))
           ("-c" . r) (flags r (pin t 'c 1))
           ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
           ; -g form rides through tol?
@@ -1306,6 +1309,11 @@
           ((a . r) && elem a '("-Wl,-z,noexecstack" "-Wl,-znoexecstack")) (flags r t)
           ; the link warns of nothing, so there is no warning to make fatal (kbuild's host link)
           ("-Wl,--fatal-warnings" . r) (flags r t)
+          ; the exports and run path only a loader reads: nothing to a static link, refused
+          ; at the end of the line on a dynamic one
+          ((a . r) && elem a '("-rdynamic" "-Wl,-E" "-Wl,--export-dynamic")) (flags r (fpush t 'dl a))
+          ((a . d . r) && elem a '("-Wl,-rpath" "-Wl,--rpath") && starts? d "-Wl,") (flags r (fpush t 'dl a))
+          ((a . r) && any (starts? a) '("-Wl,-rpath," "-Wl,-rpath=" "-Wl,--rpath," "-Wl,--rpath=")) (flags r (fpush t 'dl a))
           ; -shared: an et_dyn whose undefined names are imports, -lNAME naming the
           ; library each comes from (a DT_NEEDED libNAME.so; -l:FILE names FILE as it is, libc.so.6).
           ; without -shared, -l rides through

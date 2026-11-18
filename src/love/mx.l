@@ -14,13 +14,13 @@
    ; the arithmetic lane: every numeric kind routes identically
    mx-numk '(KCharm KSun KGem KTwin KTrayZ KTrayR KTrayC KTrayO)
 
-   ; --- the reps: what a heap object's hot says it is; `love_typ` answers these eight only.
+   ; --- the reps: what a heap object's hot says it is; `love_typ` answers these nine only.
    ; one tray rep, refined by element tier into four kinds.
-   mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain)
+   mx-reps '(DMint DNom DGem DTwin DBig DTray DString DChain DTab)
    ; each rep's dispatch kind. DTray's entry is never read (kind adds the tier itself).
    ; DBig -> KSun: one boxed integer, limbs in C, `sun` to love.
    mx-repq '((DMint KMint) (DNom KNom) (DGem KGem) (DTwin KTwin)
-             (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain))
+             (DBig KSun) (DTray KTrayZ) (DString KString) (DChain KChain) (DTab KTablet))
 
    ; --- the rows, (name numk KMint KNom KString KChain KTablet KHot): total by construction.
    ; precedence, high to low: lambda > tablet > chain > text > number (incl. tray).
@@ -113,8 +113,8 @@
    ; on the ap. tiling tighter than the C's stride answers slot 0 for every value in silence;
    ; looser drives ld's counter backwards, so `. =` per slot is also a check.
    ; one row per class: the stride the C compiles under and ld is told. it must clear the
-   ; fattest sentinel body (a64 4, x64 8, thumb2 60, rv64 88); lean's 16 leaves room for endbr64.
-   mx-strides '((lean 16  ("__x86_64__" "__aarch64__"))
+   ; fattest sentinel body (a64 4, x64 8, riscv 10, thumb2 60); lean's 16 leaves room for endbr64.
+   mx-strides '((lean 16  ("__x86_64__" "__aarch64__" "__riscv"))
                 (fat  128 ()))              ; no predicate: the #else
    ; whether the sections are laid: 0 asks the sentinels by name (wasm, love0). the image
    ; carries an ap as its index in image_extra_aps, so no layout crosses binaries.

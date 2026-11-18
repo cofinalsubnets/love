@@ -21,6 +21,16 @@
    (same f) (0 = <(hark ["cmp" "-s" (d + "/a/" + f) (d + "/b/" + f)]))
    _ (test (0 = mk "a") (0 = mk "b") (same "root.cpio") (same "disk.img")
            (0 != z ["disk" (d + "/a")]))
+   ; a site's choices beside the firmware: a node a real fdt keeps from its driver, in place
+   ; (a root, the node, its status, its strings), config lines, a cmdline of its own
+   (w v) (wrbe v 4)
+   dt (w 0xd00dfeed + w 108 + w 40 + w 100 + w 0 + w 17 + w 16 + w 0 + w 8 + w 60
+       + w 1 + w 0 + w 1 + "uart@7e201000" + string [0 0 0]
+       + w 3 + w 5 + w 0 + "okay" + string [0 0 0 0] + w 2 + w 2 + w 9 + "status" + string [0 0])
+   _ (put "fdt" dt, mkdir (d + "/f") 493, mkdir (d + "/fs") 493,
+      each fws (f \ put ("fs/" + f) ("the " + f)),
+      put "fs/dtb-off" "uart@7e201000\n", put "fs/config.add" "dtparam=x=on", put "fs/cmdline.txt" "console=tty1\n")
+   _ (test (0 = z ["disk" (d + "/f") (d + "/Image") (d + "/fdt") (d + "/fs")]))
 
    ; the root: helm as init, love as the shell, and the console the kernel opens before either
    es (cpio-unpack <>(uread (d + "/a/root.cpio")) @ [1 es] es ())
@@ -33,10 +43,29 @@
            (has? (peep (at1 "etc/helm.l") 'body "") "(oneshot commit (after boot wifi sshd)")
            (has? (peep (at1 "app/commit.l") 'body "") "(has? x v ? 1")
            (has? (peep (at1 "app/data.l") 'body "") "/dev/mmcblk0p2")
+           ; a name only a site gives; the kernel takes it at boot, ahead of the dhcp that sends it
+           (() = at1 "etc/hostname")
+           (has? (peep (at1 "app/host.l") 'body "") "/proc/sys/kernel/hostname")
+           (has? (peep (at1 "etc/helm.l") 'body "") "(service wifi (after data host)")
            ; each directory ahead of what it holds
            (all (e \ (: n (peep e 'nom "") k (foldl (a \ i \ n i = 47 ? i a) -1 ^#n)
                       (k < 0 || foldl (a \ x \ a || peep x 'nom "" = snip n 0 k) 0 es)))
                 es))
+
+   ; a trial names its file in config.txt's [tryboot] line, the rest as it was; a missing file
+   ; or a config with no such line leaves it alone. run on a stand-in /boot, reboot a no-op
+   tb (d + "/tb")
+   (trial f cf has) (: _ (hark ["rm" "-rf" tb], mkdir tb 493, mkdir (tb + "/boot") 493,
+                         each has (h \ put ("tb/boot/" + h) "a kernel"), put "tb/boot/config.txt" cf,
+                         put "tb/t.l" (replace (replace (peep (at1 ("app/" + f)) 'body "") "/boot/" (tb + "/boot/"))
+                                               "reboot \"0 tryboot\"" "0"))
+                     r <(hark [love (tb + "/t.l")])
+                   [r <>(uread (tb + "/boot/config.txt"))])
+   cf0 "kernel=Image\n[tryboot]\nkernel=Image.new\n"
+   _ (test ([0 "kernel=Image\n[tryboot]\nkernel=inle.img\n"] = trial "inle.l" cf0 ["inle.img"])
+           ([0 cf0] = trial "update.l" "kernel=Image\n[tryboot]\nkernel=inle.img\n" ["Image.new"])
+           ([1 cf0] = trial "inle.l" cf0 ())
+           ([1 "kernel=Image\n"] = trial "inle.l" "kernel=Image\n" ["inle.img"]))
 
    im <>(uread (d + "/a/disk.img"))
    (at s o n) (rdle im (s * 512 + o) n)
@@ -58,7 +87,16 @@
            (2048 = at 2048 28 4) ("BOOT       " = snip im (2048 * 512 + 71) (2048 * 512 + 82))
            (has? cf "kernel=Image\n") (has? cf "[tryboot]\nkernel=Image.new\n")
            (has? cf "enable_uart=1\n") (has? cf "device_tree=bcm2837-rpi-zero-2-w.dtb\n")
+           (has? cf "disable_splash=1\n[tryboot]\nkernel=Image.new\n")
+           ("a tree" = rd "bcm2837-rpi-zero-2-w.dtb")
            ("console=ttyS1,115200 rdinit=/bin/helm panic=5\n" = rd "cmdline.txt"))
    _ (test (0xEF53 = at 526336 1080 2))
+   fim <>(uread (d + "/f/disk.img"))
+   fb (fat-mount [(lba \ k \ snip fim ((2048 + lba) * 512) ((2048 + lba + k) * 512)) (lba \ b \ ()) 524288])
+   (frd p) <>(fat-read fb p)
+   fd (frd "bcm2837-rpi-zero-2-w.dtb")
+   _ (test (#fd = #dt) (snip fd 0 80 = snip dt 0 80) ("fail" = snip fd 80 84) (snip fd 84 #fd = snip dt 84 #dt)
+           (has? (frd "config.txt") "disable_splash=1\ndtparam=x=on\n[tryboot]\nkernel=Image.new\n")
+           ("console=tty1\n" = frd "cmdline.txt"))
    (hark ["rm" "-rf" d], 0))
 (test_fin (), puts "zimage: ok", putc 10, 0)

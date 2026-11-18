@@ -1,17 +1,4 @@
 #pragma once
-int isalnum(int);
-int isalpha(int);
-int isblank(int);
-int iscntrl(int);
-int isdigit(int);
-int isgraph(int);
-int islower(int);
-int isprint(int);
-int ispunct(int);
-int isspace(int);
-int isupper(int);
-int isxdigit(int);
-int tolower(int);
-int toupper(int);
-int isascii(int);
-int toascii(int);
+int isalnum(int), isalpha(int), isblank(int), iscntrl(int), isdigit(int), isgraph(int),
+    islower(int), isprint(int), ispunct(int), isspace(int), isupper(int), isxdigit(int),
+    tolower(int), toupper(int), isascii(int), toascii(int);

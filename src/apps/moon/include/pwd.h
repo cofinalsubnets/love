@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include <sys/types.h>
 
 struct passwd {
@@ -11,8 +12,8 @@ struct passwd {
 	char *pw_shell;
 };
 
-struct passwd *getpwnam(char const*);
-struct passwd *getpwuid(uid_t);
-struct passwd *getpwent(void);
-void           setpwent(void);
-void           endpwent(void);
+struct passwd *getpwnam(char const*), *getpwuid(uid_t), *getpwent(void);
+void setpwent(void), endpwent(void);
+int getpwnam_r(char const*, struct passwd*, char*, size_t, struct passwd**),
+    getpwuid_r(uid_t, struct passwd*, char*, size_t, struct passwd**),
+    getpwent_r(struct passwd*, char*, size_t, struct passwd**);
