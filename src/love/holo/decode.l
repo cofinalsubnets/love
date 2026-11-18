@@ -70,9 +70,7 @@
                    + (pf p 'rep && !ate ? [['op 'rep 0 ()]] ())
                    + (pf p 'repne && !ate ? [['op 'repne 0 ()]] ()))
 
-   ;; a kind's role and width letter
-   (dc-role k) (show k @ t (? (t = "CL" || t = "ub") t (#t = 1) t (snip t 0 1)))
-   (dc-wl k) (show k @ t (#t = 2 && t != "CL" && t != "ub" ? (snip t 1 2) ""))
+   (dc-first p l) (? !(two? l) () (p <l) <l (dc-first p >l))
    ;; an instruction by its row in x64-tab (x64.l): the first row of its map and opcode whose
    ;; prefixes, modrm digit and widths fit, its kinds read in order
    (dc-op s i j p)
@@ -92,9 +90,9 @@
                        '(p b w ow d mod rm))
        (lay r)
         (: ks (r 3) at (r 4)
-           g (rvd-first (k \ elem (dc-role k) ["G" "V" "S" "C" "D"]) ks)
-           e (rvd-first (k \ elem (dc-role k) ["E" "W" "N"]) ks)
-           (kw k) (dc-role k @ "V" 16 "W" 16 "N" 8 "S" 8 "C" 8 "D" 8 (wd (dc-wl k)))
+           g (dc-first (k \ elem (x64-role k) ["G" "V" "S" "C" "D"]) ks)
+           e (dc-first (k \ elem (x64-role k) ["E" "W" "N"]) ks)
+           (kw k) (x64-role k @ "V" 16 "W" 16 "N" 8 "S" 8 "C" 8 "D" 8 (wd (x64-wl k)))
            wr (g = () ? (e = () ? 0 (kw e)) (kw g)) wm (e = () ? wr (kw e))
            mr (g != () || e != ()) md (mr ? (dc-modrm s k p wr wm) ())
            (imm k0 l)                                          ; -> [operand next]
@@ -108,18 +106,18 @@
                  [['lbl (k0 + 4 + dc-imm s k0 4)] (k0 + 4)])
            (go ks pos acc)
             (? !(two? ks) [pos (rev acc)]
-               (: q <ks ro (dc-role q)
+               (: q <ks ro (x64-role q)
                   (ro @ "G" (go >ks pos (md 1 . acc)) "V" (go >ks pos (md 1 . acc))
                         "E" (go >ks pos (md 2 . acc)) "W" (go >ks pos (md 2 . acc))
                         "N" (go >ks pos (['ind (md 2)] . acc)) "S" (go >ks pos (['sr (md 3)] . acc))
                         "C" (go >ks pos (['cr <>(md 1)] . acc)) "D" (go >ks pos (['dr <>(md 1)] . acc))
-                        "Z" (go >ks pos (dc-reg (oc & 7 | pf p 'b << 3) (wd (dc-wl q)) rexp . acc))
-                        "A" (go >ks pos (dc-reg 0 (wd (dc-wl q)) rexp . acc))
+                        "Z" (go >ks pos (dc-reg (oc & 7 | pf p 'b << 3) (wd (x64-wl q)) rexp . acc))
+                        "A" (go >ks pos (dc-reg 0 (wd (x64-wl q)) rexp . acc))
                         "CL" (go >ks pos (['rg 1 1] . acc))
                         (imm pos (show q) @ (o nx) (go >ks nx (o . acc))))))
            st (mr ? (md 0) (peep at 'rm () != () ? (k + 1) k))
            ; the item's width: the first general register's, reg field ahead of r/m
-           gw (catmap (ro \ filter (k \ dc-role k = ro) ks) ["G" "E" "Z" "A"] @ l (two? l ? <l ()))
+           gw (catmap (ro \ filter (k \ x64-role k = ro) ks) ["G" "E" "Z" "A"] @ l (two? l ? <l ()))
            iw (peep at 'iw () @ v (v != () ? v (gw = () ? 0 (kw gw))))
            ate (? (peep at 'ate 0) 1 (peep at 'x 0) (elem px '(f2 f3) ? 1 0) 0)
            (go ks st () @ (pos ops)

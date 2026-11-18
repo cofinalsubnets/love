@@ -851,8 +851,8 @@
      (x6t-dig 1 174 '(Eq) '((mod m) (p none) (iw 0)) '(fxsave fxrstor ldmxcsr stmxcsr xsave xrstor xsaveopt clflush))
      (map (r \ x6t-r 'bswap 1 (200 + r) '(Zv) ()) ^8)
      ;; SSE: xmm <- xmm/m, or the store; the name by the prefix's lane
-     (x6t-px 16 '(V W) '((none movups) (66 movupd) (f3 movss) (any movsd)) 1)
-     (x6t-px 17 '(W V) '((none movups) (66 movupd) (f3 movss) (any movsd)) 1)
+     (x6t-px 16 '(V W) '((none movups) (66 movupd) (f3 movss) (f2 movsd)) 1)
+     (x6t-px 17 '(W V) '((none movups) (66 movupd) (f3 movss) (f2 movsd)) 1)
      ; the half moves: a register pair is movhlps/movlhps, memory the low or high 8 bytes
      [(x6t-r 'movlpd 1 18 '(V W) '((p 66) (x 1))) (x6t-r 'movhpd 1 22 '(V W) '((p 66) (x 1)))
       (x6t-r 'movhlps 1 18 '(V W) '((p none) (mod r) (x 1))) (x6t-r 'movlhps 1 22 '(V W) '((p none) (mod r) (x 1)))
@@ -886,6 +886,106 @@
      [(x6t-r 'pmovmskb 1 215 '(Gd W) '((p 66) (x 1)))]
      (catmap (l \ [(x6t-r (name ("cmp" + l 1)) 1 194 '(V W ub) [['p <l] '(x 1)])]) '((none "ps") (66 "pd") (f3 "ss") (f2 "sd")))])
    ;; the rows by map and opcode, in table order
-   x64-tabix (foldl (\ t r (: k (r 1 * 256 + r 2) (pin t k (peep t k () + [r])))) {} x64-tab))
+   x64-tabix (foldl (\ t r (: k (r 1 * 256 + r 2) (pin t k (peep t k () + [r])))) {} x64-tab)
+   ;; the encoder: a row lays operands written as the decoder's (decode.l), Intel order; of the
+   ;; rows of a name that take them, the shortest, the first on a tie
+   x64-byname (foldl (\ t r (pin t <r (peep t <r () + [r]))) {} x64-tab)
+   (x64-role k) (show k @ t (? (t = "CL" || t = "ub") t (#t = 1) t (snip t 0 1)))
+   (x64-wl k) (show k @ t (#t = 2 && t != "CL" && t != "ub" ? (snip t 1 2) ""))
+   (x6e-rg? o) (two? o && <o = 'rg)
+   (x6e-mem? o) (two? o && elem <o '(mem rip seg))
+   ;; a memory operand's modrm, sib and displacement with reg field rf -> [bytes X B], or ()
+   (x6e-mem rf o)
+    (o @ ('seg _ m) (x6e-mem rf m)
+         ('rip () d) [([(x86-modrm 0 rf 5)] + le32 d) 0 0]
+         ('mem b ix sc d)
+          (? (!(charm? d) || !(fits32 d) || ix = 4) ()
+             (b < 0) [([(x86-modrm 0 rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) 5)] + le32 d) (ix < 0 ? 0 (ix >> 3)) 0]
+             (: md (? (d = 0 && (b & 7) != 5) 0 (fits8 d) 1 2)
+                dsp (md @ 0 () 1 [(byte d)] (le32 d))
+                hd (? (ix >= 0 || (b & 7) = 4) [(x86-modrm md rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) b)]
+                      [(x86-modrm md rf b)])
+                [(hd + dsp) (ix < 0 ? 0 (ix >> 3)) (b >> 3)]))
+         ())
+   ;; an immediate's bytes by kind, or () when it does not fit
+   (x6e-in lo v hi) ((lo <= v) && (v <= hi))
+   (x6e-imm l v osz byte?)
+    (? (l = "Uv" && osz = 8) (le64 v)
+       !(charm? v) ()
+       (l @ "Ib" (x6e-in -128 v (byte? ? 255 127) ? [(byte v)] ())
+            "Iz" (? (osz = 2) (x6e-in -32768 v 65535 ? (le16 v) ())
+                    (osz = 8) (fits32 v ? (le32 v) ())
+                    (x6e-in -2147483648 v 4294967295 ? (le32 v) ()))
+            "Id" (fits32 v ? (le32 v) ())
+            "Uv" (? (osz = 2) (x6e-in -32768 v 65535 ? (le16 v) ())
+                    (x6e-in -2147483648 v 4294967295 ? (le32 v) ()))
+            "Uw" (x6e-in 0 v 65535 ? (le16 v) ())
+            "ub" (x6e-in -128 v 255 ? [(byte v)] ())
+            ()))
+   ;; a row's bytes for the operands, pc where the instruction starts (a target is absolute), or ()
+   (x6e-lay r w ops pc)
+    (: ks (r 3) at (r 4) n #ks oc (r 2)
+       (a k) (peep at k ())
+       rl (map x64-role ks) wl (map x64-wl ks)
+       ; the operand size: ow, else a sized register's, else the item's
+       sized (filter (i \ elem (wl i) ["v" "p" "y"] && elem (rl i) ["G" "E" "Z" "A"] && x6e-rg? (ops i) && ops i 2 >= 2) ^n)
+       osz (? (a 'ow != ()) (a 'ow) (two? sized) (ops <sized 2) (w > 1) w 4)
+       vsz (any (i \ elem (wl i) ["v" "p" "y" "z"]) ^n || a 'ow != ())
+       (wd l) (l @ "b" 1 "w" 2 "d" 4 "q" 8 "v" osz "p" osz "y" osz 0)
+       byte? (any (l \ l = "b") wl)
+       (gpr? o l) (x6e-rg? o && (o 2 = wd l) && ((o 1 < 16) || (wd l = 1 && (o 1 < 24))))
+       (ok i)
+        (: o (ops i) l (wl i)
+           (rl i @ "G" (gpr? o l) "Z" (gpr? o l && (o 1 & 7) = (oc & 7))
+                   "A" (gpr? o l && o 1 = 0) "CL" (o = ['rg 1 1])
+                   "E" (gpr? o l || x6e-mem? o) "V" (x6e-rg? o && o 2 = 16) "W" (x6e-rg? o && o 2 = 16 || x6e-mem? o)
+                   "N" (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = 8 || x6e-mem? (o 1)))
+                   "S" (two? o && <o = 'sr) "C" (two? o && <o = 'cr) "D" (two? o && <o = 'dr)
+                   (two? o && elem <o '(im lbl))))
+       (idx role) (filter (i \ elem (rl i) role) ^n @ (i . _) i _ -1)
+       gi (idx ["G" "V" "S" "C" "D"]) ei (idx ["E" "W" "N"]) zi (idx ["Z"])
+       ; the item's width as the decoder names it: iw, else the first general register kind's
+       gw (catmap (ro \ filter (i \ rl i = ro) ^n) ["G" "E" "Z" "A"] @ l (two? l ? (wd (wl <l)) 0))
+       iw (a 'iw != () ? (a 'iw) gw)
+       (? (#ops != n || iw != w || !(all ok ^n) || (a 'ow != () && w > 0 && vsz && w != a 'ow)
+           || (osz = 2 && (a 'p = 'none)) || (a 'mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
+           || (a 'mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
+           ()
+          (: eo (ei < 0 ? () (ops ei @ ('ind x) x x x))
+             go (gi < 0 ? () (ops gi))
+             rf (? (a 'd != ()) (a 'd) (gi < 0) 0
+                   (go @ ('sr d) d ('cr c) c ('dr c) c ('rg c _) c 0))
+             mrm (? (a 'rm != ()) [[(a 'rm)] 0 0]
+                    (eo = ()) (gi >= 0 || a 'd != () ? () [() 0 0])
+                    (x6e-rg? eo) [[(x86-modrm 3 rf (eo 1))] 0 (eo 1 >> 3 & 1)]
+                    (x6e-mem rf eo))
+             ; a byte register 4..7 forces a REX; ah..bh refuse one
+             bregs (filter (o \ x6e-rg? o && o 2 = 1) ops)
+             frc (any (o \ 4 <= o 1 && o 1 <= 7) bregs) hib (any (o \ o 1 >= 16) bregs)
+             W ((a 'w = 1) || (vsz && (osz = 8) && !(elem "p" wl)))
+             R (rf >> 3 & 1) X (two? mrm ? (mrm 1) 0)
+             B (? (zi >= 0) (ops zi 1 >> 3 & 1) (two? mrm) (mrm 2) 0)
+             rex? (W || R || X || B || frc)
+             seg (eo @ ('seg s _) (x86-seg s) _ ())
+             pre (catall [seg (osz = 2 && vsz || a 'p = 66 ? [102] ()) (a 'p @ 'f3 [243] 'f2 [242] _ ())
+                          (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ())
+                          (r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) [oc]])
+             (? (!(two? mrm) || (rex? && hib) || (a 'b = 1 && B = 0) || (a 'w = 0 && W)) ()
+                (: hd (pre + <mrm)
+                   ; the immediates and targets, in order
+                   (tail i acc) (? (i >= n) acc
+                                   (: l (show (ks i)) o (ops i)
+                                      (? (elem l ["Jb" "Jz"])
+                                          (: z (l = "Jb" ? 1 4) d (o 1 - (pc + #hd + #acc + z))
+                                             ((l = "Jb" ? (fits8 d) (fits32 d)) ? (tail (i + 1) (acc + (z = 1 ? [(byte d)] (le32 d)))) ()))
+                                         (elem (rl i) ["I" "U" "ub"])
+                                          (x6e-imm l (o 1) osz byte? @ b (two? b && (#o < 3 || o 2 = #b) ? (tail (i + 1) (acc + b)) ()))
+                                         (tail (i + 1) acc))))
+                   (tail 0 () @ t (t = () && any (l \ elem l ["I" "U" "ub" "J"]) rl ? () (hd + t))))))))
+   ;; an instruction by name from the decoder's operands -> its bytes, the shortest row's
+   (x64-enc mn w ops pc)
+    (: bs (filter two? (map (r \ x6e-lay r w ops pc) (peep x64-byname mn ())))
+       (? !(two? bs) (scare 'x64-enc [mn w ops])
+          (foldl (\ b x (#x < #b ? x b)) <bs >bs))))
 
 ) ; module 'holo
