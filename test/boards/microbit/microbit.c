@@ -102,6 +102,8 @@ static void col_put(int c, int on) {
   REG(on ? GPIO_OUTCLR(col_port[c]) : GPIO_OUTSET(col_port[c])) = 1u << col_pin[c]; }
 
 void led_init(void) {
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN;
+  REG(GPIO_DIRSET(P0)) = 1u << SPKR_PIN;
   for (int k = 0; k < LED_N; k++) {
     REG(GPIO_OUTCLR(P0)) = 1u << row_pin[k];
     REG(GPIO_DIRSET(P0)) = 1u << row_pin[k];
@@ -118,14 +120,31 @@ void led_put(int on) {
 #define LED_SLICES 32
 static uint8_t const led_gamma[LED_MAX + 1] = { 0, 1, 2, 4, 7, 11, 17, 24, 32 };
 
-// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms
-void led_scan(uint8_t const *lv) {
+// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms. with noise,
+// each slice is also a sample: the speaker's pin set to an xorshift bit, white noise at ~16 kHz
+void led_scan(uint8_t const *lv, uint32_t *noise) {
   for (int r = 0; r < LED_N; r++) {
     REG(GPIO_OUTSET(P0)) = 1u << row_pin[r];
     for (int s = 0; s < LED_SLICES; s++) {
+      if (noise) {
+        uint32_t x = *noise;
+        x ^= x << 13, x ^= x >> 17, x ^= x << 5, *noise = x;
+        REG((x & 1u) ? GPIO_OUTSET(P0) : GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }
       for (int c = 0; c < LED_N; c++) col_put(c, led_gamma[lv[r * LED_N + c]] > s);
       for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
-    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; } }
+    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; }
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }
+
+// the logo pad, a capacitor: drained low, then released to its pull-up, the us until it reads
+// high. a finger adds its capacitance and the charge takes longer; 4 ms caps a stuck pad
+uint32_t logo_us(void) {
+  REG(GPIO_CNF(P1, LOGO_PIN)) = 1u;                       // output, driven low
+  REG(GPIO_OUTCLR(P1)) = 1u << LOGO_PIN;
+  for (uint32_t t = clock_us(); clock_us() - t < 20u; ) {}
+  REG(GPIO_CNF(P1, LOGO_PIN)) = 0u;                       // input, no pull
+  uint32_t t = clock_us(), d = 0;
+  while (!(REG(GPIO_IN(P1)) >> LOGO_PIN & 1u) && (d = clock_us() - t) < 4000u) {}
+  return d; }
 
 // --- the die's temperature, in quarter degrees ------------------------------
 int32_t temp_read(void) {

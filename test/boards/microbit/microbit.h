@@ -24,12 +24,16 @@
 #define P1 0x50000300u
 #define GPIO_OUTSET(p) ((p) + 0x508u)
 #define GPIO_OUTCLR(p) ((p) + 0x50Cu)
+#define GPIO_IN(p)     ((p) + 0x510u)
 #define GPIO_DIRSET(p) ((p) + 0x518u)
 #define GPIO_CNF(p, n) ((p) + 0x700u + 4u * (n))
 // the 5x5 matrix: a row driven high and a column held low light the led between them.
 // rows P0.21 22 15 24 19, columns P0.28 11 31, P1.05, P0.30
 #define LED_N   5
 #define LED_MAX 8        // a cell's level: 0 dark .. LED_MAX full
+// the logo's touch pad P1.04, its 10M pull-up charging the pad; the speaker's drive P0.00
+#define LOGO_PIN  4u     // on P1
+#define SPKR_PIN  0u     // on P0
 
 // --- UART0, the legacy non-dma uart: P0.06 TX, P1.08 RX, the daplink's vcp --
 #define UART0 0x40002000u
@@ -114,7 +118,8 @@ int  serial_getc(void);
 uint32_t clock_ms(void);
 uint32_t clock_us(void);
 void led_put(int on);
-void led_scan(uint8_t const *lv);
+void led_scan(uint8_t const *lv, uint32_t *noise);
+uint32_t logo_us(void);
 int32_t temp_read(void);
 void ble_init(void);
 void ble_addr(uint8_t *a);

@@ -1,7 +1,8 @@
 // micro:bit v2 firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
 // not love (128 KB SRAM): the toolchain on silicon, the boards' battery over the daplink's
 // vcp; the matrix after it is lore's savers, slop's drift all green, matrix rain a miss, and a
-// ble beacon names the result and the die's temperature
+// ble beacon names the result and the die's temperature. a finger on the logo turns the
+// matrix to static and the speaker to white noise
 #include <stdint.h>
 #include "microbit.h"
 #include "../battery.h"
@@ -32,6 +33,13 @@ static void slop(uint8_t *lv, uint32_t t, int8_t const *sn, uint8_t const *rr) {
       int v = sn[(x * 12u + ph) & 63] + sn[(y * 14u - ph * 7u / 10u) & 63]
             + sn[((x + y) * 8u + ph * 4u / 10u) & 63] + sn[(rr[y * LED_N + x] - ph) & 63u];
       lv[y * LED_N + x] = (uint8_t) ((v + 256) * (LED_MAX + 1) / 513); } }
+
+// static: every cell a fresh level each pass, off the noise's own xorshift
+static void snow(uint8_t *lv, uint32_t *z) {
+  for (int k = 0; k < LED_N * LED_N; k++) {
+    uint32_t x = *z;
+    x ^= x << 13, x ^= x >> 17, x ^= x << 5, *z = x;
+    lv[k] = (uint8_t) (x % (LED_MAX + 1)); } }
 
 // digits of v at p, answering the end
 static uint8_t *put_u(uint8_t *p, uint32_t v) {
@@ -84,12 +92,24 @@ int main(void) {
   int32_t q = temp_read();
   adv_pdu(pdu, addr, r, q);
   puts_("; beacon up\n");
+  // the untouched pad's charge time, the median of nine; touched past twice it, released under
+  // one and a half times it
+  uint32_t bs[9];
+  for (int k = 0; k < 9; k++) {
+    uint32_t v = logo_us(), j = (uint32_t) k;
+    for (; j && bs[j - 1] > v; j--) bs[j] = bs[j - 1];
+    bs[j] = v; }
+  uint32_t base = bs[4] ? bs[4] : 1, z = 0x9E3779B9u ^ clock_us();
+  int touched = 0;
+  puts_("; logo "), putu(base), puts_(" us\n");
   led_put(0);
   // the beacon every tenth pass, ~100 ms; the temperature read again each second
   for (uint32_t n = 0;; n++) {
-    uint32_t t = clock_ms();
-    if (r <= 100) slop(lv, t, sn, rr);
+    uint32_t t = clock_ms(), us = logo_us();
+    touched = touched ? us * 2 > base * 3 : us > base * 2;
+    if (touched) snow(lv, &z);
+    else if (r <= 100) slop(lv, t, sn, rr);
     else rain(lv, t);
-    led_scan(lv);
+    led_scan(lv, touched ? &z : 0);
     if (n % 100 == 0) q = temp_read(), adv_pdu(pdu, addr, r, q);
     if (n % 10 == 0) ble_adv(pdu); } }
