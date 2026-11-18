@@ -8,8 +8,10 @@
 //   'N' rq w32     a write whose ack no target drives (dpv2's targetsel): answers nothing
 //   'B' n16 bytes  n raw bits out, lsb first: line resets, the jtag switch, dormant wakes
 //   'R' b          1 holds nrst low, 0 lets it go
+//   'Q' b          the same for aux (a pico's gp5), a second open-drain line such as a boot
+//                  button: no pull of its own, so a released aux is the target's
 //   'C' hz32       the clock: answers the rate it set
-//   'Z'            every line let go, the target's alone again
+//   'Z'            every line let go, aux too, the target's alone again
 //   'E'            the batch's end: answers 'e'
 //   'I'            answers "lovswd1\n"
 //   'P'            the wiring: four bytes of the three lines' levels (bit 0 swclk, 1 nrst, 2 swdio),
@@ -24,7 +26,7 @@ enum { sys_hz = 150000000 };
 enum { sys_hz = 125000000 };
 #endif
 
-enum { swclk = 2, nrst = 3, swdio = 4 };
+enum { swclk = 2, nrst = 3, swdio = 4, aux = 5 };
 enum { bit_cyc = 24, loop_cyc = 4 };   // a bit's cost without delay, a delay turn's
 
 void usb_init(void);
@@ -67,7 +69,7 @@ static void take(struct probe *p) {
   p->on = 1; }
 
 static void release(struct probe *p) {
-  REG(SIO_GPIO_OE_CLR) = PIN(swclk) | PIN(swdio) | PIN(nrst);
+  REG(SIO_GPIO_OE_CLR) = PIN(swclk) | PIN(swdio) | PIN(nrst) | PIN(aux);
   p->on = 0; }
 
 static uint32_t levels(void) {
@@ -155,7 +157,9 @@ int main(void) {
   while ((REG(RESETS_RESET_DONE) & blk) != blk) {}
   for (unsigned i = 0; i < 3; i++) gpio_init(pins[i]);
   pulls(1);
-  REG(SIO_GPIO_OUT_CLR) = PIN(nrst);
+  gpio_init(aux);
+  REG(PADS_BANK0_GPIO(aux) + REG_CLR) = PADS_PUE | PADS_PDE;
+  REG(SIO_GPIO_OUT_CLR) = PIN(nrst) | PIN(aux);
   rate(&p, 1000000u);
   usb_init();
   for (;;) {
@@ -175,6 +179,7 @@ int main(void) {
         uint32_t const b = (uint32_t) get();
         for (uint32_t k = 0; k < 8 && i + k < n; k++) wbit(&p, b >> k); } }
     else if (c == 'R') REG(get() ? SIO_GPIO_OE_SET : SIO_GPIO_OE_CLR) = PIN(nrst);
+    else if (c == 'Q') REG(get() ? SIO_GPIO_OE_SET : SIO_GPIO_OE_CLR) = PIN(aux);
     else if (c == 'C') put32(rate(&p, get32()));
     else if (c == 'Z') release(&p);
     else if (c == 'E') p.stop = 0, usb_putc('e');
