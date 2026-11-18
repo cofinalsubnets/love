@@ -795,7 +795,7 @@ static void cmd_frame(struct helper *H, char *args) {
  // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
  H->kept = 0;
  if ((int) v[10] & 512) {
-  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDepthMask(0);
+  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDepthMask(0);
   glUseProgram(H->kprog); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->rb);
   GLuint any = 1;
   glBeginQuery(GL_ANY_SAMPLES_PASSED, H->kq); glDrawArrays(GL_TRIANGLES, 0, 3); glEndQuery(GL_ANY_SAMPLES_PASSED);
