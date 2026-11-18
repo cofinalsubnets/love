@@ -791,7 +791,8 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 # at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
 # past its data and bound to its doors, and it WAKES the image the binary carries. an arch
 # whose processes run love (a src/inle/<arch>/proc.c) projects the cross lane's love the
-# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh).
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
+# board (kb=) has metal files of its own, so it takes the pie.
 # $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
 # link, the kernel's bodies bound in. test_disk rides the projection, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
@@ -802,7 +803,7 @@ k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
 else
-ifneq ($(and $(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+ifneq ($(and $(if $(kb),,1),$(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
 # rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
 k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
 k_pie_o = $(xkart_o)
