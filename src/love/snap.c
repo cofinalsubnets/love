@@ -33,6 +33,7 @@ static intptr_t
  img_encode(struct img_ctx *x, intptr_t v);
 static struct g
  *img_canon_symbols(struct g *g),
+ *img_canon_serials(struct g *g),
  *img_wake(void const *buf, uintptr_t len, int kept);
 static uintptr_t
  hc_hchain(struct chain *c),
@@ -44,7 +45,6 @@ static uintptr_t
  image_objsize(struct g *g, union u *p),
  img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt),
  img_hash(word v),
- img_rank_assign(word *rank, uintptr_t nser),
  img_remap(struct img_ctx const *x, uintptr_t bo),
  img_stream(unsigned char *out, word const *blob, uintptr_t nw, uintptr_t i0, struct img_dic const *d,
             uintptr_t *last);
@@ -69,7 +69,7 @@ static word
 // lvm_* that appear as an object's ap but are not in love_def1[]
 static lvm_t *const image_extra_aps[] = {
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, lvm_twinbox,  // data sentinels
- lvm_map_lookup, lvm_map_data, lvm_cask, lvm_coin, lvm_port_io,                       // thread aps
+ lvm_tab, lvm_cask, lvm_coin, lvm_port_io,                                            // ..and thread aps
  lvm_cur, lvm_help, lvm_ret0, lvm_ap, lvm_ret,                                         // dispatchers
  // embedded directly by compiled threads; odd on thumb, so else they pass as fixnums
  lvm_callk, lvm_kcall, lvm_jump, lvm_scare, lvm_unc,
@@ -89,7 +89,8 @@ static uintptr_t image_datasize(union u *d, void const *s) {
   case DTwin:  return Width(struct twin);
   case DString:return str_width(((struct str const*) s)->len);
   case DBig:   return b2w(big_bytes((struct big*)(word) s));
-  case DTray:  return b2w(love_tray_bytes((struct tray*)(word) s)); }
+  case DTray:  return b2w(love_tray_bytes((struct tray*)(word) s));
+  case DTab:   return Width(struct tablet); }
  return 0; }
 static uintptr_t image_objsize(struct g *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
@@ -158,7 +159,7 @@ static intptr_t image_imm_index(word v) {
 // the buffer codec: save compacts and serializes {header, dictionary, token stream}; load
 // validates, expands, decodes in place. a mismatched buffer -> NULL, a normal boot
 /* bump on any wire format change, renumbering image_immortals included */
-#define ImageMagic 0x31314f4e5349411aULL
+#define ImageMagic 0x32314f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -176,17 +177,26 @@ static intptr_t image_imm_index(word v) {
 #define CodeRow (3 * sizeof(uint64_t))                         // raw offset, coded offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
 #define CodeDict ((uintptr_t) 32 << 10)
+#define CodeDictSpan 1536u                                    // the picker's spans, and the bytes of a shape
+#define CodeDictShape 8u
 #define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
 #ifndef CodeZLevel
 #define CodeZLevel 15
 #endif
 // token stream: [raw length, chunks, shared code's length, dict length, its deflated length], per
-// chunk a StreamRow, the shared code, the dictionary, then the deflated bytes or the raw stream.
-// a chunk starts at an object boundary, so each one inflates and walks on its own. the hot chunks,
-// what every run wakes, share one code; the rest but the last deflate against the dictionary
+// chunk a StreamRow, the shared code, the dictionary deflated, then the coded bytes or the raw stream.
+// a chunk starts at an object boundary, so each one decodes and walks on its own. the hot chunks,
+// what every run wakes, share one deflate code, and the last deflates alone; the rest are zstd
+// frames against the dictionary, zstd's with tables as the code segment's
 #define StreamSegHead (5 * sizeof(uint64_t))
 #ifndef StreamDict
-#define StreamDict ((uintptr_t) 32 << 10)
+#define StreamDict ((uintptr_t) 110 << 10)
+#endif
+#define StreamDictTabs CodeDictTabs
+#define StreamDictSpan 64u
+#define StreamDictShape 5u
+#ifndef StreamZLevel
+#define StreamZLevel 19
 #endif
 #ifndef ImageHotChunks
 #define ImageHotChunks 76
@@ -694,17 +704,74 @@ static struct g *img_canon_symbols(struct g *g) {
  alloc(pairs, 0);
  return g; }
 
-// live serials keep session order, packed 1..k; only the nameless (mints, tablets, pids) carry
-// one. a slot is a word offset; SlotCharm marks a serial held as a charm, where a mint's is raw
-#define SlotCharm ((uintptr_t) 1 << (8 * sizeof(uintptr_t) - 1))
-static love_inline uintptr_t slot_serial(word const *blob, uintptr_t s) {
- word v = blob[s & ~(uintptr_t) SlotCharm]; return s & SlotCharm ? (uintptr_t) getcharm(v) : (uintptr_t) v; }
-static love_inline void slot_put(word *blob, uintptr_t s, uintptr_t r) {
- blob[s & ~(uintptr_t) SlotCharm] = s & SlotCharm ? putcharm(r) : (word) r; }
-static uintptr_t img_rank_assign(word *rank, uintptr_t nser) {
+// live serials keep session order, packed 1..k, in the live heap; only the nameless (mints,
+// tablets, pids) carry one. 0 stays ()'s, and a pid charm copied into user data keeps its old number
+static love_inline bool img_serial_at(union u *p, uint64_t *v) {
+ if (!in_data(p->ap)) return false;
+ return love_typ(p) == DMint ? (*v = mint_serial((word) p), true)
+      : love_typ(p) == DTab && (*v = map_serial((word) p), true); }
+// a serial's rank: its place among the sorted live ones, from 1
+static uint64_t img_rank(uint64_t const *u, uintptr_t k, uint64_t v) {
+ uintptr_t lo = 0, hi = k;
+ while (lo < hi) { uintptr_t m = (lo + hi) / 2; if (u[m] < v) lo = m + 1; else hi = m; }
+ return (uint64_t) lo + 1; }
+static void img_sift64(uint64_t *a, uintptr_t i, uintptr_t n) {
+ for (uintptr_t c; (c = 2 * i + 1) < n; i = c) {
+  if (c + 1 < n && a[c] < a[c + 1]) c++;
+  if (a[i] >= a[c]) break;
+  uint64_t t = a[i]; a[i] = a[c], a[c] = t; } }
+static void img_sort64(uint64_t *a, uintptr_t n) {
+ for (uintptr_t i = n / 2; i-- > 0; ) img_sift64(a, i, n);
+ for (uintptr_t k = n; k > 1; ) { uint64_t t = a[0]; a[0] = a[--k], a[k] = t; img_sift64(a, 0, k); } }
+// a tablet's pairs again, in their old slot order, under the hashes their keys have now
+static bool img_rehash(struct g *g, word m, word *pairs) {
+ uintptr_t cap = map_cap(m), mask = cap - 1, n = 0;
+ word *s = map_slots(m);
+ for (uintptr_t j = 0; j < cap; j++)
+  if (s[2 * j] != map_gap) pairs[2 * n] = s[2 * j], pairs[2 * n + 1] = s[2 * j + 1], n++;
+ for (uintptr_t j = 0; j < cap; j++) s[2 * j] = map_gap, s[2 * j + 1] = zero;
+ for (uintptr_t k = 0; k < n; k++) {
+  uintptr_t i = hash(g, pairs[2 * k]) & mask;
+  if (g->walk) return false;
+  while (s[2 * i] != map_gap) i = (i + 1) & mask;
+  s[2 * i] = pairs[2 * k], s[2 * i + 1] = pairs[2 * k + 1]; }
+ return true; }
+static struct g *img_canon_serials(struct g *g) {
+ word *base = g->major_base, *hp = g->major_hp;
+ unsigned char *fzm = hc_fzmap(g, base, hp);
+ uintptr_t n = 0, cap = 0;
+ uint64_t v;
+ int fz;
+ #define each_obj(p) for (union u *p = cell(base); ptr(p) < hp; p = cell(ptr(p) + hc_stride(g, fzm, base, p, &fz))) if (!fzm[ptr(p) - base])
+ if (!fzm) return g->scare = (uintptr_t) (hp - base), encode(g, status_scare);
+ each_obj(p) {
+  if (img_serial_at(p, &v) && v) n++;
+  if (tabp((word) p) && map_cap((word) p) > cap) cap = map_cap((word) p); }
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) n++;
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) n++;
+ uint64_t *u = alloc(NULL, (n + 1) * sizeof(uint64_t));
+ word *pairs = alloc(NULL, (2 * cap + 1) * sizeof(word));
+ if (!u || !pairs) { alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0); return g->scare = n + 2 * cap, encode(g, status_scare); }
  uintptr_t k = 0;
- for (uintptr_t i = 1; i < nser; i++) if (rank[i]) rank[i] = ++k;
- return k; }
+ each_obj(p) if (img_serial_at(p, &v) && v) u[k++] = v;
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (uint64_t) getcharm(t[2].x);
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m) if (getcharm(t[2].x)) u[k++] = (uint64_t) getcharm(t[2].x);
+ img_sort64(u, k);
+ uintptr_t nu = 0;
+ for (uintptr_t i = 0; i < k; i++) if (!nu || u[nu - 1] != u[i]) u[nu++] = u[i];
+ each_obj(p) if (img_serial_at(p, &v) && v) {
+  if (love_typ(p) == DMint) ini_missing(sym(p), img_rank(u, nu, v));
+  else serial_set(tablet(p)->serial, img_rank(u, nu, v)); }
+ for (union u *t = g->tasks, *st = t; t; t = t->m == st ? NULL : t->m)
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
+ for (union u *t = g->parked, *st = t; t; t = t->m == st ? NULL : t->m)
+  if (ptr(t) >= base && ptr(t) < hp && getcharm(t[2].x)) t[2].x = putcharm((uintptr_t) img_rank(u, nu, (uint64_t) getcharm(t[2].x)));
+ g->next_serial = nu;
+ bool ok = true;
+ each_obj(p) if (ok && tabp((word) p)) ok = img_rehash(g, (word) p, pairs);
+ #undef each_obj
+ alloc(u, 0), alloc(pairs, 0), alloc(fzm, 0);
+ return ok ? g : (g->scare = 1, encode(g, status_scare)); }
 
 // the bake-time hash-cons: equal chains and strings merge. chains are immutable by convention
 // only (poke could write one); `==` is the one witness. bottom-up, so a candidate compares by
@@ -743,8 +810,9 @@ static word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
    if (len(r) == len(p) && !memcmp(txt(r), txt(p), len(p))) return q; }
   else if (two(r)->a == two(p)->a && two(r)->b == two(p)->b) return q; } }
 
-// the live finalizer nodes by word offset: headerless, a walk knows one only by address.
-// NULL without scratch, and hc_stride asks the list (quadratic, but right)
+// by word offset, what a walk knows only by address: a live finalizer node 1 (headerless),
+// a tablet's backing 2 (its word 0 any key). NULL without scratch, and hc_stride asks the
+// list (quadratic, but right)
 static unsigned char *hc_fzmap(struct g *g, word const *base, word const *hp) {
  uintptr_t nw = (uintptr_t) (hp - base);
  unsigned char *m = alloc(NULL, nw);
@@ -752,13 +820,18 @@ static unsigned char *hc_fzmap(struct g *g, word const *base, word const *hp) {
  memset(m, 0, nw);
  for (struct fz *z = g->fz; z; z = z->next)
   if ((word const*) z >= base && (word const*) z < hp) m[(word const*) z - base] = 1;
+ for (union u *p = cell(base); ptr(p) < hp; ) {
+  uintptr_t o = (uintptr_t) (ptr(p) - base);
+  if (m[o] != 1 && tabp((word) p) && ptr(map_back((word) p)) >= base && ptr(map_back((word) p)) < hp)
+   m[ptr(map_back((word) p)) - base] = 2;
+  p = cell(ptr(p) + (m[o] == 1 ? Width(struct fz) : image_objsize(g, p))); }
  return m; }
 
 // the object stride, forging a live finalizer node's width (three raw words, no header)
 static uintptr_t hc_stride(struct g *g, unsigned char const *m, word const *base,
                            union u *p, int *fzp) {
  int z;
- if (m) z = m[(word const*) p - base];
+ if (m) z = m[(word const*) p - base] == 1;
  else { struct fz *f = g->fz; while (f && (union u*) f != p) f = f->next; z = !!f; }
  return (*fzp = z) ? Width(struct fz) : image_objsize(g, p); }
 
@@ -852,8 +925,8 @@ static void img_hashcons(struct g *g) {
   memset(h->tab, 0, cap * sizeof(word));
   for (union u *p = cell(base); ptr(p) < hp; ) {
    uintptr_t sz = hc_stride(g, fzm, base, p, &fz), off = (uintptr_t) (ptr(p) - base);
-   if (!fz && sz > 1 && !in_data(p->ap)
-       && p->ap != lvm_map_lookup && p->ap != lvm_map_data && p->ap != lvm_cask
+   if (!fz && sz > 1 && !in_data(p->ap) && fzm && fzm[off] != 2
+       && p->ap != lvm_cask
        && p->ap != lvm_coin && p->ap != lvm_port_io && p->ap != lvm_cur) {
     int parked = 0;
     uintptr_t hv = 1469598103934665603u;
@@ -899,6 +972,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (!ok(gen_major(g, 0, NULL))) return NULL;
  img_hashcons(g);
  if (!ok(gen_major(g, 0, NULL))) return NULL;                  // ..and compact the duplicates away
+ if (!ok(g = img_canon_serials(g))) return NULL;
  if (!ok(g = img_canon_symbols(g))) return NULL;
  Why(8);
  word *base = g->major_base, *hp = g->major_hp;
@@ -909,16 +983,10 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  word *blob = alloc(NULL, bytes);
  if (!blob) return NULL;
  memcpy(blob, base, bytes);
- // canonical serials, blob side only: live ones rename monotone to 1..k, preserving order,
- // 0 staying ()'s. a pid charm copied into user data keeps its old number. nw/2 + 1 bounds
- // the slots (a mint is two words at least); the cap is checked anyway
- uintptr_t nslot = 0, ncap = nw / 2 + 1, *slots = alloc(NULL, ncap * sizeof(uintptr_t));
- if (!slots) { alloc(blob, 0); return NULL; }
  // chunk starts: the first object on or past each multiple of kw words
  uintptr_t kw = opt && opt->chunk ? opt->chunk : StreamZWords,
            ncb = 0, nextk = 0, *cb = alloc(NULL, (nw / kw + 2) * sizeof(uintptr_t));
- if (!cb) { alloc(slots, 0); alloc(blob, 0); return NULL; }
- bool slotover = false;
+ if (!cb) { alloc(blob, 0); return NULL; }
  // every field spelled, not left to the compiler to zero
  uintptr_t const nlvm = image_nlvm(), nfn = image_nfn();
  struct img_ctx X = { g, base, hp, nlvm, image_code_base(nlvm, nfn), 0, 0, 0, {0}, 0, 0, 0, 0, 0, 0, 0,
@@ -946,8 +1014,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
    case DChain: blob[off + 1] = img_encode(x, A(p));
                 blob[off + 2] = img_encode(x, B(p)); break;
    case DNom:   blob[off + 1] = img_encode(x, (intptr_t) nom(p)->name); break;   // dig rides raw
-   case DMint:  if (nslot < ncap) slots[nslot++] = off + 1; else slotover = true;
-                break;
+   case DTab:   blob[off + 1] = img_encode(x, (intptr_t) tablet(p)->back); break;   // serial, len and cap raw
    case DTray:   if (tray(p)->type == love_O) {
                  word *e = ptr(tray_data(tray(p)));
                  uintptr_t ne = tray_nelem(tray(p)), eo = (uintptr_t)(e - ptr(p));
@@ -960,10 +1027,7 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
                    break; }
    default: break; }
   else { for (uintptr_t i = 1; i < sz; i++)
-          blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]);  // a woken entry is its header
-         if (p->ap == lvm_map_lookup) {
-          if (nslot < ncap) slots[nslot++] = (off + __builtin_offsetof(struct tablet, serial) / sizeof(word)) | SlotCharm;
-          else slotover = true; } }
+          blob[off + i] = img_encode(x, ptr(p)[i] == (word) lvm_lazy ? ptr(p)[0] : ptr(p)[i]); }  // a woken entry is its header
   p = cell(ptr(p) + sz); }
  if (x->ob)                                        // chunk starts in the laid order
   for (uintptr_t q = 0; q < x->nobj; q++) { uintptr_t no = x->nob[x->ord[q]]; if (no >= nextk) cb[ncb++] = no, nextk = (no / kw + 1) * kw; }
@@ -971,40 +1035,10 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (x->ct) alloc(x->ct, 0);
  *cseg = x->cseg, *ncode = x->cn;
  Why(4);
- if (x->fail) { img_bad_out(x, bad); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- if (slotover) { Why(12); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- // the rename: mark the slots' serials and both task rings' pids ([2], a charm), rank, rewrite
- uintptr_t nser = g->next_serial + 1, kser = 0;
- Why(10);
- word *rank = alloc(NULL, nser * sizeof(word));
- if (!rank) { alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(slots, 0); alloc(blob, 0); return NULL; }
- Why(11);
- memset(rank, 0, nser * sizeof(word));
- for (uintptr_t i = 0; i < nslot; i++)
-  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) rank[v] = 1; }
- for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
-  uintptr_t pid = getcharm(n[2].x);
-  if (pid < nser) rank[pid] = 1; }
- if (g->parked)
-  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
-   uintptr_t pid = getcharm(n[2].x);
-   if (pid < nser) rank[pid] = 1; }
- rank[0] = 0;                                            // the immortal ()'s
- kser = img_rank_assign(rank, nser);
- for (uintptr_t i = 0; i < nslot; i++)
-  { uintptr_t v = slot_serial(blob, slots[i]); if (v < nser) slot_put(blob, slots[i], rank[v]); }
- for (union u *n = g->tasks, *st = n; n; n = n->m == st ? NULL : n->m) {
-  uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
-  if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
- if (g->parked)
-  for (union u *n = g->parked, *st = n; n; n = n->m == st ? NULL : n->m) {
-   uintptr_t off = img_remap(x, (uintptr_t)(ptr(n) - base) * sizeof(word)) / sizeof(word), pid = getcharm(n[2].x);
-   if (ptr(n) >= base && ptr(n) < hp && pid < nser) blob[off + 2] = putcharm(rank[pid]); }
- alloc(slots, 0);
+ if (x->fail) { img_bad_out(x, bad); alloc(cb, 0); if (x->ob) alloc(x->ob, 0); alloc(blob, 0); return NULL; }
  // no address rides the header; `sum` is laid over the wire (img_wire). the counter drops
  // to the live count
- struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, kser, x->cn, 0, {0}, {0} };
- alloc(rank, 0);
+ struct image_hdr H = { ImageMagic, sizeof(word), nw, ImageArch, op_fp, 0, image_carried_c(), 0, g->next_serial, x->cn, 0, {0}, {0} };
  // roots: symbols, tasks, then all of v0..end, as the gc walks it
  uintptr_t nv = LvImgRoots - 2, nr = LvImgRoots;
  Why(5);
@@ -1017,14 +1051,14 @@ static word *img_build(struct g *g, struct image_hdr *Ho, struct image_bad *bad,
  if (x->ob) alloc(x->ob, 0);
  return Why(0), *Ho = H, *outnw = nw, *cbo = cb, *ncbo = ncb, blob; }
 
-// the chunks' preset dictionary: greedily, the 256-byte spans whose 8-byte shapes the most
+// the chunks' preset dictionary: greedily, the spans whose shapes (sh bytes, 1..8) the most
 // chunks share, each shape spent once in, the best nearest the chunk. answers its length
 #define CdBits 20
-#define CdSpan 256u
-static uint32_t cd_hash(char const *p) { uint64_t v; memcpy(&v, p, 8); return (uint32_t) ((v * 0x9e3779b97f4a7c15ull) >> (64 - CdBits)); }
-static uint64_t cd_score(char const *p, uint32_t const *cnt, uint32_t *stamp, uint32_t st) {
+static uint32_t cd_hash(char const *p, unsigned sh) {
+ uint64_t v; memcpy(&v, p, 8); return (uint32_t) (((v << (64 - 8 * sh)) * 0x9e3779b97f4a7c15ull) >> (64 - CdBits)); }
+static uint64_t cd_score(char const *p, uintptr_t span, unsigned sh, uint32_t const *cnt, uint32_t *stamp, uint32_t st) {
  uint64_t a = 0;
- for (unsigned j = 0; j + 8 <= CdSpan; j++) { uint32_t h = cd_hash(p + j); if (stamp[h] != st) stamp[h] = st, a += cnt[h]; }
+ for (uintptr_t j = 0; j + 8 <= span; j++) { uint32_t h = cd_hash(p + j, sh); if (stamp[h] != st) stamp[h] = st, a += cnt[h]; }
  return a; }
 static void cd_sift(uint64_t *hp, uintptr_t n, uintptr_t i) {
  for (;;) { uintptr_t l = 2 * i + 1, r = l + 1, m = i;
@@ -1032,8 +1066,9 @@ static void cd_sift(uint64_t *hp, uintptr_t n, uintptr_t i) {
   if (r < n && hp[r] > hp[m]) m = r;
   if (m == i) return;
   uint64_t t = hp[i]; hp[i] = hp[m], hp[m] = t, i = m; } }
-static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uintptr_t cap, uintptr_t chunk) {
- uintptr_t ns = n >= 4 * cap ? (n - CdSpan) / (CdSpan / 2) + 1 : 0, nh = 0, got = 0;
+static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uintptr_t cap, uintptr_t chunk,
+                             uintptr_t span, unsigned sh) {
+ uintptr_t ns = n >= 4 * cap ? (n - span) / (span / 2) + 1 : 0, nh = 0, got = 0;
  if (ns >> 24) ns = (uintptr_t) 1 << 24;                        // a span's index rides under its score
  uint32_t *cnt = ns ? alloc(NULL, 2 * sizeof(uint32_t) << CdBits) : NULL, *stamp = cnt + (1u << CdBits), st = 0;
  uint64_t *hp = cnt ? alloc(NULL, ns * sizeof *hp) : NULL;
@@ -1042,20 +1077,20 @@ static uintptr_t img_dict_of(char const *c, uintptr_t n, unsigned char *dic, uin
  for (uintptr_t a = 0; a + 8 <= n; a += chunk) {
   uintptr_t e = a + chunk < n - 7 ? a + chunk : n - 7;
   st++;
-  for (uintptr_t i = a; i < e; i++) { uint32_t h = cd_hash(c + i); if (stamp[h] != st) stamp[h] = st, cnt[h]++; } }
- for (uintptr_t k = 0; k < ns; k++) hp[nh++] = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st) << 24 | k;
+  for (uintptr_t i = a; i < e; i++) { uint32_t h = cd_hash(c + i, sh); if (stamp[h] != st) stamp[h] = st, cnt[h]++; } }
+ for (uintptr_t k = 0; k < ns; k++) hp[nh++] = cd_score(c + k * (span / 2), span, sh, cnt, stamp, ++st) << 24 | k;
  for (uintptr_t i = nh / 2; i--; ) cd_sift(hp, nh, i);
- while (nh && got + CdSpan <= cap) {
+ while (nh && got + span <= cap) {
   uintptr_t k = hp[0] & ((1u << 24) - 1);
-  uint64_t sc = cd_score(c + k * (CdSpan / 2), cnt, stamp, ++st), kid = nh > 1 ? hp[1] : 0;
+  uint64_t sc = cd_score(c + k * (span / 2), span, sh, cnt, stamp, ++st), kid = nh > 1 ? hp[1] : 0;
   if (nh > 2 && hp[2] > kid) kid = hp[2];
   hp[0] = sc << 24 | k;                                        // rescored: still best, or back in the heap
   if (hp[0] < kid) { cd_sift(hp, nh, 0); continue; }
   hp[0] = hp[--nh], cd_sift(hp, nh, 0);
   if (!sc) break;
-  char const *p = c + k * (CdSpan / 2);
-  got += CdSpan, memcpy(dic + cap - got, p, CdSpan);
-  for (unsigned j = 0; j + 8 <= CdSpan; j++) cnt[cd_hash(p + j)] = 0; }
+  char const *p = c + k * (span / 2);
+  got += span, memcpy(dic + cap - got, p, span);
+  for (uintptr_t j = 0; j + 8 <= span; j++) cnt[cd_hash(p + j, sh)] = 0; }
  alloc(hp, 0), alloc(cnt, 0);
  return memmove(dic, dic + cap - got, got), got; }
 
@@ -1067,7 +1102,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
  uint64_t *tab = z ? alloc(NULL, 4 * ncap * sizeof(uint64_t)) : NULL;
  uintptr_t nh = ncb > 2 * ImageHotChunks ? ImageHotChunks : 0, tn = 0;
  uintptr_t rend[ImageHotChunks + 1], zend[ImageHotChunks + 1];
- unsigned char code[1024], *dic = tab ? alloc(NULL, 2 * StreamDict + 64) : NULL;
+ unsigned char code[1024], *dic = tab ? alloc(NULL, StreamDict + 2 * (StreamDict + StreamDictTabs) + 64) : NULL;
  uintptr_t dn = 0, dnz = 0, r0 = 0;
  if (!raw) goto out;
  if (tab) {                                              // each chunk laid apart: its tokens, then its literals
@@ -1090,15 +1125,28 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
    if (i == nh) r0 = ra;
    tab[4 * nch] = a, tab[4 * nch + 1] = ra, nch++;
    a = b, ra = rb; }
-  if (nch && dic && ra > r0 && (dn = img_dict_of((char const*) raw + r0, ra - r0, dic, StreamDict, StreamZWords * 2))) {
-   intptr_t dg = deflate_raw(g, dic, dn, dic + StreamDict, StreamDict + 64);
+  uintptr_t nm = nch > nh + 1 ? nch - 1 - nh : 0, pn = 0;   // the middle ones: zstd against the dictionary
+  uintptr_t *cut = nm && dic ? alloc(NULL, (2 * nm + 1) * sizeof *cut) : NULL, *ze = cut ? cut + nm + 1 : NULL;
+  unsigned char *zd = dic ? dic + StreamDict : NULL, *dz = zd ? zd + StreamDict + StreamDictTabs : NULL, *mz = NULL;
+  if (cut) {
+   for (uintptr_t k = 0; k <= nm; k++) cut[k] = (uintptr_t) tab[4 * (nh + k) + 1];
+   if ((pn = img_dict_of((char const*) raw + r0, cut[nm] - r0, dic, StreamDict, StreamZWords * 2, StreamDictSpan, StreamDictShape))
+       && (mz = alloc(NULL, cut[nm] - cut[0])))
+    dn = zstde_dict(dic, pn, raw, cut, nm, StreamZLevel, zd, StreamDict + StreamDictTabs, mz, cut[nm] - cut[0], ze);
+   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, StreamDict + StreamDictTabs + 64) : 0;
    if (dg > 0) dnz = (uintptr_t) dg; else dn = 0; }
-  for (uintptr_t i = nh; i < nch; i++) {                 // the rest against the dictionary, the hot ones stay out of it
-   uintptr_t rb = i + 1 < nch ? (uintptr_t) tab[4 * i + 5] : ra;
-   intptr_t got = deflate_dict(g, raw + tab[4 * i + 1], rb - (uintptr_t) tab[4 * i + 1], dic, i + 1 < nch ? dn : 0, z + zn, rn - zn);
+  for (uintptr_t i = nh; i < nch; i++) {                 // the hot ones and the last stay out of it
+   uintptr_t ri = (uintptr_t) tab[4 * i + 1], rb = i + 1 < nch ? (uintptr_t) tab[4 * i + 5] : ra;
+   intptr_t got = 0;
+   if (dn && i + 1 < nch) {
+    uintptr_t k = i - nh, w0 = k ? ze[k - 1] : 0, w = ze[k] - w0;
+    if (w <= rn - zn) memcpy(z + zn, mz + w0, w), got = (intptr_t) w; }
+   else got = deflate_dict(g, raw + ri, rb - ri, dic, 0, z + zn, rn - zn);
    if (got <= 0) { nch = 0; break; }
    tab[4 * i + 2] = zn, tab[4 * i + 3] = image_sum(z + zn, (uintptr_t) got, 0);
-   zn += (uintptr_t) got; } }
+   zn += (uintptr_t) got; }
+  if (mz) alloc(mz, 0);
+  if (cut) alloc(cut, 0); }
  if (nch && StreamRow * nch + tn + dnz + zn >= ra) nch = 0;
  if (!nch) tn = dn = dnz = 0;
  last = 0, rn = nch ? ra : img_stream(raw, blob, nw, 0, d, &last);
@@ -1108,7 +1156,7 @@ static unsigned char *img_zstream(struct g *g, word const *blob, uintptr_t nw, s
   if (nch) {
    unsigned char *q = seg + StreamSegHead + StreamRow * nch;
    memcpy(seg + StreamSegHead, tab, StreamRow * nch), memcpy(q, code, tn);
-   if (dnz) memcpy(q + tn, dic + StreamDict, dnz);
+   if (dnz) memcpy(q + tn, dic + 2 * StreamDict + StreamDictTabs, dnz);
    memcpy(q + tn + dnz, z, zn); }
   else memcpy(seg + StreamSegHead, raw, rn);
   *outn = StreamSegHead + body; }
@@ -1173,7 +1221,7 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
  uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
  unsigned char *cz = NULL, *dic = craw ? alloc(NULL, CodeDict + 2 * (CodeDict + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
  if (craw) {
-  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, most = 0, pn = 0;
+  uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, pn = 0;
   uintptr_t *cut = dic ? alloc(NULL, (ncap + 1) * sizeof *cut) : NULL;
   if (cut) {
    cut[0] = 0;
@@ -1181,31 +1229,25 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     for (b = a; b < craw && b - a < CodeZChunk; )
      b += (hd + ((uintptr_t const*)(cseg + b))[0] + 1 + 15) & ~(uintptr_t) 15;
     if (b > craw) { nch = 0; break; }
-    cut[nch + 1] = b, most = b - a > most ? b - a : most; }
+    cut[nch + 1] = b; }
    if (cut[nch] != craw) nch = 0; }
-  if (nch && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk))) {
+  uintptr_t *ze = nch ? alloc(NULL, nch * sizeof *ze) : NULL;
+  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
    zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
-   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs);
+   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs, cz, craw, ze);
    intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
    if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg; }
   if (!dn) nch = 0;
   uint64_t *tab = nch ? alloc(NULL, 3 * nch * sizeof(uint64_t)) : NULL;
-  uintptr_t oc = zstde_cap(most);
-  unsigned char *one = tab ? alloc(NULL, oc) : NULL;
-  if (one && (cz = alloc(NULL, craw)))
-   for (uintptr_t k = 0; k < nch; k++) {
-    uintptr_t a = cut[k], b = cut[k + 1],
-              got = zstde_with(zd, dn, (unsigned char const*) cseg + a, b - a, CodeZLevel, one, oc);
-    if (!got || got > craw - zn) { nch = 0; break; }
-    memcpy(cz + zn, one, got);
-    tab[3 * k] = a, tab[3 * k + 1] = zn, tab[3 * k + 2] = image_sum(cz + zn, got, 0);
-    zn += got; }
+  if (tab)
+   for (uintptr_t k = 0; k < nch; k++)
+    tab[3 * k] = cut[k], tab[3 * k + 1] = zn, tab[3 * k + 2] = image_sum(cz + zn, ze[k] - zn, 0), zn = ze[k];
   else nch = 0;
   uintptr_t tn = CodeRow * nch;
   unsigned char *t = nch && tn + dnz + zn < craw ? alloc(NULL, tn + dnz + zn) : NULL;   // the table, the dictionary, the chunks
   if (t) memcpy(t, tab, tn), memcpy(t + tn, dz, dnz), memcpy(t + tn + dnz, cz, zn);
   else nch = 0, dn = dnz = 0;
-  if (one) alloc(one, 0);
+  if (ze) alloc(ze, 0);
   if (cz) alloc(cz, 0);
   if (tab) alloc(tab, 0);
   if (cut) alloc(cut, 0);
@@ -1275,6 +1317,7 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
    if (sz - 1 >= hi - off) return 0;                                              // no length, or more than is left
    switch (love_typ(p)) {
     case DNom:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // dig rides raw
+    case DTab:   o[1] = (word) img_decode((intptr_t) o[1], d); break;             // the backing; the rest raw
     case DTray:  if (tray(p)->type == love_O) { word *e = (word*) tray_data(tray(p)); uintptr_t ne = tray_nelem(tray(p));
                   for (uintptr_t i = 0; i < ne; i++) e[i] = img_decode(e[i], d); }
                  break;
@@ -1296,12 +1339,13 @@ static int img_walk(word *base, uintptr_t lo, uintptr_t hi, char *code, uintptr_
   off += sz; }
  return off == hi && !d->bad; }
 
-// a chunked stream: per chunk [first word, raw offset, deflated offset] and a sentinel row,
-// the digests, which are live. a lazy wake decodes a chunk when a page of it is first touched
+// a chunked stream: per chunk [first word, raw offset, coded offset] and a sentinel row,
+// the digests, which are live. a lazy wake decodes a chunk when a page of it is first touched;
+// zt is the dictionary's tables, built with dic
 struct img_lazy {
  word *base; char *code; word const *dict; unsigned char const *z, *dz;
  uint64_t *t, *sum; unsigned char *run, *st, *want, *dic;
- void *tabs;
+ void *tabs, *zt;
  uintptr_t nw, nch, left, ps, pg0, pg1, cn, nd, ndz; int clazy; };
 
 // the segment's table, checked to tile the image, into a fresh img_lazy. NULL refuses
@@ -1311,11 +1355,11 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  if (ns < StreamSegHead) return NULL;
  memcpy(&rn, p, 8), memcpy(&nch, p + 8, 8), memcpy(&tn, p + 16, 8), memcpy(&nd, p + 24, 8), memcpy(&ndz, p + 32, 8);
  p += StreamSegHead, ns -= StreamSegHead;
- if (!nch || nch > ns / StreamRow || tn + ndz < tn || tn + ndz > ns - StreamRow * nch || nd > StreamDict || !nd != !ndz) return NULL;
+ if (!nch || nch > ns / StreamRow || tn + ndz < tn || tn + ndz > ns - StreamRow * nch || nd > StreamDict + StreamDictTabs || !nd != !ndz) return NULL;
  uintptr_t zn = ns - StreamRow * (uintptr_t) nch - (uintptr_t) tn - (uintptr_t) ndz, most = 0;
  uintptr_t tb = 24 * ((uintptr_t) nch + 1);
- uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0;
- uintptr_t fix = sizeof(struct img_lazy) + ts + tb + 9 * (uintptr_t) nch + (uintptr_t) nd;
+ uintptr_t ts = tn ? (inflate_tabs_size() + 7) & ~(uintptr_t) 7 : 0, zs = nd ? (zstd_dict_size() + 7) & ~(uintptr_t) 7 : 0;
+ uintptr_t fix = sizeof(struct img_lazy) + ts + zs + tb + 9 * (uintptr_t) nch + (uintptr_t) nd;
  for (uint64_t k = 0; k < nch; k++) {
   memcpy(t, p + StreamRow * k, StreamRow);
   if (k + 1 < nch) memcpy(t + 4, p + StreamRow * (k + 1), StreamRow);
@@ -1326,10 +1370,10 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
   if (t[5] - t[1] > most) most = (uintptr_t) (t[5] - t[1]); }
  struct img_lazy *L = alloc(NULL, fix + most);
  if (!L) return NULL;
- L->tabs = ts ? (void*) (L + 1) : NULL;
+ L->tabs = ts ? (void*) (L + 1) : NULL, L->zt = zs ? (char*) (L + 1) + ts : NULL;
  if (ts && !inflate_tabs_load(p + StreamRow * nch, (uintptr_t) tn, L->tabs)) { alloc(L, 0); return NULL; }
  L->base = base, L->code = code, L->cn = cn, L->dict = dict, L->dz = p + StreamRow * nch + tn, L->ndz = (uintptr_t) ndz, L->nd = (uintptr_t) nd, L->z = L->dz + ndz, L->clazy = clazy;
- L->t = (uint64_t*) ((char*) (L + 1) + ts), L->sum = L->t + 3 * (nch + 1);
+ L->t = (uint64_t*) ((char*) (L + 1) + ts + zs), L->sum = L->t + 3 * (nch + 1);
  L->st = (unsigned char*) (L->sum + nch), L->run = L->st + nch, L->dic = L->run + most;
  for (uint64_t k = 0; k < nch; k++)
   memcpy(L->t + 3 * k, p + StreamRow * k, 24), memcpy(L->sum + k, p + StreamRow * k + 24, 8);
@@ -1339,18 +1383,20 @@ static struct img_lazy *img_lazy_new(word *base, uintptr_t nw, unsigned char con
  L->want = NULL;
  return L; }
 
-// chunk k into its words: digest checked, inflated, expanded, walked. 0 refuses
+// chunk k into its words: digest checked, decoded, expanded, walked. 0 refuses
 static int img_chunk(struct img_lazy *L, uintptr_t k) {
  uint64_t const *t = L->t + 3 * k;
  uintptr_t rl = (uintptr_t) (t[4] - t[1]), zl = (uintptr_t) (t[5] - t[2]);
  int shared = L->tabs && inflate_shared_is(L->z + t[2], zl);
  int bare = k + 1 == L->nch;                             // every wake reads the last chunk: no dictionary
- if (!shared && !bare && L->ndz) {                       // the first chunk past the hot ones inflates dic
-  if (inflate_raw(L->dz, L->ndz, L->dic, L->nd) != (intptr_t) L->nd) return 0;
+ int zs = !shared && !bare && L->nd;                    // a middle one: zstd against the dictionary
+ if (zs && L->ndz) {                                     // the first of them builds dic and its tables
+  if (inflate_raw(L->dz, L->ndz, L->dic, L->nd) != (intptr_t) L->nd || !zstd_dict_load(L->zt, L->dic, L->nd)) return 0;
   L->ndz = 0; }
  if (image_sum(L->z + t[2], zl, 0) != L->sum[k]
      || (shared ? inflate_shared(L->z + t[2], zl, L->run, rl, L->tabs)
-                : inflate_dict(L->z + t[2], zl, L->run, rl, L->dic, bare ? 0 : L->nd)) != (intptr_t) rl
+         : zs ? zstd_dict_into(L->zt, L->z + t[2], zl, L->run, rl)
+              : inflate_dict(L->z + t[2], zl, L->run, rl, L->dic, 0)) != (intptr_t) rl
      || img_expand(L->base + t[0], (uintptr_t) (t[3] - t[0]), (uintptr_t) t[0], L->run, L->run + rl, L->dict) != L->run + rl
      || !img_walk(L->base, (uintptr_t) t[0], (uintptr_t) t[3], L->code, L->cn, L->clazy)) return 0;
  return L->st[k] = 1, L->left--, 1; }

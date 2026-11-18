@@ -11,6 +11,8 @@
     ; the images run in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
             "a64"  ['a64 0x40200000 "a64boot" 0xffffff8000000000]
+            ; the pi's firmware enters at the start of the flat image, so boot leads
+            "a64pi" ['a64 0x80000 "a64boot" 0xffffff8000000000]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
             "rv64" ['rv64  0x80200000 "rvboot" 0xffffffe000000000]
             (scare 'kproject-arch arch))

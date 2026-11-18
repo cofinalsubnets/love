@@ -161,6 +161,32 @@ int getaddrinfo(char const *host, char const *serv, struct addrinfo const *hints
   return 0; }
 void freeaddrinfo(struct addrinfo *r) { free(r); }
 
+/* gethostbyname_r: getaddrinfo's one v4 answer, laid in buf as the aliases' end, the address
+ * list, the address and the name. a short buf is ERANGE, a miss HOST_NOT_FOUND */
+int gethostbyname_r(char const *host, struct hostent *h, char *buf, size_t n, struct hostent **res, int *herr) {
+  struct addrinfo *r;
+  char **al = (char **) (((unsigned long) buf + sizeof(char *) - 1) & ~(sizeof(char *) - 1));
+  size_t need = (size_t) ((char *) (al + 3) - buf) + 4 + (host ? strlen(host) + 1 : 0);
+  *res = 0;
+  if (!host) { *herr = HOST_NOT_FOUND; return 0; }
+  if (n < need) { *herr = NO_RECOVERY; return ERANGE; }
+  if (getaddrinfo(host, 0, 0, &r)) { *herr = HOST_NOT_FOUND; return 0; }
+  char *a = (char *) (al + 3), *nm = a + 4;
+  memcpy(a, &((struct sockaddr_in *) r->ai_addr)->sin_addr, 4);
+  freeaddrinfo(r);
+  strcpy(nm, host);
+  al[0] = 0, al[1] = a, al[2] = 0;
+  h->h_name = nm, h->h_aliases = al, h->h_addrtype = AF_INET, h->h_length = 4, h->h_addr_list = al + 1;
+  *res = h;
+  return 0; }
+/* ..and the plain one into the process's one hostent */
+static struct { struct hostent h; char *b[40]; } __hb;   /* room for a 255-byte name */
+struct hostent *gethostbyname(char const *host) {
+  struct hostent *r;
+  int e = gethostbyname_r(host, &__hb.h, (char *) __hb.b, sizeof __hb.b, &r, &h_errno);
+  if (e == ERANGE) h_errno = HOST_NOT_FOUND;   /* a name past the buffer: glibc's NETDB answer */
+  return r; }
+
 char const *gai_strerror(int e) {
   switch (e) {
   case 0: return "Success";

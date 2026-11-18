@@ -1,10 +1,11 @@
 ; src/inle/mkboot.l -- lay boot.o, the register-exact bring-up before there is a C environment.
 ;   (lay-boot dst "x64")   the PVH note, the page tables + GDT, the long-mode ladder, khop
 ;   (lay-boot dst "a64")   the translation tables, MAIR/TCR/TTBR, the MMU switch, the hop, khop
+;   (lay-boot dst "a64pi") the same on the pi: the drop from el2 first, the pi's map
 ;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
-; the link is flat (vaddr = paddr), so `la` answers a label; x64's image lies in the upper half.
+; the link is flat (vaddr = paddr), so `la` answers a label; the image lies in the upper half.
 ; `lia` stays where an absolute is wanted: the first fetch after the MMU comes on (a pc-relative
-; branch would ride a broken map), its stack, and x64's reach up to the image.
+; branch would ride a broken map), its stack, and the reach up to the image.
 ; runs after holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined.
 ; registers: x86 r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64 rN = xN.
 (:
@@ -138,9 +139,8 @@
    a-gig 0x40000705                                 ; 0x40000000 | 0x705  valid | AttrIndx 1 | SH inner | AF
    ;; PXNTable | UXNTable (bits 59, 60 of a table descriptor): x86's NX, one level up.
    a-xntab 0x1800000000000000
-   a-boot-text
-    ('((label a64boot)
-       ;; firmware enters with the MMU on, `qemu -kernel` with it off: read SCTLR.M.
+   a-head
+    '(;; firmware enters with the MMU on, `qemu -kernel` with it off: read SCTLR.M.
        ;; no test-bit-branch or immediate AND in the neutral surface; x9/x10 are dead here.
        (mrs r9 sctlr_el1)
        (li r10 1) (and r10 r9 r10) (cmp r10 0)
@@ -150,8 +150,9 @@
        (jmpr r9)
        (label a64_cold)
        (mov r21 r0)                                  ; x0: a loader's dtb pointer, honored at khop
-       (li r6 3)                                     ; valid | table; a literal, the block is quoted
-       ;; l2_dev: 512 x 2 MiB Device blocks. `la` is pc-relative and we run low, so every
+       (li r6 3))                                    ; valid | table; a literal, the block is quoted
+   a-dev-virt
+    ('(;; l2_dev: 512 x 2 MiB Device blocks. `la` is pc-relative and we run low, so every
        ;; address written into a table is physical.
        (la r0 l2_dev)
        (li r1 0)
@@ -165,10 +166,12 @@
        (or r3 r0 r6) (st r1 0 r3))
      + [['li 'r2 a-gig] ['st 'r1 8 'r2]
         ['li 'r2 (a-gig + 0x40000000)] ['st 'r1 16 'r2]
-        ['li 'r2 (a-gig + 0x80000000)] ['st 'r1 24 'r2]]
-     ;; the L0s: the same L1 under all three. the XN pair rides the hhdm alone, so pages reached
+        ['li 'r2 (a-gig + 0x80000000)] ['st 'r1 24 'r2]])
+   ;; ..then r0 = l2_dev, r1 = l1_id, r6 = the table bits, for the L0s and the switch
+   a-tail
+    (;; the L0s: the same L1 under all three. the XN pair rides the hhdm alone, so pages reached
      ;; through it can't execute while identity and the window keep X for the image.
-     + ['(or r3 r1 r6)
+     ['(or r3 r1 r6)
         '(la r0 l0_lo) '(st r0 0 r3)
         '(la r2 l0_hi)
         ['li 'r5 a-xntab] '(or r5 r5 r3) '(st r2 2048 r5)      ; [256]: nothing under it runs
@@ -200,6 +203,64 @@
          (align 8)
          (lia r9 khop)
          (jmpr r9)))
+
+   a-boot-text ('((label a64boot)) + a-head + a-dev-virt + a-tail)
+
+   ;; -- a64 on the pi ---------------------------------------------------
+   ;; the firmware enters at el2, mmu off, x0 the dtb, the image at its load address. drop to
+   ;; el1 (aarch64, the physical timer el1's, fp untrapped, sctlr_el1 a known reset), then the
+   ;; stub as on virt with the pi's map: ram below the peripherals Normal (2 MiB blocks), the
+   ;; peripherals at 0x3f000000 and the local block at 0x40000000 Device. 512 MiB, two gigs
+   a-pi-el2
+    '((label a64boot)
+      (mrs r9 currentel)
+      (cmp r9 8) (br ne a64_el1)                     ; CurrentEL.EL in bits 3:2
+      (li r10 0x80000000) (msr hcr_el2 r10)          ; RW: el1 is aarch64
+      (mrs r10 cnthctl_el2) (li r11 3) (or r10 r10 r11) (msr cnthctl_el2 r10)
+      (li r10 0) (msr cntvoff_el2 r10)
+      (li r10 0x33ff) (msr cptr_el2 r10)             ; TFP clear, the res1 bits set
+      (li r10 0x30d00800) (msr sctlr_el1 r10)        ; res1, mmu and caches off
+      (li r10 0x3c5) (msr spsr_el2 r10)              ; el1h, daif masked
+      (la r10 a64_el1) (msr elr_el2 r10)
+      (eret)
+      (label a64_el1))
+   a-pi-dev 504                                      ; the first Device 2 MiB block: 0x3f000000
+   a-pi-boot-text
+    (a-pi-el2 + a-head
+     + '((la r0 l2_dev)
+         (li r1 0)
+         (li r2 0x705)                               ; Normal, as a-gig's
+         (label a64_ram)
+         (mov r3 r1) (shl r3 21) (or r3 r3 r2)
+         (stx r0 r1 8 0 r3)
+         (add r1 r1 1))
+     + [['cmp 'r1 a-pi-dev] '(br ne a64_ram)]
+     + '((li r2 0x401)                               ; Device
+         (label a64_peri)
+         (mov r3 r1) (shl r3 21) (or r3 r3 r2)
+         (stx r0 r1 8 0 r3)
+         (add r1 r1 1) (cmp r1 512) (br ne a64_peri)
+         (la r1 l1_id)
+         (or r3 r0 r6) (st r1 0 r3))
+     + [['li 'r2 0x60000040000401] ['st 'r1 8 'r2]]  ; [1] the local block's gig: Device, xn
+     + a-tail)
+   a-pi-text
+    '((label khop)
+       ;; boot runs physical: the stack and C are reached through the image window
+       (la r9 kstack_top)
+       (li r10 0xffffff8000000000)
+       (add r9 r9 r10)
+       (lea sp r9 0)
+       (mov r0 r21)                                  ; the firmware's dtb, always
+       (align 8)
+       (lia r9 dtb_to_kboot)
+       (callr r9)
+       (align 8)
+       (lia r9 kmain)
+       (callr r9)
+       (label a64_park)
+       (wfi)
+       (jmp a64_park))
 
    a-text
     '((label khop)
@@ -299,6 +360,16 @@
                  [".text"      1 6 16   a-text]
                  [".bss"       8 3 16   b-stack]]
                 '("a64boot")             ; kproject.l names it as the ELF entry
+                () ()
+                '("khop"))
+       "a64pi"
+       ;; the stub before the tables: the firmware enters at the load address, as rv64's
+       (objsecs 'a64
+                [[".boot.text" 1 6 16   a-pi-boot-text]
+                 [".boot"      1 3 4096 a-boot]
+                 [".text"      1 6 16   a-pi-text]
+                 [".bss"       8 3 16   b-stack]]
+                '("a64boot")
                 () ()
                 '("khop"))
        "rv64"

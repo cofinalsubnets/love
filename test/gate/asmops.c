@@ -102,8 +102,10 @@ uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_wr_vbar_el1(p);
   k_daif_mask_all();
   k_daif_unmask_irq();
+  k_irq_restore(k_irq_save());
   k_tlbi_all();
   k_dc_cvau(p);
+  k_dc_civac(p);
   k_ic_ivau(p);
   k_ic_iallu();
   k_wr_ttbr0_el1(p);
@@ -126,8 +128,11 @@ void const *const k_asmops_keep[] = {
   (void const*) k_wr_vbar_el1,
   (void const*) k_daif_mask_all,
   (void const*) k_daif_unmask_irq,
+  (void const*) k_irq_save,
+  (void const*) k_irq_restore,
   (void const*) k_tlbi_all,
   (void const*) k_dc_cvau,
+  (void const*) k_dc_civac,
   (void const*) k_ic_ivau,
   (void const*) k_ic_iallu,
   (void const*) k_wr_ttbr0_el1,

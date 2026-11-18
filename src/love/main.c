@@ -192,7 +192,7 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
   g->sp[2] = putcharm(-2); }                              // drained; now reap
  int st; pid_t w;
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
- if (!w) { g->next_wake_at = love_clock() + 1; return g; }
+ if (!w) { g->next_wake_at = tick_add(love_tick(), 1); return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
  // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
  if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
@@ -687,10 +687,11 @@ int main(int argc, char const **argv) {
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uintptr_t t0 = love_clock(), blen = 0;
+   uint64_t t0 = love_clock();
+   uintptr_t blen = 0;
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
-    woke_ms = love_clock() - t0,
+    woke_ms = (uintptr_t) (love_clock() - t0),
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   char const *envimg = getenv("LOVE_IMAGE");

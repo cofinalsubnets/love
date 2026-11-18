@@ -758,10 +758,20 @@
    (lodivk g op a b)
     (b @ ([_ t0 [['li t1 n]]] && t0 = t1 && cint? n && 0 < n && !(abl? g 'divk))
           (: u (cmpu g (vty a) (vty b)) rt (rbin g (vty a) (vty b)) bw (8 * wsize g) rem (op = '%)
-             (? (u && pow2? n) 'no
+             q (lodivl g rem u a n rt bw)
+             (? (q != 'no) q
+                (u && pow2? n) 'no
                 (pow2? n) (loz g a b @ [_ x fx] (lodivp g rem x fx rt n bw))
                 (t32? g || wasm? g || xt? g || n < 3 || !(n < 1 << (u ? bw (bw - 1)))) 'no
                 (loz g a b @ [_ x fx] (lodivm g rem u x fx rt n bw))))
+         _ 'no)
+   ; a literal by a literal: C's answer, truncated toward zero; an unsigned negative one only at the word
+   (lodivl g rem u a n rt bw)
+    (a @ ([_ t [['li t2 k]]] && t = t2 && cint? k && (!u || 0 <= k || tsz g rt = wsize g))
+          (: W (bw 2)
+             x (u && k < 0 ? (k + W) k)
+             v (rem ? (x % n) (x // n))
+             (lomk g @ d [rt d [['li d (u && W // 2 <= v ? (v - W) v)]]]))
          _ 'no)
    ; C rounds toward zero and sar toward -inf: a negative dividend takes n - 1 first
    (lodivp g rem x fx rt n bw)
@@ -2359,7 +2369,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ dlout g (rasub f2 loc) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ dlout g (raunmark (radrl g (rakeep g (rasubk f2 loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rv? g || xt? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))

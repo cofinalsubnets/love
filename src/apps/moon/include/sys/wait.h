@@ -9,5 +9,4 @@
 #define WSTOPSIG(s)    (((s) >> 8) & 255)
 /* glibc's signed-char trick: stopped (0x7f) must not read as signaled */
 #define WIFSIGNALED(s) ((((signed char)(((s) & 127) + 1)) >> 1) > 0)
-int waitpid(int, int*, int);
-int wait(int*);
+int waitpid(int, int*, int), wait(int*);

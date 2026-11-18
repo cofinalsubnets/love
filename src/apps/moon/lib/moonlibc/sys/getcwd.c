@@ -8,7 +8,7 @@ char *getcwd(char *b, unsigned long n) {
     if (!getcwd(m, n ? n : 4096)) { free(m); return 0; }
     if (!n) { char *t = realloc(m, strlen(m) + 1); if (t) m = t; }
     return m; }
-  if (!n) { __errno_v = EINVAL; return 0; }
+  if (!n) { errno = EINVAL; return 0; }
 #ifdef LvMac
   if (__love_osv == 4) {                   /* no getcwd: the path of an open "." (F_GETPATH) */
     char p[1024];
@@ -16,10 +16,10 @@ char *getcwd(char *b, unsigned long n) {
     if (fd < 0) return 0;
     long r = fb3(92, fd, 50, (long) p);
     close(fd);
-    if (r < 0) { __errno_v = (int) -r; return 0; }
-    if (strlen(p) >= n) { __errno_v = ERANGE; return 0; }
+    if (r < 0) { errno = (int) -r; return 0; }
+    if (strlen(p) >= n) { errno = ERANGE; return 0; }
     return strcpy(b, p); }
 #endif
   long r = sc2(NR_getcwd, (long) b, (long) n);
-  if (r < 0) { __errno_v = (int) -r; return 0; }
+  if (r < 0) { errno = (int) -r; return 0; }
   return b; }

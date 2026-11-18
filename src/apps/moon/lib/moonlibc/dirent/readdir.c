@@ -4,7 +4,7 @@ struct dirent *readdir(DIR *d) {
     /* the 4th arg is a BSD's basep, which macos writes unasked; linux ignores it */
     long long base;
     long n = sc4(NR_getdents64, d->fd, (long) d->buf, sizeof d->buf, __love_osv == 4 ? (long) &base : 0);
-    if (n <= 0) { if (n < 0) __errno_v = (int) -n; return 0; }
+    if (n <= 0) { if (n < 0) errno = (int) -n; return 0; }
     d->len = (int) n; d->pos = 0; }
   if (__love_osv == 2) {
     struct __fb_dirent *fe = (struct __fb_dirent *) (d->buf + d->pos);

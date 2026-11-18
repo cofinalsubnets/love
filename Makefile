@@ -299,7 +299,7 @@ else
 moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                         src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h)
 # out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
-# pole (three ISAs' runtime members, ~80 s of cpu cold) -- behind the TU list they start as
+# pole (six ISAs' runtime members, ~200 s of cpu cold) -- behind the TU list they start as
 # they finish and run alone. ahead of them they ride beside them, and -j loses that time.
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
@@ -509,7 +509,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64 i386
+rt_isas = x64 a64 rv64 i386 arm rv32 wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -518,21 +518,22 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-# i386 has no 64-bit divide: its roster carries rt.c's helpers too
+# i386, arm and rv32 have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
 rt_groups_i386 = $(rt_groups) rt
+rt_groups_arm = $(rt_groups) rt
+rt_groups_rv32 = $(rt_groups) rt
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,$(if $(filter wasm,$(1)),,mksys),$$(call rt_src,$(2)))
 endef
 $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
-# arm's, not carried: built only for a port whose own linker pulls members (teensy41's kernel)
-rt_arm_a = $(foreach g,$(rt_groups) rt,out/rt/arm/$g.a)
-$(foreach g,$(rt_groups) rt,$(eval $(call rtgroup,arm,$g)))
+# arm's, for a port whose own linker pulls members (teensy41's kernel)
+rt_arm_a = $(foreach g,$(rt_groups_arm),out/rt/arm/$g.a)
 out/rt/arm.list: force_dist_list $(rt_arm_a)
 	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_arm_a)' > $$tf; \
 	 $(note)
@@ -685,8 +686,13 @@ ko = out$(hsuf)
 mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
+# a board under the arch: kb=pi takes $a/pi/*.c over the same-named $a/*.c, defines k_pi,
+# and names the odir, the elf and the boot stub $a$(kb)
+ka = $a$(kb)
+kb_c = $(if $(kb),$(wildcard $(S)/inle/$a/$(kb)/*.c),)
+kcppflags += $(if $(kb),-Dk_$(kb),)
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-k_arch_c = $(wildcard $(S)/inle/$a/*.c)
+k_arch_c = $(filter-out $(addprefix $(S)/inle/$a/,$(notdir $(kb_c))),$(wildcard $(S)/inle/$a/*.c)) $(kb_c)
 k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c $S/inle/efi.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
@@ -708,8 +714,8 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$a
-k_elf = $(ko)/love-$a.elf
+k_odir = $(ko)/$(ka)
+k_elf = $(ko)/love-$(ka).elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
 # and one name -- wasm is nobody's arch, so the seat's letter is not in it
@@ -804,7 +810,12 @@ endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a $(k_pie_o) && test -s $@
+	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $(ka) $(k_pie_o) && test -s $@
+
+# the pi's firmware and qemu's raspi load a flat image, not an elf
+$(ko)/love-$(ka).img: $(k_elf) $S/tools/kflat.l $(mdep)
+	@echo 'HOLO	'$@
+	@$m $S/tools/kflat.l $(k_elf) $@ && test -s $@
 
 out/lib/korelist.h: Makefile
 	@mkdir -p out/lib
@@ -926,10 +937,14 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $S/inle/%.l $(klay_l)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+$(k_lay_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -q -e '(lay-$* "$@" "$a")' && test -s $@
+$(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+	@echo 'HOLO	'$@
+	@mkdir -p "$(dir $@)"
+	@$m -l $< -q -e '(lay-$* "$@" "$(ka)")' && test -s $@
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.

@@ -19,11 +19,9 @@ int madvise(void*, long, int);
 #define MS_ASYNC      1
 #define MS_INVALIDATE 2
 #define MS_SYNC       4
-int msync(void*, unsigned long, int);
-int mincore(void*, unsigned long, unsigned char*);
+int msync(void*, unsigned long, int), mincore(void*, unsigned long, unsigned char*);
 void *mmap(void*, long, int, int, int, off_t);
-int munmap(void*, long);
-int mprotect(void*, long, int);
+int munmap(void*, long), mprotect(void*, long, int);
 #define MREMAP_MAYMOVE 1
 #define MREMAP_FIXED   2
 void *mremap(void*, unsigned long, unsigned long, int, ...);

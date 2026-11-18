@@ -272,11 +272,25 @@
          'sx1 (k \ (k % 256 + 256) % 256 @ z (z < 128 ? z (z - 256)))
          'sx2 (k \ (k % 65536 + 65536) % 65536 @ z (z < 32768 ? z (z - 65536)))
          'sx4 (k \ (k % 4294967296 + 4294967296) % 4294967296 @ z (z < 2147483648 ? z (z - 4294967296)))}
-   (nmlit fs)
-    (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (nmlit (['li t ((nmun op) k)] . u))
-          ((['li t k] . ['shl t2 n] . u) && t = t2 && cint? k && cint? n && 0 <= n < 32 && fits32 (k * n 2)) (nmlit (['li t (k * n 2)] . u))
-          (f . u) (f . nmlit u)
-          _ ())
+   nmsv {'shlv 'shl 'shrv 'shr 'sarv 'sar}
+   ; ..and a shift by a literal count, as the word lays it: a shl past the word's range stays
+   (nmlit g fs)
+    (: bw (8 * wsize g)
+       h ((bw - 1) 2)
+       (sh op k n) (? !(0 <= n && n < bw && 0 - h <= k && k < h) ()
+                      (op = 'sar) [(k >> n)]
+                      (op = 'shr) [((k < 0 ? (k + h + h) k) >> n)]
+                      (k * n 2 @ r (0 - h <= r && r < h ? [r])))
+       (go fs)
+        (fs @ ((['li t k] . [op t2] . u) && t = t2 && cint? k && peep nmun op ()) (go (['li t ((nmun op) k)] . u))
+              ((['li t k] . [op t2 n] . u) && t = t2 && cint? k && cint? n && elem op '(shl shr sar) && two? (sh op k n))
+               (go (['li t <(sh op k n)] . u))
+              ; a count lo.l copied to r1 for the one shift after it, known: the immediate shift
+              ((['li 'r1 k] . [op d 'r1] . u) && cint? k && 0 <= k && k < bw && peep nmsv op ())
+               (go ([(nmsv op) d k] . u))
+              (f . u) (f . go u)
+              _ ())
+       (go fs))
 
    ; within a block, a vreg's one def but its declaration's while what it read still holds: copies
    ; read through, an add or lea of a literal moves into the offset, an add of a scaled index into an
@@ -347,12 +361,13 @@
           (go fs)))
 
    (nmround g fs0)
-    (nmwid g (nmlit fs0) @ fs
+    (nmwid g (nmlit g fs0) @ fs
        (nmdn g fs @ dn
           (nmmaps fs dn @ [cp kc]
-             ; the substitution may add defs, so the block pass counts again
-             (nmsub g fs cp kc dn @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
-   ; a multiply by a power of two the fold left is a shift, off x86 through a register;
+             ; the substitution may add defs, so the block pass counts again; a literal it copies
+             ; down folds into the rewrite after it now
+             (nmlit g (nmsub g fs cp kc dn) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+   ; a multiply by a power of two the fold left is a shift, through a register too;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
     (: (lg n) (n = 1 ? 0 (1 + lg (n >> 1)))
@@ -362,7 +377,9 @@
        (x86k d a k) (odd k @ m ((m = 1 ? (a = d ? () [['mov d a]]) [['leax d a a (m - 1) 0]]) + (1 < k // m ? [['shl d (lg (k // m))]])))
        (kx86? k) (cint? k && 1 < k && (k & (k - 1) = 0 || elem (odd k) '(3 5 9)))
        (go fs) (fs @ ((['mov d a] . ['imul d2 x k] . u) && d = d2 && d = x && kx86? k) (x86k d a k + go u)
-                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k) _ [f])) + go u)
+                     (f . u) (((f @ (['imul d a k] && kx86? k) (x86k d a k)
+                                     (['imul d a k] && lovr? k && p2 (kv k)) ((a = d ? () [['mov d a]]) + [['shl d (lg (kv k))]])
+                                     _ [f])) + go u)
                      ())
        (x86? g ? (go fs)
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
@@ -486,7 +503,36 @@
        (go () fs))
    ; -> the forms normalised; a form whose reads raops cannot say leaves them as they are
    (nmall g fs)
-    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (? (x64? g || a64? g) (nmhoist g r @ h (h == r ? r (nmfix g h))) (t32? g && !(v6m? g)) (nmlsr g r @ h (h == r ? r (nmfix g h))) r)))))
+    (any (f \ raops g f @ 'bad 1 _ ()) fs ? fs (nmsf g (nmfwd g (nmlow g (nmfix g (nmreach (nminv g (nmfuse g fs))) @ r (? (x64? g || a64? g) (nmhoist g r @ h (h == r ? r (nmfix g h))) (t32? g && !(v6m? g)) (nmlsr g r @ h (h == r ? r (nmfix g h))) r))))))
+   ; a frame slot read again within a block, while a vreg still holds what was last stored there or
+   ; read from it at that width, is a copy of the vreg. a label, a jump, or a form that might write
+   ; memory past the frame forgets every slot; a store into the frame, the slots it may touch; a
+   ; write to the vreg, its own
+   (nmsfk op) (? (elem op '(ld st)) 'g (elem op '(ldss stss)) 'f 'd)
+   (nmsfc c) (c @ 'g 'mov 'f 'movss _ 'movapd)
+   (nmsfq g) (g 'nmsfq @ () (: q (foldl (t \ o \ pin t o 1) {} (ldops9 + fldops + leaops + xops + fxops + x4ops + m4ops + aluops + flagops + divops +
+                                       wmops + vshops + unops + rafbin +
+                                       '(mov movss movapd li fimm fli la laa lapool set cmov cmp test shl shr sar rol ror ror4
+                                         ucomiss ucomisd ucom0 br movdxr movdrx movqxr movqrx movqrr movrrq cuse cdef
+                                         cvtsi2ss cvtsi2sd cvttss2si cvttsd2si cvtss2sd cvtsd2ss negss negsd sqrtss sqrtsd))) (pins g 'nmsfq q, q)) t t)
+   (nmsf g fs)
+    (: (has k o c) (k @ ([o2 c2 v] . u) (o2 = o && c2 = c ? v (has u o c)) _ ())
+       (near o k) (filter (e \ abs (<e - o) >= 8) k)
+       ; w read again in its block before a write, so the copy keeps it no longer
+       (rd? w u) (u @ (f . u2) (f @ ('label . _) 0 _ (raops g f @ [r d] (elem w r ? 1 (elem w d ? 0 (rd? w u2))) _ 0)) _ 0)
+       (go fs k)
+        (fs @ (f . u)
+              (f @ ([op v 'r4 o] && elem op '(ld ldss ldsd) && charm? o && lovr? v)
+                    (: c (nmsfk op) k2 (filter (e \ e 2 != v) k)
+                       (has k o c @ () (f . go u ([o c v] . k2))
+                                    w (? (w = v) (go u k) (!(rd? w u)) (f . go u ([o c v] . k2)) ([(nmsfc c) v w] . go u k2))))
+                   ([op 'r4 o v] && elem op '(st stss stsd) && charm? o && lovr? v)
+                    (f . go u ([o (nmsfk op) v] . near o k))
+                   ([op 'r4 o _] && elem op stops9 && charm? o) (f . go u (near o k))
+                   _ (!(two? f) || !(nmsfq g <f) ? (f . go u ())
+                        (raops g f @ [_ d] (f . go u (filter (e \ nelem (e 2) d) k)) _ (f . go u ()))))
+              _ ())
+     (abl? g 'sf ? fs (go fs ())))
    ; a 32-bit extension of a vreg whose every reader takes only its low half goes. such a reader:
    ; the extension, a store of 4 bytes or less, or an add, sub, imul, and, or, xor or copy whose
    ; answer is such a vreg in turn or is extended by the next form

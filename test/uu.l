@@ -2337,6 +2337,15 @@
  (defn uidf (pi T UU x T T) (lam T x x))
  ('accepted = rejects (z \ defn uidf-self (pi T UU x T T) (uidf (pi T UU x T T) uidf))))
 (univ univ-was)
+; a vc's levels go once it is checked, and what a path through them implied stays
+(: ufresh (uu 'ufresh) ule (uu 'ule) ucommit (uu 'ucommit) ucompact (uu 'ucompact)
+   ureset (uu 'ureset) ulive (uu 'ulive))
+(test
+ (: n (ulive 0) _ (defvc uu-lv-vc (pi T UU (pi x T T)) (lam T (lam x x))) (n = ulive 0))
+ (: _ (ureset 'uu-lv-ab) a (ufresh 0) b (ufresh 0) _ (ucommit 'uu-lv-ab)
+    _ (ureset 'uu-lv-d) d (ufresh 0) _ (ule a d) _ (ule ['lv (d 1) 1] b) _ (ucompact () (ucommit 'uu-lv-d))
+    ('accepted = rejects (z \ (ureset 'uu-lv-ok, ule a b, ucommit 'uu-lv-ok))
+     && 'rejected = rejects (z \ (ureset 'uu-lv-no, ule b a, ucommit 'uu-lv-no)))))
 ; --- conv in pairs: a mixed-up env or de bruijn level would accept a bad proof
 ; --- silently. each negative needs its accepted twin ---
 (test

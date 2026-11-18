@@ -7,3 +7,14 @@ int rand(void) { return (int) ((__rstep() >> 49) & 32767); }
 void srand(unsigned int s) { __rnd = s; }
 long random(void) { return (long) ((__rstep() >> 33) & 2147483647); }
 void srandom(unsigned int s) { __rnd = s; }
+/* glibc's: three steps of the old lcg, 11 + 10 + 10 bits, the whole state the caller's word */
+int rand_r(unsigned int *seed) {
+  unsigned int n = *seed;
+  n = n * 1103515245 + 12345;
+  int r = (int) (n / 65536 % 2048);
+  n = n * 1103515245 + 12345;
+  r = r << 10 ^ (int) (n / 65536 % 1024);
+  n = n * 1103515245 + 12345;
+  r = r << 10 ^ (int) (n / 65536 % 1024);
+  *seed = n;
+  return r; }

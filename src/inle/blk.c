@@ -189,6 +189,9 @@ static int blk_mmio(volatile uint8_t *m, void *dma) {
   return 1; }
 
 static void blk_scan(void *dma) {
+#if defined(k_pi)
+  (void) dma; return;                          // the pi has ram where virt has the slots
+#endif
   for (uint32_t i = 0; i < VIRTIO_MMIO_N; i++) {
     volatile uint8_t *m =
       (volatile uint8_t*) (khhdm + VIRTIO_MMIO_PHYS + i * VIRTIO_MMIO_STEP);

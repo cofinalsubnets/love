@@ -46,7 +46,7 @@ static lvm_t *const mul_mx[KN][KN] = {
  [KTablet] = mx_MUL_H,
  [KHot] = mx_MUL_H,
 };
-static enum q const kind_of_d[] = { [DMint] = KMint, [DNom] = KNom, [DGem] = KGem, [DTwin] = KTwin, [DBig] = KSun, [DTray] = KTrayZ, [DString] = KString, [DChain] = KChain };
+static enum q const kind_of_d[] = { [DMint] = KMint, [DNom] = KNom, [DGem] = KGem, [DTwin] = KTwin, [DBig] = KSun, [DTray] = KTrayZ, [DString] = KString, [DChain] = KChain, [DTab] = KTablet };
 #undef mx_row
 #undef mx_ADD_MINT
 #undef mx_ADD_NUM
