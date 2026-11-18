@@ -194,7 +194,7 @@ static char const vsrc[] =
 static char const fsrc[] =
  "#version 300 es\n"
  "#extension GL_EXT_blend_func_extended : enable\n"
- "precision highp float; in vec2 uv; in vec3 col; in vec3 scol; in vec3 lp; in float w;\n"
+ "precision highp float; precision highp int; in vec2 uv; in vec3 col; in vec3 scol; in vec3 lp; in float w;\n"
  "uniform sampler2D tx; uniform vec2 ts; uniform int has; uniform vec3 fog; uniform vec2 fz; uniform float tone; uniform int mode;\n"
  "uniform highp sampler2D fbt; uniform highp sampler2D gbt; uniform int fg;\n"
  "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
@@ -237,7 +237,7 @@ static char const uvsrc[] =
  "void main(){ vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0); gl_Position = vec4(p, 0.0, 1.0); }\n";
 static char const ufsrc[] =
  "#version 300 es\n"
- "precision highp float; uniform highp sampler2D cc; uniform highp sampler2D cd; uniform ivec2 cs; uniform ivec2 fs;\n"
+ "precision highp float; precision highp int; uniform highp sampler2D cc; uniform highp sampler2D cd; uniform ivec2 cs; uniform ivec2 fs;\n"
  "out vec4 o;\n"
  "uniform int base;\n"
  "void main(){ ivec2 p = ivec2(gl_FragCoord.xy);\n"
@@ -251,7 +251,7 @@ static char const ufsrc[] =
 // and swizzled, the frame's own, the spots laid over its sky
 static char const sfsrc[] =
  "#version 300 es\n"
- "precision highp float; uniform sampler2D t; uniform sampler2D ov; uniform vec4 r; uniform vec2 wh; uniform int swz; out vec4 o;\n"
+ "precision highp float; precision highp int; uniform sampler2D t; uniform sampler2D ov; uniform vec4 r; uniform vec2 wh; uniform int swz; out vec4 o;\n"
  "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y), uv = (p - r.xy) / (r.zw - r.xy);\n"
  " vec4 k = texture(t, uv); o = vec4(swz != 0 ? k.bgr : k.rgb, 1.0);\n"
  " if (swz > 1 && abs(k.a * 255.0 - 254.0) < 0.5) { vec4 s = texture(ov, uv); if (s.a > 0.5) o = vec4(s.rgb, 1.0); } }\n";
@@ -264,11 +264,11 @@ static char const pvsrc[] =
  " col = vec3(float(k >> 16 & 255), float(k >> 8 & 255), float(k & 255)) / 255.0; }\n";
 static char const pfsrc[] =
  "#version 300 es\n"
- "precision highp float; flat in vec3 col; out vec4 o; void main(){ o = vec4(col, 1.0); }\n";
+ "precision highp float; precision highp int; flat in vec3 col; out vec4 o; void main(){ o = vec4(col, 1.0); }\n";
 // ..a pixel of the frame that the cpu must finish: bare, or glass over the bare
 static char const kfsrc[] =
  "#version 300 es\n"
- "precision highp float; uniform highp sampler2D t; out vec4 o;\n"
+ "precision highp float; precision highp int; uniform highp sampler2D t; out vec4 o;\n"
  "void main(){ if (texelFetch(t, ivec2(gl_FragCoord.xy), 0).a > 192.5 / 255.0) discard; o = vec4(0.0); }\n";
 
 static GLuint program(GLuint vs, GLuint fs) {
