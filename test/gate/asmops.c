@@ -159,6 +159,10 @@ uint64_t k_asmops_probe(uintptr_t p, uint64_t bits) {
   k_wait();
   k_fence();
   k_wr_stvec(p);
+  k_wr_satp(k_rd_satp());
+  k_sfence();
+  k_fence_i();
+  k_wr_scounteren(bits);
   k_sie_set(bits);
   k_sie_on();
   k_sie_off();
@@ -169,6 +173,11 @@ void const *const k_asmops_keep[] = {
   (void const*) k_wait,
   (void const*) k_fence,
   (void const*) k_wr_stvec,
+  (void const*) k_rd_satp,
+  (void const*) k_wr_satp,
+  (void const*) k_sfence,
+  (void const*) k_fence_i,
+  (void const*) k_wr_scounteren,
   (void const*) k_sie_set,
   (void const*) k_sie_on,
   (void const*) k_sie_off,
