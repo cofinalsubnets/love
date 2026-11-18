@@ -64,7 +64,7 @@ enum {
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
  GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
- GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11 };
+ GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11, GL_ANY_SAMPLES_PASSED = 0x8C2F, GL_QUERY_RESULT = 0x8866, GL_POINTS = 0 };
 
 #define EGLFNS(X) \
  X(unsigned, eglInitialize, (EGLDisplay, EGLint *, EGLint *)) \
@@ -122,6 +122,8 @@ enum {
  X(void, glClearColor, (GLfloat, GLfloat, GLfloat, GLfloat)) X(void, glClear, (GLbitfield)) \
  X(void, glDrawElements, (GLenum, GLsizei, GLenum, const void *)) \
  X(void, glReadPixels, (GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *)) \
+ X(void, glGenQueries, (GLsizei, GLuint *)) X(void, glBeginQuery, (GLenum, GLuint)) X(void, glEndQuery, (GLenum)) \
+ X(void, glGetQueryObjectuiv, (GLuint, GLenum, GLuint *)) \
  X(const unsigned char *, glGetString, (GLenum))
 
 #define DECL(r, n, a) static r (*n) a;
@@ -149,7 +151,8 @@ struct helper {
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
  EGLDisplay d; EGLConfig cf; EGLContext c; EGLSurface ws; void *xd;   // ws: the window shown on, by xd's display
- GLuint sprog, stex; GLint us_r, us_wh;
+ GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz; int kept;
+ GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot   // kept: the frame drawn left unread, none of it the cpu's
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -245,11 +248,28 @@ static char const ufsrc[] =
 
 // ..a picture shown on the window: r its rect in the window's pixels, top down, which it fills,
 // its edges carried on past
+// and swizzled, the frame's own, the spots laid over its sky
 static char const sfsrc[] =
  "#version 300 es\n"
- "precision highp float; uniform sampler2D t; uniform vec4 r; uniform vec2 wh; out vec4 o;\n"
- "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y);\n"
- " o = vec4(texture(t, (p - r.xy) / (r.zw - r.xy)).rgb, 1.0); }\n";
+ "precision highp float; uniform sampler2D t; uniform sampler2D ov; uniform vec4 r; uniform vec2 wh; uniform int swz; out vec4 o;\n"
+ "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y), uv = (p - r.xy) / (r.zw - r.xy);\n"
+ " vec4 k = texture(t, uv); o = vec4(swz != 0 ? k.bgr : k.rgb, 1.0);\n"
+ " if (swz > 1 && abs(k.a * 255.0 - 254.0) < 0.5) { vec4 s = texture(ov, uv); if (s.a > 0.5) o = vec4(s.rgb, 1.0); } }\n";
+// ..spots: a pixel's index and its word, laid on a texture of the frame's size
+static char const pvsrc[] =
+ "#version 300 es\n"
+ "layout(location=0) in float i; layout(location=1) in float c; uniform ivec2 sz; flat out vec3 col;\n"
+ "void main(){ int n = int(i), k = int(c); vec2 q = (vec2(float(n % sz.x), float(n / sz.x)) + 0.5) / vec2(sz);\n"
+ " gl_Position = vec4(q * 2.0 - 1.0, 0.0, 1.0); gl_PointSize = 1.0;\n"
+ " col = vec3(float(k >> 16 & 255), float(k >> 8 & 255), float(k & 255)) / 255.0; }\n";
+static char const pfsrc[] =
+ "#version 300 es\n"
+ "precision highp float; flat in vec3 col; out vec4 o; void main(){ o = vec4(col, 1.0); }\n";
+// ..a pixel of the frame that the cpu must finish: bare, or glass over the bare
+static char const kfsrc[] =
+ "#version 300 es\n"
+ "precision highp float; uniform highp sampler2D t; out vec4 o;\n"
+ "void main(){ if (texelFetch(t, ivec2(gl_FragCoord.xy), 0).a > 192.5 / 255.0) discard; o = vec4(0.0); }\n";
 
 static GLuint program(GLuint vs, GLuint fs) {
  GLuint p = glCreateProgram(); GLint ok = 0;
@@ -302,6 +322,15 @@ static int setup(struct helper *H, int x) {
  glUseProgram(H->sprog);
  glUniform1i(glGetUniformLocation(H->sprog, "t"), 0);
  H->us_r = glGetUniformLocation(H->sprog, "r"); H->us_wh = glGetUniformLocation(H->sprog, "wh");
+ H->us_swz = glGetUniformLocation(H->sprog, "swz");
+ GLuint kfs = shader(GL_FRAGMENT_SHADER, kfsrc);
+ if (!kfs || !(H->kprog = program(uvs, kfs))) { dprintf(1, "err link\n"); return 0; }
+ glUseProgram(H->kprog); glUniform1i(glGetUniformLocation(H->kprog, "t"), 0);
+ GLuint pvs = shader(GL_VERTEX_SHADER, pvsrc), pfs = shader(GL_FRAGMENT_SHADER, pfsrc);
+ if (!pvs || !pfs || !(H->pprog = program(pvs, pfs))) { dprintf(1, "err link\n"); return 0; }
+ glUseProgram(H->pprog); H->up_sz = glGetUniformLocation(H->pprog, "sz");
+ glUseProgram(H->sprog); glUniform1i(glGetUniformLocation(H->sprog, "ov"), 1);
+ glGenQueries(1, &H->kq);
  glUseProgram(H->uprog);
  glUniform1i(glGetUniformLocation(H->uprog, "cc"), 0); glUniform1i(glGetUniformLocation(H->uprog, "cd"), 1);
  H->uu_cs = glGetUniformLocation(H->uprog, "cs"); H->uu_fs = glGetUniformLocation(H->uprog, "fs");
@@ -434,6 +463,12 @@ static void cmd_verts(struct helper *H, int id, int nv, size_t off, int S) {
  glBindBuffer(GL_ARRAY_BUFFER, 0);
  dprintf(1, "ok\n"); }
 
+static GLuint plain(GLenum f, GLenum ty, int w, int h) {
+ GLuint t; glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+ glTexImage2D(GL_TEXTURE_2D, 0, (GLint) f, w, h, 0, GL_RGBA, ty, NULL);
+ return t; }
+
 // the window shown on: X's window xid, on the display opened for it
 static void cmd_win(struct helper *H, unsigned long xid) {
  if (!H->xd) { dprintf(1, "err no window display\n"); return; }
@@ -444,47 +479,84 @@ static void cmd_win(struct helper *H, unsigned long xid) {
  H->ws = ws;
  dprintf(1, "ok\n"); }
 
-// ..a picture w by h laid over the window W by H at [ax ay], then n strips: rows y0..y1 of
-// the window's own, laid as they are; and shown
-static void lay(struct helper *H, unsigned char const *p, int w, int h, float x0, float y0, float x1, float y1, int W, int Hh, int lin) {
- unsigned char *rgba = malloc(4 * (size_t) w * h);
- if (!rgba) return;
- texels(rgba, p, (size_t) w * h);
- glBindTexture(GL_TEXTURE_2D, H->stex);
- glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
- free(rgba);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, lin ? GL_LINEAR : GL_NEAREST);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, lin ? GL_LINEAR : GL_NEAREST);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+// ..texture t over the rect x0 y0 x1 y1 of the window W by H, top down; swizzled, the frame's own
+static void lay(struct helper *H, GLuint t, int swz, float x0, float y0, float x1, float y1, int W, int Hh) {
+ glBindTexture(GL_TEXTURE_2D, t);
+ glUniform1i(H->us_swz, swz);
  glUniform4f(H->us_r, x0, y0, x1, y1); glUniform2f(H->us_wh, (float) W, (float) Hh);
  glViewport(0, 0, W, Hh);
  glScissor((GLint) x0, Hh - (GLint) y1, (GLsizei) (x1 - x0), (GLsizei) (y1 - y0));
  glDrawArrays(GL_TRIANGLES, 0, 3); }
 
+// ..words w by h at p, as the texture shown
+static GLuint put(struct helper *H, unsigned char const *p, int w, int h) {
+ unsigned char *rgba = malloc(4 * (size_t) w * h);
+ if (!rgba) return 0;
+ texels(rgba, p, (size_t) w * h);
+ glBindTexture(GL_TEXTURE_2D, H->stex);
+ glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+ free(rgba);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+ return H->stex; }
+
+// ..ns spots, their indices then their words as floats at p, laid on the spots' texture
+static int spots(struct helper *H, unsigned char const *p, int ns, int w, int h) {
+ if (!H->ot || H->ow != w || H->oh != h) {
+  if (H->ot) glDeleteTextures(1, &H->ot), glDeleteFramebuffers(1, &H->ofb);
+  H->ot = plain(GL_RGBA8, GL_UNSIGNED_BYTE, w, h), H->ow = w, H->oh = h;
+  glGenFramebuffers(1, &H->ofb); glBindFramebuffer(GL_FRAMEBUFFER, H->ofb);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, H->ot, 0);
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { H->ow = H->oh = 0; return 0; } }
+ if (!H->pva) {
+  glGenVertexArrays(1, &H->pva); glBindVertexArray(H->pva); glGenBuffers(1, &H->pvb);
+  glBindBuffer(GL_ARRAY_BUFFER, H->pvb); }
+ glBindVertexArray(H->pva); glBindBuffer(GL_ARRAY_BUFFER, H->pvb);
+ glBufferData(GL_ARRAY_BUFFER, 8 * (intptr_t) ns, p, GL_STATIC_DRAW);
+ glVertexAttribPointer(0, 1, GL_FLOAT, 0, 4, (void*) 0); glEnableVertexAttribArray(0);
+ glVertexAttribPointer(1, 1, GL_FLOAT, 0, 4, (void*) (4 * (uintptr_t) ns)); glEnableVertexAttribArray(1);
+ glBindFramebuffer(GL_FRAMEBUFFER, H->ofb); glViewport(0, 0, w, h);
+ float const z[4] = { 0, 0, 0, 0 };
+ glClearBufferfv(GL_COLOR, 0, z);
+ glUseProgram(H->pprog); glUniform2i(H->up_sz, w, h);
+ glDrawArrays(GL_POINTS, 0, ns);
+ glBindVertexArray(0);
+ return 1; }
+
+// ..a picture w by h laid over the window W by H at [ax ay]: the words at off, or with kept
+// the frame last drawn and kept, ns spots over its sky, at off; then n rects x0 y0 x1 y1 of
+// the window's own, their words after; and shown
 static void cmd_show(struct helper *H, char *l) {
- int w, h, W, Hh, ax, ay, n, k = 0; long off;
- if (sscanf(l, "%d %d %d %d %d %d %ld %d%n", &w, &h, &W, &Hh, &ax, &ay, &off, &n, &k) != 8 || w < 1 || h < 1 || W < 1 || Hh < 1 || n < 0) {
+ int w, h, W, Hh, ax, ay, kept, ns, n, k = 0; long off;
+ if (sscanf(l, "%d %d %d %d %d %d %ld %d %d %d%n", &w, &h, &W, &Hh, &ax, &ay, &off, &kept, &ns, &n, &k) != 10 || w < 1 || h < 1 || W < 1 || Hh < 1 || n < 0 || ns < 0) {
   dprintf(1, "err show size\n"); return; }
  if (!H->ws) { dprintf(1, "err no window\n"); return; }
- size_t at = (size_t) off + 4 * (size_t) w * h;
- unsigned char const *p = bytes(H, (size_t) off, 4 * (size_t) w * h);
- if (!p) { dprintf(1, "err show bytes\n"); return; }
+ if (kept && !(H->kept && w == H->fw && h == H->fh)) { dprintf(1, "err no frame kept\n"); return; }
+ unsigned char const *sp = kept && ns ? bytes(H, (size_t) off, 8 * (size_t) ns) : NULL;
+ if (kept && ns && !(sp && spots(H, sp, ns, w, h))) { dprintf(1, "err show spots\n"); return; }
+ size_t at = (size_t) off + (kept ? 8 * (size_t) ns : 4 * (size_t) w * h);
+ unsigned char const *p = kept ? NULL : bytes(H, (size_t) off, 4 * (size_t) w * h);
+ if (!kept && !p) { dprintf(1, "err show bytes\n"); return; }
  if (!H->stex) glGenTextures(1, &H->stex);
  glBindFramebuffer(GL_FRAMEBUFFER, 0);
  glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
  glUseProgram(H->sprog); glActiveTexture(GL_TEXTURE0);
  glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT);
  glEnable(GL_SCISSOR_TEST);
- lay(H, p, w, h, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh), W, Hh, 0);
+ if (kept && ns) glActiveTexture(GL_TEXTURE1), glBindTexture(GL_TEXTURE_2D, H->ot), glActiveTexture(GL_TEXTURE0);
+ GLuint t = kept ? H->rb : put(H, p, w, h);
+ if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh), W, Hh);
  char *s = l + k;
- for (int i = 0, y0, y1, j; i < n; i++, s += j) {
-  if (sscanf(s, "%d %d%n", &y0, &y1, &j) != 2 || y0 < 0 || y1 <= y0 || y1 > Hh) break;
-  unsigned char const *q = bytes(H, at, 4 * (size_t) W * (y1 - y0));
-  if (!q) break;
-  lay(H, q, W, y1 - y0, 0.0f, (float) y0, (float) W, (float) y1, W, Hh, 0);
-  at += 4 * (size_t) W * (y1 - y0); }
+ for (int i = 0, x0, y0, x1, y1, j; i < n; i++, s += j) {
+  if (sscanf(s, "%d %d %d %d%n", &x0, &y0, &x1, &y1, &j) != 4 || x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 || x1 > W || y1 > Hh) break;
+  size_t const m = 4 * (size_t) (x1 - x0) * (y1 - y0);
+  unsigned char const *q = bytes(H, at, m);
+  if (!q || !(t = put(H, q, x1 - x0, y1 - y0))) break;
+  lay(H, t, 0, (float) x0, (float) y0, (float) x1, (float) y1, W, Hh);
+  at += m; }
  glDisable(GL_SCISSOR_TEST);
  eglSwapBuffers(H->d, H->ws);
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glUseProgram(H->prog);
@@ -548,12 +620,6 @@ static void cmd_drop(struct helper *H, int id) {
  dprintf(1, "ok\n"); }
 
 // a texture drawn into and asked by texel, w by h of the format f
-static GLuint plain(GLenum f, GLenum ty, int w, int h) {
- GLuint t; glGenTextures(1, &t); glBindTexture(GL_TEXTURE_2D, t);
- glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
- glTexImage2D(GL_TEXTURE_2D, 0, (GLint) f, w, h, 0, GL_RGBA, ty, NULL);
- return t; }
-
 static int target(struct helper *H, int w, int h) {
  if (w == H->fw && h == H->fh) return 1;
  if (H->fb) glDeleteFramebuffers(1, &H->fb), glDeleteFramebuffers(1, &H->gb), glDeleteTextures(1, &H->rb),
@@ -726,6 +792,16 @@ static void cmd_frame(struct helper *H, char *args) {
   glBindVertexArray(sb->vao);
   for (int r = 0; r < sb->nrun; r++) glDrawElements(GL_TRIANGLES, sb->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) sb->runs[r].at));
   glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); }
+ // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
+ H->kept = 0;
+ if ((int) v[10] & 512) {
+  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDepthMask(0);
+  glUseProgram(H->kprog); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->rb);
+  GLuint any = 1;
+  glBeginQuery(GL_ANY_SAMPLES_PASSED, H->kq); glDrawArrays(GL_TRIANGLES, 0, 3); glEndQuery(GL_ANY_SAMPLES_PASSED);
+  glGetQueryObjectuiv(H->kq, GL_QUERY_RESULT, &any);
+  glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glDepthMask(1); glUseProgram(H->prog);
+  if (!any) { H->kept = 1; dprintf(1, "kept\n"); return; } }
  size_t const N = (size_t) w * h;
  glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, out + 4 * N);
  if (glassy) {

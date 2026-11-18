@@ -6,8 +6,10 @@
 ;   (gpu-open x)                 a helper, or a nom with why: 'no-helper 'no-gpu; with x, one
 ;                                that can show on an X window
 ;   (gpu-win g xid)              the X window it shows on, () where it can
-;   (gpu-show g f w h W H at ys P) the picture f w by h shown over the window W by H at [x y],
-;                                then rows ys [y0 y1] of the paper P laid on it as they are
+;   (gpu-show g f w h W H at rs P) the picture f w by h shown over the window W by H at [x y],
+;                                or ['kept [S C]] the frame the helper kept, the pixels S over its
+;                                sky laid with the colours C; then rects rs [x0 y0 x1 y1]
+;                                of the paper P laid on it as they are
 ;   (gpu-tex g id w h t)         texture id, w by h: a tray of 0x00rrggbb (below 0 a hole), rows
 ;                                top first, or a list of them, each level half the last
 ;   (gpu-buf g id verts tris st) buf id: facets's verts (st numbers a vertex, 8, or 11 with the
@@ -138,20 +140,24 @@
  (gpu-win g xid) (ask g "win \(show xid)")
  ; ..laid past the frame's own room, which the helper may still be filling, and answered
  ; when the file is next written
- (gpu-show g f w h W H at ys P)
-  (: o (8 * w * h) n (4 * w * h) (rows y) (4 * W * (y 1 - y 0)) c (cask (n + +(map rows ys)))
-     _ ((cite 'guts 'pinv) c 0 4 4 f)
-     _ (foldl (\ a y (pour c a P (4 * W * y 0) (rows y), a + rows y)) n ys)
+ (gpu-show g f w h W H at rs P)
+  (: o (8 * w * h) kp (two? f) sp (kp && two? (f 1) ? (f 1) ()) I (two? sp ? (iota (sp 0 >= 0)) ()) ns #I
+     n (kp ? (8 * ns) (4 * w * h)) (size r) (4 * (r 2 - r 0) * (r 3 - r 1)) c (cask (n + +(map size rs)))
+     _ (? kp (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
+          ((cite 'guts 'pinv) c 0 4 4 f))
+     ; ..each rect's rows, one after another
+     (rows r a) (foldl (\ a y (pour c a P (4 * (y * W + r 0)) (4 * (r 2 - r 0)), a + 4 * (r 2 - r 0))) a (map (+ (r 1)) ^(r 3 - r 1)))
+     _ (foldl (\ a r (rows r a)) n rs)
      (room! g (o + #c), fdpush (g 'w) c 0 o #c,
-      say (g 'to) ("show \(show w) \(show h) \(show W) \(show H) \(show (at 0)) \(show (at 1)) \(show o) \(show #ys)"
-                   + foldl (\ a y (a + " " + show (y 0) + " " + show (y 1))) "" ys + "\n"),
+      say (g 'to) ("show \(show w) \(show h) \(show W) \(show H) \(show (at 0)) \(show (at 1)) \(show o) \(kp ? "1" "0") \(show ns) \(show #rs)"
+                   + foldl (\ a r (a + " " + unwords (map show r))) "" rs + "\n"),
       pin g 'shows (peep g 'shows 0 + 1), ()))
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
   (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
                                      + unwords (map show ids) + "\n"), ())
- (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
+ (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept" 'kept "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
@@ -204,7 +210,10 @@
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
                  y (string? u ? u (sky! s sk))
-                 e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0))]))
+                 ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
+                 ; or one that says its spots
+                 kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) ? 512 0)
+                 e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0) + kp)]))
                  p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
                  (? (string? e) (pin s 'g (), ())
                     !(peep s 'pipe 0) (now () @ () () q (q 0))
