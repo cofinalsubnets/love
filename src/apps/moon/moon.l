@@ -514,7 +514,7 @@
           (go fs {} () 0 ())))
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro hids]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (mprof 'cgen (_ \ cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts ni gregs [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt))
@@ -528,7 +528,7 @@
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 laid (tgt = 'arm && pc ? (laidin (fns + gns + lnames + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
+                 laid (tgt = 'arm && pc ? (laidin (fns + gns + lnames + hids + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
                  tforms (lpool tgt pc (picla tgt pc laid (wkla tgt wu tforms)))
                  xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc laid (wkla tgt wu forms))) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
