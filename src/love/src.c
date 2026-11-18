@@ -29,9 +29,9 @@ uint64_t image_carried_c(void) {
  return 0; }
 
 // a section alone ends in the two zero blocks a tar ends with; the last carries its own
-static love_noinline struct g *host_tree_tar(struct g *g) {
+static lvm(lvm_tree_tar) {
  struct tree *t = tree_carried();
- word a = g->sp[0];
+ word a = Sp[0];
  intptr_t one = -1;
  if (t && strp(a)) {
   char nm[9] = {0};
@@ -42,31 +42,41 @@ static love_noinline struct g *host_tree_tar(struct g *g) {
  for (uint32_t i = lo; t && i < hi; i++)
   if (tree_sec(t, i)) n += t->s[i].raw;
   else t = NULL;
- if (!t) return g->sp[0] = ZeroPoint, g;
- if (!ok(g = str0(g, n))) return g;             // pushes: the tar over the arg
- unsigned char *o = (unsigned char*) txt(g->sp[0]);
+ if (!t) love_musttail return Answer(ZeroPoint);
+ if (!n) love_musttail return Answer(EmptyString);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *z = ini_str(str(Hp), n);
+ Hp += req;
+ unsigned char *o = (unsigned char*) txt(z);
  for (uint32_t i = lo; i < hi; i++) memcpy(o, t->s[i].bytes, t->s[i].raw), o += t->s[i].raw;
  if (one > 0) memset(o, 0, 1024);
- return g->sp[1] = g->sp[0], g->sp += 1, g; }
+ love_musttail return Answer(word(z)); }
 
-static love_noinline struct g *host_tree_head(struct g *g) {
+static lvm(lvm_tree_head) {
  struct tree *t = tree_carried();
- if (!t) return g->sp[0] = ZeroPoint, g;
+ if (!t) love_musttail return Answer(ZeroPoint);
  uintptr_t w = 0;
  for (uint32_t i = 0; i < t->ns; i++)
   w += str_width(strlen(t->s[i].name)) + 7 * Width(struct chain);
- if (!ok(g = have(g, w))) return g;
+ Have(w);
  word l = ZeroPoint;
  for (uint32_t i = t->ns; i--;) {
   struct tree_sec const *s = t->s + i;
   uintptr_t nl = strlen(s->name);
-  struct str *nm = ini_str(bump(g, str_width(nl)), nl);
+  struct str *nm = ini_str(str(Hp), nl);
+  Hp += str_width(nl);
   memcpy(nm->bytes, s->name, nl);
-  word f[6] = { (word) nm, putcharm(s->codec), putcharm(s->raw), putcharm(s->packed),
-                putcharm(s->crc), putcharm(s->bytes ? 1 : 0) }, r = ZeroPoint;
-  for (int k = 6; k--;) r = word(ini_chain(bump(g, Width(struct chain)), f[k], r));
-  l = word(ini_chain(bump(g, Width(struct chain)), r, l)); }
- return g->sp[0] = l, g; }
+  struct chain *c = (struct chain*) Hp;
+  Hp += 7 * Width(struct chain);
+  word r = word(ini_chain(c + 5, putcharm(s->bytes ? 1 : 0), ZeroPoint));
+  r = word(ini_chain(c + 4, putcharm(s->crc), r));
+  r = word(ini_chain(c + 3, putcharm(s->packed), r));
+  r = word(ini_chain(c + 2, putcharm(s->raw), r));
+  r = word(ini_chain(c + 1, putcharm(s->codec), r));
+  r = word(ini_chain(c, (word) nm, r));
+  l = word(ini_chain(c + 6, r, l)); }
+ love_musttail return Answer(l); }
 
 love_noinline static struct g *host_rtar(struct g *g) {
  const unsigned char *p = 0;
@@ -96,8 +106,6 @@ love_noinline static struct g *host_rtar(struct g *g) {
  return g; }
 
 static LvmWrap(lvm_rtar, host_rtar)
-static LvmWrap(lvm_tree_tar, host_tree_tar)
-static LvmWrap(lvm_tree_head, host_tree_head)
 
 LvDef("tree-tar", tree_tar, 1, "tree");
 LvDef("tree-head", tree_head, 1, "tree");
