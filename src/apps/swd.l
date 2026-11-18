@@ -3,11 +3,13 @@
 ; turns swdio to the host (1) or the target (0), 'rst b holds nrst low (1) or lets it go (0);
 ; bits go lsb first. a probe wire moves whole transfers: 'xfer [[rq wdata] ..] answers
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
-; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set
+; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set. the
+; love swd probe and cmsis-dap are probe wires
 (module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
-             gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire)
+             nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
+             gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire dap-wire-on dap-wire)
 (borrow 'bytes)
 (borrow 'posix)
 (:
@@ -196,6 +198,27 @@
      (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
      (at 0))
 
+ ; an nrf52: its part, and its flash from 0 in pages, both from the ficr (codepagesize
+ ; +0x10, codesize +0x14 in pages); written through the nvmc: ready +0x400 (bit 0), config
+ ; +0x504 (1 writes, 2 erases, 0 reads), erasepage +0x508 taking a page's address
+ ficr 0x10000000 nv 0x4001E000
+ (nrf-ids w) [(swd-rd w (ficr + 0x100)) (swd-rd w (ficr + 0x10)) (swd-rd w (ficr + 0x14))]
+ (nrf-idle w k) (? ((swd-rd w (nv + 0x400) & 1) = 1) 1 (k > 0) (nrf-idle w (k - 1)) (scare 'nrf-busy 0))
+ (nrf-mode w m) (nrf-idle w 100000, swd-wr w (nv + 0x504) m)
+ (nrf-erase w a) (nrf-mode w 2, swd-wr w (nv + 0x508) a, nrf-mode w 0)
+ (nrf-write w a s) (nrf-mode w 1, swd-wrs w a (f4-words s), nrf-mode w 0)
+ ; erase the pages s covers from a, write it, read it back: 1, or where it differs first;
+ ; nothing to write, or bytes past the flash, scare before the chip is touched
+ (nrf-flash w a s)
+  (: ids (nrf-ids w) ps (ids 1)
+     _ (!(string? s) || #s = 0 ? (scare 'nrf-empty a))
+     _ (!(0 <= a && a + #s <= ps * ids 2) ? (scare 'nrf-range [a #s]))
+     _ (map (p \ nrf-erase w (ps * p)) (drop (a // ps) ^((a + #s - 1) // ps + 1)))
+     _ (nrf-write w a s)
+     b (f4-read w a #s)
+     (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
+     (at 0))
+
  ; linux's gpio character device, its v2 uapi: a request of 592 bytes (64 line offsets, the
  ; consumer's name at 256, a config at 288, the line count at 560), its line fd answered at
  ; 588; a config of 272 (flags, then up to 10 attributes of 24 from 32); values 16, bits then
@@ -275,5 +298,51 @@
      w (probe-wire-on {'send (s \ (say p s, flush p)) 'recv (k \ rdn k ()) 'close (_ \ close p)})
      id (w 'id 0)
      (id = "lovswd1\n" ? w (scare 'probe-id id)))
+
+ ; a cmsis-dap wire over a link of reports through io's 'send s (a command, padded to its
+ ; report), 'recv () (a whole reply) and 'close: daplink and its kin, over swd. dap_transfer
+ ; answers an ap read's own value, its posted read seen to, so the wire keeps each back and
+ ; answers the one before, as the port does; rdbuff answers the last either way. a batch goes
+ ; 12 transfers a report. a write whose ack no one reads (multidrop's targetsel) it cannot send
+ (dap-wire-on io)
+  (: st {'rb 0}
+     (ask s) (: _ (io 'send s) r (io 'recv ()) (#r > 0 && r 0 = s 0 ? r (scare 'dap-reply [(s 0) r])))
+     (ok what r) (r 1 = 0 ? 1 (scare what r))
+     (one it) (: q (<it >> 1 & 1 | (<it >> 2 & 1) << 1 | (<it >> 3 & 3) << 2)
+                 (? (#it = 3) (scare 'dap-noack (it 1)) (q & 2) (string [q]) (string [q] + wrle (it 1) 4)))
+     ; a report's answers: [ack v par] for each done, the ack it stopped on (-1 a bad parity),
+     ; then 0s
+     (got its n last r at i)
+      (? !(two? its) ()
+         (i < n) (: rq <<its
+                    (? ((rq >> 2 & 1) = 0) ([1 () ()] . got >its n last r at (i + 1))
+                       (: v (rdle r at 4) b ((rq >> 1 & 1) = 1 ? (st 'rb @ b (pin st 'rb v, b)) v)
+                          ([1 b (swd-par b)] . got >its n last r (at + 4) (i + 1)))))
+         (i = n) ([(last & 8 ? -1 (last & 7)) () ()] . got >its n last r at (i + 1))
+         ([0 () ()] . got >its n last r at (i + 1)))
+     (xfer its) (? !(two? its) ()
+                   (: h (take 12 its) r (ask (string [5 0 #h] + join "" (map one h)))
+                      a (got h (r 1) (r 2) r 3 0)
+                      (all (x \ <x = 1) a ? (a + xfer (drop 12 its)) (a + map (_ \ [0 () ()]) (drop 12 its)))))
+     (line s n) (n > 0 ? (: k (min n 256) m ((k + 7) // 8)
+                            (ok 'dap-line (ask (string [0x12 (k & 255)] + snip s 0 m)), line (snip s m #s) (n - k))) 1)
+     w {'xfer xfer
+        'line (bn \ line <bn (bn 1))
+        'rst (b \ (ask (string [0x10 (b = 1 ? 0 0x80) 0x80] + wrle 0 4), 1))
+        'clock (hz \ (ok 'dap-clock (ask (string [0x11] + wrle hz 4)), hz))
+        'id (_ \ (ask (string [0 2]) @ r (snip r 2 (2 + r 1))))
+        'close (_ \ (ask (string [3]), io 'close ()))}
+     _ (ask (string [2 1]) 1 = 1 ? 0 (scare 'dap-connect 0))
+     _ (ok 'dap-config (ask (string [4 0] + wrle 64 2 + wrle 0 2)))
+     _ (ok 'dap-swd (ask (string [0x13 0])))
+     w)
+ ; daplink's hid interface: a report of 64 bytes, written behind report id 0
+ (dap-wire path)
+  (: fd (openfd path 6)
+     _ (charm? fd ? 0 (scare 'dap-open fd))
+     p (fdopen fd)
+     (rdn k acc) (k = 0 ? (join "" (rev acc)) (see p @ c (c = -1 ? (scare 'dap-eof k) (rdn (k - 1) (string [c] . acc)))))
+     (dap-wire-on {'send (s \ (say p (string [0] + s + string (map (_ \ 0) ^(64 - #s))), flush p))
+                   'recv (_ \ rdn 64 ()) 'close (_ \ close p)}))
 )
 ) ; module swd

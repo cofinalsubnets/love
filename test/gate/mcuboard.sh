@@ -12,7 +12,8 @@
 # the cap names the board, so what follows from its chip is here: where flash starts, openocd's
 # target, love's flasher. how the host reaches it is the host's facts: probe, `lovswd TTY` (the
 # love swd probe, test/boards/rp2040/probe.c), `gpio CHIP SWCLK SWDIO NRST` (love's bit wire on the
-# host's own gpio) or `openocd ARGS` (the interface's), console (its serial port, a glob), and love
+# host's own gpio), `dap SERIAL` (a cmsis-dap's hid interface, found by its usb serial) or
+# `openocd ARGS` (the interface's), console (its serial port, a glob), and love
 # when the host runs a love not this one
 # usage: mcuboard.sh OUTDIR LANE CAP IMAGE
 . test/gate/skip.sh
@@ -86,8 +87,14 @@ probe=${BEE_PROBE:-} con=${BEE_CONSOLE:-} lv=${BEE_LOVE:-./love}
 [ -n "$probe" ] || { echo "the host gives no probe fact"; exit 1; }
 [ -n "$con" ] || { echo "the host gives no console fact"; exit 1; }
 kind=${probe%% *} pa=${probe#"$kind"}
+if [ "$kind" = dap ]; then
+  hid=
+  for h in /sys/class/hidraw/*; do [ "$(cat "$h/device/../../serial" 2>/dev/null)" = "${pa# }" ] && hid=/dev/${h##*/}; done
+  [ -n "$hid" ] || { echo "no hid interface with serial${pa}"; exit 1; }
+  probe="dap $hid"
+fi
 case $kind in
-  lovswd|gpio)
+  lovswd|gpio|dap)
     flash() { "$lv" swdflash.l $chip $at firm.bin flash $probe; }
     reset() { "$lv" swdflash.l $chip $at firm.bin run $probe; } ;;
   openocd)
