@@ -649,7 +649,10 @@ EOF
   moonrun -t arm -mfloat-abi=softfp -o "$d/fpr" "$d/.ga.c" "$d/.gb.c" > "$d/fpr.log" 2>&1 \
     && fail "softfp: a link that pulls moonlibc, which is hard-float, was taken"
   grep -q "softfp links with" "$d/fpr.log" || fail "softfp: the refusal: $(cat "$d/fpr.log")"
-  echo "arm: a trapped call answers ENOSYS, -shared lays a REL object, -fpic loads through the got, -dynamic-linker lays a pie, softfp is gcc's"
+  # a static link says its stack is not executable: without pt_gnu_stack a 32-bit arm
+  # kernel maps every read as exec too, for it and all it execs (selinux then refuses a gpu)
+  case $(arm-none-eabi-readelf -lW "$d/got") in *"GNU_STACK"*" RW  "*) ;; *) fail "static: no PT_GNU_STACK rw" ;; esac
+  echo "arm: a trapped call answers ENOSYS, -shared lays a REL object, -fpic loads through the got, -dynamic-linker lays a pie, softfp is gcc's, the stack is not exec"
 fi
 
 [ $n -gt 0 ] || fail "no programs ran from test/cc/"

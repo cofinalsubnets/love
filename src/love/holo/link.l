@@ -1265,7 +1265,7 @@
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
        bsd? (elem mach '(62 183 243 3) || target = 'arm)
        nb? (wx? && bsd?)
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 3 1) + (img? ? 1 0) + (nb? ? 1 0) + (tls? ? 1 0)) + (nb? ? 24 0))
+       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 4 1) + (img? ? 1 0) + (nb? ? 1 0) + (tls? ? 1 0)) + (nb? ? 24 0))
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
@@ -1362,7 +1362,10 @@
                  [(phf 1 7 0 base base (dend - base) (bend - base) pg)])
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
             + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)])
-            + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)]))
+            + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)])
+            ; ..and pt_gnu_stack rw: without it a 32-bit arm kernel reads every map as
+            ; executable, for the process and all it execs
+            + (wx? ? [(phf 0x6474e551 6 0 0 0 0 0 16)]))
        hdr (w32 ? (elf32-hdrn 2 ent mach (sf ? 83886592 (elf32-eflags target)) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
