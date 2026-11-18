@@ -330,7 +330,8 @@ static char *k_proc_code(struct k_proc *p, char const *path, uintptr_t pn, uintp
 static char const k_self[] = "/proc/self/exe";
 
 // a path to a program runs as itself; anything else, a bare word above all, is love's,
-// woken from the door's /proc/image, else from the one seat.l baked, else bare
+// woken from the door's /proc/image, else from the one seat.l baked, else bare. the prime's
+// own verbs, bake and wake, are always bare
 static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
   bool self = !strcmp(f, k_self);
@@ -342,8 +343,9 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
     return r; }
   static char const wake[] = "love\0wake\0/proc/image", baked[] = "love\0wake\0/tmp/.love.img";
   struct k_st st;
-  bool door = !k_fs_stat("/proc/image", 11, &st, true),
-       own = !door && !k_fs_stat(baked + 10, sizeof baked - 11, &st, true);
+  bool bare = !strcmp(f, "bake") || !strcmp(f, "wake"),
+       door = !bare && !k_fs_stat("/proc/image", 11, &st, true),
+       own = !bare && !door && !k_fs_stat(baked + 10, sizeof baked - 11, &st, true);
   char const *wk = own ? baked : wake;
   uintptr_t a0 = an ? strlen(av) + 1 : 0,
             pn = door ? sizeof wake : own ? sizeof baked : 5,
