@@ -105,18 +105,27 @@ case $kind in
 esac
 flash > flash.log 2>&1 || { tail -5 flash.log; echo "the flash failed"; exit 1; }
 n=0 pids=
-for p in $con; do
-  [ -r "$p" ] || continue
-  q=$(readlink -f "$p")
-  [ "$(cat /sys/class/tty/${q##*/}/type 2>/dev/null)" = 0 ] && continue
-  stty -F "$p" 115200 cs8 -cstopb -parenb raw -echo -crtscts clocal 2>/dev/null || continue
-  n=$((n + 1)); timeout 12 cat "$p" > "got.$n" & pids="$pids $!"
-done
+listen() {
+  for p in $con; do
+    [ -r "$p" ] || continue
+    q=$(readlink -f "$p")
+    [ "$(cat /sys/class/tty/${q##*/}/type 2>/dev/null)" = 0 ] && continue
+    stty -F "$p" 115200 cs8 -cstopb -parenb raw -echo -crtscts clocal 2>/dev/null || continue
+    n=$((n + 1)); timeout 12 cat "$p" > "got.$n" & pids="$pids $!"
+  done
+}
+listen
 sleep 1
 reset > reset.log 2>&1 || { tail -5 reset.log; echo "the reset failed"; exit 1; }
-# the battery's last line ends the read; 12 s at most, a moment more for the line to finish
+# the battery's last line ends the read; 15 s at most, a moment more for the line to finish. a
+# console on the board's own usb goes with the old image and comes back with the new one, so
+# when every reader has ended the consoles are listened to again
 k=0
-until grep -Eqs '; (all .* green|FAILED)' got.* || [ $k -ge 110 ]; do sleep 0.1; k=$((k + 1)); done
+until grep -Eqs '; (all .* green|FAILED)' got.* || [ $k -ge 150 ]; do
+  live=; for q in $pids; do kill -0 $q 2>/dev/null && live="$live $q"; done; pids=$live
+  [ -n "$pids" ] || listen
+  sleep 0.1; k=$((k + 1))
+done
 sleep 0.3; kill $pids 2>/dev/null; wait
 cat got.* 2>/dev/null | tr -d '\r'
 EOF

@@ -4,7 +4,8 @@
 ;   love swdflash.l CHIP BASE IMAGE run PROBE..     reset, and let it run free
 ; a probe is `lovswd TTY` (the love swd probe), `gpio CHIP SWCLK SWDIO NRST` (linux's gpio
 ; character device, the lines by offset) or `dap HIDRAW` (a cmsis-dap's hid interface, daplink's).
-; one flasher a chip: stm32f4, nrf52
+; one flasher a chip: stm32f4, nrf52, rp2040. an rp2040 is reached by multidrop (core 0) and
+; halted where it runs, since run held low holds its debug port too, and run is a pulse on run
 (borrow "swd.l")
 (: (fail m) (say err ("swdflash: " + m + "\n"), quit 1)
    (num s) (read s @ (n && charm? n) n (fail ("not a number: " + s)))
@@ -14,15 +15,16 @@
                     (fail ("no probe known as " + show ps)))
    (main as)
     (: _ (#as < 5 ? (fail "usage: love swdflash.l CHIP BASE IMAGE flash|run PROBE..") 0)
-       fl ({"stm32f4" f4-flash "nrf52" nrf-flash} (as 0))
+       fl ({"stm32f4" f4-flash "nrf52" nrf-flash "rp2040" rp-flash} (as 0))
+       rp (as 0 = "rp2040")
        _ (fl = () ? (fail ("no flasher for " + <as)) 0)
        w (wire (drop 4 as))
        r (trap (_ \ as 3 @
           "flash" (: s (uread (as 2) @ [1 s] s (fail ("cannot read " + as 2)))
-                     ids (swd-attach w)
+                     ids (rp ? (swd-mdconnect w 0x01002927 @ ids (swd-halt w, ids)) (swd-attach w))
                      _ (say out ("swdflash: dpidr " + show <ids + ", " + show #s + " bytes at " + as 1 + "\n"))
                      (fl w (num (as 1)) s))
-          "run" (: _ (swd-connect w) (swd-run w))
+          "run" (rp ? (w 'rst 1, w 'rst 0, 1) (: _ (swd-connect w) (swd-run w)))
           (fail ("no step " + as 3))) 0
           (a \ b \ (w 'close 0, fail (show a + " answered " + show b))))
        _ (w 'close 0)

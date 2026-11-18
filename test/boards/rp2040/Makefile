@@ -18,7 +18,7 @@ include ../../../src/inle/port.mk
 
 rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 
-objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o
+objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/busb.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o
 pobjs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/probe.o $(R)/$(o)/usb.o $(R)/$(o)/rt.o
 
 .PHONY: objs bin
@@ -30,6 +30,7 @@ $(eval $(call p_obj,main,test/boards/rp2040/main.c,main.c rp2040.h $(S)/inle/bpu
 $(eval $(call p_obj,rp2040,test/boards/rp2040/rp2040.c,rp2040.c rp2040.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,probe,test/boards/rp2040/probe.c,probe.c rp2040.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,usb,test/boards/rp2040/usb.c,usb.c rp2040.h $(S)/inle/usbcdc.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,busb,test/boards/rp2040/usb.c,usb.c rp2040.h $(S)/inle/usbcdc.h $(mc),$(rp_cc) -D 'UCDC_PRODUCT="love board"'))
 
 # boot2: 240 payload bytes zero-padded to 252 and CRC-stamped, in .boot2. no gas -- the
 # section name IS the interface, and the writer spells it now.
