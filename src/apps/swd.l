@@ -9,6 +9,7 @@
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
+             swd-reg swd-regw swd-call rp-rom rp-flash
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire dap-wire-on dap-wire)
 (borrow 'bytes)
 (borrow 'posix)
@@ -243,6 +244,50 @@
      (part p) (: lo (max a (ps * p)) hi (min (a + #s) (ps * (p + 1))) [lo (snip s (lo - a) (hi - a))])
      (put p) (part p @ [lo t] (f4-read w lo #t = t ? 0 (nrf-erase w (ps * p), nrf-write w lo t)))
      _ (map put (drop (a // ps) ^((a + #s - 1) // ps + 1)))
+     b (f4-read w a #s)
+     (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
+     (at 0))
+
+ ; a halted core's registers through dcrsr/dcrdr (r0-r12, sp 13, lr 14, pc 15, xpsr 16),
+ ; each move awaited in dhcsr's bit 16
+ dcrsr 0xE000EDF4 dcrdr 0xE000EDF8
+ (swd-regok w k) (((swd-rd w dhcsr) >> 16 & 1) = 1 ? 1 (k > 0 ? (swd-regok w (k - 1)) (scare 'swd-reg k)))
+ (swd-regw w r v) (: _ (swd-wr w dcrdr v) _ (swd-wr w dcrsr (r | 0x10000)) (swd-regok w 50))
+ (swd-reg w r) (: _ (swd-wr w dcrsr r) _ (swd-regok w 50) (swd-rd w dcrdr))
+ ; f run on the halted core with args in r0-r3 and the stack at sp, returning to the bkpt at
+ ; brk, its interrupts masked: r0 once it halts there, k polls at most
+ (swd-call w f args sp brk k)
+  (: _ (map (i \ swd-regw w i (args i)) ^#args)
+     _ (swd-regw w 13 sp) _ (swd-regw w 14 (brk | 1)) _ (swd-regw w 16 0x01000000)
+     _ (swd-regw w 15 (f - (f & 1)))
+     _ (swd-wr w dhcsr 0xA05F000B) _ (swd-wr w dhcsr 0xA05F0009)
+     _ (swd-wait w k)
+     pc (swd-reg w 15)
+     (pc = brk ? (swd-reg w 0) (scare 'swd-call [f pc])))
+
+ ; an rp2040: no flash controller, so the rom's own routines erase and program the qspi flash,
+ ; run on core 0 halted. the rom's lookup and its table are halfwords at 0x18 and 0x14, a
+ ; routine named by two letters; a bkpt at sram's base, the image staged above it
+ rp-sram 0x20000000 rp-top 0x20042000 rp-xip 0x10000000 rp-chunk 0x10000
+ (rp-rd16 w a) (: e (swd-rd w (a - (a & 3))) ((a & 2) = 2 ? (e >> 16) (e & 0xFFFF)))
+ (rp-rom w nm) (: f (swd-call w (rp-rd16 w 0x18) [(rp-rd16 w 0x14) (nm 0 | nm 1 << 8)] rp-top rp-sram 100)
+                  (f = 0 ? (scare 'rp-rom nm) f))
+ ; erase the 4K sectors s covers from a, program it in 64K pieces padded with ones to a
+ ; page, flash's cache flushed and xip back, then read back: 1, or where it differs first
+ (rp-flash w a s)
+  (: o (a - rp-xip)
+     _ (!(string? s) || #s = 0 ? (scare 'rp-empty a))
+     _ (o < 0 || (o & 4095) != 0 || o + #s > 0x1000000 ? (scare 'rp-range [a #s]))
+     _ (swd-wr w rp-sram 0xBE00BE00)
+     (go nm args k) (swd-call w (rp-rom w nm) args rp-top rp-sram k)
+     _ (go "IF" [] 100) _ (go "EX" [] 100)
+     _ (go "RE" [o ((#s + 4095) // 4096 * 4096) 0x10000 0xD8] 1000000)
+     (put i) (: t (snip s i (min #s (i + rp-chunk)))
+                p (t + string (map (_ \ 255) ^((256 - #t % 256) % 256)))
+                _ (swd-wrs w (rp-sram + 256) (f4-words p))
+                (go "RP" [(o + i) (rp-sram + 256) #p] 1000000))
+     _ (map (i \ put (i * rp-chunk)) ^((#s + rp-chunk - 1) // rp-chunk))
+     _ (go "FC" [] 100) _ (go "CX" [] 100)
      b (f4-read w a #s)
      (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
      (at 0))

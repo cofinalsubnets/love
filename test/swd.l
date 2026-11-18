@@ -829,6 +829,73 @@
    (test (e0 = [0x1000 0x2000]) (1 = r1) (e1 = e0) (1 = r2) (e2 = e0 + [0x2000])
          (f4-read w 0x1000 5001 = t)))
 
+; an rp2040's core 0 halted over a bus, its rom's flash routines run when dhcsr lets it go: the
+; core's registers through dcrsr/dcrdr, the lookup (0x18) and its table (0x14), each routine
+; at its own address, then back halted at lr. erase and program want the flash out of xip and
+; connected, a read through xip wants it back; program only clears bits. 'calls the routines
+; run, in order, each [name its args], and 'loose the ones let go with interrupts unmasked
+(: (swdt-rp _)
+    (: m {} fl {} rg {} st {'dr 0 'xip 1 'con 0 'calls () 'loose 0}
+       rt {"IF" 0x301 "EX" 0x311 "RE" 0x321 "RP" 0x331 "FC" 0x341 "CX" 0x351}
+       (r i) (peep rg i 0)
+       (call nm) (pin st 'calls ([nm (map r ^4)] . st 'calls))
+       (fw o) (peep fl o 0xFFFFFFFF)
+       (run v) (: pc (r 15) nm (filter (k \ rt k = pc + 1) (keys rt))
+                  _ ((v & 8) = 0 ? (pin st 'loose (st 'loose + 1)) 0)
+                  _ (? (pc = 0x200) (pin rg 0 (r 0 = 0x100 ? (peep rt (string [(r 1 & 255) (r 1 >> 8)]) 0) 0))
+                       (nm = ()) (scare 'swdt-rp-pc pc)
+                       (<nm @ "IF" (pin st 'con 1) "EX" (pin st 'xip 0) "CX" (pin st 'xip 1) _ 0))
+                  _ (nm != () && (<nm = "RE" || <nm = "RP") && (st 'xip = 1 || st 'con = 0) ? (scare 'swdt-rp-xip <nm) 0)
+                  _ (nm != () && <nm = "RE" ? (map (i \ pin fl (r 0 + 4 * i) 0xFFFFFFFF) ^(r 1 // 4)) 0)
+                  _ (nm != () && <nm = "RP" ? (map (i \ pin fl (r 0 + 4 * i) (fw (r 0 + 4 * i) & peep m (r 1 + 4 * i) 0)) ^(r 2 // 4)) 0)
+                  _ (nm != () ? (call <nm) 0)
+                  (pin rg 15 (r 14 - (r 14 & 1))))
+       (rd a) (? (a = 0x14) 0x100 (a = 0x18) 0x200
+                 (a = 0xE000EDF0) 0x30003 (a = 0xE000EDF8) (st 'dr)
+                 (0x10000000 <= a < 0x11000000) (st 'xip = 1 ? (fw (a - 0x10000000)) 0)
+                 (peep m a 0))
+       (wr a v) (? (a = 0xE000EDF8) (pin st 'dr v)
+                   (a = 0xE000EDF4) ((v & 0x10000) != 0 ? (pin rg (v & 31) (st 'dr)) (pin st 'dr (r (v & 31))))
+                   (a = 0xE000EDF0) ((v & 2) = 0 ? (run v) 0)
+                   (pin m a v))
+       {'rd rd 'wr wr 'mem (_ \ m) 'flash (_ \ fl) 'xip (_ \ st 'xip)
+        'calls (_ \ rev (st 'calls)) 'loose (_ \ st 'loose)}))
+
+; the 4K sectors it covers erased once, programmed in pages from the staged copy, cache flushed
+; and xip back last; every call let go masked; it reads back, the last page's tail ones and a
+; word past its sectors as it was. a bkpt at sram's base is where each call returns
+(: b (swdt-rp ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   _ (pin (b 'flash ()) 0x3000 0x12345678)
+   s (string (map (i \ i * 5 + 1 & 255) ^5000))
+   r (rp-flash w 0x10001000 s)
+   cs (filter (c \ <c != ()) (b 'calls ()))
+   (test (1 = r) (["IF" "EX" "RE" "RP" "FC" "CX"] = map cap cs)
+         ([0x1000 8192 0x10000 0xD8] = cs 2 1) ([0x1000 0x20000100 5120] = snip (cs 3 1) 0 3)
+         (0 = b 'loose ()) (1 = b 'xip ()) (0xBE00BE00 = b 'mem () 0x20000000)
+         (f4-read w 0x10001000 5000 = s) (0xFFFFFFFF = b 'flash () 0x2388)
+         (0x12345678 = b 'flash () 0x3000)))
+
+; past 64K the image goes in pieces, each programmed where it lies
+(: b (swdt-rp ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   s (string (map (i \ i * 3 + 7 & 255) ^70000))
+   r (rp-flash w 0x10000000 s)
+   ps (map (c \ snip (c 1) 0 3) (filter (c \ <c = "RP") (b 'calls ())))
+   (test (1 = r) (ps = [[0 0x20000100 0x10000] [0x10000 0x20000100 4608]])
+         (f4-read w 0x10000000 70000 = s)))
+
+; nothing, a start off a sector, or one outside the flash scares before a routine runs; a name
+; the rom does not know scares
+(: b (swdt-rp ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   (try a s) (trap (_ \ rp-flash w a s) 0 (a \ b \ [a b]))
+   e (try 0x10000000 "")
+   o (try 0x10000100 "abcd")
+   lo (try 0x0FFFF000 "abcd")
+   hi (try 0x10FFF000 (string (map (_ \ 1) ^4097)))
+   z (trap (_ \ rp-rom w "ZZ") 0 (a \ b \ [a b]))
+   (test (e = ['rp-empty 0x10000000]) (o = ['rp-range [0x10000100 4]])
+         (lo = ['rp-range [0x0FFFF000 4]]) (hi = ['rp-range [0x10FFF000 4097]])
+         (z = ['rp-rom "ZZ"]) (() = b 'calls ())))
+
 ; --- batching: a run's transfers in few batches ---
 
 ; a batch whose third transfer waits: the wait asked again from it, alone with the rest, and

@@ -46,7 +46,10 @@ into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. arm-none-eabi-ld still binds it (thumb relocations
 are not in src/love/holo/link.l); `make bin` writes the raw flash image, which
-src/tools/uf2.l packs as a UF2 (family 0xE48BFF56).
+src/tools/uf2.l packs as a UF2 (family 0xE48BFF56). The battery reports on UART0 and,
+to each host that opens it, on the chip's own usb serial port. test_rp2040_board writes
+it over swd on a host with rp2040-swd: no flash controller, so swd.l's rp-flash runs the
+ROM's own flash routines on the halted core, and a pulse on RUN starts it.
 
 
 ## rp2350/
