@@ -1013,7 +1013,7 @@ test_doomx-run: $(R)/test/host/doomx.l
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
-	@echo TEST love seed kernel "(the projection; byte-identical to make's)"
+	@echo TEST love seed kernel "(the transpose; byte-identical to make's)"
 	@rm -rf $(ko)/.kverb
 	@cd $(ko) && $(abspath $m) seed kernel .kverb > /dev/null
 	@cmp $(ko)/.kverb/love-$a.elf $(k_elf)

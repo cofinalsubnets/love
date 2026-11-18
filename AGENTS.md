@@ -46,7 +46,7 @@ Instructions for any coding agent in this tree.
 
 ; love artifact and build information:
 ; - love and inle are not separate builds. moon builds both with the same flags, and a
-;   kernel is projected out of the love binary that makes it: that binary's own bytes, plus
+;   kernel is transposed from the love binary that makes it: that binary's own bytes, plus
 ;   the kernel objects it compiles from the source it carries, so they share one copy of
 ;   almost everything. a given instance of the love artifact is linked for hosted or
 ;   freestanding use, but the translation is bidirectional and mechanical, and either

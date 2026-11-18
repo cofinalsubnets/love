@@ -359,7 +359,7 @@
                  [".boot.text" 1 6 16   a-boot-text]
                  [".text"      1 6 16   a-text]
                  [".bss"       8 3 16   b-stack]]
-                '("a64boot")             ; kproject.l names it as the ELF entry
+                '("a64boot")             ; transpose.l names it as the ELF entry
                 () ()
                 '("khop"))
        "a64pi"
@@ -380,7 +380,7 @@
                  [".boot"      1 3 4096 r-boot]
                  [".text"      1 6 16   r-text]
                  [".bss"       8 3 16   b-stack]]
-                '("rvboot")              ; kproject.l names it as the ELF entry
+                '("rvboot")              ; transpose.l names it as the ELF entry
                 () ()
                 '("khop"))
        (scare 'mkboot-arch arch)))
