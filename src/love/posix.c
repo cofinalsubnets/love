@@ -1547,26 +1547,29 @@ static const unsigned tio_baud[][2] = {
 #else
 #define TIO_SPEEDS 0
 #endif
-static lvm(lvm_termios) {
- word x = Sp[0];
+love_noinline static struct g *host_termios(struct g *g) {
+ word x = g->sp[0];
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);
  struct termios t;
- if (fd < 0) love_musttail return Answer(badarg(g));
+ if (fd < 0) return g->sp[0] = badarg(g), g;
  memset(&t, 0, sizeof t);
- if (tcgetattr((int) fd, &t)) love_musttail return Answer(love_err(g, errno));
+ if (tcgetattr((int) fd, &t)) return g->sp[0] = love_err(g, errno), g;
  intptr_t sp = 0;
 #if TIO_SPEEDS
  sp = (intptr_t) t.c_ospeed;
 #endif
  if (!sp) for (unsigned k = 0; k < TIO_NB; k++)
   if (tio_baud[k][1] == (t.c_cflag & 4111u)) sp = tio_baud[k][0];
- Have(22 * Width(struct chain));
- struct chain *c = (struct chain*) Hp;
- Hp += 22 * Width(struct chain);
+ size_t const C = Width(struct chain);
+ if (!ok(g = have(g, 22 * C))) return g;
+ struct chain *c = 0;
+ word l = ZeroPoint;
+ for (int k = 16; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(t.c_cc[k]), l), l = word(c);
  intptr_t hd[5] = {t.c_iflag, t.c_oflag, t.c_cflag, t.c_lflag, sp};
- for (int k = 0; k < 22; k++)
-  ini_chain(c + k, putcharm(k < 5 ? hd[k] : t.c_cc[k - 5]), k < 21 ? word(c + k + 1) : ZeroPoint);
- love_musttail return Answer(word(c)); }
+ for (int k = 4; k >= 0; k--) c = ini_chain(bump(g, C), putcharm(hd[k]), l), l = word(c);
+ return g->sp[0] = l, g; }
+static lvm(lvm_termios) {
+ LvmCall(g, host_termios) }
 
 love_noinline static word host_settermios(struct g *g, word x, word l) {
  intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x), v[22];
