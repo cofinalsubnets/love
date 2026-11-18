@@ -9,7 +9,7 @@ void love_fd_drain(int fd, void const *p, uintptr_t n) { }
 char *code_window(char *p) { return p; }
 
 // the fine clock from the coarse one
-intptr_t nclock(void) { return (intptr_t) (love_clock() * 1000000u); }
+int64_t nclock(void) { return (int64_t) (love_clock() * 1000000u); }
 // every slot filled, so "none ready" never reads as "nobody answered". ready is the board's
 void ready_fds(struct wait_fd *fds, int n) {
   for (int i = 0; i < n; i++)
