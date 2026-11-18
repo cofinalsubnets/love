@@ -272,7 +272,9 @@ lvm(lvm_yield_sw) {
   if (g->parked) { g->parked->m = N; gen_wb(g, (word) g->parked, (word) g->parked->m); }
   else g->parked = N; }
  g->yield_ctr = 0;
+ union u *me = g->tasks;
  g->tasks = next;
+ me->m = me;   // the spent node links nowhere: a remembered one would hold every later node
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
  Ip = next[1].m;
  love_musttail return Continue(); }

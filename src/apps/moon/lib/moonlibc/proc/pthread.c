@@ -96,8 +96,8 @@ static void __pt_start(struct __pthread *d) { pthread_exit(d->fn(d->arg)); }
 
 /* a detached thread's stack goes once the thread is wholly off it: linux clears tid in the
  * kernel, freebsd's thr_exit sets gone, netbsd's _lwp_wait answers after done */
-static void __pt_rtake(void) { while (__sync_lock_test_and_set(&__love_mt.rlock, 1)) sched_yield(); }
-static void __pt_rgive(void) { __sync_lock_release(&__love_mt.rlock); }
+static void __pt_rtake(void) { while (__love_tas(&__love_mt.rlock, 1)) sched_yield(); }
+static void __pt_rgive(void) { __love_rel(&__love_mt.rlock); }
 static int __pt_off(struct __pthread *d) {
 #ifdef LvBsdThreads
   if (__love_osv == 2) return d->gone != 0;
