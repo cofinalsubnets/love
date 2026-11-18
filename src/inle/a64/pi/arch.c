@@ -164,6 +164,7 @@ int k_board(char *b) {
 void archinit(void) {
   k_sp_to_el1h();
   k_fpen_enable();
+  k_el0_open();
   k_wr_vbar_el1((uintptr_t) vectors);
   mmio_wr(LOCAL, CORE0_TIMER, SRC_CNTPNS);       // the physical timer's irq to core 0
   k_timer_init();

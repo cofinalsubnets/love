@@ -57,9 +57,19 @@ long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
   return r; }
 #endif
 
-/* inle's door, for a link without the kernel: ENOSYS. aligned for the jump a kernel patches in */
-__attribute__((weak, aligned(16)))
+/* inle's door, for a link without the kernel: ENOSYS. natively through __love_inle__slot, which
+   a kernel image points at its own (love.h's love_door, spelled out: libc has no love.h) */
+#if defined(__mooncc__) && !defined(__wasm__)
+long __love_inle__host(long n, long a, long b, long c, long d, long e, long f);
+long (*volatile __love_inle__slot)(long, long, long, long, long, long, long) = __love_inle__host;
+__attribute__((weak, noinline))
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
+  return __love_inle__slot(n, a, b, c, d, e, f); }
+long __love_inle__host(long n, long a, long b, long c, long d, long e, long f) {
+#else
+__attribute__((weak))
+long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
+#endif
   return -38; }
 
 /* a refused address the program can make good: 1 retries the call */

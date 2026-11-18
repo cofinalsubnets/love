@@ -4,4 +4,5 @@
 // lies in RAM given away, but is read once, before there is a heap
 #define k_hhdm    0xffffffc000000000ull
 #define k_map_top 0x100000000ull
+#define k_fwcfg   0x10100000ull          // qemu virt's fw_cfg: a lane's initrd rides it
 #include "dtb.h"
