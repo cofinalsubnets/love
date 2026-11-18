@@ -15,7 +15,7 @@
    mips-tab (catall [
      [['nop 0 0xffffffff ()] ['ssnop 0x40 0xffffffff ()] ['ehb 0xc0 0xffffffff ()]
       ['move 0x21 0xfc1f07ff '(rd rs)] ['move 0x25 0xfc1f07ff '(rd rs)]   ; addu, or with $zero
-      ['negu 0x23 0xffe007ff '(rd rt)]                                 ; subu rd, $zero, rt
+      ['neg 0x22 0xffe007ff '(rd rt)] ['negu 0x23 0xffe007ff '(rd rt)]  ; sub and subu rd, $zero, rt
       ['not 0x27 0xfc1f07ff '(rd rs)]                                  ; nor rd, rs, $zero
       ['b 0x10000000 0xffff0000 '(b16)] ['bal 0x04110000 0xffff0000 '(b16)]
       ['beqz 0x10000000 0xfc1f0000 '(rs b16)] ['bnez 0x14000000 0xfc1f0000 '(rs b16)]

@@ -7,7 +7,7 @@
 (: seed {0 777}
    (rnd u) (pin seed 0 ((seed 0 * 1103515245 + 12345) & 2147483647), seed 0)
    (one r)
-    (: w (r 1 | (rnd 0 << 16 ^ rnd 0) & (4294967295 ^ r 2) & 4294967295)
+    (: hi (rnd 0) lo (rnd 0) w (r 1 | (hi << 16 ^ lo) & (4294967295 ^ r 2) & 4294967295)
        (elem 'rdt (r 3) ? (w & 0xffe0ffff | (w >> 11 & 31) << 16) w))
    (gen u) (each mips-tab (r \ each ^24 (k \ puts (".word 0x" + radix (one r) 16 + "\n"))))
    misses {0 0}
