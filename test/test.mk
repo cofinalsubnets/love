@@ -759,7 +759,8 @@ gate_love += test_caja
 test_gpic test_grap test_chem: test_%: host
 	@echo TEST test/gate/pictool.sh $*
 	@$(gsh) test/gate/pictool.sh $* $(ho)/love
-# holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
+# holo's encoder goldens, objdump-checked (every backend catted in: the host bakes only its own),
+# the kernel link's laws, and the ELF byte order (beorder.sh)
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
@@ -767,6 +768,7 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
+	@$(gsh) test/gate/beorder.sh $m $(ho)
 # as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump and the riscv
 # and aarch64 tables both ways (rvcodec, a64codec) alongside
 test_as: host

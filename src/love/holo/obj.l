@@ -419,11 +419,12 @@
              (le32 (x86 ? 0 83886080)) (le16 52) (le16 0)                 ; e_flags=eabi_ver5 on arm, e_ehsize=52, e_phentsize=0
              (le16 0) (le16 40) (le16 nsh)                                ; e_phnum=0, e_shentsize=40, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
-       (catall ([hdr]
-                + o-mapi (i \ l \ ln-ty l != 8 && lbytes i) lanes       ; a NOBITS lane writes nothing
-                + [symbytes strblob]
-                + rels
-                + [shstrblob sht])))
+       (elf-order machine
+        (catall ([hdr]
+                 + o-mapi (i \ l \ ln-ty l != 8 && lbytes i) lanes       ; a NOBITS lane writes nothing
+                 + [symbytes strblob]
+                 + rels
+                 + [shstrblob sht]))))
 
    ; a section's sh_addralign: the floor a0, or the widest ('align n) its forms ask, else an
    ; inner pad aligns nothing.
@@ -1046,9 +1047,10 @@
              (le32 (? xt 768 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit), e_ehsize, e_phentsize=0
              (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
-       (catall ([hdr]
-                + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
-                + [symbytes strblob]
-                + relas
-                + [shstrblob sht]))))
+       (elf-order machine
+        (catall ([hdr]
+                 + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
+                 + [symbytes strblob]
+                 + relas
+                 + [shstrblob sht])))))
 ) ; module 'holo

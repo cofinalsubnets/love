@@ -75,8 +75,10 @@
    ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
    ;               on a REL; 'rels the same as [(target . entries) ..] in header order.
    ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
-   (ld-obj id s rels?)
-    (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
+   ; a big-endian file reads as its swap: its tables little-endian, its sections as they were
+   (ld-obj id s0 rels?)
+    (: _ (#s0 > 52 && s0 0 = 127 && s0 1 = 69 && s0 2 = 76 && s0 3 = 70 ? 0 (scare 'link-not-elf id))
+       s (s0 5 = 2 ? (elf-swap s0) s0)
        fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94) ? elf32rf elf32f) (scare 'link-elf-class id))
        (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
@@ -1370,9 +1372,10 @@
        hdr (w32 ? (elf32-hdrn 2 ent mach (sf ? 83886592 (elf32-eflags target)) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
-       (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
-                 + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
-                    (ld-zeros (shto - (rdmo + rdmz))) sht])))
+       (elf-order mach
+        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
+                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
+                     (ld-zeros (shto - (rdmo + rdmz))) sht]))))
 
    ; --- the shared object: ldlink's lay at base 0, plus what a dynamic loader reads ---
    ; a strong undefined no object defines is an import: a plt stub branches through a got
@@ -1853,11 +1856,12 @@
                              rlanes))
        hdr (elf32-hdrn 2 ent mach (elf32-eflags target) [shto (nl + 4 + nr) (nl + 3)]
                        (map (g \ elf32-phdr 1 (g 5) (g 2) <g (g 1) (g 3) (g 4) 4096) segs))
-       (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
-               + [(ld-zeros (symo - fend)) <st <>st <shstr
-                  (ld-zeros (relo - (ssto + sstz)))]
-               + relbs
-               + [(ld-zeros (shto - (relo + relsz))) sht])))
+       (elf-order mach
+        (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
+                + [(ld-zeros (symo - fend)) <st <>st <shstr
+                   (ld-zeros (relo - (ssto + sstz)))]
+                + relbs
+                + [(ld-zeros (shto - (relo + relsz))) sht]))))
 
    ; set byte i of a piece, a text or a byte list
    (ld-brand p i v)
