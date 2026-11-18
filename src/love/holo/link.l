@@ -197,11 +197,14 @@
        sa (sv + rdle s off w)
        v (elem k '(w32 w16 w8) ? sa (sa - site))
        (w @ 4 (le32 (ld-u32 v)) 2 (le16 (ld-u32 v)) [(ld-u32 v & 255)]))
-   (ldarm be s off sv kind site)
+   (ld-hex v) ("0x" + radix v 16)
+   ; a field past its reach refuses, naming the symbol, the site and the target
+   (ldarm be s off sv kind site nm)
     (: r (ld-rk 40 kind) k (r 1) sa (sv + rle32 s off)
        (? (k == 'w32) (le32 (ld-u32 sa))
           (k == 'r32) (le32 (ld-u32 (sa - site)))
-          (refix-with be k (map (i \ s (off + i)) ^4) sv site 4)))
+          (refix-with be k (map (i \ s (off + i)) ^4) sv site 4 @ f
+             (two? f ? f (scare 'link-range [nm (ld-hex site) (ld-hex sv)])))))
 
    ; --- archives: "!<arch>\n", GNU shape. only the "/" ranlib index is walked, so an
    ; archive without one refuses (`ranlib` repairs it). a header is 60 bytes of left-justified
@@ -650,7 +653,7 @@
                   ; pooled abs32 word there
                   relbox && elem kind '(47 48) ? (scare 'link-abs-imm <sy),
                   go (off0 + ro + 4) >es
-                     (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro)
+                     (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro) <sy
                       . (snip s pos (off0 + ro) . acc)))
                  (: sa (ld-u64 (sv + ad))
                     row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
@@ -708,7 +711,7 @@
                               (fits32 v ? 0 (scare 'link-range <sy),
                                le32 (ld-u32 v)))
                           (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sg (base + ro))
-                             (two? r ? r (scare 'link-range <sy))))
+                             (two? r ? r (scare 'link-range [<sy (ld-hex (base + ro)) (ld-hex sg)]))))
                     g3 (two? gx ? gx dx)
                     (go (off0 + ro + w) >es
                         (? (two? g3) (bs . g3 . snip s pos (off0 + ro - 3) . acc)
