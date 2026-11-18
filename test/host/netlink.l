@@ -51,6 +51,9 @@
            (<m = 2) (quad-show (m 1) = "192.168.1.50")
            (m 2 = [[53 (string 2)] [1 (string [255 255 255 0])] [3 (string [192 168 1 1])]])
            ((dhcp-read o 1) = ()) ((dhcp-read (snip o 0 100) 305419896) = ()))
+   ; the kernel's hostname as option 12; its newline off, and none for an unnamed kernel
+   _ (test (dhcp-name "board\n" = [(string [12 5] + "board")]) (dhcp-name "board" = dhcp-name "board\n")
+           (dhcp-name "(none)\n" = ()) (dhcp-name "" = ()) (dhcp-name "\n" = ()))
    (test_fin (),
     say err "test/host/netlink: netlink and packet sockets, the pmk, rsn and dhcp frames: ok",
     put err 10,

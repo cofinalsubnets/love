@@ -12,10 +12,16 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
+#if defined(__riscv)
+#define K_PEEK 0xffffffe000200000ull           // inside rv64's image window, the kernel's alone
+#else
+#define K_PEEK 0xffffff8000200000ull
+#endif
+
 int main(int argc, char **argv) {
   char d[256];
-  if (argc == 2 && !strcmp(argv[1], "peek")) return *(volatile char*) (uintptr_t) 0xffffff8000200000ull;
-  if (argc == 2 && !strcmp(argv[1], "poke")) return write(1, (void*) (uintptr_t) 0xffffff8000200000ull, 1) < 0 ? 3 : 4;
+  if (argc == 2 && !strcmp(argv[1], "peek")) return *(volatile char*) (uintptr_t) K_PEEK;
+  if (argc == 2 && !strcmp(argv[1], "poke")) return write(1, (void*) (uintptr_t) K_PEEK, 1) < 0 ? 3 : 4;
   if (argc == 3 && !strcmp(argv[1], "spin"))
     for (volatile unsigned long i = 0;; i++)
       if (!(i & 0xffffff) && open(argv[2], O_RDONLY) >= 0) return 5;

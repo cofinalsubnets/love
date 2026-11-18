@@ -98,16 +98,20 @@
                  (go 0))
    (past-blanks s i) (i < #s && blank? (s i) ? (past-blanks s (i + 1)) i)
    ; the first call-shaped identifier not a qualifier -- except love.h's definition
-   ; macros, where the name is inside the parens: `lvm(name)`, `love_kdoorv(name, ..)`
-   ; and `love_kdoor(T, name, ..)`.
+   ; macros, where the name is inside the parens: `lvm(name)` (and `love_doorlvm(name)`),
+   ; `love_kdoorv(name, ..)` and `love_doorv(name, ..)`, `love_kdoor(T, name, ..)` and
+   ; `love_door(T, name, ..)`.
    (hdr-name s)
     (: j (find s "lvm(")
        v (find s "love_kdoorv(")
+       w (find s "love_doorv(")
        d (find s "love_kdoor(")
+       e (find s "love_door(")
        cs (filter (x \ !(any (= x) nonfn)) (calls s))
        (? (j != ()) (ident-from s (j + 4))
           (v != ()) (ident-from s (past-blanks s (v + 12)))
-          (d != ()) (ident-from s (past-blanks s (find s "," + 1)))
+          (w != ()) (ident-from s (past-blanks s (w + 11)))
+          (d != () || e != ()) (ident-from s (past-blanks s (find s "," + 1)))
           (two? cs) <cs
           (rtrim s)))
 

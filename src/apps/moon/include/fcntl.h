@@ -11,6 +11,9 @@
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
+#define O_NDELAY      O_NONBLOCK
+#define O_DSYNC       4096
+#define O_SYNC     1052672   /* __O_SYNC | O_DSYNC */
 /* a64 keeps 32-bit arm's values for these two; rv64 takes asm-generic's, which are x86-64's */
 #if defined(__aarch64__) || defined(__arm__)
 #define O_DIRECTORY  16384   /* arm/a64 040000 */
@@ -20,8 +23,8 @@
 #define O_NOFOLLOW  131072   /* x86-64, rv64, asm-generic 0400000 */
 #endif
 #define O_CLOEXEC   524288
-#ifdef __i386__
-#define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it */
+#if defined(__i386__) || defined(__riscv) && defined(__ILP32__)
+#define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it (rv32: asm-generic's 0100000) */
 #elif defined(__ARM_EABI__)
 #define O_LARGEFILE 131072 /* arm's 0400000 */
 #else
@@ -33,6 +36,8 @@
 #define AT_FDCWD      (-100)
 #define AT_SYMLINK_NOFOLLOW 256
 #define AT_REMOVEDIR        512
+#define AT_EACCESS          512   /* faccessat's, beside AT_REMOVEDIR as linux's */
+#define AT_SYMLINK_FOLLOW  1024
 /* linux only, for fexecve */
 #define AT_EMPTY_PATH      4096
 #define F_DUPFD          0
@@ -56,8 +61,5 @@ struct flock {
   off_t l_len;
   int   l_pid;
 };
-int open(char const*, int, ...);
-int openat(int, char const*, int, ...);
-int creat(char const*, unsigned int);
-int fcntl(int, int, ...);
-int posix_fallocate(int, off_t, off_t);
+int open(char const*, int, ...), openat(int, char const*, int, ...),
+    creat(char const*, unsigned int), fcntl(int, int, ...), posix_fallocate(int, off_t, off_t);

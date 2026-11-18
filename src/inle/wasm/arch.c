@@ -197,13 +197,5 @@ bool k_fb_resize(uintptr_t w, uintptr_t h, uintptr_t scale) {
   return k_fb_reseat((unsigned) w, (unsigned) h, (unsigned) w, (unsigned) scale); }
 
 // no carried runtimes here: plain definitions, so a seat that grows them collides
-const unsigned char rtzst_x64[1] = {0};
-const uintptr_t rtzst_x64_len = 0;
-const unsigned char rtzst_a64[1] = {0};
-const uintptr_t rtzst_a64_len = 0;
-const unsigned char rtzst_rv64[1] = {0};
-const uintptr_t rtzst_rv64_len = 0;
-const unsigned char rtzst_i386[1] = {0};
-const uintptr_t rtzst_i386_len = 0;
-const unsigned char rtzst_id[1] = {0};
-const uintptr_t rtzst_id_len = 0;
+const unsigned char rtzst_tab[1] = {0};
+const uintptr_t rtzst_tab_len = 0;

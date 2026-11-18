@@ -469,10 +469,11 @@ static void dev_shut(int fd) { close(fd); }
 
 // the sink: frames played since t0 at the rate, sink_ms deep; an underrun re-bases t0
 static uintptr_t sink_played(struct horn *h) {
- uintptr_t now = love_clock(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
+ uintptr_t now = love_tick(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
            wpos = (uintptr_t) getcharm(h->wpos);
- uintptr_t played = now > t0 ? (now - t0) * rate / 1000 : 0;
- if (played > wpos) { played = wpos; h->t0 = putcharm((intptr_t) (now - wpos * 1000 / rate)); }
+ intptr_t dt = tick_cmp(now, t0);
+ uintptr_t played = dt > 0 ? (uintptr_t) dt * rate / 1000 : 0;
+ if (played > wpos) { played = wpos; h->t0 = putcharm((intptr_t) tick_of((uint64_t) now + tick_span - wpos * 1000 / rate)); }
  return played; }
 
 static uintptr_t sink_land(struct horn *h, uintptr_t frames) {
@@ -486,9 +487,10 @@ static uintptr_t sink_land(struct horn *h, uintptr_t frames) {
 // HORN_IN=none: silence at the rate since t0, wpos the frames handed out; a reader a ring
 // behind loses the oldest, as an overrun does
 static uintptr_t sink_heard(struct horn *h) {
- uintptr_t now = love_clock(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
+ uintptr_t now = love_tick(), t0 = (uintptr_t) getcharm(h->t0), rate = (uintptr_t) getcharm(h->rate),
            wpos = (uintptr_t) getcharm(h->wpos), cap = rate * sink_ms / 1000;
- uintptr_t heard = now > t0 ? (now - t0) * rate / 1000 : 0;
+ intptr_t dt = tick_cmp(now, t0);
+ uintptr_t heard = dt > 0 ? (uintptr_t) dt * rate / 1000 : 0;
  if (heard - wpos > cap) h->wpos = putcharm((intptr_t) (wpos = heard - cap));
  return heard - wpos; }
 
@@ -601,10 +603,10 @@ __attribute__((weak)) intptr_t k_horn_read(unsigned char *dst, uintptr_t n) { (v
 __attribute__((weak)) uintptr_t k_horn_in_lag(void) { return 0; }
 __attribute__((weak)) void k_horn_in_close(void) { }
 // and the card refuses where no kernel stands under the binary
-love_door int k_horn_open(int rate) { (void) rate; return -1; }
-love_door intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { (void) src, (void) n; return -1; }
-love_door uintptr_t k_horn_lag(void) { return 0; }
-love_door void k_horn_close(void) { }
+love_door(int, k_horn_open, (int rate), (rate)) { (void) rate; return -1; }
+love_door(intptr_t, k_horn_write, (unsigned char const *src, uintptr_t n), (src, n)) { (void) src, (void) n; return -1; }
+love_door(uintptr_t, k_horn_lag, (void), ()) { return 0; }
+love_doorv(k_horn_close, (void), ()) { }
 
 // the finalizer, inside GC: io_close runs only for the fd port, so this port shuts its own
 static void horn_fin(struct g *g, void *p) {
@@ -683,7 +685,7 @@ love_noinline static struct g *horn_mk(struct g *g, int dir) {
  h->dwid = putcharm(dwid);
  h->aq = putcharm(aq);
  h->wpos = putcharm(0);
- h->t0 = putcharm((intptr_t) love_clock());
+ h->t0 = putcharm((intptr_t) love_tick());
  *--g->sp = (word) tagthread(k, n);
  struct fz *z = bump(g, Width(struct fz));
  z->p = k, z->fn = horn_fin, z->next = g->fz, g->fz = z;

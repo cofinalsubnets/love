@@ -14,8 +14,8 @@
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
-  test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 \
-  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
+  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -37,7 +37,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
-	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_cci386m16 test_ccarm test_ccthumb1 test_ccthumb2 \
@@ -48,13 +48,13 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
-	test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
-	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 \
+	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
@@ -236,6 +236,10 @@ test_hook: host
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_NO_IMAGE=1 $m" "glaze-hook: ok" test/glaze-hook.l
 	@echo TEST test/glaze-tail.l "(a native's tail call holds no frame, under a 64 MB budget)"
 	@$(gsh) test/gate/run.sh -a hook "env LOVE_BUDGET_MB=64 $m" "glaze-tail: ok" test/glaze-tail.l
+	@echo TEST test/glaze-yield.l "(a native loop yields to a waiting peer, every lane)"
+	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-yield: ok" test/glaze-yield.l
+	@echo TEST test/glaze-group.l "(the group lane answers what the interpreter does)"
+	@$(gsh) test/gate/run.sh -a hook "$m" "glaze-group: ok" test/glaze-group.l
 # test_glazebench -- each bench, by stdin and by file, beats LOVE_NO_GLAZE=1 by a floor ratio
 test_glazebench: host
 	@echo TEST test/gate/glazebench.sh "(the benches glaze through the driver)"
@@ -397,13 +401,14 @@ mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:k
          test/uuinfvc.l:src/love/compress/inf.l:inf-vc:inf-ok \
          src/love/compress/bz_gen.h:src/love/compress/bz.l:bz-h:bz-ok test/uuzbvc.l:src/love/compress/bz.l:bz-vc:bz-ok \
          src/love/compress/lz_gen.h:src/love/compress/lz.l:lz-h:lz-ok test/uuzxvc.l:src/love/compress/lz.l:lz-vc:lz-ok \
-         src/love/mag_gen.h:src/love/mag.l:mag-h:mag-ok test/uumagvc.l:src/love/mag.l:mag-vc:mag-ok
+         src/love/mag_gen.h:src/love/mag.l:mag-h:mag-ok test/uumagvc.l:src/love/mag.l:mag-vc:mag-ok \
+         src/love/gpark_gen.h:src/love/gpark.l:gpark-h:gpark-ok
 # \# is load-bearing: a bare # in a make variable starts a comment
 mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${r\#*:}; o=out/.`basename $$d`
 # the egg lane: the crew in the warm book shadows names these generators use
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l on $m)"
+	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l gpark_gen.h "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l + gpark.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # each header depends on its table alone ($(m) would close a loop); with no love it stands
@@ -418,6 +423,7 @@ endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
 src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
+src/love/gpark_gen.h: src/love/boot/glaze.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
 test_clay: host
@@ -426,7 +432,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h and uumagvc.l regenerate identically"
+	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h, uumagvc.l and gpark_gen.h regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c, xz.c and num.c holds the clay vc.l laid)"
 	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
@@ -464,6 +470,8 @@ gate_hm += test_softfp
 # test_reloc32 -- arm32 --emit-relocs: linked 64K apart, the table is the words that moved;
 # MOVW/MOVT absolutes refuse
 gate_hm += test_reloc32
+# test_rtall -- every header name links on every carried isa, from the carried archive alone
+gate_hm += test_rtall
 # every love C file and moonlibc by mooncc, the system linker binding; opt-in, x64 only
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
@@ -564,10 +572,10 @@ test_raw_rv64: host
 test_raw_a64: host
 	@$(raw_env) gate_sentinel='test/a64/callout:.* ok' \
 	  $(gsh) test/gate/raw.sh a64 $(ho) $m $t test/a64/callout.l
-# test_love_rv64 -- the cross-built rv64 artifact under qemu-user
-test_love_rv64: host $(ho)/.dist-cat.l
-	@$(MAKE) -s xa=rv64 out/x-rv64/love
-	@$(gsh) test/gate/rv64love.sh $(ho) out/x-rv64/love $(ho)/.dist-cat.l $t
+# test_love_rv64, test_love_arm -- the cross-built artifact under qemu-user
+test_love_rv64 test_love_arm: host $(ho)/.dist-cat.l
+	@$(MAKE) -s xa=$(@:test_love_%=%) out/x-$(@:test_love_%=%)/love
+	@$(gsh) test/gate/qlove.sh $(@:test_love_%=%) $(ho) out/x-$(@:test_love_%=%)/love $(ho)/.dist-cat.l $t
 # test_envimage -- an unbaked love keeping its image at LOVE_IMAGE, as an android app does
 test_envimage: host
 	@sh test/gate/envimage.sh $(ho)/love.raw $(ho)/envimage
@@ -586,7 +594,8 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
-test_thumb1 test_thumb2 test_thumb2sp: test_%: host
+# lane j links the leaves and longjmp out of the isa's own archives
+test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
 # love on the metal by mooncc and our linker; exit 42 = laws held, 98 = a trap.
 #   virt the bare rv64 hart; mps2 the M7, -t thumb2; mps2_t1 the same at -t thumb1
@@ -758,7 +767,8 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect and decode alongside
+# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump and the riscv
+# and aarch64 tables both ways (rvcodec, a64codec) alongside
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
@@ -766,6 +776,9 @@ test_as: host
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
 	@$(gsh) test/gate/decode.sh "$m" $(ho)
+	@$(gsh) test/gate/objdump.sh "$m" $(ho)
+	@$(gsh) test/gate/rvcodec.sh "$m" $(ho)
+	@$(gsh) test/gate/a64codec.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 writer judged by Linux under qemu-arm: thumb write+exit returns 42
 gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l byte-compared with objcopy, both formats; skips without
@@ -975,6 +988,10 @@ test_wake: $(ho)/love
 	@if timeout 60 $(ho)/love.wake $(ho)/wake-corpus.l > /dev/null 2>&1; \
 	  then echo "test_wake: green (the woken image checks uu at speed)"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; \
 	  else echo "test_wake: FAILED -- the woken image storms"; rm -f $(ho)/love.wake $(ho)/wake-corpus.l; exit 1; fi
+	@$(ho)/love bake -l test/gate/wakekeys.l $(ho)/wakekeys.image > /dev/null
+	@if $(ho)/love wake $(ho)/wakekeys.image -q -e "(quit (wakekeys 0 ? 0 1))"; \
+	  then echo "test_wake: green (serial keys found after the wake)"; rm -f $(ho)/wakekeys.image; \
+	  else echo "test_wake: FAILED -- a serial key is lost across the bake"; rm -f $(ho)/wakekeys.image; exit 1; fi
 
 # --- the metal gates; kernel build rules stay in the root Makefile ---
 
@@ -1102,10 +1119,10 @@ endif
 
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
-inle_rv64 = test_kernel_rv64
+inle_rv64 = test_kernel_rv64 test_kernel_uproc_rv64
 inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
-inle_a64 = test_kernel_a64 test_uefi_a64 test_uefi_stay_a64
+inle_a64 = test_kernel_a64 test_kernel_uproc_a64 test_uefi_a64 test_uefi_stay_a64
 test_inle: host
 	@$(MAKE) -s $(src_tree) out/rootfs.tar
 	@rm -rf out/inle && mkdir -p out/inle
@@ -1117,13 +1134,21 @@ inle-%:
 	 r=$$?; cat out/inle/$*.log; exit $$r
 
 ifeq ($(QEMU_A64),)
-test_kernel_a64:
-	@sh test/gate/skip.sh gate-skip "test_kernel_a64: skipped (need qemu-system-aarch64)"
+test_kernel_a64 test_kernel_uproc_a64:
+	@sh test/gate/skip.sh gate-skip "$@: skipped (need qemu-system-aarch64)"
 else
 test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
+
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+test_kernel_uproc_a64: host $(S)/tools/ktest.l
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
+	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
+	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
 test_kernel_rpi3:
@@ -1138,13 +1163,22 @@ endif
 qemu_rv64_at := $(shell command -v qemu-system-riscv64 2>/dev/null)
 QEMU_RV64 ?= $(qemu_rv64_at)
 ifeq ($(QEMU_RV64),)
-test_kernel_rv64:
-	@sh test/gate/skip.sh gate-skip "test_kernel_rv64: skipped (need qemu-system-riscv64)"
+test_kernel_rv64 test_kernel_uproc_rv64:
+	@sh test/gate/skip.sh gate-skip "$@: skipped (need qemu-system-riscv64)"
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
+
+# test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+test_kernel_uproc_rv64: host $(S)/tools/ktest.l
+	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
+	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
+	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
+	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 
 node_at := $(shell command -v node 2>/dev/null)

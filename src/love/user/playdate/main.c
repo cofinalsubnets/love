@@ -21,7 +21,7 @@ static struct k {
     uint8_t cb_bytes[sizeof(struct cb) + sizeof(struct cb_cell) * NROWS * NCOLS]; };
 } K;
 
-uintptr_t love_clock(void) { return pdg_ms(); }
+uint64_t love_clock(void) { return pdg_ms(); }
 void love_sleep(uintptr_t ms) {
   uintptr_t start = love_clock();
   if (ms) while (love_clock() - start < ms) ;

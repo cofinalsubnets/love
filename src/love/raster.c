@@ -160,6 +160,27 @@ struct rz_plane {
  intptr_t x0, x1, y0, y1;
  int nk, persp, shade, zo; };
 
+// the level of nlv where a pixel's step at u v crosses about a texel
+static love_inline int rz_lod(flo_t const *vx, flo_t const *vy, int persp, int nlv, flo_t s, flo_t u, flo_t v) {
+ int l = 0;
+ flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
+             uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
+ flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
+ r2 = ry > r2 ? ry : r2;
+ while (r2 > 2 && l + 1 < nlv) r2 /= 4, l++;
+ return l; }
+// the texel at u v, wrapped: by a mask where a side is a power of two
+static love_inline intptr_t rz_fetch(struct rz_tex const *tx, flo_t u, flo_t v) {
+ intptr_t iu = rz_ifloor(u), iv = rz_ifloor(v);
+ if (tx->mw) iu &= tx->mw;
+ else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
+ if (tx->mh) iv &= tx->mh;
+ else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
+ return tx->px[iv * tx->w + iu]; }
+
+// a pixel's channels, each 0..255 as it rounds
+static love_inline int32_t rz_rgb(flo_t r, flo_t g, flo_t b) { return (int32_t) (rz_ch(r, 0) << 16 | rz_ch(g, 0) << 8 | rz_ch(b, 0)); }
+
 // one row of a triangle: its run inside all three edges, each pixel shaded
 love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct rz_tex const *lv, int nlv, intptr_t y) {
  flo_t const *const v0 = t->v0, *const vx = t->vx, *const vy = t->vy, x0f = t->x0f, y0f = t->y0f, fn = t->fn, fs = t->fs, *const fog = r->fog;
@@ -195,6 +216,31 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
    else if (z < dz[x] && !(under && o[x] >= 0) && (!cls || (cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))
     dz[x] = z, td[x >> 3] = 1; }
   return; }
+ int const plain = !under && !cls && !glass && !add && !fs && !(tone > 0) && !dith && !shade;   // none of those asked a pixel
+ if (plain && !nlv) {
+  for (intptr_t x = xs; x < xe; x++) {
+   float const z = (float) a[0];
+   if (a[0] >= -1 && a[0] <= 1 && z < dz[x]) {
+    flo_t const s = persp ? 1 / a[1] : 1;
+    o[x] = rz_rgb((a[4] + a[7]) * s * 255, (a[5] + a[8]) * s * 255, (a[6] + a[9]) * s * 255), dz[x] = z, td[x >> 3] = 1; }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; }
+  return; }
+ if (plain) {
+  for (intptr_t x = xs; x < xe; x++) {
+   float const z = (float) a[0];
+   if (a[0] >= -1 && a[0] <= 1 && z < dz[x]) {
+    flo_t const s = persp ? 1 / a[1] : 1, u = a[2] * s, v = a[3] * s;
+    if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+    intptr_t const t = rz_fetch(lv + L, u * us, v * us);
+    if (t >= 0)
+     o[x] = rz_rgb((a[4] + a[7]) * s * 255 * u8[t >> 16 & 255], (a[5] + a[8]) * s * 255 * u8[t >> 8 & 255],
+                   (a[6] + a[9]) * s * 255 * u8[t & 255]), dz[x] = z, td[x >> 3] = 1; }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; }
+  return; }
  for (intptr_t x = xs; x < xe; x++) {
   float const z = (float) a[0];
   if (a[0] >= -1 && a[0] <= 1   // inside all three edges: the run is exact
@@ -204,23 +250,10 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
   flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
   int hole = 0;
   flo_t tint[3] = { 1, 1, 1 };
-  if (nlv) {   // the level where a pixel's step crosses about a texel
+  if (nlv) {
    flo_t const u = a[2] * s, v = a[3] * s;
-   if (nlv > 1 && !((x - xs) & 7)) {   // ..one level alone is that one
-    L = 0;
-    flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
-                uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
-    flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
-    r2 = ry > r2 ? ry : r2;
-    while (r2 > 2 && L + 1 < nlv) r2 /= 4, L++;
-    us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L); }
-   struct rz_tex const *tx = lv + L;
-   intptr_t iu = rz_ifloor(u * us), iv = rz_ifloor(v * us);
-   if (tx->mw) iu &= tx->mw;   // wrapped, by a mask where a side is a power of two
-   else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
-   if (tx->mh) iv &= tx->mh;
-   else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
-   intptr_t const t = tx->px[iv * tx->w + iu];
+   if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+   intptr_t const t = rz_fetch(lv + L, u * us, v * us);
    if (t < 0) hole = 1;
    else if (glass) tint[0] = u8[t >> 16 & 255], tint[1] = u8[t >> 8 & 255], tint[2] = u8[t & 255];
    else c[0] *= u8[t >> 16 & 255], c[1] *= u8[t >> 8 & 255], c[2] *= u8[t & 255]; }

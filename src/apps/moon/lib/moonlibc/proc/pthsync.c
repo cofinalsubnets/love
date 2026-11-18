@@ -25,16 +25,16 @@ static int __pt_left(struct timespec const *abs, struct timespec *rel) {
   return rel->tv_sec >= 0; }
 
 static void __pt_take(int *w) {
-  if (__sync_lock_test_and_set(w, 1) == 0) return;
-  while (__sync_lock_test_and_set(w, 2) != 0) __fx_wait(w, 2, 0); }
+  if (__love_tas(w, 1) == 0) return;
+  while (__love_tas(w, 2) != 0) __fx_wait(w, 2, 0); }
 static int __pt_taketill(int *w, struct timespec const *abs) {
-  if (__sync_lock_test_and_set(w, 1) == 0) return 0;
+  if (__love_tas(w, 1) == 0) return 0;
   struct timespec rel;
-  while (__sync_lock_test_and_set(w, 2) != 0) {
+  while (__love_tas(w, 2) != 0) {
     if (!__pt_left(abs, &rel)) return ETIMEDOUT;
     __fx_wait(w, 2, &rel); }
   return 0; }
-static void __pt_give(int *w) { if (__atomic_exchange_n(w, 0, __ATOMIC_RELEASE) == 2) __fx_wake(w, 1); }
+static void __pt_give(int *w) { if (__love_xchg(w, 0, __ATOMIC_RELEASE) == 2) __fx_wake(w, 1); }
 
 int pthread_mutexattr_init(pthread_mutexattr_t *a) { a->__kind = PTHREAD_MUTEX_DEFAULT; return 0; }
 int pthread_mutexattr_destroy(pthread_mutexattr_t *a) { return 0; }
@@ -68,7 +68,7 @@ int pthread_mutex_timedlock(pthread_mutex_t *m, struct timespec const *abs) {
 int pthread_mutex_trylock(pthread_mutex_t *m) {
   int r = __pt_mine(m);
   if (r >= 0) return r == EDEADLK ? EBUSY : r;
-  if (m->__lock || __sync_lock_test_and_set(&m->__lock, 2) != 0) return EBUSY;
+  if (m->__lock || __love_tas(&m->__lock, 2) != 0) return EBUSY;
   return __pt_got(m); }
 int pthread_mutex_unlock(pthread_mutex_t *m) {
   if (m->__kind != PTHREAD_MUTEX_NORMAL) {
@@ -91,7 +91,7 @@ static int __pt_cwait(pthread_cond_t *c, pthread_mutex_t *m, struct timespec con
   struct timespec rel;
   if (!abs) __fx_wait(&c->__seq, s, 0);
   else if (!__pt_left(abs, &rel) || __fx_wait(&c->__seq, s, &rel) == -ETIMEDOUT) r = ETIMEDOUT;
-  while (__sync_lock_test_and_set(&m->__lock, 2) != 0) __fx_wait(&m->__lock, 2, 0);   /* others may wait on it now */
+  while (__love_tas(&m->__lock, 2) != 0) __fx_wait(&m->__lock, 2, 0);   /* others may wait on it now */
   if (kind != PTHREAD_MUTEX_NORMAL) { m->__owner = pthread_self(); m->__count = n; }
   return r; }
 int pthread_cond_wait(pthread_cond_t *c, pthread_mutex_t *m) { return __pt_cwait(c, m, 0); }
@@ -131,9 +131,9 @@ int pthread_rwlock_unlock(pthread_rwlock_t *l) {
  * release, read with an acquire */
 int pthread_once(pthread_once_t *o, void (*fn)(void)) {
   while (__atomic_load_n(o, __ATOMIC_ACQUIRE) != 2) {
-    int was = __sync_lock_test_and_set(o, 1);
-    if (was == 0) { fn(); __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
-    if (was == 2) { __atomic_exchange_n(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
+    int was = __love_tas(o, 1);
+    if (was == 0) { fn(); __love_xchg(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
+    if (was == 2) { __love_xchg(o, 2, __ATOMIC_RELEASE); __fx_wake(o, 0x7fffffff); return 0; }
     __fx_wait(o, 1, 0); }
   return 0; }
 
@@ -159,31 +159,61 @@ int pthread_setspecific(pthread_key_t k, void const *v) {
  * raises __w then sleeps only while __v is 0: seq_cst both, so one sees the other's store */
 #include <semaphore.h>
 int sem_init(sem_t *s, int shared, unsigned v) {
-  if (shared) { __errno_v = ENOSYS; return -1; }          /* the futex ops are private */
-  if (v > INT_MAX) { __errno_v = EINVAL; return -1; }
+  if (shared) { errno = ENOSYS; return -1; }          /* the futex ops are private */
+  if (v > INT_MAX) { errno = EINVAL; return -1; }
   s->__v = (int) v; s->__w = 0; return 0; }
 int sem_destroy(sem_t *s) { return 0; }
 int sem_post(sem_t *s) {
-  __atomic_fetch_add(&s->__v, 1, __ATOMIC_SEQ_CST);
+  __love_fadd(&s->__v, 1, __ATOMIC_SEQ_CST);
   if (__atomic_load_n(&s->__w, __ATOMIC_SEQ_CST)) __fx_wake(&s->__v, 1);
   return 0; }
 static int __sem_take(sem_t *s) {
   int v = __atomic_load_n(&s->__v, __ATOMIC_ACQUIRE);
   while (v > 0)
-    if (__atomic_compare_exchange_n(&s->__v, &v, v - 1, 0, __ATOMIC_ACQUIRE, __ATOMIC_ACQUIRE)) return 1;
+    if (__love_cas(&s->__v, &v, v - 1, __ATOMIC_ACQUIRE)) return 1;
   return 0; }
-int sem_trywait(sem_t *s) { if (__sem_take(s)) return 0; __errno_v = EAGAIN; return -1; }
+int sem_trywait(sem_t *s) { if (__sem_take(s)) return 0; errno = EAGAIN; return -1; }
 static int __sem_wait(sem_t *s, struct timespec const *abs) {
   for (;;) {
     if (__sem_take(s)) return 0;
     struct timespec rel;
-    if (abs && !__pt_left(abs, &rel)) { __errno_v = ETIMEDOUT; return -1; }
-    __atomic_fetch_add(&s->__w, 1, __ATOMIC_SEQ_CST);
+    if (abs && !__pt_left(abs, &rel)) { errno = ETIMEDOUT; return -1; }
+    __love_fadd(&s->__w, 1, __ATOMIC_SEQ_CST);
     int r = __fx_wait(&s->__v, 0, abs ? &rel : 0);
-    __atomic_fetch_sub(&s->__w, 1, __ATOMIC_SEQ_CST);
-    if (r == -EINTR) { __errno_v = EINTR; return -1; } } }
+    __love_fadd(&s->__w, -1, __ATOMIC_SEQ_CST);
+    if (r == -EINTR) { errno = EINTR; return -1; } } }
 int sem_wait(sem_t *s) { return __sem_wait(s, 0); }
 int sem_timedwait(sem_t *s, struct timespec const *abs) {
-  if (abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) { __errno_v = EINVAL; return -1; }
+  if (abs->tv_nsec < 0 || abs->tv_nsec >= 1000000000L) { errno = EINVAL; return -1; }
   return __sem_wait(s, abs); }
 int sem_getvalue(sem_t *s, int *v) { *v = __atomic_load_n(&s->__v, __ATOMIC_ACQUIRE); return 0; }
+
+/* a barrier: the n-th arrival opens a new generation and answers SERIAL; the rest wait on
+ * the generation word until it moves */
+int pthread_barrier_init(pthread_barrier_t *b, pthread_barrierattr_t const *a, unsigned n) {
+  if (!n) return EINVAL;
+  b->__lock = 0, b->__seq = 0, b->__n = n, b->__in = 0;
+  return 0; }
+int pthread_barrier_destroy(pthread_barrier_t *b) { return 0; }
+int pthread_barrier_wait(pthread_barrier_t *b) {
+  __pt_take(&b->__lock);
+  int seq = b->__seq;
+  if (++b->__in == b->__n) {
+    b->__in = 0;
+    __love_fadd(&b->__seq, 1, __ATOMIC_RELEASE);
+    __pt_give(&b->__lock);
+    __fx_wake(&b->__seq, 0x7fffffff);
+    return PTHREAD_BARRIER_SERIAL_THREAD; }
+  __pt_give(&b->__lock);
+  while (__atomic_load_n(&b->__seq, __ATOMIC_ACQUIRE) == seq) __fx_wait(&b->__seq, seq, 0);
+  return 0; }
+
+/* spinlocks: an exchange to take, a load to spin on, a release store to give */
+int pthread_spin_init(pthread_spinlock_t *s, int sh) { *s = 0; return 0; }
+int pthread_spin_destroy(pthread_spinlock_t *s) { return 0; }
+int pthread_spin_lock(pthread_spinlock_t *s) {
+  while (__love_xchg(s, 1, __ATOMIC_ACQUIRE))
+    while (__atomic_load_n(s, __ATOMIC_RELAXED)) ;
+  return 0; }
+int pthread_spin_trylock(pthread_spinlock_t *s) { return __love_xchg(s, 1, __ATOMIC_ACQUIRE) ? EBUSY : 0; }
+int pthread_spin_unlock(pthread_spinlock_t *s) { __atomic_store_n(s, 0, __ATOMIC_RELEASE); return 0; }
