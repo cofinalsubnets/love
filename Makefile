@@ -1,5 +1,8 @@
 R ?= .
 include $(R)/common.mk
+# a build's own choices (crewfiles, rt_isas), untracked: selfpack carries it, so every seed
+# laid from this tree makes them again
+-include $(R)/config.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
@@ -357,7 +360,7 @@ kore_net = src/apps/tls/bytes.l src/apps/tls/verify.l src/apps/tls/client.l src/
   src/apps/ssh/server.l src/apps/ssh/cli.l \
   src/apps/png.l src/apps/jpeg.l src/apps/gif.l src/apps/webp.l src/apps/pnm.l src/apps/bmp.l src/apps/qoi.l src/apps/kore/wget.l src/apps/kore/openssl.l src/apps/kore/im.l src/apps/kore/www.l src/apps/kore/net.l src/apps/kore/kore.l
 # the crew the artifact carries past kore and mooncc
-crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
+crewfiles ?= src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \
   src/apps/source.l src/apps/lapiz.l \
   src/apps/libra/salt.l src/apps/libra/spans.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
@@ -509,7 +512,10 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64 i386 arm rv32 wasm
+# the one roster: mkrt.l lays a frame per isa its groups name, and runtime-ar finds it by name.
+# wasm alone lays no mksys leaves: its jumps are wasmfn's
+rt_isas ?= x64 a64 rv64 i386 arm rv32 wasm thumb1 thumb2 thumb2sp xtensa
+rt_nosys = wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -518,18 +524,16 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-# i386, arm and rv32 have no 64-bit divide: their rosters carry rt.c's helpers too
+# the 32-bit isas have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
-rt_groups_i386 = $(rt_groups) rt
-rt_groups_arm = $(rt_groups) rt
-rt_groups_rv32 = $(rt_groups) rt
+$(foreach i,i386 arm rv32 thumb1 thumb2 thumb2sp xtensa,$(eval rt_groups_$i = $$(rt_groups) rt))
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,$(if $(filter wasm,$(1)),,mksys),$$(call rt_src,$(2)))
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,$(if $(filter $(rt_nosys),$(1)),,mksys),$$(call rt_src,$(2)))
 endef
 $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
 # arm's, for a port whose own linker pulls members (teensy41's kernel)
@@ -537,7 +541,11 @@ rt_arm_a = $(foreach g,$(rt_groups_arm),out/rt/arm/$g.a)
 out/rt/arm.list: force_dist_list $(rt_arm_a)
 	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_arm_a)' > $$tf; \
 	 $(note)
-out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
+# the roster as a noted list, so a config.mk that drops an isa lays the join again
+out/rt/.isas.list: force_dist_list
+	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_isas)' > $$tf; \
+	 $(note)
+out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0) out/rt/.isas.list
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
 

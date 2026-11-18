@@ -15,7 +15,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -37,7 +37,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
-	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_cci386m16 test_ccarm test_ccthumb1 test_ccthumb2 \
@@ -48,7 +48,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
-	test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
@@ -470,6 +470,8 @@ gate_hm += test_softfp
 # test_reloc32 -- arm32 --emit-relocs: linked 64K apart, the table is the words that moved;
 # MOVW/MOVT absolutes refuse
 gate_hm += test_reloc32
+# test_rtall -- every header name links on every carried isa, from the carried archive alone
+gate_hm += test_rtall
 # every love C file and moonlibc by mooncc, the system linker binding; opt-in, x64 only
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
@@ -592,7 +594,8 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
-test_thumb1 test_thumb2 test_thumb2sp: test_%: host
+# lane j links the leaves and longjmp out of the isa's own archives
+test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
 # love on the metal by mooncc and our linker; exit 42 = laws held, 98 = a trap.
 #   virt the bare rv64 hart; mps2 the M7, -t thumb2; mps2_t1 the same at -t thumb1

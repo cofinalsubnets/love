@@ -8,8 +8,8 @@ static __mhdr __mbase;
 static __mhdr *__mfree;
 /* thread state lives here so a link that allocates never pulls in pthread.o */
 struct __love_mt __love_mt;
-static void __mtake(void) { if (__love_mt.threads) while (__sync_lock_test_and_set(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
-static void __mgive(void) { if (__love_mt.threads) __sync_lock_release(&__love_mt.lock); }
+static void __mtake(void) { if (__love_mt.threads) while (__love_tas(&__love_mt.lock, 1)) sc0(NR_sched_yield); }
+static void __mgive(void) { if (__love_mt.threads) __love_rel(&__love_mt.lock); }
 /* a small block is a slot in a 64 KiB slab of its size class, a bit per slot held. a
  * slot's header is tagged __MSlot, its size the units | index << 16 */
 #define SlabU (65536 / sizeof(__mhdr))
