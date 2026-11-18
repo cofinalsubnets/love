@@ -257,8 +257,8 @@
 (: h (f4port 0) w (swdt-target h) _ (swd-connect w) n0 #(h 'writes ())
    v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
    (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010)
-         (drop n0 (h 'writes ()) = [[0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010] [1 12 0xDEADBEEF]
-                                 [0 8 0] [1 0 0x23000012] [0 8 0] [1 4 0x20000010]])))
+         (drop n0 (h 'writes ()) = [[0 8 0] [1 0 0x23000012] [1 4 0x20000010] [1 12 0xDEADBEEF]
+                                 [1 0 0x23000012] [1 4 0x20000010]])))
 
 ; runs across 1K boundaries: tar set again at each, every word where it belongs
 (: h (f4port 0) w (swdt-target h) _ (swd-connect w)
@@ -296,7 +296,7 @@
    v (swd-wr w 0x20000010 0xDEADBEEF) r (swd-rd w 0x20000010)
    ws (map (i \ 0x1000 * i + 7) ^300) n (swd-wrs w 0x200003F0 ws) back (swd-rds w 0x200003F0 300)
    (test (v = 0xDEADBEEF) (r = 0xDEADBEEF) (0xDEADBEEF = h 'mem () 0x20000010) (300 = n) (back = ws)
-         (take 5 (drop n0 (h 'writes ())) = [[0 8 0x2D00] [1 0 0x23000012] [0 8 0x2D00] [1 4 0x20000010] [1 12 0xDEADBEEF]])
+         (take 5 (drop n0 (h 'writes ())) = [[0 8 0x2D00] [1 0 0x23000012] [1 4 0x20000010] [1 12 0xDEADBEEF] [1 0 0x23000012]])
          (() = w 'errs ())))
 
 ; a cortex-m core over a bus, as an f4 answers: dhcsr's debug enable and halt (key 0xA05F,
@@ -822,3 +822,11 @@
    k (swd-wrs w a vs) n1 (p 'sends ())
    back (swd-rds w a 300) n2 (p 'sends ())
    (test (k = 300) (back = vs) (n1 - n0 < 16) (n2 - n1 < 16)))
+
+; select is written only to change it: three reads after connect write it once. a select
+; forgets it: core 1's connect after core 0's, its ap id through the same bank, writes core 1's select
+(: h (f4port 0) w (swdt-target h) _ (swd-connect w)
+   _ (map (_ \ swd-rd w 0x20000000) ^3) a #(filter (e \ e = [0 8 0]) (h 'writes ()))
+   b (rpbus 0) v <b _ (swd-mdconnect v (rpts 0))
+   c1 (swd-mdconnect v (rpts 1))
+   (test (1 = a) (c1 = [rpdp rpap])))

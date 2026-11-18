@@ -72,7 +72,7 @@
  ; probe the same 136 bits as bytes, lsb first
  ones (string (map (_ \ 255) ^7))
  (swd-line w)
-  (swd-probe? w ? (w 'line [(ones + string [0x9E 0xE7] + ones + string [0]) 136])
+  (pin w 'sel (), swd-probe? w ? (w 'line [(ones + string [0x9E 0xE7] + ones + string [0]) 136])
      (w 'own 1, swd-bits w -1 56, swd-bits w 0xE79E 16, swd-bits w -1 56, swd-bits w 0 8))
 
  ; dp v2's multidrop. the wake from dormant: 8 ones, the 128-bit selection alert, 4 zeros, the
@@ -87,17 +87,19 @@
  ; the wake, then targetsel (dp 0xC) naming the one target that answers until the next line
  ; reset: its tinstance, partno and designer as the target's own targetid lays them
  (swd-select w ts)
-  (swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
+  (pin w 'sel (), swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
      (: _ (w 'own 1) _ (map (i \ swd-bits w (swd-wake i) 8) ^#swd-wake) _ (swd-noack w 0x99 ts) 1))
 
  ; the debug port's registers by address, each [ack v]; an access port's through select's bank:
  ; apsel 0's, or with the wire's 'ap set (swd-use) the adiv6 ap at that base, whose adiv5 map
  ; lies at base + 0xD00 and select takes the address's top 28 bits. an ap read is posted, its
- ; value the next one's, so rdbuff (dp 12) answers it
+ ; value the next one's, so rdbuff (dp 12) answers it. the wire's 'sel is select as last
+ ; written, forgotten at a line reset or a select, so an ap access writes it only to change it
  (swd-dp w a) (swd-xfer w 0 1 a 0)
- (swd-dpw w a v) (swd-xfer w 0 0 a v)
+ (swd-dpw w a v) (swd-xfer w 0 0 a v @ r (a = 8 ? (pin w 'sel (<r = 1 ? v ()), r) r))
  (swd-use w base) (pin w 'ap base, w)
- (swd-sel w a) (w 'ap @ b (charm? b ? (: f (b + 0xD00 + a) (swd-dpw w 8 (f - (f & 15)))) (swd-dpw w 8 (a & 0xF0))))
+ (swd-sel w a) (: s (w 'ap @ b (charm? b ? (: f (b + 0xD00 + a) (f - (f & 15))) (a & 0xF0)))
+                  (w 'sel = s ? [1 s] (swd-dpw w 8 s)))
  (swd-ap w a) (: s (swd-sel w a) r (<s = 1 ? (swd-xfer w 1 1 a 0) s) (<r = 1 ? (swd-dp w 12) r))
  (swd-apw w a v) (: s (swd-sel w a) (<s = 1 ? (swd-xfer w 1 0 a v) s))
 
