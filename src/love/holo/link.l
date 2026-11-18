@@ -159,7 +159,7 @@
             94 (ld-cls '((1 4 abs32) (20 3 slot0)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
-            40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc)))
+            40 (ld-cls '((2 4 w32) (3 4 r32) (42 4 p31) (28 4 acall) (29 4 a24) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc)))
             ; gotoff S+A-GOT and gotpc GOT+A-P, laid by ld.l alone
             3 (ld-cls '((1 4 w32) (2 4 r32) (4 4 r32) (9 4 gotoff) (10 4 gotpc) (20 2 w16) (21 2 r16) (22 1 w8) (23 1 r8)))}
    ; a64's thread-pointer kinds -> (how shift): an add's imm12 (hi or lo, the lo checked or
@@ -189,6 +189,9 @@
                     (0 - h // 2 <= v && v < h))
               u ((v % h + h) % h)
               (ok ? (w @ 4 (le32 u) 2 (le16 u) [u])))
+          ; arm's prel31, an unwind table's: 31 bits of S+A-P, the field's top bit kept
+          (k == 'p31) (: v (s64 (ld-u64 (sa - p)))
+                         (-1073741824 <= v && v < 1073741824 ? (le32 ((bs 3 & 128) << 24 | v & 2147483647))))
           (refix-with be k bs sa p <r)))
    ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
@@ -1028,7 +1031,7 @@
                               fl)))))
                 0 flat)
        env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0 'osof osof 'mof mof 'ssec {} 'stype {} 'cur ()
-            'hdrs (? (two? phr) (? (peep cx 'w32 0) (52 + 32 * #phr) (64 + 56 * #phr)) ())}
+            'hdrs (? (two? phr) (? (peep cx 'w32 0) (52 + 32 * (#phr + peep cx 'exidx 0)) (64 + 56 * #phr)) ())}
        isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec) stype (env 'stype)
        ; the address of byte off of input section si of object oi, or () if not laid
        (at oi si off)
