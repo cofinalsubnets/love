@@ -46,9 +46,9 @@
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_core"] ""]
-     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
-      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
-      ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
+     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`"
+      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*"] ["test_gcstress"]
+      ", in the queue's union; a `Makefile` or `common.mk` change owes it only by judgment, when it changes how the C core compiles (name it in the row); a `.l`, doc, app or test diff never owes it"]
      ["what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze"
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
