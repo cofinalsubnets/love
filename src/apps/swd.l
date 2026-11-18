@@ -5,7 +5,7 @@
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
 ; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set. the
 ; love swd probe and cmsis-dap are probe wires
-(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
+(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-batch swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
@@ -36,9 +36,9 @@
  ; register a's bits 2 and 3: [ack v], a read's value or the one written. ack 1 is ok; a wait
  ; (2) is asked again after 8 idle clocks, 64 times at most; a fault (4) or no answer (7)
  ; answers its ack, and a read whose parity is wrong the ack -1
+ (swd-rq ap rd a) (: ad (a >> 2 & 3) (1 | ap << 1 | rd << 2 | ad << 3 | swd-par (ap | rd << 1 | ad << 2) << 5 | 1 << 7))
  (swd-xfer w ap rd a v)
-  (: ad (a >> 2 & 3)
-     rq (1 | ap << 1 | rd << 2 | ad << 3 | swd-par (ap | rd << 1 | ad << 2) << 5 | 1 << 7)
+  (: rq (swd-rq ap rd a)
      pw (swd-probe? w)
      (go k) (: r (pw ? <(w 'xfer [[rq (rd = 1 ? 0 v)]]) (swd-xfer1 w rq rd v)) ack <r
                (? (ack = 2 && k > 0) (pw || swd-bits w 0 8, go (k - 1))
@@ -46,6 +46,27 @@
                   (rd = 1) [(r 2 = swd-par (r 1) ? ack -1) (r 1)]
                   [ack v]))
      (go 64))
+ ; transfers [[ap rd a v] ..] in order: [[ack x] ..] as swd-xfer's, ending at the first ack
+ ; not 1. a probe wire takes them 64 to a batch, and a wait is asked again from the transfer
+ ; that waited, the rest of its batch unclocked; a bit wire takes them one at a time
+ (swd-batch w ts)
+  (: (one ts acc) (? !(two? ts) (rev acc)
+                     (: r (swd-xfer w <(<ts) (<ts 1) (<ts 2) (<ts 3))
+                        (<r = 1 ? (one >ts (r . acc)) (rev (r . acc)))))
+     (bat ts k acc)
+      (? !(two? ts) (rev acc)
+         (: c (snip ts 0 64)
+            rs (w 'xfer (map (t \ [(swd-rq <t (t 1) (t 2)) (t 1 = 1 ? 0 (t 3))]) c))
+            (walk c rs i acc)
+             (? !(two? c) (bat (snip ts i #ts) 64 acc)
+                (: t <c r <rs ack <r
+                   (? (ack = 1 && t 1 = 1)
+                       (r 2 = swd-par (r 1) ? (walk >c >rs (i + 1) ([1 (r 1)] . acc)) (rev ([-1 (r 1)] . acc)))
+                      (ack = 1) (walk >c >rs (i + 1) ([1 (t 3)] . acc))
+                      (ack = 2 && (i > 0 || k > 0)) (bat (snip ts i #ts) (i > 0 ? 64 (k - 1)) acc)
+                      (rev ([ack ()] . acc)))))
+            (walk c rs 0 acc)))
+     (swd-probe? w ? (bat ts 64 ()) (one ts ())))
 
  ; the switch: a line reset, the jtag-to-swd sequence, a line reset again, then idle; to a
  ; probe the same 136 bits as bytes, lsb first
@@ -112,20 +133,23 @@
      (run a n) (n < 1 ? ()
                 (: k (min n ((1024 - (a & 1023)) // 4))
                    _ (swd-ok 'swd-tar (swd-apw w 4 a))
-                   vs (map (_ \ swd-ok 'swd-read (swd-xfer w 1 1 12 0)) ^k)
-                   last (swd-ok 'swd-read (swd-dp w 12))
-                   (>vs + [last] + run (a + 4 * k) (n - k))))
+                   rs (swd-batch w (map (_ \ [1 1 12 0]) ^k + [[0 1 12 0]]))
+                   vs (map (r \ swd-ok 'swd-read r) rs)
+                   _ (#vs = k + 1 || swd-ok 'swd-read [0 ()])
+                   (>vs + run (a + 4 * k) (n - k))))
      (run a n))
  (swd-rd w a) <(swd-rds w a 1)
- ; a run of words written from a, answering how many
+ ; a run of words written from a, answering how many: each 1K block's drw writes one batch
  (swd-wrs w a vs)
   (: _ (swd-at a)
      _ (swd-ok 'swd-csw (swd-apw w 0 csw))
-     _ (swd-ok 'swd-tar (swd-apw w 4 a))
      (run a vs k) (!(two? vs) ? k
-                   (: _ ((a & 1023) = 0 && k > 0 ? (swd-ok 'swd-tar (swd-apw w 4 a)) 0)
-                      _ (swd-ok 'swd-write (swd-xfer w 1 0 12 <vs))
-                      (run (a + 4) >vs (k + 1))))
+                   (: m (min #vs ((1024 - (a & 1023)) // 4))
+                      _ (swd-ok 'swd-tar (swd-apw w 4 a))
+                      rs (swd-batch w (map (v \ [1 0 12 v]) (snip vs 0 m)))
+                      _ (map (r \ swd-ok 'swd-write r) rs)
+                      _ (#rs = m || swd-ok 'swd-write [0 ()])
+                      (run (a + 4 * m) (snip vs m #vs) (k + m))))
      (run a vs 0))
  (swd-wr w a v) (: _ (swd-wrs w a [v]) v)
 

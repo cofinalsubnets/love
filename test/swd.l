@@ -584,9 +584,10 @@
         'recv (n \ (: a (st 'a) _ (pin st 'a (snip a n #a)) (snip a 0 n)))
         'close (_ \ 0) 'sent (_ \ rev (st 'sent))})
    ; a probe in love over a bit wire: the commands decoded and each transfer one swd-xfer1,
-   ; a batch's transfers after its first ack not 1 answering 0, unclocked
+   ; a batch's transfers after its first ack not 1 answering 0, unclocked; 'sends counts the
+   ; host's writes, its round trips
    (swdt-probe bw)
-    (: st {'out "" 'stop 0 'n 0}
+    (: st {'out "" 'stop 0 'n 0 'sends 0}
        (emit s) (pin st 'out (st 'out + s))
        (tx rq rd v) (: r (swd-xfer1 bw rq rd v)
                        _ (pin st 'n (st 'n + 1))
@@ -610,9 +611,9 @@
                  (c = 73) (: _ (emit "lovswd1\n") (cmd s (i + 1)))
                  (c = 90) (cmd s (i + 1))
                  (scare 'swdt-probe c))))
-       {'send (s \ (cmd s 0, 0))
+       {'send (s \ (pin st 'sends (st 'sends + 1), cmd s 0, 0))
         'recv (n \ (: o (st 'out) _ (#o < n && scare 'swdt-probe-short n) _ (pin st 'out (snip o n #o)) (snip o 0 n)))
-        'close (_ \ 0) 'n (_ \ st 'n)}))
+        'close (_ \ 0) 'n (_ \ st 'n) 'sends (_ \ st 'sends)}))
 
 ; a batch: each transfer's bytes, 'E' after them; answers by the lengths the requests foretell,
 ; and after a fault the transfers the probe did not clock answer 0
@@ -796,3 +797,28 @@
          (f4-read w 0x1000 5001 = s) ((b 'mem () 0x2388) = (s 5000 | 0xFFFFFF00))
          (0x12345678 = b 'mem () 0x3000) ('nrf-empty = e) ('nrf-range = f)
          (b 'erased () = [0x1000 0x2000])))
+
+; --- batching: a run's transfers in few batches ---
+
+; a batch whose third transfer waits: the wait asked again from it, alone with the rest, and
+; every answer in order; a fault or a read's bad parity ends the answers at it; 100 transfers go as 64 and 36
+(: id 0x2BA01477 ok (string [1] + wrle id 4 + string [0])
+   l (swdt-link (ok + ok + string [2 0 0] + "e" + ok + ok + ok + "e"))
+   r (swd-batch (probe-wire-on l) (map (_ \ [0 1 0 0]) ^5))
+   s (l 'sent ())
+   f (swd-batch (probe-wire-on (swdt-link (ok + string [4 0] + "e"))) (map (_ \ [0 1 0 0]) ^3))
+   m (swdt-link (join "" (map (_ \ ok) ^64) + "e" + join "" (map (_ \ ok) ^36) + "e"))
+   g (swd-batch (probe-wire-on m) (map (_ \ [0 1 0 0]) ^100))
+   bp (swd-batch (probe-wire-on (swdt-link (string [1] + wrle id 4 + string [1 0] + "e"))) (map (_ \ [0 1 0 0]) ^2))
+   (test (r = map (_ \ [1 id]) ^5) (#s = 2) (bp = [[-1 id]]) (s 1 = join "" (map (_ \ "T" + string [0xA5]) ^3) + "E")
+         (f = [[1 id] [4 ()]]) (#g = 100) (map (x \ #x) (m 'sent ()) = [129 73])))
+
+; through the sim probe a run reads and writes as over bits, in a few round trips: 300 words
+; from a block's last 44, a 1K boundary inside, and back
+(: t (f4chip 0) p (swdt-probe <t) w (probe-wire-on p) _ (swd-attach w)
+   vs (map (i \ (i * 2654435761) % 4294967296) ^300)
+   a 0x20000FD4
+   n0 (p 'sends ())
+   k (swd-wrs w a vs) n1 (p 'sends ())
+   back (swd-rds w a 300) n2 (p 'sends ())
+   (test (k = 300) (back = vs) (n1 - n0 < 16) (n2 - n1 < 16)))
