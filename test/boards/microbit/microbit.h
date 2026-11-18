@@ -34,6 +34,9 @@
 // the logo's touch pad P1.04, its 10M pull-up charging the pad; the speaker's drive P0.00
 #define LOGO_PIN  4u     // on P1
 #define SPKR_PIN  0u     // on P0
+// the buttons, low when held: A the left P0.14, B the right P0.23
+#define BTN_A     14u
+#define BTN_B     23u
 
 // --- UART0, the legacy non-dma uart: P0.06 TX, P1.08 RX, the daplink's vcp --
 #define UART0 0x40002000u
@@ -120,6 +123,7 @@ uint32_t clock_us(void);
 void led_put(int on);
 void led_scan(uint8_t const *lv, uint32_t *noise);
 uint32_t logo_us(void);
+int buttons(void);
 int32_t temp_read(void);
 void ble_init(void);
 void ble_addr(uint8_t *a);

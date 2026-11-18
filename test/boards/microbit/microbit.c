@@ -102,6 +102,7 @@ static void col_put(int c, int on) {
   REG(on ? GPIO_OUTCLR(col_port[c]) : GPIO_OUTSET(col_port[c])) = 1u << col_pin[c]; }
 
 void led_init(void) {
+  REG(GPIO_CNF(P0, BTN_A)) = 3u << 2, REG(GPIO_CNF(P0, BTN_B)) = 3u << 2;   // inputs, pulled up
   REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN;
   REG(GPIO_DIRSET(P0)) = 1u << SPKR_PIN;
   for (int k = 0; k < LED_N; k++) {
@@ -134,6 +135,11 @@ void led_scan(uint8_t const *lv, uint32_t *noise) {
       for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
     REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; }
   REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }
+
+// the buttons held: bit 0 A, bit 1 B
+int buttons(void) {
+  uint32_t in = REG(GPIO_IN(P0));
+  return !(in >> BTN_A & 1u) | !(in >> BTN_B & 1u) << 1; }
 
 // the logo pad, a capacitor: drained low, then released to its pull-up, the us until it reads
 // high. a finger adds its capacitance and the charge takes longer; 4 ms caps a stuck pad
