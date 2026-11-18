@@ -357,10 +357,10 @@
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
              "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
              "__preinit_array_start" "__preinit_array_end")
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs), global noms
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs ctor?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us ss)
-        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss]
+        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss (any (l \ ld-arr l = 1) (keys (peep ob 'lanes {})))]
            (: sy (sy9 i) bind (sy 1)
               (? !(elem bind '(1 2)) (go (i + 1) ds us ss)
                  (0 < sy 3) (go (i + 1) (<sy . ds) us (bind = 1 ? (<sy . ss) ss))
@@ -417,9 +417,10 @@
        (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
          + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
-   ; a set of objects -> (dt owed tls? sd): dt every nom defined or synthesized, a tablet the
+   ; a set of objects -> (dt owed tls? sd ctor?): dt every nom defined or synthesized, a tablet the
    ; caller pins into; owed the strong undefineds left; tls? whether one carries a thread
-   ; template; sd the noms one defines strongly. __start_X/__stop_X are ldres's to answer.
+   ; template; sd the noms one defines strongly; ctor? whether one lays a constructor.
+   ; __start_X/__stop_X are ldres's to answer.
    (ld-bracket? nm)
     (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
@@ -432,7 +433,8 @@
                                   a <>du))
                    () duos)
          (any (du \ du 2) duos)
-         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)]))
+         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)
+         (any (du \ du 4) duos)]))
    ; pull the members the index names for owed noms, each pull's undefineds joining the owed,
    ; until none hits -> (picked-srcs owed); `dt` grows in place.
    (arpull path s dt owed mach)
