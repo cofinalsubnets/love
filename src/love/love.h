@@ -549,7 +549,7 @@ extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
 uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
-intptr_t nclock(void); // ns; the null seat degrades to ms
+int64_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
 void love_sleep(uintptr_t ticks); // at most ticks (0 forever), no input wakeup; default no-op
