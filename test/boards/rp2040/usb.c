@@ -7,6 +7,8 @@
 #define UCDC_VID 0x1209
 #define UCDC_PID 0x0001
 #define UCDC_PRODUCT "love swd probe"
+static char serial[17];   // the flash's unique id in hex, set by usb_init
+#define UCDC_SERIAL serial
 #include "../../../src/inle/usbcdc.h"
 
 #define DPRAM 0x50100000u
@@ -143,10 +145,13 @@ void usb_poll(void) {
     else if (txlast == ucdc_pkt) txlast = 0, arm(2, 0, 0, 0);
     else txon = 0; } }
 
-// pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
+// the serial the flash's id; pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
 // as present, the pullup on. the rom's usb boot leaves the pll running and feeding clk_usb, so
 // the clock stops and the pll resets before either is set
 void usb_init(void) {
+  uint8_t id[8];
+  flash_uid(id);
+  for (uint32_t i = 0; i < 16; i++) serial[i] = "0123456789ABCDEF"[id[i / 2] >> (i & 1 ? 0 : 4) & 15u];
   REG(CLK_USB_CTRL) = 0;
   for (volatile uint32_t k = 0; k < 64; k++) {}
   REG(RESETS_RESET + REG_SET) = RST_PLL_USB;

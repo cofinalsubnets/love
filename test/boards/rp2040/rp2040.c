@@ -128,3 +128,32 @@ void gpio_put(unsigned pin, int hi) {
   REG(hi ? SIO_GPIO_OUT_SET : SIO_GPIO_OUT_CLR) = 1u << pin; }
 
 int gpio_get(unsigned pin) { return (REG(SIO_GPIO_IN) >> pin) & 1u; }
+
+// --- the flash's unique id ------------------------------------------------
+// its 0x4b read: four dummy bytes, then eight. xip is off while it runs, so the exchange runs
+// from ram (.data, copied by crt0) and boot2, copied to the stack first, puts xip back after.
+// the rom's flush also lets go of chip select
+typedef void (*romfn)(void);
+static romfn rom_fn(uint32_t code) {
+  typedef void *(*lookup_t)(uint16_t const *, uint32_t);
+  lookup_t const look = (lookup_t) (uintptr_t) *(uint16_t const *) 0x18u;
+  return (romfn) look((uint16_t const *) (uintptr_t) *(uint16_t const *) 0x14u, code); }
+
+__attribute__((section(".data"), noinline))
+static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flush, romfn boot2) {
+  connect(), exit_xip();
+  REG(0x4001800cu) = (REG(0x4001800cu) & ~0x300u) | 0x200u;   // ss low
+  for (uint32_t i = 0; i < 13; i++) {
+    while (!(REG(0x18000028u) & 2u)) {}
+    REG(0x18000060u) = i ? 0 : 0x4bu;
+    while (!(REG(0x18000028u) & 8u)) {}
+    uint32_t const b = REG(0x18000060u);
+    if (i >= 5) id[i - 5] = (uint8_t) b; }
+  REG(0x4001800cu) = (REG(0x4001800cu) & ~0x300u) | 0x300u;   // ss high
+  flush(), boot2(); }
+
+void flash_uid(uint8_t id[8]) {
+  uint32_t b2[64];
+  for (uint32_t i = 0; i < 64; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
+  flash_uid_ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
+                (romfn) ((uintptr_t) b2 | 1u)); }

@@ -124,6 +124,7 @@ void serial_putc(int c);
 int  serial_getc(void);
 int  serial_rx_ready(void);
 uint32_t clock_ms(void);
+void flash_uid(uint8_t id[8]);
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);
