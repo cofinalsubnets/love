@@ -1,5 +1,5 @@
 // an swd probe on any rp2040 board (the xiao rp2040's d8 d9 d10, a pico's gp2 gp4 gp3), mooncc
-// -t thumb1, no sdk: src/apps/swd.l's transfer-level wire, over usb.c's cdc-acm. the core
+// -t thumb1, or an rp2350's (-D RP2350, thumb2sp), no sdk: src/apps/swd.l's transfer-level wire, over usb.c's cdc-acm. the core
 // clocks the bits on sio; the host batches commands and reads each answer at a length it
 // can predict. every multi-byte field is little-endian
 //   'T' rq [w32]   a transfer, w32 when rq's RnW bit is clear: answers ack, then on a read
@@ -16,10 +16,16 @@
 //                  all pulled up, all pulled down, then swclk and then swdio driven low with
 //                  the others pulled up. nrst is never driven; every line is let go after
 #include <stdint.h>
+#ifdef RP2350
+#include "../rp2350/rp2350.h"
+enum { sys_hz = 150000000 };
+#else
 #include "rp2040.h"
+enum { sys_hz = 125000000 };
+#endif
 
 enum { swclk = 2, nrst = 3, swdio = 4 };
-enum { sys_hz = 125000000, bit_cyc = 24, loop_cyc = 4 };   // a bit's cost without delay, a delay turn's
+enum { bit_cyc = 24, loop_cyc = 4 };   // a bit's cost without delay, a delay turn's
 
 void usb_init(void);
 void usb_poll(void);
@@ -27,6 +33,9 @@ int usb_rx_ready(void);
 int usb_getc(void);
 void usb_putc(int c);
 void usb_flush(void);
+#ifdef RP2350
+void serial_putc(int c) { usb_putc(c); }   // rp2350.c's fault report, out the usb port
+#endif
 
 struct probe { uint32_t half, on, stop; };
 
