@@ -722,7 +722,7 @@
    (test (r = [rpdp rpap]) (q = [rpdp rpap]) (() = c0 'reqs ()) (() = c1 'errs ()) (0 < #(c1 'reqs ()))))
 
 ; a cmsis-dap under its reports, over a port's handler h, as the firmware answers: an ap read's
-; posted value fetched through rdbuff, a batch stopping at its first ack not 1. 'lines the bit
+; posted value fetched through rdbuff, a transfer or a block stopping at its first ack not 1. 'lines the bit
 ; sequences asked, 'cmds every command
 (: (swdt-dap h)
     (: st {'r "" 'lines () 'cmds ()}
@@ -732,7 +732,15 @@
               (? (ack != 1) [i ack acc]
                  (rd = 1) (: v (ap = 1 ? (h 'rd 1 a, h 'rd 0 12) (h 'rd 0 a)) (xf s n (i + 1) (at + 1) (acc + wrle v 4)))
                  (: _ (h 'wr ap a (rdle s (at + 1) 4)) (xf s n (i + 1) (at + 5) acc)))))
+       ; a block: one request n times, a write's words after it
+       (xb q s n i at acc)
+        (? (i = n) [i 1 acc]
+           (: ap (q & 1) rd (q >> 1 & 1) a ((q >> 2 & 3) << 2) ack (h 'ack ap rd a)
+              (? (ack != 1) [i ack acc]
+                 (rd = 1) (: v (ap = 1 ? (h 'rd 1 a, h 'rd 0 12) (h 'rd 0 a)) (xb q s n (i + 1) at (acc + wrle v 4)))
+                 (: _ (h 'wr ap a (rdle s at 4)) (xb q s n (i + 1) (at + 4) acc)))))
        (reply s) (? ((s 0) = 5) (: x (xf s (s 2) 0 3 "") (string [5 <x (x 1)] + x 2))
+                    ((s 0) = 6) (: x (xb (s 4) s (rdle s 2 2) 0 5 "") (wrle <x 2 @ c (string [6 (c 0) (c 1) (x 1)] + x 2)))
                     ((s 0) = 0x12) (pin st 'lines ([(s 1) (snip s 2 #s)] . st 'lines), string [0x12 0])
                     ((s 0) = 0) (string [0 4] + "dap1")
                     ((s 0) = 2) (string [2 1])
@@ -761,15 +769,27 @@
          (all id (runs 0 (swd-use (dap-wire-on (swdt-dap (r6port ()))) 0x2000)))))
 
 ; a batch past a report, and one an ack stops: every item answered, in order; after a fault
-; the rest 0s, unasked
+; the rest 0s, unasked. thirty of one request go as two blocks; a block a fault stops answers
+; the same way
 (: id0 [1 f4dp (swd-par f4dp)]
    d (swdt-dap (f4port 0)) w (dap-wire-on d)
+   (reps _) #(filter (s \ s 0 = 5 || s 0 = 6) (d 'cmds ()))
    rd (swdt-rq 0 1 0) ap (swdt-rq 1 1 0)
-   long (w 'xfer (map (_ \ [rd 0]) ^30)) n0 #(filter (s \ s 0 = 5) (d 'cmds ()))
-   cut (w 'xfer ([[rd 0] [rd 0] [ap 0]] + map (_ \ [rd 0]) ^20))
-   (test (long = map (_ \ id0) ^30) (3 = n0)
-         (cut = [id0 id0 [4 () ()]] + map (_ \ [0 () ()]) ^20)
-         (4 = #(filter (s \ s 0 = 5) (d 'cmds ())))))
+   long (w 'xfer (map (_ \ [rd 0]) ^30)) n0 (reps 0)
+   cut (w 'xfer ([[rd 0] [rd 0] [ap 0]] + map (_ \ [rd 0]) ^20)) n1 (reps 0)
+   blk (w 'xfer (map (_ \ [ap 0]) ^20))
+   (test (long = map (_ \ id0) ^30) (2 = n0)
+         (cut = [id0 id0 [4 () ()]] + map (_ \ [0 () ()]) ^20) (4 = n1)
+         (blk = [[4 () ()]] + map (_ \ [0 () ()]) ^19) (5 = reps 0)))
+
+; a 300-word write and read through a dap: blocks of 14 and 15 to a report, 29 and 31 reports
+; where one a word took 600
+(: d (swdt-dap (f4port 0)) w (dap-wire-on d) _ (swd-connect w)
+   (reps _) #(filter (s \ s 0 = 5 || s 0 = 6) (d 'cmds ()))
+   n0 (reps 0) ws (map (i \ 0x1000 * i + 7) ^300)
+   _ (swd-wrs w 0x200003F0 ws) nw (reps 0 - n0)
+   back (swd-rds w 0x200003F0 300) nr (reps 0 - n0 - nw)
+   (test (back = ws) (nw <= 32) (nr <= 32) (0 < #(filter (s \ s 0 = 6) (d 'cmds ())))))
 
 ; an nrf52's nvmc over a bus: flash below 0x80000 in 4K pages, a write clearing bits only while
 ; config says write, erasepage setting a page to ones only while it says erase; the ficr's part

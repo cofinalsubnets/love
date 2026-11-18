@@ -328,13 +328,14 @@
  ; a cmsis-dap wire over a link of reports through io's 'send s (a command, padded to its
  ; report), 'recv () (a whole reply) and 'close: daplink and its kin, over swd. dap_transfer
  ; answers an ap read's own value, its posted read seen to, so the wire keeps each back and
- ; answers the one before, as the port does; rdbuff answers the last either way. a batch goes
- ; 12 transfers a report. a write whose ack no one reads (multidrop's targetsel) it cannot send
+ ; answers the one before, as the port does; rdbuff answers the last either way. a write whose
+ ; ack no one reads (multidrop's targetsel) it cannot send
  (dap-wire-on io)
   (: st {'rb 0}
      (ask s) (: _ (io 'send s) r (io 'recv ()) (#r > 0 && r 0 = s 0 ? r (scare 'dap-reply [(s 0) r])))
      (ok what r) (r 1 = 0 ? 1 (scare what r))
-     (one it) (: q (<it >> 1 & 1 | (<it >> 2 & 1) << 1 | (<it >> 3 & 3) << 2)
+     (dq rq) (rq >> 1 & 1 | (rq >> 2 & 1) << 1 | (rq >> 3 & 3) << 2)
+     (one it) (: q (dq <it)
                  (? (#it = 3) (scare 'dap-noack (it 1)) (q & 2) (string [q]) (string [q] + wrle (it 1) 4)))
      ; a report's answers: [ack v par] for each done, the ack it stopped on (-1 a bad parity),
      ; then 0s
@@ -346,10 +347,19 @@
                           ([1 b (swd-par b)] . got >its n last r (at + 4) (i + 1)))))
          (i = n) ([(last & 8 ? -1 (last & 7)) () ()] . got >its n last r at (i + 1))
          ([0 () ()] . got >its n last r at (i + 1)))
+     ; a leading run of one request goes as dap_transferblock, 15 reads or 14 writes a report;
+     ; else up to 12 transfers, to the next such run, as dap_transfer
+     (lead its q k m) (k < m && two? its && #(<its) = 2 && <(<its) = q ? (lead >its q (k + 1) m) k)
+     (sing its k) (k < 12 && two? its && !(two? >its && <(<its) = <(<>its)) ? (sing >its (k + 1)) k)
      (xfer its) (? !(two? its) ()
-                   (: h (take 12 its) r (ask (string [5 0 #h] + join "" (map one h)))
-                      a (got h (r 1) (r 2) r 3 0)
-                      (all (x \ <x = 1) a ? (a + xfer (drop 12 its)) (a + map (_ \ [0 () ()]) (drop 12 its)))))
+                   (: q <(<its) rd ((q >> 2 & 1) = 1) b (lead its q 0 (rd ? 15 14))
+                      a (b > 1 ? (: h (take b its)
+                                    r (ask (string [6 0] + wrle b 2 + string [(dq q)] + (rd ? "" (join "" (map (it \ wrle (it 1) 4) h)))))
+                                    (got h (rdle r 1 2) (r 3) r 4 0))
+                                 (: h (take (max 1 (sing its 0)) its) r (ask (string [5 0 #h] + join "" (map one h)))
+                                    (got h (r 1) (r 2) r 3 0)))
+                      n #a
+                      (all (x \ <x = 1) a ? (a + xfer (drop n its)) (a + map (_ \ [0 () ()]) (drop n its)))))
      (line s n) (n > 0 ? (: k (min n 256) m ((k + 7) // 8)
                             (ok 'dap-line (ask (string [0x12 (k & 255)] + snip s 0 m)), line (snip s m #s) (n - k))) 1)
      w {'xfer xfer
