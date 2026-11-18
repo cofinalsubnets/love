@@ -4,7 +4,7 @@
 ; bits go lsb first. a probe wire moves whole transfers: 'xfer [[rq wdata] ..] answers
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
 ; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set
-(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-dp swd-dpw swd-ap swd-apw swd-connect swd-rd swd-rds swd-wr swd-wrs
+(module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire)
@@ -52,6 +52,21 @@
   (swd-probe? w ? (w 'line [(ones + string [0x9E 0xE7] + ones + string [0]) 136])
      (w 'own 1, swd-bits w -1 56, swd-bits w 0xE79E 16, swd-bits w -1 56, swd-bits w 0 8))
 
+ ; dp v2's multidrop. the wake from dormant: 8 ones, the 128-bit selection alert, 4 zeros, the
+ ; swd activation code, a line reset and idle, as bytes lsb first
+ swd-wake (string [0xFF 0x92 0xF3 0x09 0x62 0x95 0x2D 0x85 0x86 0xE9 0xAF 0xDD 0xE3 0xA2 0x0E 0xBC 0x19
+                   0xA0 0xF1 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0x00])
+ ; a write whose ack no one drives, over a bit wire: the request, five clocks the host does not
+ ; drive (turnaround, ack, turnaround), the word, its parity, idle
+ (swd-noack w rq v)
+  (: _ (swd-bits w rq 8) _ (w 'own 0) _ (swd-sample w 5) _ (w 'own 1)
+     (swd-bits w v 32, swd-bits w (swd-par v) 1, swd-bits w 0 2))
+ ; the wake, then targetsel (dp 0xC) naming the one target that answers until the next line
+ ; reset: its tinstance, partno and designer as the target's own targetid lays them
+ (swd-select w ts)
+  (swd-probe? w ? (w 'line [swd-wake (8 * #swd-wake)], w 'xfer [[0x99 ts 'noack]], 1)
+     (: _ (w 'own 1) _ (map (i \ swd-bits w (swd-wake i) 8) ^#swd-wake) _ (swd-noack w 0x99 ts) 1))
+
  ; the debug port's registers by address, each [ack v]; an access port's (apsel 0) through
  ; select's bank. an ap read is posted, its value the next one's, so rdbuff (dp 12) answers it
  (swd-dp w a) (swd-xfer w 0 1 a 0)
@@ -62,8 +77,12 @@
  ; the port up: the switch, its id, abort clearing the sticky flags, both power domains asked
  ; and their acks awaited, 100 polls at most, then the access port's id: [dpidr apidr], or a
  ; scare naming the step and what it answered
- (swd-connect w)
-  (: _ (swd-line w) id (swd-dp w 0)
+ (swd-connect w) (swd-line w, swd-up w)
+ ; a multidrop target's connect: the wake and its targetsel in place of the switch
+ (swd-mdconnect w ts) (swd-select w ts, swd-up w)
+ ; dpidr first, as a dp v2 must after its select, then abort, the power, the ap's id
+ (swd-up w)
+  (: id (swd-dp w 0)
      _ (<id = 1 ? 0 (scare 'swd-connect ['id id]))
      _ (swd-dpw w 0 0x1E)
      _ (swd-dpw w 4 0x50000000)
