@@ -52,13 +52,22 @@
               (hot? q ? (slurp q @ t (close q, t))
                  (open "src/apps/lore/glhelp.c" "r" @ q (hot? q ? (slurp q @ t (close q, t)) ()))))
  (here? p) (two? (stat p))
- ; ..the system loader a mooncc build names, by the machine, and the libraries it names:
- ; android's bionic, else glibc
- (droid? _) (here? "/system/bin/linker64")
- (loader m) (droid? () ? (m = "aarch64" ? "/system/bin/linker64" ())
-               (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1"
-                    "riscv64" "/lib/ld-linux-riscv64-lp64d.so.1" ()))
- (libs _) (droid? () ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
+ ; ..the system loader a mooncc build names: the one the system's own shell names (its
+ ; PT_INTERP), else by the machine; and the libraries it names, bionic's or glibc's
+ (le t o n) (: (go i a) (i < 0 ? a (go (i - 1) (a * 256 + peep t (o + i) 0))) (go (n - 1) 0))
+ (elf-interp t) (? !(string? t && 64 <= #t && snip t 0 4 = "\x7fELF" && t 5 = 1) ()
+                   (: w (t 4 = 2) at (le t (w ? 32 28) (w ? 8 4)) sz (le t (w ? 54 42) 2) k (le t (w ? 56 44) 2)
+                      (go i) (i >= k ? ()
+                               (: h (at + i * sz) off (le t (h + (w ? 8 4)) (w ? 8 4)) len (le t (h + (w ? 32 16)) (w ? 8 4))
+                                  (le t h 4 = 3 && 1 < len && off + len <= #t ? (snip t off (off + len - 1)) (go (i + 1)))))
+                      (go 0)))
+ (interp f) (open f "r" @ q (hot? q ? (slurp q @ t (close q, elf-interp t)) ()))
+ (shell-loader _) (: (go l) (atom? l ? () (interp <l @ p (string? p && here? p ? p (go >l)))) (go ["/system/bin/sh" "/bin/sh"]))
+ (loader m) (shell-loader () @ p (string? p ? p
+              (m @ "x86_64" "/lib64/ld-linux-x86-64.so.2" "aarch64" "/lib/ld-linux-aarch64.so.1"
+                   "riscv64" "/lib/ld-linux-riscv64-lp64d.so.1" ())))
+ (droid? ld) (string? ld && 18 <= #ld && snip ld 0 18 = "/system/bin/linker")
+ (libs ld) (droid? ld ? ["-l:libc.so" "-l:libdl.so"] ["-l:libc.so.6"])
  (run argv) (: p (spawnio argv -1 -1 -1 () -1 0) (charm? p && 0 <= p ? (wait p) -1))
  ; ..argv to start the helper, built if the cache lacks it: mooncc first unless told
  (helper-argv _)
@@ -72,7 +81,7 @@
            _ (here? cf ? 0 (open (cf + tmp) "w" @ q (say q src, close q, rename (cf + tmp) cf)))
            (made f argv) (here? f || (0 = run (argv (f + tmp)) && !(rename (f + tmp) f)))
            (moon? _) (how != 'cc && string? ld && here? ld
-                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-dynamic-linker" ld "-o" o cf] + libs ())))
+                      && made mb (o \ ([(selfpath 0) "cc" "-O2" "-dynamic-linker" ld "-o" o cf] + libs ld)))
            (cc? _) (how != 'moon && made cb (o \ ["cc" "-O2" "-o" o cf]))
            (? (moon? ()) [mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
