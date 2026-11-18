@@ -1,7 +1,9 @@
 R ?= .
 include $(R)/common.mk
 
-CCACHE ?= $(shell command -v ccache 2>/dev/null)
+# each $(shell) below forks once, into a := (common.mk's hosta); the ?= keeps the override
+ccache_at := $(shell command -v ccache 2>/dev/null)
+CCACHE ?= $(ccache_at)
 
 ifneq ($(words $(CC)),1)
 CCACHE :=
@@ -644,7 +646,7 @@ $(distro_img): src/apps/init/boot.l $(lushfiles) $(korefiles) $(distro_love)
 
 # Direct kernel boot, no bootloader: rdinit=/init makes love pid 1. KVM when the host
 # offers it -- TCG is too slow to reach the console inside a smoke window.
-distro_accel = $(shell test -e /dev/kvm && echo -enable-kvm -cpu host)
+distro_accel := $(shell test -e /dev/kvm && echo -enable-kvm -cpu host)
 # 2G: love reserves a two-space GC heap at startup, so pid1 love PLUS a forked child
 # each need one -- 512M overflows (execve -> ENOMEM). Override with QMEM=.
 QMEM ?= 2048
@@ -1069,8 +1071,9 @@ DESTDIR ?= $(HOME)/
 # shebang and the man page together. the PROJECT is still love: lib/love/, liblove,
 # src/love/love.h and src/love/boot/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
-BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
-d = $(if $(PREFIX),$(DESTDIR)/$(PREFIX),$(shell sh $(S)/tools/nest.sh))
+BINUP := $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
+nest_at := $(shell sh $(S)/tools/nest.sh)
+d = $(if $(PREFIX),$(DESTDIR)/$(PREFIX),$(nest_at))
 v = $(DESTDIR)/$(VIMPREFIX)
 
 # A shebang-carrying source tool installs as a SYMLINK to the source under the default
