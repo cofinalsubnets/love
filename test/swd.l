@@ -624,10 +624,11 @@
    (test (r = [[1 0x2BA01477 0] [1 () ()] [4 () ()] [0 () ()]])
          (l 'sent () = [("T" + string [0xA5] + "T" + string [0x81] + wrle 0x1E 4 + "T" + string [0xA5] + "T" + string [0xA5] + "E")])))
 
-; the probe's two open-drain lines, each a command and a byte: 'rst nrst, 'aux the second
+; the probe's two open-drain lines, each a command and a byte: 'rst nrst, 'aux the second;
+; 'close clocks 8 idle bits before it lets go, so a posted last write lands
 (: l (swdt-link "") w (probe-wire-on l)
-   _ (w 'rst 1) _ (w 'aux 1) _ (w 'aux 0)
-   (test (l 'sent () = [("R" + string [1]) ("Q" + string [1]) ("Q" + string [0])])))
+   _ (w 'rst 1) _ (w 'aux 1) _ (w 'aux 0) _ (w 'close 0)
+   (test (l 'sent () = [("R" + string [1]) ("Q" + string [1]) ("Q" + string [0]) ("B" + wrle 8 2 + string [0] + "Z")])))
 
 ; swd-xfer over a probe: a wait asked again as a batch of its own, the read's parity checked
 ; by love, so a bad bit answers -1; a noack write foretells no answer; the switch is 136 raw

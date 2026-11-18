@@ -383,7 +383,9 @@
       'aux (b \ io 'send ("Q" + string [b]))
       'clock (hz \ (io 'send ("C" + wrle hz 4), rdle (io 'recv 4) 0 4))
       'id (_ \ (io 'send "I", io 'recv 8))
-      'close (_ \ (io 'send "Z", io 'close ()))})
+      ; a write is posted, its access done only as the clock goes on: 8 idle bits land the
+      ; last one (a reset asked of aircr) before the lines go
+      'close (_ \ (io 'send ("B" + wrle 8 2 + string [0] + "Z"), io 'close ()))})
  ; the probe on its serial device, raw: 8 bits, no parity, no echo, no line discipline, a
  ; read waiting for a byte. it must name itself
  (probe-wire path)
