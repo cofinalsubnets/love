@@ -139,7 +139,7 @@ static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
  return 1; }
 #endif
 
-// a link address's physical one: x64's image is linked high and loaded low (kproject.l)
+// a link address's physical one: x64's image is linked high and loaded low (transpose.l)
 static u64 kpa(u8 *e, u64 va) {
  u64 phoff = *(u64*) (e + 32);
  u16 phn = *(u16*) (e + 56), phsz = *(u16*) (e + 54);

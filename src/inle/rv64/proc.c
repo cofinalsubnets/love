@@ -15,7 +15,7 @@ extern long k_proc_call(long pid, long n, long a, long b, long c, long d, long e
 extern void k_kswap(uint64_t *save, uint64_t load), r_uret(void);
 extern void k_trap(uint64_t cause, uint64_t epc, uint64_t tval);
 extern void **k_proc_seat(long pid);
-extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the projection
+extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the transpose
 extern uintptr_t k_clock_ms(void);
 
 #define K_RESTART -512                     // sys.c's: the call must wait, and is asked again
@@ -373,7 +373,7 @@ static long k_uload(struct k_uctx *c, uint8_t const *e, uintptr_t n, uint64_t *p
   return k_uok(c, *pc, 1) ? 0 : -ENOEXEC; }
 
 // love itself from the kernel's image: its loads shared read-only, but the first writable one,
-// fresh from the projection's copy, whose door slots name the hosted bodies -> 0, the entry in
+// fresh from the transpose's copy, whose door slots name the hosted bodies -> 0, the entry in
 // *pc; -ENOSYS with no copy
 static long k_uload_love(struct k_uctx *c, uint64_t *pc, uint64_t *phdr, uint64_t *phn) {
   if (!k_pie_base || !k_pie_data) return -ENOSYS;

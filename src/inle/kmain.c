@@ -79,7 +79,7 @@ void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
+// the metal image's far edge, patched in by transpose.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for an arch's proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
@@ -2289,7 +2289,7 @@ void kmain(void) {
   if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
- // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
+ // baked_pick reads the transpose's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
