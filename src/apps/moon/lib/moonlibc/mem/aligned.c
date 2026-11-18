@@ -2,9 +2,9 @@
 
 /* a stand-in header tagged __MAlign before the aligned pointer leads back to the block */
 void *aligned_alloc(size_t al, size_t n) {
-  if (!al || (al & (al - 1))) { __errno_v = EINVAL; return 0; }
+  if (!al || (al & (al - 1))) { errno = EINVAL; return 0; }
   if (al <= sizeof(__mhdr)) return malloc(n);
-  if (n > ((size_t) -1 >> 1) - al) { __errno_v = ENOMEM; return 0; }
+  if (n > ((size_t) -1 >> 1) - al) { errno = ENOMEM; return 0; }
   char *p = malloc(n + al - sizeof(__mhdr));
   if (!p) return 0;
   char *a = (char *) (((unsigned long) p + al - 1) & ~(unsigned long) (al - 1));
@@ -14,9 +14,9 @@ void *memalign(size_t al, size_t n) { return aligned_alloc(al, n); }
 /* errno untouched */
 int posix_memalign(void **pp, size_t al, size_t n) {
   if (!al || (al & (al - 1)) || al % sizeof(void *)) return EINVAL;
-  int e = __errno_v;
+  int e = errno;
   void *p = aligned_alloc(al, n);
-  __errno_v = e;
+  errno = e;
   if (!p) return ENOMEM;
   *pp = p;
   return 0; }

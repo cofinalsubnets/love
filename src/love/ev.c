@@ -32,7 +32,7 @@ static bool
  lexbound(struct g *g, struct env *d, word x);
 static lvm_t
  ap_next, help_ret_more, help_ret_scare, lvm_add_coin, lvm_coin_op, lvm_mul_coin,
- lvm_numap, lvm_numtap, lvm_resume;
+ lvm_numap, lvm_numtap, lvm_resume, lvm_fair, lvm_setcup;
 static struct g
  *love_raise(struct g *c, union u const *K),
  *ana_ap(struct g *g, struct env **c, intptr_t x),
@@ -758,6 +758,21 @@ lvm(lvm_calloutdrive) { love_musttail return Answer(putcharm((intptr_t) callout_
 // the blob's out-of-pool base, never a stack-interior pointer gcp would be fed
 union u const callout_resume[] = { {lvm_ap}, {.ap = lvm_resume} };
 lvm(lvm_calloutresume) { love_musttail return Answer(putcharm((intptr_t) callout_resume)); }
+// a native's countdown spent with a peer waiting, off the same resume frame [x, charm(bb - entry), entry]
+union u const callout_fair[] = { {lvm_fair}, {.ap = lvm_resume} };
+static lvm(lvm_fair) {
+ Ip += 1;                                               // a yield resumes at lvm_resume, back into the blob
+ if (g->tasks->m == g->tasks && !g->parked) love_musttail return Continue();
+ g->next_wait_fd = -1, g->next_wake_at = 0;
+ love_musttail return Ap(lvm_yield_sw, g); }
+// the cons-tail loop's hole, moved out of the nursery by a collection: [hole, v, resume..], its cup takes v barriered
+union u const callout_setcup[] = { {lvm_setcup}, {.ap = lvm_resume} };
+static lvm(lvm_setcup) {
+ Pack(g);                    // young reads g->hp, which the live Hp may be ahead of
+ gen_wb(g, Sp[0], Sp[1]);
+ B(Sp[0]) = Sp[1];
+ Sp += 1, Ip += 1;
+ love_musttail return Continue(); }
 // (sortby le l): a merge sort handing each compare back to the VM. values ride two object
 // trays, the cursors the stack as charms (the comparator may collect); stable when le answers 1 on ties
 enum { sb_va = 1, sb_vb, sb_w, sb_lo, sb_x, sb_y, sb_o, sb_hi, sb_n, sb_pend, sb_le, sb_k };   // off Sp; Sp[0] = the answer, sb_k the caller's next op

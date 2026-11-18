@@ -6,7 +6,7 @@ int ftruncate(int fd, off_t n) {
     if (__love_osv == 3 || LvFbPad) return (int) er(sc4(NR_ftruncate, fd, 0, (long) n, (long) (n >> 32)));
     return (int) er(sc3(NR_ftruncate, fd, (long) n, (long) (n >> 32))); }
 #endif
-#ifdef __i386__
+#if defined(__i386__) || defined(__riscv) && defined(__ILP32__)
   return (int) er(sc3(NR_ftruncate, fd, (long) n, (long) (n >> 32)));   /* ftruncate64: lo, hi */
 #elif defined(__ARM_EABI__)
   return (int) er(sc4(NR_ftruncate, fd, 0, (long) n, (long) (n >> 32)));   /* eabi lays a 64-bit arg on an even pair */

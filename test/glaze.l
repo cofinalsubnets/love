@@ -185,9 +185,10 @@
    (gzf-eq x) (x = 0.5)   (gzf-ob a b) (a + 0.0 < b)   (gzf-ab a b) (a * b - 0.0)
    (gzf-run i acc) (i = 0 ? acc (gzf-run (i - 1) (acc + 0.5 * 3)))
    ins [0 -3 0.5 1e308 4611686018427387903 -4611686018427387904 (1 /// 3) (0.5 ~ 1) "s" ()]
-   _ (test (show (map gzf-a ins) = "(0.25 -2.75 0.75 1e308 4.611686018427388e18 -4.611686018427388e18 0.5833333333333333 (0.75 ~ 1.0) \"s\" 0.25)")
-           (show (map gzf-s ins) = "(2.5 5.5 2.0 -1e308 -4.611686018427388e18 4.611686018427388e18 2.1666666666666665 (2.0 ~ -1.0) () ())")
-           (show (map gzf-m ins) = "(-0.0 4.5 -0.75 -1.5e308 -6.917529027641082e18 6.917529027641082e18 -0.5 (-0.75 ~ -1.5) () ())")
+   ; the printed doubles are a 64-bit word's: a 32-bit one's floats are single
+   _ (test (word ? (show (map gzf-a ins) = "(0.25 -2.75 0.75 1e308 4.611686018427388e18 -4.611686018427388e18 0.5833333333333333 (0.75 ~ 1.0) \"s\" 0.25)") 1)
+           (word ? (show (map gzf-s ins) = "(2.5 5.5 2.0 -1e308 -4.611686018427388e18 4.611686018427388e18 2.1666666666666665 (2.0 ~ -1.0) () ())") 1)
+           (word ? (show (map gzf-m ins) = "(-0.0 4.5 -0.75 -1.5e308 -6.917529027641082e18 6.917529027641082e18 -0.5 (-0.75 ~ -1.5) () ())") 1)
            (map gzf-lt ins = [1 1 0 0 0 1 1 0 1 1]) (map gzf-le ins = [1 1 1 0 0 1 1 0 1 1])
            (map gzf-gt ins = [0 1 0 0 0 1 0 0 1 1]) (map gzf-ge ins = [1 0 1 1 1 0 1 1 0 0])
            (map gzf-eq ins = [0 0 1 0 0 0 0 0 0 0])
@@ -318,7 +319,7 @@
                       '(col px py acc) '(py < 8 ? (col px (py + 1) (acc + mand ((3.0 + px * 0.25) ~ (py * 0.25)) (0.0 ~ 0.0) 0)) acc)
                       gzg-o gzg-ob '(grid 0 0)]) = 32))
    ; the native takes the outer loop's own args, a literal inner start, and deopts on a non-fixnum or an acc past a fixnum;
-   ; where it is native, half the nest runs at least 3x its declined twin (a test the native will not read), best of three
+   ; where it is native and the float lanes run, half the nest runs at least 3x its declined twin (a test the native will not read), best of three
    (gzg-nest t k w) (ev (': . ['(mand c z it) ['? ['&& '(it < 40) t] '(mand c (z * z + c) (it + 1)) 'it]
                               ['col 'px 'py 'acc] ['? '(py < 20) ['col 'px '(py + 1) ['+ 'acc ['mand ['twin ['- ['* 'px (3.0 / w)] 2.0] '(py * 0.15 - 1.5)] '(0.0 ~ 0.0) 0]]] 'acc]
                               gzg-o ['? ['px '< w] ['grid '(px + 1) ['+ 'acc ['col 'px k 0]]] 'acc] 'grid]))
@@ -329,7 +330,7 @@
    _ (test (map (ab \ gzg-g <ab <>ab) [[0 0] [20 0] [20 7] [39 0] [40 5] [50 5] [-3 0] [0 1.5] [20.5 0] [0 4611686018427387900]]
             = [8574 5430 5437 45 5 5 8634 8575.5 5383 4611686018427396474])
            (map (ab \ gzg-h <ab <>ab) [[0 0] [20 0] [1 1]] = [7265 4475 7214])
-           (!(nat? gzg-g) || (: na (gzg-tm (gzg-nest gzg-q 0 1000)) tw (gzg-tm (gzg-nest '(abs z <= 2.0) 0 1000))
+           (!(nat? gzg-g) || !(cite 'glaze 'targets love-arch 'float) || (: na (gzg-tm (gzg-nest gzg-q 0 1000)) tw (gzg-tm (gzg-nest '(abs z <= 2.0) 0 1000))
                                 (<na = <tw && 3 * <>na < <>tw))))
    ; the host row's word is the vm's: a charm holds 8w-1 bits, signed
    _ (G 'targets love-arch @ row

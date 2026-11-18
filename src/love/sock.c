@@ -225,7 +225,7 @@ static lvm(lvm_connect) {
  if (parse_addr(Sp[0], HowConnect, &a)) love_musttail return Answer(badarg(g));
  LvmPack(g, host_conn);
  Unpack(g);
- if (chainp(Sp[0])) { g->next_wake_at = love_clock() + 1; love_musttail return Ap(lvm_yield_sw, g); }
+ if (chainp(Sp[0])) { g->next_wake_at = tick_add(love_tick(), 1); love_musttail return Ap(lvm_yield_sw, g); }
  love_musttail return Next(1); }
 
 // SO_ERROR reads 0 while still trying: POLLOUT first, then the error, tells connected from refused
@@ -283,7 +283,7 @@ static lvm(lvm_shutdown) {
    if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    if (io_wpending(g, (struct io*) g->sp[0])) {   // park; nothing shut yet
     Unpack(g);
-    g->next_wake_at = love_clock() + 1;
+    g->next_wake_at = tick_add(love_tick(), 1);
     love_musttail return Ap(lvm_yield_sw, g); }
    Unpack(g); }
   if (how >= 0 && how <= 2) shutdown(fd, (int) how); }

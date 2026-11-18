@@ -5,7 +5,8 @@
 ; the disk: 1 boot (FAT32): the firmware, autoboot.txt, config.txt, cmdline.txt, Image, the dtb;
 ; 2 data (ext4).
 ; an update is a second file beside the first: Image.new, run once by the firmware's tryboot,
-; renamed over Image when the board comes up on it, else a plain reboot runs Image again.
+; renamed over Image when the board comes up on it, else a plain reboot runs Image again. inle
+; rides the same trial as inle.img: config.txt's [tryboot] line names the file on trial.
 ; a root: love as /bin/love and /bin/sh, helm's script as init (/bin/helm), an app that says the
 ; board, the otg port's console, wifi's station (src/apps/wifi) and sshd, their state on data.
 ; (load with -l src/apps/tar.l -l src/apps/cpio.l -l src/apps/sqfs.l -l src/apps/ext4.l)
@@ -58,6 +59,7 @@
    helm-conf """
      (service app (exec "/bin/love" "/app/run.l") (restart no))
      (oneshot gadget (exec "/bin/love" "/app/gadget.l"))
+     (oneshot host (exec "/bin/love" "/app/host.l"))
      (oneshot data (exec "/bin/love" "/app/data.l"))
      ; boot waits on data, so no part of the card is held while its table is read again
      (oneshot boot (after data) (exec "/bin/love" "/app/boot.l"))
@@ -69,7 +71,7 @@
      (service console (after gadget)
        (exec "/bin/love" "sh" "-c" "exec /bin/love setsid -cw /bin/love sh < /dev/ttyGS0 > /dev/ttyGS0 2>&1")
        (restart always))
-     (service wifi (after data)
+     (service wifi (after data host)
        (exec "/bin/love" "-l" "/app/wifi/netlink.l" "-l" "/app/wifi/dhcp.l" "/app/wifi/wifi.l" "wlan0" "/etc/wifi.conf")
        (log "/data/wifi.log") (restart on-fail) (tries 5))
      (service sshd (after data)
@@ -152,13 +154,29 @@
      (borrow 'posix)
      (mount "/dev/mmcblk0p1" "/boot" "vfat" @ r (nom? r ? (say err ("boot: vfat refused (" + show r + ")\n"), 1) 0))
      """
-   ; an update, once Image.new is on /boot (ssh root@BOARD 'cat > /boot/Image.new' < Image):
-   ; the firmware runs it at the next boot only
-   update-l """
+   ; the kernel's name, /etc/hostname's line: dhcp sends it
+   host-l """
      (borrow 'posix)
-     (? !(two? (lstat "/boot/Image.new")) (say err "update: no /boot/Image.new\n", quit 1)
-        (sync 0, say err "update: a trial of Image.new\n", reboot "0 tryboot"))
+     (uread "/etc/hostname" @ [1 s] (uwrite "/proc/sys/kernel/hostname" (snip s 0 (#s - 1))) 0)
      """
+   ; a trial of f on /boot, named in config.txt's [tryboot] line: the firmware runs it at the
+   ; next boot only, and a plain reboot after runs Image
+   (trial-l v f) ("(borrow 'posix)\n(: v \"" + v + "\" f \"" + f + "\"\n" + """
+        c "/boot/config.txt"
+        (no s) (say err (v + ": " + s + "\n"), quit 1)
+        cf (uread c @ [1 s] s "")
+        (? !(two? (lstat ("/boot/" + f))) (no ("no /boot/" + f))
+           (cf @ (a + "[tryboot]\nkernel=" + old + "\n" + z)
+              (uwrite "/boot/config.new" (a + "[tryboot]\nkernel=" + f + "\n" + z)
+               && !(nom? (rename "/boot/config.new" c))
+                ? (sync 0, say err (v + ": a trial of " + f + "\n"), reboot "0 tryboot")
+                  (no "config.txt not written"))
+              (no "config.txt has no [tryboot] kernel line"))))
+     """ + "\n")
+   ; an update, once Image.new is on /boot (ssh root@BOARD 'cat > /boot/Image.new' < Image)
+   update-l (trial-l "update" "Image.new")
+   ; inle once, from /boot/inle.img; its (reset 0) or a power cycle comes back to Image
+   inle-l (trial-l "inle" "inle.img")
    ; a trial kept: on the firmware's tryboot, and the running kernel's banner inside Image.new,
    ; the link up within 2 minutes renames Image.new over Image; down, a plain reboot runs Image
    commit-l """
@@ -197,7 +215,8 @@
    app-wifi (map (f \ [f (fil 420 (rd ("src/apps/wifi/" + f)))]) ["dhcp.l" "netlink.l" "wifi.l"])
    (root love ver site)
     (dir [["app" (dir [["boot.l" (fil 420 boot-l)] ["commit.l" (fil 420 commit-l)] ["data.l" (fil 420 data-l)]
-                       ["gadget.l" (fil 420 gadget-l)] ["run.l" (fil 420 app-l)] ["source.l" (fil 420 source-l)]
+                       ["gadget.l" (fil 420 gadget-l)] ["host.l" (fil 420 host-l)] ["inle.l" (fil 420 inle-l)]
+                       ["run.l" (fil 420 app-l)] ["source.l" (fil 420 source-l)]
                        ["swap.l" (fil 420 swap-l)] ["update.l" (fil 420 update-l)]
                        ["wifi" (dir app-wifi)]])]
         ["bin" (dir [["helm" (fil 493 helm)] ["love" (fil 493 love)] ["sh" (link "love")]])]
@@ -220,8 +239,9 @@
 
    ; --- the boot files ---------------------------------------------------------
    ; the mini uart on gpio14/15 is serial1 in the mainline dtb; enable_uart pins the core
-   ; clock it counts its baud from. gpu_mem stays the firmware's: 16 asks for start_cd.elf
-   config ("""
+   ; clock it counts its baud from. gpu_mem stays the firmware's: 16 asks for start_cd.elf.
+   ; a site's own lines ride ahead of the [tryboot] section
+   (config add) ("""
      arm_64bit=1
      kernel=Image
      device_tree=bcm2837-rpi-zero-2-w.dtb
@@ -229,9 +249,7 @@
      fixup_file=fixup.dat
      enable_uart=1
      disable_splash=1
-     [tryboot]
-     kernel=Image.new
-     """ + "\n")
+     """ + "\n" + add + (0 < #add && add (#add - 1) != 10 ? "\n" "") + "[tryboot]\nkernel=Image.new\n")
    cmdline "console=ttyS1,115200 rdinit=/bin/helm panic=5\n"
    ; the zero 2 w's bootcode hands start.elf the tryboot flag only under tryboot_a_b: both
    ; modes name this one part, and config.txt's [tryboot] picks the file
@@ -246,6 +264,9 @@
    verb (as 0)
    odir (as 1)
    (fw f) (rd (as 4 + "/" + f))
+   ; a site's choices beside the firmware, each optional: config.add's lines, cmdline.txt in
+   ; place of the default, and dtb-off's nodes, one a line, kept from their drivers
+   (fwopt f) (uread (as 4 + "/" + f) @ [1 s] s "")
    ; root's words: OUT LOVE FW STAMP SITE; disk's: OUT IMAGE DTB FW STAMP
    sa (verb = "root" ? 4 5)
    stamp (#as > sa ? (read (as sa)) 0)
@@ -256,14 +277,33 @@
        site (#as > 5 ? (sqfs-tree (as 5) @ ['dir _ ks] ks ()) ())
        (uwrite (odir + "/root.cpio") (cpio-pack (rev (walk "" (root love "v1" site) ()))),
         say err "hearts-zimage: root.cpio\n"))
+   ; node's status turned from okay to fail in place, so no driver binds it; a blob that is no
+   ; fdt passes as it is
+   (fdt-fail b node)
+    (: (al n) ((n + 3) // 4 * 4)
+       (nul p) (b p = 0 ? p (nul (p + 1)))
+       ss (rdbe b 12 4)
+       (go p up) (rdbe b p 4 @
+                  1 (: q (nul (p + 4)) (go (al (q + 1)) (snip b (p + 4) q . up)))
+                  2 (go (p + 4) >up)
+                  3 (: n (rdbe b (p + 4) 4)  o (ss + rdbe b (p + 8) 4)  v (p + 12)
+                     (<up = node && snip b o (nul o) = "status" && snip b v (v + 4) = "okay" ? v
+                      (go (al (v + n)) up)))
+                  4 (go (p + 4) up)
+                  _ ())
+       (#b < 40 || rdbe b 0 4 != 0xd00dfeed ? b
+        (go (rdbe b 8 4) () @ () (gone ("no okay status on " + node + " in the dtb"))
+                             v (snip b 0 v + "fail" + snip b (v + 4) #b))))
    ; the disk: the boot FAT, room for Image.new beside Image, then data
    (mkdisk _)
     (: kernel (rd (as 2))
-       dtb (rd (as 3))
+       dtb (foldl fdt-fail (rd (as 3)) (filter (n \ 0 < #n) (lines (fwopt "dtb-off"))))
+       cl (fwopt "cmdline.txt")
        fsz (256 * mib)  dsz (64 * mib)
        _ (2 * #kernel + 16 * 1048576 < fsz * 512 || gone "the boot part holds no second Image")
        pa mib  pd (pa + fsz)
-       boot (fatimg pa "BOOT" fsz [["autoboot.txt" autoboot] ["config.txt" config] ["cmdline.txt" cmdline]
+       boot (fatimg pa "BOOT" fsz [["autoboot.txt" autoboot] ["config.txt" (config (fwopt "config.add"))]
+                       ["cmdline.txt" (0 < #cl ? cl cmdline)]
                        ["bootcode.bin" (fw "bootcode.bin")] ["start.elf" (fw "start.elf")]
                        ["fixup.dat" (fw "fixup.dat")] ["LICENCE.broadcom" (fw "LICENCE.broadcom")]
                        ["Image" kernel] ["bcm2837-rpi-zero-2-w.dtb" dtb]])

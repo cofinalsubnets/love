@@ -186,7 +186,9 @@ static lvm(lvm_scribe) {
  Unpack(g);
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
+// glass, wet and tilepx answer 32-bit words, past a 32-bit word's charms: each reserves its bignum
 static lvm(lvm_glass) {
+ Have(wbig_req);
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1)) {
@@ -194,7 +196,7 @@ static lvm(lvm_glass) {
   struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
   if (e && k >= 0 && k < cb_clun + 2) {
    uint32_t const *v = cb_clu(c, e->g);
-   out = putcharm(k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
+   out = mk_uword(&Hp, k == 0 ? (v ? (e->g & 0xffe00000u) | cb_cp(v[0]) : e->g) : k == 1 ? e->fg & ~cb_soft : k == 2 ? e->bg
                   : v ? cb_cp(v[k - 2]) : 0u); } }
  Sp[2] = out;
  Sp += 2; Ip += 1; love_musttail return Continue(); }
@@ -234,28 +236,30 @@ static lvm(lvm_peer) {
 
 // (wet scr k): rows 32k..32k+31; bit 255 stands for row 255 and past
 static lvm(lvm_damage) {
+ Have(wbig_req);
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1)) {
   intptr_t k = getcharm(Sp[1]);
   if (k >= 0 && k < 8) {
-   out = putcharm(c->dmg[k]);
+   out = mk_uword(&Hp, c->dmg[k]);
    c->dmg[k] = 0; } }
  Sp[1] = out;
  Sp += 1; Ip += 1; love_musttail return Continue(); }
 
 static lvm(lvm_tilepx) {
+ Have(wbig_req);
  struct cb *c = scr_ok(Sp[0]);
  word out = ZeroPoint;
  if (c && (Sp[1] & 1) && (Sp[2] & 1) && (Sp[3] & 1)) {
   struct cb_cell const *e = cb_at(c, getcharm(Sp[1]));
   intptr_t const x = getcharm(Sp[2]), y = getcharm(Sp[3]);
   if (e && x >= 0 && y >= 0 && x < c->cw && y < c->ch) {
-   uint32_t const g = e->g;
-   struct cb_img const *im = g & cb_pic ? cb_img(c, cb_tslot(g)) : 0;
+   uint32_t const eg = e->g;
+   struct cb_img const *im = eg & cb_pic ? cb_img(c, cb_tslot(eg)) : 0;
    if (im) {
-    uint32_t const X = cb_ttx(g) * c->cw + (uint32_t) x, Y = cb_tty(g) * c->ch + (uint32_t) y;
-    out = putcharm(cb_ipick(c, im, X, Y)); } } }
+    uint32_t const X = cb_ttx(eg) * c->cw + (uint32_t) x, Y = cb_tty(eg) * c->ch + (uint32_t) y;
+    out = mk_uword(&Hp, cb_ipick(c, im, X, Y)); } } }
  Sp[3] = out;
  Sp += 3; Ip += 1; love_musttail return Continue(); }
 
@@ -272,14 +276,15 @@ static lvm(lvm_dye) {
  struct cb *c = scr_ok(Sp[0]);
  struct str *b = cask_str(Sp[1]);
  word out = ZeroPoint;
- if (c && b && (Sp[2] & 1) && (Sp[3] & 1) && (Sp[4] & 1)) {
-  intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]), cur = getcharm(Sp[4]);
+ if (c && b && (Sp[2] & 1) && (Sp[3] & 1) && intp(Sp[4])) {
+  intptr_t const w = getcharm(Sp[2]), row = getcharm(Sp[3]);
+  uint32_t const cur = charmp(Sp[4]) && getcharm(Sp[4]) < 0 ? ~0u : (uint32_t) toint(Sp[4]);   // a 32-bit word's colour may be a bignum
   if (w > 0 && row >= 0 && row < c->rows) {
    struct str *f = nif_bytes(Sp[5]);
    uint8_t const *qf = f && cb_font_ok((uint8_t const*) f->bytes, f->len) ? (uint8_t const*) f->bytes : 0;
    struct cb_paper const p = { (uint32_t*) b->bytes, (uintptr_t) w, (uintptr_t) w, b->len / 4u / (uintptr_t) w, 1 };
    struct font const ft = { (uint8_t const*) cleat_8x16, 8, 16 };
-   cb_paint(&p, c, &ft, qf, (uint16_t) row, 0, 0, cur < 0 ? ~0u : (uint32_t) cur);
+   cb_paint(&p, c, &ft, qf, (uint16_t) row, 0, 0, cur);
    out = Sp[0]; } }
  Sp[5] = out;
  Sp += 5; Ip += 1; love_musttail return Continue(); }

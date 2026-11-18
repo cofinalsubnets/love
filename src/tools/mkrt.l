@@ -1,14 +1,16 @@
 ; src/tools/mkrt.l -- lay the compiled moonlibc runtime into an ELF object, one zstd frame of
-; archive per hosted ISA, so a bare `love cc` links without compiling its members first.
+; archive per hosted ISA against the build ISA's, so a bare `love cc` links without compiling its
+; members first.
 ;
 ;   love wake out/mooncc0.image src/tools/mkrt.l -m GRP.a ISA SRC..   one group's members
 ;   love wake out/mooncc0.image src/tools/mkrt.l out.o ARCH GRP.a..   the join
 ;
 ; a group is a few members of one ISA (out/rt/<isa>/<grp>.a); the join reads every group,
-; the ISA off its directory. per name in {id, x64, a64, rv64, i386}, 8-aligned:
+; the ISA off its directory. per name in {id, base, x64, a64, rv64, i386, arm, rv32, wasm}, 8-aligned:
 ;
 ;   rtzst_<nm>_len   an 8-byte little-endian length
-;   rtzst_<nm>       the bytes behind it (a .a as one zstd frame; `id` is moon.l's rtcid, plain text)
+;   rtzst_<nm>       the bytes behind it: `base` the build ISA's .a as one zstd frame, each ISA's
+;                    .a a frame against it, `id` moon.l's rtcid in plain text
 ;
 ; a link with no runtime names src/love/noblob.c instead. arbytes and rtcid are pure of
 ; the machine, so the seed's fixpoint carries this object unchanged. arch names the
@@ -75,20 +77,16 @@
        objelf (cite 'holo 'objelf)
        cid ((cite 'moon 'rtcid) rt-home)
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
-       ; one frame each: rtcarried pays one decode for the ISA it wants
-       (one tgt) (: z (zstde (rt-isa tgt grps) 19)
-                    _ (!(string? z) ? (rt-die (show tgt + ": zstd refused the archive")))
-                    z)
+       (z? tgt z) (string? z ? z (rt-die (show tgt + ": zstd refused the archive")))
+       ; the ISAs share most of their bytes, so each is a frame against the build ISA's archive,
+       ; and runtime-ar pays two decodes for the one it wants
+       base (rt-isa arch grps)
+       (one tgt) (z? tgt (zstde-by (tgt = arch ? base (rt-isa tgt grps)) base 19))
+       isas '(x64 a64 rv64 i386 arm rv32 wasm)
        forms (rt-forms "id" cid
-              + rt-forms "x64" (one 'x64)
-              + rt-forms "a64" (one 'a64)
-              + rt-forms "rv64" (one 'rv64)
-              + rt-forms "i386" (one 'i386))
-       xs '("rtzst_id" "rtzst_id_len"
-            "rtzst_x64" "rtzst_x64_len"
-            "rtzst_a64" "rtzst_a64_len"
-            "rtzst_rv64" "rtzst_rv64_len"
-            "rtzst_i386" "rtzst_i386_len")
+              + rt-forms "base" (z? arch (zstde base 19))
+              + foldl (a \ t \ a + rt-forms (string t) (one t)) () isas)
+       xs (foldl (a \ nm \ a + ["rtzst_\(nm)" "rtzst_\(nm)_len"]) () ("id" . "base" . map string isas))
        ob (objelf arch () () () xs () () () () () forms)
        (cite 'holo 'write-bytes dst ob))        ; a byte list, not a string
 

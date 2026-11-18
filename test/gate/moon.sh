@@ -1931,6 +1931,12 @@ else
   gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
 fi
 moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+# -rdynamic and -rpath: nothing to a static link (jimsh's line), refused where a loader would read them
+moonrun -Wl,-rpath -Wl,/usr/local/lib -rdynamic -Wl,-rpath,/opt -o "$ho/.rdyn" "$ho/.dyn.c" > /dev/null 2>&1 \
+  || fail "-rdynamic and -rpath on a static link were not taken as no-ops"
+moonrun -shared -rdynamic -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" || fail "-rdynamic with -shared was not refused"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -Wl,-rpath=/opt -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" \
+  || fail "-rpath with -dynamic-linker was not refused"
 
 # -- constructors and destructors: priorities first in order, the plain last; destructors
 # the other way about, after atexit's; static, -pie, a gcc object, every libc, a dlopened object
@@ -2408,14 +2414,26 @@ cmp -s "$ho/.wa-cold.o" "$ho/.wa-warm.o" \
 echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a failure) ok"
 
 
+# -- a program that names nothing of libc's still gets the runtime's startup: crt0's
+# __love_start is weak, so the link must owe the real one, which runs the constructors
+printf 'static int hit;\n__attribute__((constructor)) static void c(void) { hit = 42; }\nint main(void) { return hit; }\n' > "$ho/.bare-start.c"
+for a in x64 i386 arm; do
+  case $a in x64) q=;; i386) q=qemu-i386;; arm) q=qemu-arm;; esac
+  [ -z "$q" ] || command -v $q > /dev/null || { gate_partly "  (the startup of a libc-free $a program skipped: no $q)"; continue; }
+  "$m" cc -t $a -o "$ho/.bare-start" "$ho/.bare-start.c" || fail "startup: a libc-free $a program does not link"
+  $q "$ho/.bare-start"; r=$?
+  [ $r -eq 42 ] || fail "startup: a libc-free $a program ran without the runtime's __love_start (its constructor answered $r, want 42)"
+done
+echo "mooncc: a program that names nothing of libc's starts through the runtime's __love_start ok"
+
 # -- the carried runtime is kernel-neutral
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
-for a in x64 a64 rv64; do
-  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-zst) \"$a\")))) 0)" | head -1)
+for a in x64 a64 rv64 i386 arm rv32 wasm; do
+  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-ar) \"$a\")))) 0)" | head -1)
   case $n in ''|*[!0-9]*) n=0;; esac
-  [ "$n" -gt 1000 ] \
-    || fail "carried runtime: this binary carries no $a archive (runtime-zst answered $n bytes)"
+  [ "$n" -gt 100000 ] \
+    || fail "carried runtime: this binary carries no $a archive (runtime-ar answered $n bytes)"
 done
 rm -f out/cache/moon/*.a                      # the clock below must measure the carried read
 printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"
@@ -2438,6 +2456,15 @@ done
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
 moonrun -t i386 "$ho/.os.c" -o "$ho/.os.i386" > /dev/null 2>&1 \
   || fail "carried runtime: -t i386 did not link"
+# rv32 is linux alone: its carried archive links, and runs where qemu can
+s0=$(date +%s)
+moonrun -t rv32 "$ho/.os.c" -o "$ho/.os.rv32" > /dev/null 2>&1 \
+  || fail "carried runtime: -t rv32 did not link"
+[ $(( $(date +%s) - s0 )) -lt 5 ] \
+  || fail "carried runtime: -t rv32 took the member-compile lane (it refused the carried archive)"
+if have qemu-riscv32; then
+  [ "$(qemu-riscv32 "$ho/.os.rv32")" = "os lane" ] || fail "carried runtime: the rv32 link did not run"
+fi
 moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
   && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"
