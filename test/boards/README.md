@@ -49,6 +49,19 @@ are not in src/love/holo/link.l); `make bin` writes the raw flash image, which
 src/tools/uf2.l packs as a UF2 (family 0xE48BFF56).
 
 
+## rp2350/
+
+Raspberry Pi Pico 2 (RP2350 on its Cortex-M33s @ 150 MHz, 520 KB SRAM, the
+single-precision FPU): mooncc -t thumb2sp end to end, the nucleo's battery
+(../battery.h) on v8-M. No boot2: the ROM sets up flash itself and wants an
+image definition in the first 4 KB, which mkboot.l lays behind the vector
+table. The console is the chip's own usb, ../rp2040/usb.c built against
+rp2350.h; 134 baud on it reboots into the ROM's drive (the reboot waits on
+the watchdog, whose tick rp2350.c starts). `make` also builds probe.uf2,
+../rp2040/probe.c on this chip. test_rp2350 verifies the boot image;
+test_rp2350_board writes the UF2 raw to the board's drive on a host with
+rp2350-uf2 and reads the battery off its usb console.
+
 ## esp32c6/
 
 Espressif ESP32-C6 (RV32IMAC @ 160 MHz, 512 KB HP SRAM -- firmware only, no love). The
