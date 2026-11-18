@@ -1002,8 +1002,7 @@
     (: mach (peep elf-machines tgt 0)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
        ; pulls it. a bare link has no crt0 to call it. a thread template owes it regardless,
-       ; for the first thread's copy. a set with a strong one of its own (a board's startup)
-       ; owes none
+       ; for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
        lg (ldledger srcs mach) dt <lg
        home (!nostd && mhome ())
        owed (!(lg 3 "__love_start") && (lg 2 || !bare && !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
@@ -1071,8 +1070,9 @@
        entry? (foldl (a \ s \ a || elem 'main <s) 0 tsyms)      ; a ledger names noms
        base (entry? ? (crt0-wasm . texts) texts)
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
-       owed0 (ledger bsyms)
-       home (two? owed0 && !nostd && mhome ())
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
+       home (!nostd && mhome ())
+       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
