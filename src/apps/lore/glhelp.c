@@ -48,7 +48,7 @@ typedef float GLfloat;
 typedef char GLchar;
 
 enum {
- EGL_PLATFORM_SURFACELESS_MESA = 0x31DD, EGL_SURFACE_TYPE = 0x3033, EGL_PBUFFER_BIT = 1,
+ EGL_PLATFORM_SURFACELESS_MESA = 0x31DD, EGL_PLATFORM_X11_KHR = 0x31D5, EGL_SURFACE_TYPE = 0x3033, EGL_PBUFFER_BIT = 1, EGL_WINDOW_BIT = 4,
  EGL_RENDERABLE_TYPE = 0x3040, EGL_OPENGL_ES3_BIT = 0x40, EGL_NONE = 0x3038,
  EGL_OPENGL_ES_API = 0x30A0, EGL_WIDTH = 0x3057, EGL_HEIGHT = 0x3056, EGL_CONTEXT_MAJOR_VERSION = 0x3098,
  GL_FRAMEBUFFER = 0x8D40, GL_RENDERBUFFER = 0x8D41, GL_RGBA8 = 0x8058, GL_DEPTH_COMPONENT24 = 0x81A6,
@@ -64,7 +64,7 @@ enum {
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
  GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
- GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5 };
+ GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11 };
 
 #define EGLFNS(X) \
  X(unsigned, eglInitialize, (EGLDisplay, EGLint *, EGLint *)) \
@@ -74,6 +74,9 @@ enum {
  X(unsigned, eglMakeCurrent, (EGLDisplay, EGLSurface, EGLSurface, EGLContext)) \
  X(EGLDisplay, eglGetDisplay, (void *)) \
  X(EGLSurface, eglCreatePbufferSurface, (EGLDisplay, EGLConfig, const EGLint *)) \
+ X(EGLSurface, eglCreateWindowSurface, (EGLDisplay, EGLConfig, void *, const EGLint *)) \
+ X(unsigned, eglSwapBuffers, (EGLDisplay, EGLSurface)) X(unsigned, eglSwapInterval, (EGLDisplay, EGLint)) \
+ X(unsigned, eglDestroySurface, (EGLDisplay, EGLSurface)) X(unsigned, eglTerminate, (EGLDisplay)) \
  X(void *, eglGetProcAddress, (const char *))
 #define GLFNS(X) \
  X(void, glGenFramebuffers, (GLsizei, GLuint *)) X(void, glBindFramebuffer, (GLenum, GLuint)) \
@@ -105,6 +108,7 @@ enum {
  X(GLint, glGetUniformLocation, (GLuint, const GLchar *)) \
  X(void, glUniform1f, (GLint, GLfloat)) X(void, glUniform1i, (GLint, GLint)) \
  X(void, glUniform2f, (GLint, GLfloat, GLfloat)) X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
+ X(void, glUniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) X(void, glScissor, (GLint, GLint, GLsizei, GLsizei)) \
  X(void, glUniformMatrix4fv, (GLint, GLsizei, unsigned char, const GLfloat *)) \
  X(void, glPixelStorei, (GLenum, GLint)) X(void, glEnable, (GLenum)) X(void, glDepthFunc, (GLenum)) \
  X(void, glDisable, (GLenum)) X(void, glCullFace, (GLenum)) X(void, glFrontFace, (GLenum)) \
@@ -144,6 +148,8 @@ struct helper {
  GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
+ EGLDisplay d; EGLConfig cf; EGLContext c; EGLSurface ws; void *xd;   // ws: the window shown on, by xd's display
+ GLuint sprog, stex; GLint us_r, us_wh;
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -237,12 +243,20 @@ static char const ufsrc[] =
  " float d = texelFetch(cd, q, 0).r; if (d >= 2.0) discard;\n"
  " vec4 k = texelFetch(cc, q, 0); o = vec4(k.b, k.g, k.r, 1.0); gl_FragDepth = clamp(d * 0.5 + 0.5, 0.0, 1.0); }\n";
 
+// ..a picture shown on the window: r its rect in the window's pixels, top down, which it fills,
+// its edges carried on past
+static char const sfsrc[] =
+ "#version 300 es\n"
+ "precision highp float; uniform sampler2D t; uniform vec4 r; uniform vec2 wh; out vec4 o;\n"
+ "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y);\n"
+ " o = vec4(texture(t, (p - r.xy) / (r.zw - r.xy)).rgb, 1.0); }\n";
+
 static GLuint program(GLuint vs, GLuint fs) {
  GLuint p = glCreateProgram(); GLint ok = 0;
  glAttachShader(p, vs); glAttachShader(p, fs); glLinkProgram(p); glGetProgramiv(p, GL_LINK_STATUS, &ok);
  return ok ? p : 0; }
 
-static int setup(struct helper *H) {
+static int setup(struct helper *H, int x) {
  // ..mesa's names, else android's
  void *egl = dlopen("libEGL.so.1", RTLD_NOW), *gl = dlopen("libGLESv2.so.2", RTLD_NOW);
  if (!egl) egl = dlopen("libEGL.so", RTLD_NOW);
@@ -257,11 +271,17 @@ static int setup(struct helper *H) {
  EGLFNS(LOADE)
  GLFNS(LOADG)
  eglGetPlatformDisplay = (EGLDisplay (*) (GLenum, void *, const intptr_t *)) need(egl, "eglGetPlatformDisplay");
- EGLDisplay d = eglGetPlatformDisplay ? eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL) : NULL;
+ // ..for a window, the X server's display, through its own connection; else none
+ void *xl = x ? dlopen("libX11.so.6", RTLD_NOW) : NULL;
+ void *(*xopen) (char const *) = (void *(*) (char const *)) (xl ? dlsym(xl, "XOpenDisplay") : NULL);
+ H->xd = xopen ? xopen(NULL) : NULL;
  EGLint ma, mi, n = 0;
+ EGLDisplay d = H->xd && eglGetPlatformDisplay ? eglGetPlatformDisplay(EGL_PLATFORM_X11_KHR, H->xd, NULL) : NULL;
+ if (d && !eglInitialize(d, &ma, &mi)) d = NULL, H->xd = NULL;
+ if (!d) d = eglGetPlatformDisplay ? eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL) : NULL;
  if (!d || !eglInitialize(d, &ma, &mi)) d = eglGetDisplay(NULL);
  if (!d || !eglInitialize(d, &ma, &mi)) { dprintf(1, "err no egl display\n"); return 0; }
- EGLint ca[] = { EGL_SURFACE_TYPE, EGL_PBUFFER_BIT, EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_NONE };
+ EGLint ca[] = { EGL_SURFACE_TYPE, EGL_PBUFFER_BIT | (H->xd ? EGL_WINDOW_BIT : 0), EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_NONE };
  EGLConfig cf = NULL;
  eglChooseConfig(d, ca, &cf, 1, &n);
  eglBindAPI(EGL_OPENGL_ES_API);
@@ -271,11 +291,17 @@ static int setup(struct helper *H) {
  EGLint pa[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
  EGLSurface ps = c && !eglMakeCurrent(d, NULL, NULL, c) ? eglCreatePbufferSurface(d, cf, pa) : NULL;
  if (!c || (ps && !eglMakeCurrent(d, ps, ps, c)) || (!ps && !eglMakeCurrent(d, NULL, NULL, c))) { dprintf(1, "err no gles 3 context\n"); return 0; }
+ H->d = d, H->cf = cf, H->c = c;
  GLuint vs = shader(GL_VERTEX_SHADER, vsrc), fs = shader(GL_FRAGMENT_SHADER, fsrc);
  if (!vs || !fs) return 0;
  GLuint uvs = shader(GL_VERTEX_SHADER, uvsrc), ufs = shader(GL_FRAGMENT_SHADER, ufsrc);
  if (!uvs || !ufs) return 0;
  if (!(H->prog = program(vs, fs)) || !(H->uprog = program(uvs, ufs))) { dprintf(1, "err link\n"); return 0; }
+ GLuint sfs = shader(GL_FRAGMENT_SHADER, sfsrc);
+ if (!sfs || !(H->sprog = program(uvs, sfs))) { dprintf(1, "err link\n"); return 0; }
+ glUseProgram(H->sprog);
+ glUniform1i(glGetUniformLocation(H->sprog, "t"), 0);
+ H->us_r = glGetUniformLocation(H->sprog, "r"); H->us_wh = glGetUniformLocation(H->sprog, "wh");
  glUseProgram(H->uprog);
  glUniform1i(glGetUniformLocation(H->uprog, "cc"), 0); glUniform1i(glGetUniformLocation(H->uprog, "cd"), 1);
  H->uu_cs = glGetUniformLocation(H->uprog, "cs"); H->uu_fs = glGetUniformLocation(H->uprog, "fs");
@@ -297,8 +323,12 @@ static int setup(struct helper *H) {
  H->u_bias = glGetUniformLocation(H->prog, "bias"); H->u_ss = glGetUniformLocation(H->prog, "ss");
  glPixelStorei(GL_PACK_ALIGNMENT, 4); glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
  glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
- dprintf(1, "ready %s\n", glGetString(GL_RENDERER));
  return 1; }
+
+// ..a renderer in software, which a server without dri3 gives a window's display
+static int soft(void) {
+ char const *r = (char const *) glGetString(GL_RENDERER);
+ return !r || strstr(r, "llvmpipe") || strstr(r, "softpipe") || strstr(r, "swrast"); }
 
 static struct tex *tex_of(struct helper *H, int id) {
  for (int i = 0; i < H->ntex; i++) if (H->texs[i].id == id) return H->texs + i;
@@ -402,6 +432,62 @@ static void cmd_verts(struct helper *H, int id, int nv, size_t off, int S) {
  glBindBuffer(GL_ARRAY_BUFFER, b->vb);
  glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * (intptr_t) S * nv, p);
  glBindBuffer(GL_ARRAY_BUFFER, 0);
+ dprintf(1, "ok\n"); }
+
+// the window shown on: X's window xid, on the display opened for it
+static void cmd_win(struct helper *H, unsigned long xid) {
+ if (!H->xd) { dprintf(1, "err no window display\n"); return; }
+ if (H->ws) eglMakeCurrent(H->d, NULL, NULL, H->c), eglDestroySurface(H->d, H->ws), H->ws = NULL;
+ EGLSurface ws = eglCreateWindowSurface(H->d, H->cf, (void *) xid, NULL);
+ if (!ws || !eglMakeCurrent(H->d, ws, ws, H->c)) { dprintf(1, "err no window surface\n"); return; }
+ eglSwapInterval(H->d, 0);
+ H->ws = ws;
+ dprintf(1, "ok\n"); }
+
+// ..a picture w by h laid over the window W by H at [ax ay], then n strips: rows y0..y1 of
+// the window's own, laid as they are; and shown
+static void lay(struct helper *H, unsigned char const *p, int w, int h, float x0, float y0, float x1, float y1, int W, int Hh, int lin) {
+ unsigned char *rgba = malloc(4 * (size_t) w * h);
+ if (!rgba) return;
+ texels(rgba, p, (size_t) w * h);
+ glBindTexture(GL_TEXTURE_2D, H->stex);
+ glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+ free(rgba);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, lin ? GL_LINEAR : GL_NEAREST);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, lin ? GL_LINEAR : GL_NEAREST);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+ glUniform4f(H->us_r, x0, y0, x1, y1); glUniform2f(H->us_wh, (float) W, (float) Hh);
+ glViewport(0, 0, W, Hh);
+ glScissor((GLint) x0, Hh - (GLint) y1, (GLsizei) (x1 - x0), (GLsizei) (y1 - y0));
+ glDrawArrays(GL_TRIANGLES, 0, 3); }
+
+static void cmd_show(struct helper *H, char *l) {
+ int w, h, W, Hh, ax, ay, n, k = 0; long off;
+ if (sscanf(l, "%d %d %d %d %d %d %ld %d%n", &w, &h, &W, &Hh, &ax, &ay, &off, &n, &k) != 8 || w < 1 || h < 1 || W < 1 || Hh < 1 || n < 0) {
+  dprintf(1, "err show size\n"); return; }
+ if (!H->ws) { dprintf(1, "err no window\n"); return; }
+ size_t at = (size_t) off + 4 * (size_t) w * h;
+ unsigned char const *p = bytes(H, (size_t) off, 4 * (size_t) w * h);
+ if (!p) { dprintf(1, "err show bytes\n"); return; }
+ if (!H->stex) glGenTextures(1, &H->stex);
+ glBindFramebuffer(GL_FRAMEBUFFER, 0);
+ glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
+ glUseProgram(H->sprog); glActiveTexture(GL_TEXTURE0);
+ glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT);
+ glEnable(GL_SCISSOR_TEST);
+ lay(H, p, w, h, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh), W, Hh, 0);
+ char *s = l + k;
+ for (int i = 0, y0, y1, j; i < n; i++, s += j) {
+  if (sscanf(s, "%d %d%n", &y0, &y1, &j) != 2 || y0 < 0 || y1 <= y0 || y1 > Hh) break;
+  unsigned char const *q = bytes(H, at, 4 * (size_t) W * (y1 - y0));
+  if (!q) break;
+  lay(H, q, W, y1 - y0, 0.0f, (float) y0, (float) W, (float) y1, W, Hh, 0);
+  at += 4 * (size_t) W * (y1 - y0); }
+ glDisable(GL_SCISSOR_TEST);
+ eglSwapBuffers(H->d, H->ws);
+ glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glUseProgram(H->prog);
  dprintf(1, "ok\n"); }
 
 static void cmd_under(struct helper *H, int cw, int ch, size_t off) {
@@ -683,13 +769,21 @@ int main(int argc, char **argv) {
  if (argc < 2) { dprintf(1, "err usage: glhelp FILE\n"); return 2; }
  H->fd = open(argv[1], O_RDWR | O_CLOEXEC);
  if (H->fd < 0) { dprintf(1, "err cannot open %s\n", argv[1]); return 2; }
- if (!setup(H)) return 3;
+ if (!setup(H, argc > 2 && !strcmp(argv[2], "x"))) return 3;
+ // ..the gpu drawing unseen, rather than a window's display drawing slower, but with LOVE_GPU_SOFT=1
+ char const *sf = getenv("LOVE_GPU_SOFT");
+ if (H->xd && soft() && !(sf && !strcmp(sf, "1"))) {
+  eglMakeCurrent(H->d, NULL, NULL, NULL), eglTerminate(H->d), H->xd = NULL;
+  if (!setup(H, 0)) return 3; }
+ dprintf(1, "ready %s\n", glGetString(GL_RENDERER));
  for (char *l; (l = next_line(H)); ) {
   int id, a, b, c, k; long off; double tone;
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
   else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
   else if (!strncmp(l, "sun ", 4)) cmd_sun(H, l + 4);
+  else if (!strncmp(l, "win ", 4)) cmd_win(H, strtoul(l + 4, NULL, 10));
+  else if (!strncmp(l, "show ", 5)) cmd_show(H, l + 5);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);

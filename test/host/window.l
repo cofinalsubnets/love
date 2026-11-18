@@ -1,11 +1,12 @@
 ; test/host/window.l -- a window on Xvfb, driven by a second wire (GetImage, XTEST, resize):
-; keys, pointer, size, selections and INCR; a blit refused with no screen; then `love synth -w`
-; and `love play test/lore/hall.l --window`.
+; keys, pointer, size, selections and INCR; the gpu's helper showing on it; a blit refused with
+; no screen; then `love synth -w` and `love play test/lore/hall.l --window`.
 ; skips without Xvfb
 ; run: cat test/00-init.l test/host/window.l | out/love
 (borrow 'window)
 (borrow 'synth)   ; synth-trows
 (borrow 'xwire)
+(borrow 'gpu)
 ; a key the keymap makes a ctrl is ctrl's, wherever it sits: caps lock as ctrl
 (: xkm {66 [65507 0] 25 [119 87]}
  (test (x-events [2 66 0 0 ""] xkm 0 = [['down 29]]) (x-events [3 66 0 4 ""] xkm 0 = [['up 29]]) (x-events [2 25 0 4 ""] xkm 0 = [['down 17]])))
@@ -52,6 +53,18 @@
    ; the map's Expose ships the paper: its pixels, once the events are taken
    (shown n) (window-events win, px xw 10 10 @ v (v = [255 0 0] || n < 1 ? v (rest 50, shown (n - 1))))
    _ (test ([255 0 0] = shown 600) ([255 0 0] = px xw 319 199))
+   ; the gpu's helper shows on the window itself: a picture 2 by 2 over it all, then the
+   ; paper's rows 100 to 116 laid as they are. a box with no gpu helper passes it by
+   _ (setenv "LOVE_GPU_SOFT" "1", setenv "EGL_LOG_LEVEL" "fatal")
+   g (gpu-open 1)
+   gw (tablet? g ? (gpu-win g xw) 'none)
+   _ (gw = () ? (gpu-show g (gem-tray [4] [65280 255 16777215 0]) 2 2 320 200 [0 0] [[100 116]] p) 0)
+   (seen x y v n) (px xw x y @ c (c = v || n < 1 ? c (rest 50, seen x y v (n - 1))))
+   _ (? (gw = ()) (test ([0 255 0] = seen 10 10 [0 255 0] 100) ([0 0 255] = px xw 310 10)
+                        ([255 255 255] = px xw 10 190) ([0 0 0] = px xw 310 190)
+                        ([255 0 0] = px xw 10 100) ([255 0 0] = px xw 300 115) ([255 255 255] = px xw 10 116)))
+   _ (tablet? g ? (gpu-close g) 0)
+   _ (window-show win 0 200)
    qx (: _ (w8 s 98, w8 s 0, w16 s 4, w16 s 5, w16 s 0)
          _ (XW 'x-wpad s "XTEST", XW 'x-flush s)
          hdr (XW 'x-reply s) (hdr 9))

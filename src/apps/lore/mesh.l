@@ -324,8 +324,12 @@
    r (tray? q ? [q c] (two? q ? q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os) [v B0 bare 0]]))
    (r 1 3 ? (r 1 2 2 1 (r 1 0) (r 0)) (mesh-bare (r 0) (r 1 0) (r 1 1) (r 1 2))))
  ; ..the gpu that draws st's frames, opened at the first: with LORE_GPU=1, else 'off. each is
- ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0
- (mesh-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0")) 'off)) 'off)
+ ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0; on an X window
+ ; it shows them there itself, but with LORE_GPU_WIN=0
+ (mesh-gpu st) (st 'gpu @ () (: w (st 'win) x (tablet? w && w 'how = 'x && getenv "LORE_GPU_WIN" != "0")
+                                  (open g) (: s (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0"))
+                                              (x && gpu-win g (w 'xw) = () ? (pin s 'win 1) s))
+                                  s (getenv "LORE_GPU" = "1" ? (gpu-open x @ g (tablet? g ? (open g) 'off)) 'off)
                                 (pin st 'gpu s, s))
                           s s)
  ; ..f's bare pixels filled as bare asks, through v, B0 the ground: again, none is left to fill
@@ -390,11 +394,19 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or to a window: the picture sent for the server to enlarge, else painted onto the
- ; paper as often as fits; bands then 'over in 8 by 16 cells, only their rows shown when
- ; the server enlarged the rest; answers ""
+ ; ..or to a window: by the gpu that shows on it, else the picture sent for the server to
+ ; enlarge, else painted onto the paper as often as fits; bands then 'over in 8 by 16 cells,
+ ; only their rows shown when the gpu or the server enlarged the rest; answers ""
  (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
-   wh (window-size win) W <wh H (wh 1) P (window-paper win)
+   wh (window-size win) W <wh H (wh 1) P (window-paper win) gp (st 'gpu)
+   (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P)))
+ (mesh-gpu-win st gp f w h W H P bands) (: ov (peep st 'over {}) rs (sort (keys bands + keys ov))
+   _ (each rs (mesh-under f w h P W H))
+   _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   ys (filter (y \ y 0 < y 1) (map (r \ [(16 * r) (min H (16 * r + 16))]) rs))
+   (gpu-show (gp 'g) f w h W H (peep st 'slide [0 0]) ys P, ""))
+ (mesh-blit st f bands w h W H P) (: win (st 'win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
