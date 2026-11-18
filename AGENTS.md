@@ -209,6 +209,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
 - `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
 - `src/love/holo/xtensa.l`, `test/holo/xtrun.l`, `test/holo/xtlink.l`, `test/holo/xtdata.c` -> `test_xtensa` `test_ccxtensa`
+- `src/love/holo/mips.l`, `src/love/holo/decode.l`, `test/holo/mipsrun.l`, `test/holo/mipscodec.l`, `test/holo/mipslink.l`, `test/gate/mips.sh` -> `test_mips`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`

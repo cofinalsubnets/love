@@ -79,7 +79,7 @@
    (ld-obj id s0 rels?)
     (: _ (#s0 > 52 && s0 0 = 127 && s0 1 = 69 && s0 2 = 76 && s0 3 = 70 ? 0 (scare 'link-not-elf id))
        s (s0 5 = 2 ? (elf-swap s0) s0)
-       fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94) ? elf32rf elf32f) (scare 'link-elf-class id))
+       fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94 8) ? elf32rf elf32f) (scare 'link-elf-class id))
        (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
        shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
@@ -159,6 +159,8 @@
             243 (ld-cls '((1 4 abs32) (2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
             ; slot0 is a j's or a call0's offset, the opcode in the field says which
             94 (ld-cls '((1 4 abs32) (20 3 slot0)))
+            ; big-endian: the word's own kind, not abs32's little-endian one
+            8 (ld-cls '((2 4 mabs32) (4 4 mj26) (5 4 mhi16) (6 4 mlo16) (10 4 mb16)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
             40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc) (96 4 gotprel)))
@@ -290,7 +292,7 @@
    ;                       on a rel, where it rides in the field instead
    ; layout pins 'base later, section index -> load address
    (ld-read id s mach)
-    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94)) 4 9)
+    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94 8)) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
        secs {} lanes {} drops {}
        ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
@@ -1251,8 +1253,8 @@
        ; a thread template (x64 and a64): .tdata then .tbss as file zeros, past the nifs, a pt_tls
        tls? (ld-tls? objs)
        _ (tls? && !(elem mach '(62 183)) ? (scare 'link-tls target))
-       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32 and xtensa the headers and symbols
-       w32 (elem mach '(3 40 94) || target = 'rv32)
+       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32, xtensa and mips the headers and symbols
+       w32 (elem mach '(3 40 94 8) || target = 'rv32)
        _ (w32 && pie ? (scare 'link-i386-pie target))
        shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)

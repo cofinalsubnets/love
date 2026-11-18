@@ -27,7 +27,8 @@
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
                  'rv64 243 'rv32 243                         ; EM_RISCV
-                 'xtensa 94}                                   ; EM_XTENSA
+                 'xtensa 94                                    ; EM_XTENSA
+                 'mips 8}                                      ; EM_MIPS, big-endian
 
    ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)
@@ -100,8 +101,8 @@
    ;; e_flags for an EM_ARM executable: eabi 5 (0x05000000), plus ABI_FLOAT_HARD (0x400) for
    ;; a target with an fpu, mooncc having no softfp lane. a .o carries plain 0x05000000.
    (arm-eflags target) (elem target '(thumb2 thumb2sp arm) ? 83887104 83886080)
-   ; an ELF32 link's e_flags: rv32's RVC, xtensa's xt_insn | xt_lit, else arm's
-   (elf32-eflags target) (target @ 'rv32 1 'xtensa 768 _ (arm-eflags target))
+   ; an ELF32 link's e_flags: rv32's RVC, xtensa's xt_insn | xt_lit, mips32r2 o32 noreorder, else arm's
+   (elf32-eflags target) (target @ 'rv32 1 'xtensa 768 'mips 0x70001001 _ (arm-eflags target))
 
    ;; elf64-at's twin at 32 bits. 'entry is the even code address; the thumb bit is the header's.
    (elf32-at base target mkprog data)

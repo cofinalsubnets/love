@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_mips test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -55,7 +55,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
@@ -594,6 +594,9 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
+# holo's mips backend: its law as one big-endian linux program on qemu-mips, its table against llvm
+test_mips: host
+	@$(gsh) test/gate/mips.sh "$m" $(ho)
 # lane j links the leaves and longjmp out of the isa's own archives
 test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
