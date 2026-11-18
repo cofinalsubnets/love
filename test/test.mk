@@ -1099,10 +1099,10 @@ endif
 
 # rv64's tcg corpus nears its ceiling beside anything, so it boots alone first; then the rest
 # at once, an arch's lanes in turn (they share its disk). the tree first: selfpack writes it
-inle_rv64 = test_kernel_rv64
+inle_rv64 = test_kernel_rv64 test_kernel_uproc_rv64
 inle_x64 = test_disk test_uefi test_uefi_stay test_kboot test_kernel_uproc test_kpier test_kverb
 inle_wasm = test_kernel_wasm
-inle_a64 = test_kernel_a64 test_uefi_a64 test_uefi_stay_a64
+inle_a64 = test_kernel_a64 test_kernel_uproc_a64 test_uefi_a64 test_uefi_stay_a64
 test_inle: host
 	@$(MAKE) -s $(src_tree) out/rootfs.tar
 	@rm -rf out/inle && mkdir -p out/inle
@@ -1114,13 +1114,21 @@ inle-%:
 	 r=$$?; cat out/inle/$*.log; exit $$r
 
 ifeq ($(QEMU_A64),)
-test_kernel_a64:
-	@sh test/gate/skip.sh gate-skip "test_kernel_a64: skipped (need qemu-system-aarch64)"
+test_kernel_a64 test_kernel_uproc_a64:
+	@sh test/gate/skip.sh gate-skip "$@: skipped (need qemu-system-aarch64)"
 else
 test_kernel_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
+
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+test_kernel_uproc_a64: host $(S)/tools/ktest.l
+	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
+	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
+	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
 test_kernel_rpi3:
@@ -1134,13 +1142,22 @@ endif
 
 QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
 ifeq ($(QEMU_RV64),)
-test_kernel_rv64:
-	@sh test/gate/skip.sh gate-skip "test_kernel_rv64: skipped (need qemu-system-riscv64)"
+test_kernel_rv64 test_kernel_uproc_rv64:
+	@sh test/gate/skip.sh gate-skip "$@: skipped (need qemu-system-riscv64)"
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
+
+# test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+test_kernel_uproc_rv64: host $(S)/tools/ktest.l
+	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
+	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
+	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
+	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 
 NODE ?= $(shell command -v node 2>/dev/null)

@@ -72,13 +72,17 @@
    ; only the esp door gets a framebuffer. ramfb, not virtio-gpu: edk2's gop over that
    ; answers a mode with no address. ramfb's lands in ordinary ram.
    gfx  (arch = "a64" ? ["-device" "ramfb"] ())
-   ; KTEST_CORPUS: a lane's own roster; KTEST_INITRD: a file the kernel shows at /proc/initrd
+   ; KTEST_CORPUS: a lane's own roster; KTEST_INITRD: a file the kernel shows at /proc/initrd.
+   ; qemu loads -initrd only for a linux kernel: the virts' elf takes it over fw_cfg
    media (? img? (: d (iso + ".dtb")
                     _ (uwrite d (fdt 0x20000000))
                     ["-kernel" iso "-dtb" d "-append"
                      (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))])
             elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
-                  + (env-of "KTEST_INITRD" @ f (string? f ? ["-initrd" f] ())))
+                  + (env-of "KTEST_INITRD" @ f
+                      (!(string? f) ? ()
+                       mmio? ["-fw_cfg" ("name=opt/love/initrd,file=" + f)]
+                       ["-initrd" f])))
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
    ; kvm where the host backs it (~7x); x64-on-x64 only, since an arm host whose gic
@@ -88,8 +92,8 @@
            (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
            ())
    ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg nears 900s loaded, the
-   ; pi's raspi3b ~800s quiet
-   ceil (two? kvm ? "420" (arch = "rv64" ? "1200" (pi? ? "1800" "900")))
+   ; pi's raspi3b ~800s quiet. KTEST_CEIL: a lane's own, for one that bakes inside the boot
+   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" (arch = "rv64" ? "1200" (pi? ? "1800" "900")))))
    ; the scratch disk: truncate leaves an existing image's bytes alone, so the
    ; persistence gate's two boots share it (test/kernel/disk.l). force-legacy=false
    ; makes virtio-mmio speak version 2, the one blk.c drives.
@@ -112,9 +116,12 @@
            (: d ("/tmp/ktest-" + show (getpid 0))
               (base p) (foldl (\ a i (p i = 47 ? (i + 1) a)) 0 (jot #p) @ k (snip p k #p))
               b (base iso)
-              rel (map (x \ (: y (replace x iso b) (dir? ? (replace y ovmf (base ovmf)) y))) qemu)
+              rd (env-of "KTEST_INITRD")
+              rel (map (x \ (: y (replace x iso b) z (dir? ? (replace y ovmf (base ovmf)) y)
+                               (string? rd ? (replace z rd (base rd)) z))) qemu)
               _ (hark ["mkdir" "-p" d]) _ (hark ["cp" "-R" iso (d + "/" + b)])
               _ (dir? ? (hark ["cp" ovmf (d + "/" + base ovmf)]) 0)
+              _ (string? rd ? (hark ["cp" rd (d + "/" + base rd)]) 0)
               x (hark ["sh" "-c" ((cite 'hosts 'hosts-line) <slot d
                                     ["sh" "-c" ("truncate -s 35840000 " + b + ".disk && exec"
                                                 + foldl (\ a w (a + " '" + w + "'")) "" rel)])])

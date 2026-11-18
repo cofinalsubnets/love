@@ -3,6 +3,9 @@
 (borrow 'posix)
 (chdir "/love")
 ; whole paths: a law may leave the cwd where it ran
+; a love process first: where no door hands an image in, it bakes one (seat.l), before any law
+; times a process
 (: (feed p) (open ("/love/" + p) "r" @ q (port? q ? (reads q, close q) (scare 'no-corpus-member p)))
+   _ (proc-main ["love" "-e" "0"])
  (each ["test/00-init.l" "test/kernel/uproc.l" "test/kernel/proc.l" "test/kernel/spawn.l"
         "test/zz-fin.l"] feed))

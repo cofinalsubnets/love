@@ -1326,7 +1326,7 @@
                     (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 (min n0 <en) (min n0 <en - base - sk) (<en - min n0 <en) 0 0 16 0)   ; from the first row, if any
                     (shf (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; the -pie table (empty non-pie)
                     (shf (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)
                     (shf (snm 6) 1 3 ist isho iszr 0 0 16 0)
@@ -1523,7 +1523,7 @@
                     (shf (snm 0) 1 6 hdrsz hdrsz (t1 - hdrsz) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 t1 (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (fo d0) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (fo <ed) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 (min n0 <en) (fo (min n0 <en)) (<en - min n0 <en) 0 0 16 0)
                     (shf (snm 4) 6 3 dy0 (fo dy0) (dynz * ndy) 10 0 wz dynz)      ; link=.dynstr
                     (shf (snm 5) 1 3 got0 (fo got0) (wz * ni) 0 0 wz wz)
                     (shf (snm 6) (w32 ? 9 4) 2 ra0 (fo ra0) (relz * nr) 8 0 wz relz)        ; link=.dynsym
