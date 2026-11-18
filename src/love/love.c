@@ -329,8 +329,10 @@ lvm(lvm_clock) {                                   // epoch ms less t, a bignum 
  Sp[0] = mk_i64(&Hp, (int64_t) love_clock() - (intp(Sp[0]) ? toi64(Sp[0]) : 0));
  Ip++; love_musttail return Continue(); }
 
-// monotonic ns, for differences; clock stays ms, since ns wraps 32 bits every 4.3s
-op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
+lvm(lvm_nclock) {                                  // monotonic ns less t, a bignum past a 32-bit word's charms
+ Have(i64_req);
+ Sp[0] = mk_i64(&Hp, nclock() - (intp(Sp[0]) ? toi64(Sp[0]) : 0));
+ Ip++; love_musttail return Continue(); }
 
 // (please x): () a minor, a positive charm a major; answers n_gc. force leaves the nursery be
 static lvm(lvm_please) {
@@ -778,7 +780,7 @@ int code_in(struct g *g, uintptr_t v) {
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
-love_door char *code_window(char *p) { return p; }
+love_door(char *, code_window, (char *p), (p)) { return p; }
 love_door_user(code_window)
 
 // the image's segment, a fixed chunk written through *w. inle's hhdm is NX and mprotect cannot

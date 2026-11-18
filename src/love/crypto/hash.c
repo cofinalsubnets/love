@@ -611,16 +611,16 @@ static lvm(lvm_cksum) {
  love_musttail return Next(1); }
 
 // cksum's register, nothing folded after, no complement; the crc field (bytes 22..25) as zeros
-static love_inline struct g *host_ogg_crc(struct g *g) {
+static lvm(lvm_ogg_crc) {
+ Have(wbig_req);
  word r = ZeroPoint;
- if (strp(g->sp[0]) && oddp(g->sp[1]) && oddp(g->sp[2])) {
-  struct str *s = str(g->sp[0]);
-  intptr_t o = getcharm(g->sp[1]), n = getcharm(g->sp[2]);
+ if (strp(Sp[0]) && oddp(Sp[1]) && oddp(Sp[2])) {
+  struct str *s = str(Sp[0]);
+  intptr_t o = getcharm(Sp[1]), n = getcharm(Sp[2]);
   if (o >= 0 && n >= 27 && (uintptr_t) (o + n) <= s->len) {
    const uint8_t *p = (const uint8_t*) s->bytes + o, z[4] = {0};
-   r = mk_uword(&g->hp, ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
- return g->sp[2] = r, g->sp += 2, g; }
-static lvm(lvm_ogg_crc) { Have(wbig_req); LvmCall(g, host_ogg_crc) }
+   r = mk_uword(&Hp, ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
+ love_musttail return Answerp(2, r); }
 
 // the streams: the one-shots' compression functions, the state in a cask love never reads.
 // big-endian throughout, so an image carrying one wakes on any box. the block digests' is

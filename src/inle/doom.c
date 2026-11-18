@@ -16,13 +16,13 @@
 #include "i_system.h"
 
 // kmain.c's, under inle; refusals where no kernel stands under the binary
-love_door bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch) { return (void) p, (void) w, (void) h, (void) pitch, false; }
-love_door void k_scan_arm(int on) { (void) on; }
-love_door int k_scan_pop(void) { return -1; }
-love_door uintptr_t k_clock_ms(void) { return 0; }
-love_door void k_fb_touch(void) { }
-love_door void k_mouse_arm(int on) { (void) on; }
-love_door int k_mouse_take(int *b) { return (void) b, 0; }
+love_door(bool, k_fb, (volatile uint32_t **p, int *w, int *h, int *pitch), (p, w, h, pitch)) { return (void) p, (void) w, (void) h, (void) pitch, false; }
+love_doorv(k_scan_arm, (int on), (on)) { (void) on; }
+love_door(int, k_scan_pop, (void), ()) { return -1; }
+love_door(uintptr_t, k_clock_ms, (void), ()) { return 0; }
+love_doorv(k_fb_touch, (void), ()) { }
+love_doorv(k_mouse_arm, (int on), (on)) { (void) on; }
+love_door(int, k_mouse_take, (int *b), (b)) { return (void) b, 0; }
 
 // laid by src/tools/mkblob.l
 extern unsigned char const doom_wad[];

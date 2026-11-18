@@ -22,10 +22,10 @@
 #include <sys/resource.h>
 
 // the fine clock; love.c's weak default degrades to ms*1e6
-love_noinline intptr_t nclock(void) {
+love_noinline int64_t nclock(void) {
  struct timespec ts;
  return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
-  : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+  : (int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
  if (love_inflag)                                        // the blocking bit was ours, a scare or not
@@ -68,7 +68,7 @@ static bool inle_tasks(void) {
 }
 
 // on inle without fork a twirled task is a process of the shell's
-love_door lvm(lvm_exit) {
+love_doorlvm(lvm_exit) {
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && inle_tasks()) love_musttail return Ap(lvm_task_quit, g);
  int rc = (int) getcharm(Sp[0]);
@@ -267,7 +267,7 @@ static lvm(lvm_getenv) {
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
  LvmCallp(g, 1, strof, v) }
 
-love_door lvm(lvm_getpid) {
+love_doorlvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const

@@ -349,8 +349,8 @@ static long k_uload(struct k_uctx *c, uint8_t const *e, uintptr_t n, uint64_t *p
   return k_uok(c, c->pc, 1) ? 0 : -ENOEXEC; }
 
 // love itself from the kernel's image: its loads shared read-only, but the first writable one,
-// fresh from the projection's copy, and the door pages, lent from theirs, whose jumps reach the
-// kernel's bodies -> 0, the entry in c->pc; -ENOSYS with no copy
+// fresh from the projection's copy, whose door slots name the hosted bodies -> 0, the entry in
+// c->pc; -ENOSYS with no copy
 static long k_uload_love(struct k_uctx *c, uint64_t *phdr, uint64_t *phn) {
   if (!k_pie_base || !k_pie_data) return -ENOSYS;
   Elf64_Ehdr const *h = (Elf64_Ehdr const*) k_pie_base;
@@ -371,8 +371,6 @@ static long k_uload_love(struct k_uctx *c, uint64_t *phdr, uint64_t *phn) {
       uint64_t *e = k_upte(c, va);
       if (!e) return -ENOMEM;
       uint64_t o = va - k_upie, from = k_pie_base + o;
-      for (uintptr_t j = 0; j < k_pie_door[1]; j++)
-        if (k_pie_door[2 + j] == o) from = k_pie_door[0] + j * 4096;
       if (!(*e & 1))
         *e = (from - k_xw) | 5 | k_ushared | (p->p_flags & PF_X ? 0 : 1ull << 63); } }
   c->pc = k_upie + h->e_entry;

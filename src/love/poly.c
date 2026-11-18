@@ -221,27 +221,27 @@ static void pl_add(struct seen *t, flo_t const p[3]) {
 static bool pl_far(flo_t const p[3]) { for (int j = 0; j < 3; j++) if (!(p[j] > -(flo_t) 1e9 && p[j] < (flo_t) 1e9)) return 1; return 0; }
 
 // (poly-seen pss): every corner of every polygon in pss, for poly-fans
-love_noinline static struct g *host_poly_seen(struct g *g) {
+static lvm(lvm_poly_seen) {
  uint64_t n = 0, cap = 8;
- for (word l = g->sp[0]; chainp(l); l = B(l))
+ for (word l = Sp[0]; chainp(l); l = B(l))
   for (word q = A(l); chainp(q); q = B(q)) {
    flo_t p[3];
-   if (!pl_num3(A(q), p) || pl_far(p)) return g->sp[0] = ZeroPoint, g;
+   if (!pl_num3(A(q), p) || pl_far(p)) love_musttail return Answer(ZeroPoint);
    n++; }
  while (cap < 2 * n) cap *= 2;   // never full, so a probe ends
  uintptr_t const bytes = (uintptr_t) (8 + 3 * sizeof(flo_t) * cap), sw = str_width(bytes);
- if (!ok(g = have(g, sw))) return g;
- struct str *s = ini_str(bump(g, sw), bytes);
+ Have(sw);
+ struct str *s = ini_str(str(Hp), bytes);
+ Hp += sw;
  struct seen t = {(uint8_t*) txt(s), cap};
  flo_t const none[3] = {pl_gone, 0, 0};
  memcpy(t.s, &cap, 8);
  for (uint64_t i = 0; i < cap; i++) memcpy(t.s + 8 + 3 * sizeof(flo_t) * i, none, sizeof none);
- for (word l = g->sp[0]; chainp(l); l = B(l))
+ for (word l = Sp[0]; chainp(l); l = B(l))
   for (word q = A(l); chainp(q); q = B(q)) {
    flo_t p[3];
    pl_num3(A(q), p), pl_add(&t, p); }
- g->sp[0] = word(s);
- return g; }
+ love_musttail return Answer(word(s)); }
 
 struct pt { flo_t t, p[3]; };
 struct fan { flo_t n[3], U[4], V[4]; struct seen seen; struct pt *ts; uintptr_t cts; };
@@ -487,7 +487,6 @@ love_noinline static struct g *host_poly_beside(struct g *g) {
 static lvm(lvm_poly_keep) { LvmCallp(g, 1, host_poly_keep) }
 static lvm(lvm_poly_carve) { LvmCallp(g, 1, host_poly_carve) }
 static lvm(lvm_poly_grid) { LvmCallp(g, 1, host_poly_grid) }
-static lvm(lvm_poly_seen) { LvmCall(g, host_poly_seen) }
 static lvm(lvm_poly_fans) { LvmCallp(g, 3, host_poly_fans) }
 static lvm(lvm_poly_weave) { LvmCall(g, host_poly_weave) }
 static lvm(lvm_poly_beside) { LvmCallp(g, 5, host_poly_beside) }

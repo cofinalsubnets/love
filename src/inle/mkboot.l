@@ -3,9 +3,9 @@
 ;   (lay-boot dst "a64")   the translation tables, MAIR/TCR/TTBR, the MMU switch, the hop, khop
 ;   (lay-boot dst "a64pi") the same on the pi: the drop from el2 first, the pi's map
 ;   (lay-boot dst "rv64")  the one sv39 root, satp, sstatus.FS, khop
-; the link is flat (vaddr = paddr), so `la` answers a label; x64's image lies in the upper half.
+; the link is flat (vaddr = paddr), so `la` answers a label; the image lies in the upper half.
 ; `lia` stays where an absolute is wanted: the first fetch after the MMU comes on (a pc-relative
-; branch would ride a broken map), its stack, and x64's reach up to the image.
+; branch would ride a broken map), its stack, and the reach up to the image.
 ; runs after holo/{elf,obj}.l in a (borrow 'holo) cat with the target's backend joined.
 ; registers: x86 r0=rax r1=rcx r2=rdx r3=rbx r5=rsi r6=rdi; a64 rN = xN.
 (:
@@ -126,12 +126,13 @@
        (cli) (hlt) (jmp x_park))
 
    ;; -- a64 -----------------------------------------------------------
-   ;; one L1 named twice: identity under TTBR0 and hhdm at L0[256] under TTBR1. the first gig
+   ;; one L1 named thrice: identity under TTBR0, the hhdm at L0[256] and the image window at
+   ;; L0[511] under TTBR1. the first gig
    ;; is a real L2 of 2 MiB Device blocks (mmio_map walks TTBR1 expecting a table there);
    ;; RAM (1..4 GiB) rides 1 GiB Normal blocks.
    a-boot
     ('((label l0_lo)) + [['raw (b-zeros 4096)]]      ; TTBR0: [0] -> l1_id
-     + '((label l0_hi)) + [['raw (b-zeros 4096)]]    ; TTBR1: [256] hhdm -> l1_id
+     + '((label l0_hi)) + [['raw (b-zeros 4096)]]    ; TTBR1: [256] hhdm, [511] the window -> l1_id
      + '((label l1_id)) + [['raw (b-zeros 4096)]]    ; [0] -> l2_dev, [1..3] 1G Normal blocks
      + '((label l2_dev)) + [['raw (b-zeros 4096)]])     ; 512 x 2M Device blocks over phys 0..1G
 
@@ -144,7 +145,9 @@
        (mrs r9 sctlr_el1)
        (li r10 1) (and r10 r9 r10) (cmp r10 0)
        (br eq a64_cold)
-       (jmp kmain)                                   ; already mapped: straight into C
+       (align 8)
+       (lia r9 kmain)                                ; already mapped: straight into C, high
+       (jmpr r9)
        (label a64_cold)
        (mov r21 r0)                                  ; x0: a loader's dtb pointer, honored at khop
        (li r6 3))                                    ; valid | table; a literal, the block is quoted
@@ -166,12 +169,13 @@
         ['li 'r2 (a-gig + 0x80000000)] ['st 'r1 24 'r2]])
    ;; ..then r0 = l2_dev, r1 = l1_id, r6 = the table bits, for the L0s and the switch
    a-tail
-    (;; the L0s: the same L1 under both. the XN pair rides the hhdm alone, so pages reached
-     ;; through it can't execute while identity keeps X for the image.
+    (;; the L0s: the same L1 under all three. the XN pair rides the hhdm alone, so pages reached
+     ;; through it can't execute while identity and the window keep X for the image.
      ['(or r3 r1 r6)
         '(la r0 l0_lo) '(st r0 0 r3)
         '(la r2 l0_hi)
-        ['li 'r5 a-xntab] '(or r5 r5 r3) '(st r2 2048 r5)]     ; [256]: nothing under it runs
+        ['li 'r5 a-xntab] '(or r5 r5 r3) '(st r2 2048 r5)      ; [256]: nothing under it runs
+        '(st r2 4088 r3)]                                       ; [511]: the image window
      + '(;; MAIR: attr0 Device-nGnRnE (what mmio_attr_index prefers), attr1 Normal WB
          (li r3 0xff00)
          (msr mair_el1 r3)
@@ -242,18 +246,28 @@
      + a-tail)
    a-pi-text
     '((label khop)
+       ;; boot runs physical: the stack and C are reached through the image window
        (la r9 kstack_top)
+       (li r10 0xffffff8000000000)
+       (add r9 r9 r10)
        (lea sp r9 0)
        (mov r0 r21)                                  ; the firmware's dtb, always
-       (call dtb_to_kboot)
-       (call kmain)
+       (align 8)
+       (lia r9 dtb_to_kboot)
+       (callr r9)
+       (align 8)
+       (lia r9 kmain)
+       (callr r9)
        (label a64_park)
        (wfi)
        (jmp a64_park))
 
    a-text
     '((label khop)
-       (la r9 kstack_top)                            ; flat: pc-relative IS the linked address
+       ;; boot runs physical: the stack and C are reached through the image window
+       (la r9 kstack_top)
+       (li r10 0xffffff8000000000)
+       (add r9 r9 r10)
        (lea sp r9 0)                                 ; mov sp, x9
        ;; qemu lays the dtb at the RAM base; a loader that passed one in x0 wins.
        (li r1 0x40000000)                             ; RAMB, virt's RAM base
@@ -262,19 +276,24 @@
        (mov r21 r1)
        (label a64_havedtb)
        (mov r0 r21)
-       (call dtb_to_kboot)
-       (call kmain)
+       (align 8)
+       (lia r9 dtb_to_kboot)
+       (callr r9)
+       (align 8)
+       (lia r9 kmain)
+       (callr r9)
        (label a64_park)
        (wfi)
        (jmp a64_park))
 
    ;; -- rv64 ------------------------------------------------------------
-   ;; sv39, one table: [0..3] identity gigs, [256..259] the hhdm at 0xffffffc0_00000000.
-   ;; no second level: MMIO is under the first gig and a base PTE carries no memory type.
+   ;; sv39, one table: [0..3] identity gigs, [256..259] the hhdm at 0xffffffc0_00000000, and
+   ;; [384..387] the image window at 0xffffffe0_00000000, identity's twin. no second level:
+   ;; MMIO is under the first gig and a base PTE carries no memory type.
    r-boot ('((label rv_root)) + [['raw (b-zeros 4096)]])
 
-   ;; a leaf PTE for gig i: PPN (i << 30 >> 12) at bit 10 is i << 28. V|R|W|G|A|D, X on the
-   ;; identity window alone (the hhdm is non-executable, as on x86 and a64).
+   ;; a leaf PTE for gig i: PPN (i << 30 >> 12) at bit 10 is i << 28. V|R|W|G|A|D, X on
+   ;; identity and the image window (the hhdm is non-executable, as on x86 and a64).
    (r-pte i x) (i << 28 | (x ? 0xEF 0xE7))
    r-boot-text
     ('((label rvboot)
@@ -282,7 +301,8 @@
        (mov r13 r1)
        (la r0 rv_root))
      + (foldl (\ a i (a + [['li 'r2 (r-pte i 1)] ['st 'r0 (i * 8) 'r2]
-                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]]))
+                           ['li 'r2 (r-pte i 0)] ['st 'r0 (2048 + i * 8) 'r2]
+                           ['li 'r2 (r-pte i 1)] ['st 'r0 (3072 + i * 8) 'r2]]))
               () ^4)
      + '(;; satp: sv39 over the root's PPN. the pc is in the identity window, so the next
          ;; fetch tests the map; there is no literal hop.
@@ -299,10 +319,17 @@
 
    r-text
     '((label khop)
-       (la sp kstack_top)                            ; flat: pc-relative IS the linked address
+       ;; boot runs physical: the stack and C are reached through the image window
+       (la sp kstack_top)
+       (li r8 0xffffffe000000000)
+       (add sp sp r8)
        (mov r0 r13)                                ; the tree SBI passed, straight to the door
-       (call dtb_to_kboot)
-       (call kmain)
+       (align 8)
+       (lia r9 dtb_to_kboot)
+       (callr r9)
+       (align 8)
+       (lia r9 kmain)
+       (callr r9)
        (label rv_park)
        (wfi)
        (jmp rv_park))

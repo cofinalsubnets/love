@@ -603,10 +603,10 @@ __attribute__((weak)) intptr_t k_horn_read(unsigned char *dst, uintptr_t n) { (v
 __attribute__((weak)) uintptr_t k_horn_in_lag(void) { return 0; }
 __attribute__((weak)) void k_horn_in_close(void) { }
 // and the card refuses where no kernel stands under the binary
-love_door int k_horn_open(int rate) { (void) rate; return -1; }
-love_door intptr_t k_horn_write(unsigned char const *src, uintptr_t n) { (void) src, (void) n; return -1; }
-love_door uintptr_t k_horn_lag(void) { return 0; }
-love_door void k_horn_close(void) { }
+love_door(int, k_horn_open, (int rate), (rate)) { (void) rate; return -1; }
+love_door(intptr_t, k_horn_write, (unsigned char const *src, uintptr_t n), (src, n)) { (void) src, (void) n; return -1; }
+love_door(uintptr_t, k_horn_lag, (void), ()) { return 0; }
+love_doorv(k_horn_close, (void), ()) { }
 
 // the finalizer, inside GC: io_close runs only for the fd port, so this port shuts its own
 static void horn_fin(struct g *g, void *p) {

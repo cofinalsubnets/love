@@ -129,11 +129,12 @@ test_dlfind:
 
 # src.tree packs only what git tracks: a file a gate lays (proof terms, lean's outputs, an
 # extraction's leftovers) that .sbignore misses re-packs the tree mid-gate and re-bakes love
-# under the lanes beside it. a gate's tree is committed; without git there is nothing to hold
+# under the lanes beside it. a gate's tree is committed; without git there is nothing to hold.
+# config.mk alone rides untracked: a build's own choices, carried so a seed makes them again
 test_srcwalk:
 	@echo TEST selfpack.l -l against git ls-files
 	@cd $(R) && command -v git > /dev/null 2>&1 && git rev-parse --git-dir > /dev/null 2>&1 || { echo "  skipped: no git here"; exit 0; }; \
 	 o=out$(hsuf); LOVE_NO_IMAGE= out/love0 src/tools/selfpack.l -l | sed 's,^\./,,' | sort > $$o/.walk; \
-	 git ls-files | sort > $$o/.tracked; x=`comm -23 $$o/.walk $$o/.tracked`; \
+	 git ls-files | sort > $$o/.tracked; x=`comm -23 $$o/.walk $$o/.tracked | grep -vx config.mk`; \
 	 [ -z "$$x" ] || { echo "  FAIL: src.tree would pack files git does not track (a generated one wants .sbignore):"; echo "$$x"; exit 1; }; \
 	 echo "  ok   the walk's `wc -l < $$o/.walk` files are all tracked"

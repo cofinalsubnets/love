@@ -267,6 +267,17 @@
                              (go >s d))
                          (go >s d))))
        (go ts 0))
+   ; `visibility("hidden")` (or internal) to the first depth-0 `;` or `{` -> 1 | ()
+   (hidat? ts)
+    (: (go s d) (atom? s ? ()
+                   (<s @ t
+                      (? (d < 1 && (tp? t ";" || tp? t "{")) ()
+                         (tp? t "(") (go >s (d + 1))
+                         (tp? t ")") (go >s (d - 1))
+                         ((idv? t "visibility" || idv? t "__visibility__") && peekp >s "(" && strat? >>s)
+                          (elem (tkv <>>s) ["hidden" "internal"] ? 1 (go >s d))
+                         (go >s d))))
+       (go ts 0))
    ; `patchable_function_entry(N)` or `(N, M)`, to the first depth-0 `;` or `{` -> (N M) | ()
    (pfeat? ts)
     (: (num t) (tkk t = 'num ? (tkv t))
@@ -332,6 +343,7 @@
    ; the words the scans above answer to, read in one walk by their bounds: a scan whose
    ; words are absent answers () having looked at nothing else, so ptop runs only the rest
    hdword {"section" 1 "__section__" 1 "alias" 1 "__alias__" 1 "weak" 1 "__weak__" 1
+           "visibility" 1 "__visibility__" 1
            "always_inline" 1 "__always_inline__" 1 "noinline" 1 "__noinline__" 1 "used" 1
            "__used__" 1 "gnu_inline" 1 "__gnu_inline__" 1 "aligned" 1 "__aligned__" 1 "_Alignas" 1
            "patchable_function_entry" 1 "__patchable_function_entry__" 1
@@ -361,6 +373,7 @@
                  pin t 'tgt tgt,                  ; the codegen target
                  pin t 'types {},         ; typedef name -> ty
                  pin t 'weaks (),                 ; __attribute__((weak)) function names
+                 pin t 'hids (),                  ; visibility("hidden") names: bound in the module
                  pin t 'ainl (),                  ; always_inline function names
                  pin t 'noinl (),                 ; noinline function names
                  pin t 'nopro (),                 ; no_profile_instrument_function names: clang splices only always_inline into them
@@ -2601,6 +2614,7 @@
     ((peep ps 'cursect () ? () (hwin hw "section" "__section__" && secat? ts @ sc (sc ? (pin ps 'cursect sc)))),
      (peep ps 'curalias () ? () (hwin hw "alias" "__alias__" && aliasat? ts @ al (al ? (pin ps 'curalias al)))),
      (peep ps 'curweak () ? () (hwin hw "weak" "__weak__" ? (pin ps 'curweak 1))),
+     (peep ps 'curhid () ? () (hwin hw "visibility" "__visibility__" && hidat? ts ? (pin ps 'curhid 1))),
      (peep ps 'curinl () ? () (hwin hw "always_inline" "__always_inline__" ? (pin ps 'curinl 1))),
      (peep ps 'curnoinl () ? () (hwin hw "noinline" "__noinline__" ? (pin ps 'curnoinl 1))),
      (peep ps 'curnopro () ? ()
@@ -2860,6 +2874,8 @@
                             fnp [<>f] ())
                      (go4 l) (atom? l ? 1 (addweak ps <l, go4 >l))
                      (go4 nms)))),
+            (ps 'curhid ? (? (elem <f '(gdecl xdecl)) (pin ps 'hids (map cap <>f + ps 'hids))
+                             fnp (pin ps 'hids (<>f . ps 'hids)))),
             peep ps 'curinl () && fnp ?
               (pin ps 'ainl (<>f . ps 'ainl)),
             peep ps 'curnoinl () && fnp ?
@@ -2874,6 +2890,7 @@
             pin ps 'curstat (),
             pin ps 'curalias (),
             pin ps 'curweak (),
+            pin ps 'curhid (),
             pin ps 'curinl (),
             pin ps 'curnoinl (),
             pin ps 'curnopro (),
@@ -2897,7 +2914,7 @@
                           (gripe () () () "__attribute__((constructor)) and destructor are not carried out on wasm")
                          [1 ['prog (ps 'hoist + rev acc2 + msasm ps + ctasm ps)] (ps 'stag) (ps 'sigs) (ps 'weaks)  ; an empty TU is valid
                             (ps 'sfns) (ps 'svars) (ps 'sects) (ps 'alias) (ps 'aligns) (ps 'ainl) (ps 'noinl)
-                            (ps 'consts) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro)]))
+                            (ps 'consts) (ps 'gregs) (ps 'anames) (ps 'pfes) (ps 'nopro) (ps 'hids)]))
            (pin ps 'tagmark (), ptop ps ts2 @ r
               (? !(two? r) (pfail ps ts2 spans toks)
                  (redecl ps <r @ why

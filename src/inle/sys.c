@@ -292,7 +292,8 @@ static char *k_proc_code(struct k_proc *p, char const *path, uintptr_t pn, uintp
 static char const k_self[] = "/proc/self/exe";
 
 // a path to a program runs as itself; anything else, a bare word above all, is love's,
-// woken from /proc/image where there is one
+// woken from the door's /proc/image, else from the one seat.l baked, else bare. the prime's
+// own verbs, bake and wake, are always bare
 static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
   bool self = !strcmp(f, k_self);
@@ -302,14 +303,18 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
     long r = k_proc_start(p->pid, av, an, ev, en, code, cn);
     kfree(code);
     return r; }
-  static char const wake[] = "love\0wake\0/proc/image";
+  static char const wake[] = "love\0wake\0/proc/image", baked[] = "love\0wake\0/tmp/.love.img";
   struct k_st st;
+  bool bare = !strcmp(f, "bake") || !strcmp(f, "wake"),
+       door = !bare && !k_fs_stat("/proc/image", 11, &st, true),
+       own = !bare && !door && !k_fs_stat(baked + 10, sizeof baked - 11, &st, true);
+  char const *wk = own ? baked : wake;
   uintptr_t a0 = an ? strlen(av) + 1 : 0,
-            pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake,
+            pn = door ? sizeof wake : own ? sizeof baked : 5,
             fw = self ? 0 : fn + 1, n = pn + fw + an - a0;
   char *b = k_grab(n);
   if (!b) return -ENOMEM;
-  memcpy(b, wake, pn), memcpy(b + pn, f, fw), memcpy(b + pn + fw, av + a0, an - a0);
+  memcpy(b, wk, pn), memcpy(b + pn, f, fw), memcpy(b + pn + fw, av + a0, an - a0);
   long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
   k_drop(b);
   return r; }
