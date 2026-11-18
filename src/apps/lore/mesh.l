@@ -3,7 +3,7 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
          mesh-glb mesh-glb-of)
@@ -129,7 +129,8 @@
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..the same kept on the packed mesh, only colours rewritten: amb, chs and gain are the
- ; first call's, and after it only the vertices a lamp reaches change, only when ks does
+ ; first call's, and after it only the vertices a lamp reaches change, only when the ks of
+ ; the lamps that reach it do
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
@@ -138,12 +139,15 @@
            base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
            v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
            on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
-           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs)})
+           r (filter (i \ net (chs i 0 + chs i 1 + chs i 2) > 0.0) ^#chs)
+           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs) 'r r 'ks (map ks r)})
            [v (pk 'tris)])
       ; ..and nothing written while the lamps stand where they stood
-      b (: lv (pk 'live) [(#(lv 'ix) = 0 || lv 'ks = ks ? b
-                           (: _ (pin lv 'ks ks) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
+      b (: lv (pk 'live) kr (map ks (lv 'r)) [(#(lv 'ix) = 0 || lv 'ks = kr ? b
+                           (: _ (pin lv 'ks kr) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
                           (pk 'tris)])))
+ ; ..the ks of the lamps that reach a mesh mesh-lamps! keeps, all of them before it has
+ (mesh-lit-ks pk ks) (pk 'live @ () ks lv (map ks (lv 'r)))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
