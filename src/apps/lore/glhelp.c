@@ -94,6 +94,7 @@ enum {
  X(void, glGenBuffers, (GLsizei, GLuint *)) X(void, glBindBuffer, (GLenum, GLuint)) \
  X(void, glDeleteBuffers, (GLsizei, const GLuint *)) \
  X(void, glBufferData, (GLenum, intptr_t, const void *, GLenum)) \
+ X(void, glBufferSubData, (GLenum, intptr_t, intptr_t, const void *)) \
  X(void, glGenVertexArrays, (GLsizei, GLuint *)) X(void, glBindVertexArray, (GLuint)) \
  X(void, glDeleteVertexArrays, (GLsizei, const GLuint *)) \
  X(void, glVertexAttribPointer, (GLuint, GLint, GLenum, unsigned char, GLsizei, const void *)) \
@@ -127,7 +128,7 @@ GLFNS(DECL)
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
-struct buf { int id; GLuint vao, vb, ib; int nrun; struct run *runs; };
+struct buf { int id, nv, S; GLuint vao, vb, ib; int nrun; struct run *runs; };
 struct helper {
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
@@ -381,7 +382,18 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S)
  glBufferData(GL_ELEMENT_ARRAY_BUFFER, 12 * (intptr_t) nt, ix, GL_STATIC_DRAW);
  glBindVertexArray(0);
  free(tr); free(ix);
- b->runs = runs, b->nrun = nrun;
+ b->runs = runs, b->nrun = nrun, b->nv = nv, b->S = S;
+ dprintf(1, "ok\n"); }
+
+// a buf's vertices laid again, its triangles kept: as many, as wide
+static void cmd_verts(struct helper *H, int id, int nv, size_t off, int S) {
+ struct buf *b = buf_of(H, id);
+ if (!b || b->nv != nv || b->S != S) { dprintf(1, "err verts not that buf\n"); return; }
+ unsigned char const *p = bytes(H, off, 4 * (size_t) S * nv);
+ if (!p) { dprintf(1, "err verts bytes\n"); return; }
+ glBindBuffer(GL_ARRAY_BUFFER, b->vb);
+ glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * (intptr_t) S * nv, p);
+ glBindBuffer(GL_ARRAY_BUFFER, 0);
  dprintf(1, "ok\n"); }
 
 static void cmd_under(struct helper *H, int cw, int ch, size_t off) {
@@ -668,6 +680,7 @@ int main(int argc, char **argv) {
   int id, a, b, c, k; long off; double tone;
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
+  else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
   else if (!strncmp(l, "sun ", 4)) cmd_sun(H, l + 4);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);

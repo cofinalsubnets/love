@@ -92,14 +92,18 @@
                       [(apart (facets W H sc mat [skv] [skt] [] (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 1.5])) gf)
                        (net (gf >> 32 = 1) != net (sc = -1)) (net (sc = -1))])
            sk [(under [ta tg]) (under [ta tr])]
-           (gpu-close g, [up d dr e fs gl pi su sk]))))
+           ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
+           (rl x V) (apart (facets W H -1 mat [V gv] [tc tl] X (o 64)) (gpu-facets s W H -1 mat [V gv] [tc tl] X (o 64) [['sq x] ['ln 0]] () ()))
+           rv (: a (rl 1 verts) n (s 'n) b (rl 2 (verts * 0.5)) c (rl 2 (verts * 0.5)) [a b c (s 'n - n)])
+           (gpu-close g, [up d dr e fs gl pi su sk rv]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
                  && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
                  && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6) && all (f \ f <= 4) (r 7)
-                 && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)))
+                 && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)
+                 && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())
