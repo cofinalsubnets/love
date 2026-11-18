@@ -58,17 +58,18 @@ static uint32_t life_step(uint32_t b) {
       if (c == 3 || (c == 2 && (b >> (y * LED_N + x) & 1u))) n |= 1u << (y * LED_N + x); }
   return n; }
 
-// a board of the game: a generation every 250 ms, a cell just died shown dim; a board that
-// dies, holds still or blinks in two reseeds off the noise's xorshift, as does the 64th
+// a board of the game: a generation every 250 ms, a cell just died shown dim; it runs on
+// through still lifes and blinkers, and only a board gone empty reseeds, a generation after,
+// off the noise's xorshift
 static void life(uint8_t *lv, uint32_t t, uint32_t *g, uint32_t *z) {
-  if (t - g[3] >= 250u || !g[0]) {
-    uint32_t n = life_step(g[0]);
-    g[1] = g[0], g[3] = t;
-    if (!g[0] || n == g[0] || n == g[2] || ++g[4] >= 64u) {
+  if (t - g[2] >= 250u || !(g[0] | g[1])) {
+    uint32_t n = g[0] ? life_step(g[0]) : 0;
+    g[1] = g[0], g[2] = t;
+    if (!g[0]) {
       uint32_t x = *z;
       x ^= x << 13, x ^= x >> 17, x ^= x << 5, *z = x;
-      n = x & ((1u << LED_N * LED_N) - 1u), g[1] = 0, g[4] = 0; }
-    g[2] = g[0], g[0] = n; }
+      n = x & ((1u << LED_N * LED_N) - 1u), g[1] = 0; }
+    g[0] = n; }
   for (int k = 0; k < LED_N * LED_N; k++)
     lv[k] = (uint8_t) ((g[0] >> k & 1u) ? LED_MAX : (g[1] >> k & 1u) ? 2 : 0); }
 
@@ -142,7 +143,7 @@ int main(void) {
     bs[j] = v; }
   uint32_t base = bs[4] ? bs[4] : 1, z = 0x9E3779B9u ^ clock_us();
   int touched = 0;
-  uint32_t gl[5] = { 0, 0, 0, 0, 0 };   // life: the board, the one before, two before, its clock, its age
+  uint32_t gl[3] = { 0, 0, 0 };   // life: the board, the one before, its clock
   puts_("; logo "), putu(base), puts_(" us\n");
   led_put(0);
   // the beacon every tenth pass, ~100 ms; the temperature read again each second
