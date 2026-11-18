@@ -175,9 +175,11 @@
      (a6t-all 0xbf80fc00 '((viw d) (vin n) shl) '((sshll 0x0f00a400) (ushll 0x2f00a400)))
      (a6t-all 0xbf20fc00 '((v d) (v n) (v m))
       '((add 0x0e208400) (sub 0x2e208400) (cmeq 0x2e208c00) (cmtst 0x0e208c00) (cmhs 0x2e203c00)
-        (cmhi 0x2e203400) (cmge 0x0e203c00) (cmgt 0x0e203400) (mla 0x0e209400) (mls 0x2e209400)
-        (mul 0x0e209c00) (ushl 0x2e204400) (sshl 0x0e204400) (addp 0x0e20bc00) (smax 0x0e206400)
-        (smin 0x0e206c00) (umax 0x2e206400) (umin 0x2e206c00)))
+        (cmhi 0x2e203400) (cmge 0x0e203c00) (cmgt 0x0e203400) (ushl 0x2e204400) (sshl 0x0e204400)
+        (addp 0x0e20bc00)))
+     (a6t-all 0xbf20fc00 '((vn d) (vn n) (vn m))
+      '((mla 0x0e209400) (mls 0x2e209400) (mul 0x0e209c00) (smax 0x0e206400) (smin 0x0e206c00)
+        (umax 0x2e206400) (umin 0x2e206c00)))
      (a6t-all 0xbfe0fc00 '((vb d) (vb n) (vb m))
       '((and 0x0e201c00) (bic 0x0e601c00) (orr 0x0ea01c00) (orn 0x0ee01c00) (eor 0x2e201c00)
         (bsl 0x2e601c00) (bit 0x2ea01c00) (bif 0x2ee01c00)))
@@ -185,9 +187,10 @@
       '((fadd 0x0e20d400) (fsub 0x0ea0d400) (fmul 0x2e20dc00) (fdiv 0x2e20fc00) (faddp 0x2e20d400)
         (fmla 0x0e20cc00) (fmls 0x0ea0cc00) (fmax 0x0e20f400) (fmin 0x0ea0f400) (fcmeq 0x0e20e400)
         (fcmge 0x2e20e400) (fcmgt 0x2ea0e400)))
-     (a6t-all 0xbffffc00 '((vb d) (vb n)) '((cnt 0x0e205800) (not 0x2e205800) (rbit 0x2e605800)))
-     (a6t-all 0xbf3ffc00 '((v d) (v n))
-      '((rev64 0x0e200800) (rev32 0x2e200800) (rev16 0x0e201800) (abs 0x0e20b800) (neg 0x2e20b800)))
+     (a6t-all 0xbffffc00 '((vb d) (vb n)) '((cnt 0x0e205800) (not 0x2e205800) (rbit 0x2e605800) (rev16 0x0e201800)))
+     (a6t-all 0xbf3ffc00 '((vn d) (vn n)) '((rev64 0x0e200800)))
+     [['rev32 0x2e200800 0xbfbffc00 '((v d) (v n))]]
+     (a6t-all 0xbf3ffc00 '((v d) (v n)) '((abs 0x0e20b800) (neg 0x2e20b800)))
      (a6t-all 0xbf3ffc00 '((v d) (v n) z0)
       '((cmgt 0x0e208800) (cmge 0x2e208800) (cmeq 0x0e209800) (cmle 0x2e209800) (cmlt 0x0e20a800)))
      (a6t-all 0xbf3ffc00 '((vn d) (vw n)) '((xtn 0x0e212800)))
@@ -206,7 +209,12 @@
      (a6t-all 0xbf20fc00 '((vw d) (vw n) (v m))
       '((saddw 0x0e201000) (ssubw 0x0e203000) (uaddw 0x2e201000) (usubw 0x2e203000)))
      [['dup 0x0e000400 0xbfe0fc00 '((v5 d) (e5 n))] ['dup 0x0e000c00 0xbfe0fc00 '((v5 d) g5)]
-      ['smov 0x0e002c00 0xbfe0fc00 '(gq (e5 n))] ['umov 0x0e003c00 0xbfe0fc00 '(gq (e5 n))]
+      ; by element size, b and h to w, b h s to x; umov b h s to w, d to x
+      ['smov 0x0e012c00 0xffe1fc00 '((w d) (e5 n))] ['smov 0x0e022c00 0xffe3fc00 '((w d) (e5 n))]
+      ['smov 0x4e012c00 0xffe1fc00 '((x d) (e5 n))] ['smov 0x4e022c00 0xffe3fc00 '((x d) (e5 n))]
+      ['smov 0x4e042c00 0xffe7fc00 '((x d) (e5 n))]
+      ['umov 0x0e013c00 0xffe1fc00 '((w d) (e5 n))] ['umov 0x0e023c00 0xffe3fc00 '((w d) (e5 n))]
+      ['umov 0x0e043c00 0xffe7fc00 '((w d) (e5 n))] ['umov 0x4e083c00 0xffeffc00 '((x d) (e5 n))]
       ['ins 0x4e001c00 0xffe0fc00 '((e5 d) g5)] ['ins 0x6e000400 0xffe08400 '((e5 d) e4)]
       ['dup 0x5e000400 0xffe0fc00 '(s5 (e5 n))]
       ['tbl 0x0e000000 0xbfe09c00 '((vb d) tlist (vb m))] ['tbx 0x0e001000 0xbfe09c00 '((vb d) tlist (vb m))]
@@ -272,7 +280,7 @@
             'f (t = 'f ? ((o 1 @ 's 0 'd 0x400000 'h 0xc00000 -1) @ k (k < 0 ? () (k | o 2 << at))) ())
             'fs (t = 'f && elem (o 1) '(s d) ? ((o 1 = 'd ? 0x400000 0) | o 2 << at) ())
             'v (t = 'v ? (a6e-arr (o 2) @ k (k = () ? () ((k >> 1) << 22 | (k & 1) << 30 | o 1 << at))) ())
-            'vn (t = 'v ? (a6e-arr (o 2) @ k (k = () ? () ((k >> 1) << 22 | (k & 1) << 30 | o 1 << at))) ())
+            'vn (t = 'v ? (a6e-arr (o 2) @ k (k = () || k > 5 ? () ((k >> 1) << 22 | (k & 1) << 30 | o 1 << at))) ())
             'vb (t = 'v && elem (o 2) ["8b" "16b"] ? ((o 2 = "16b" ? 0x40000000 0) | o 1 << at) ())
             'vw (t = 'v ? (peep {"8h" 0 "4s" 1 "2d" 2} (o 2) -1 @ k (k < 0 ? () (k << 22 | o 1 << at))) ())
             'vf (t = 'v ? (peep {"2s" 0 "4s" 0x40000000 "2d" 0x40400000} (o 2) -1 @ k
@@ -348,7 +356,6 @@
            ('v5 f) (is 'v ? (a6e-arr (o 2) @ k (k = () ? () [((1 << (k >> 1)) << 16 | (k & 1) << 30 | o 1 << a6e-at f) 1])) ())
            ('e5 f) (is 'el ? (a6e-ech (o 2) @ e [(((o 3 << (e + 1)) | 1 << e) << 16 | o 1 << a6e-at f) 1]) ())
            'g5 (elem t '(x w) ? [(a6e-n o << 5) 1] ())
-           'gq (elem t '(x w) ? [((t = 'x ? 0x40000000 0) | a6e-n o) 1] ())
            'e4 (is 'el ? (a6e-ech (o 2) @ e [((o 3 << e) << 11 | o 1 << 5) 1]) ())
            's5 (is 'f ? (a6e-ech (o 1) @ e [((1 << e) << 16 | o 2) 1]) ())
            'tlist (is 'list ? [(v << 5 | (o 2 - 1) << 13) 1] ())

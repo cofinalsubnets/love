@@ -855,7 +855,6 @@
            ('v5 f) (a6d-esz (b 20 16) @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6t-arr (e << 1 | q))]]))
            ('e5 f) (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['el (fld f) (a6d-ech e) (b 20 16 >> (e + 1))]]))
            'g5 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [[(e = 3 ? 'x 'w) (b 9 5)]]))
-           'gq [[(q ? 'x 'w) (b 4 0)]]
            'e4 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['el (b 9 5) (a6d-ech e) (b 14 11 >> e)]]))
            's5 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['f (a6d-ech e) (b 4 0)]]))
            'tlist [['list (b 9 5) (b 14 13 + 1) "16b" -1]]
