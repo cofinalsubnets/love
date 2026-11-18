@@ -660,7 +660,8 @@
          target (af ? (target0 + afix-ad aux0) target0) aux (af ? (afix-w aux0) aux0)
          rb (target - site)
          rel (rb // 4)
-         (? (kind = 'b26) (le32 (aux | rel & 67108863))             ; bits[25:0]
+         (? (kind = 'b26) (-33554432 <= rel < 33554432 ? (le32 (aux | rel & 67108863))   ; bits[25:0]
+                             (scare 'a64-branch-range rel))
             (elem kind '(b19 ld19)) (-262144 <= rel < 262144 ? (le32 (aux | (rel & 524287) << 5))   ; bits[23:5]
                              (scare 'a64-branch-range rel))
             (kind = 'b14) (-8192 <= rel < 8192 ? (le32 (aux | (rel & 16383) << 5))   ; bits[18:5]
