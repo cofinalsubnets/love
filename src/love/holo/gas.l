@@ -1310,28 +1310,28 @@
    (gr-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-rv64-operand o))
    gr-nils (gtab '((nop nop) (ret ret) (ecall sys) (ebreak trap) (wfi wfi) (sret sret) (mret mret) (fence fence) (fence.i fencei)))
    gr-alu (gtab '((add add) (addi add) (sub sub) (and and) (andi and) (or or) (ori or) (xor xor) (xori xor) (mul imul)))
-   gr-sh (gtab '((slli shl) (srli shr) (srai sar) (sll shlv) (srl shrv) (sra sarv)))
+   gr-sh (gtab '((slli shl) (srli shr) (srai sar)))          ; sll srl sra: the table's, any count register
    gr-ld (gtab '((ld ld) (lw ld4) (lwu ldu4) (lh ld2) (lhu ldu2) (lb ld1) (lbu ldu1)))
    gr-st (gtab '((sd st) (sw st4) (sh st2) (sb st1)))
    gr-bcc (gtab '((beq eq) (bne ne) (blt lt) (bge ge) (bltu below) (bgeu ae)))
    gr-bz (gtab '((beqz eq) (bnez ne) (bltz lt) (bgez ge)))
    gr-csr1 '(csrw csrs csrc csrwi csrsi csrci)
    gr-csr2 '(csrrw csrrs csrrc csrrwi csrrsi csrrci)
-   (gr-ins m os)
+   (gr-ins m os raw)
     (#os @ k
-       (? (ghas? gr-nils m) [[(gr-nils m)]]
+       (? (ghas? gr-nils m && k = 0) [[(gr-nils m)]]                  ; fence r, rw: the table's
           (m = 'unimp) '((csrw cycle zr))
           (m = 'sfence.vma) [['sfence (k > 0 ? (gr-r (os 0)) 'zr) (k > 1 ? (gr-r (os 1)) 'zr)]]
           (m = 'li) [['li (gr-r (os 0)) (<>(os 1))]]
           (m = 'mv) [['mov (gr-r (os 0)) (gr-r (os 1))]]
           (m = 'j) [['jmp (<>(os 0))]]
           (m = 'jr) [['jmpr (gr-r (os 0))]]
-          (m = 'jalr) [['callr (gr-r (os 0))]]
+          (m = 'jalr && k = 1) [['callr (gr-r (os 0))]]
           (m = 'call) [['call (<>(os 0))]]
           (ghas? gr-bcc m) [['cmp (gr-r (os 0)) (gr-r (os 1))] ['br (gr-bcc m) (<>(os 2))]]
           (ghas? gr-bz m) [['cmp (gr-r (os 0)) 0] ['br (gr-bz m) (<>(os 1))]]
           (ghas? gr-alu m) [[(gr-alu m) (gr-r (os 0)) (gr-r (os 1)) (gr-v (os 2))]]
-          (ghas? gr-sh m)
+          (ghas? gr-sh m && os 0 = os 1)                                 ; else one instruction, the table's
            (: d (gr-r (os 0)) s (gr-r (os 1))
               ((d = s ? () [['mov d s]]) + [[(gr-sh m) d (gr-v (os 2))]]))
           (m = 'neg) (: d (gr-r (os 0)) s (gr-r (os 1)) ((d = s ? () [['mov d s]]) + [['neg d]]))
@@ -1341,11 +1341,63 @@
           (m = 'csrr) [['csrr (gr-r (os 0)) (<>(os 1))]]
           (elem m gr-csr1) [[m (<>(os 0)) (gr-v (os 1))]]
           (elem m gr-csr2) [[m (gr-r (os 0)) (<>(os 1)) (gr-v (os 2))]]
-          (scare 'gas-rv64-op m)))
+          (gr-tab m raw)))
+   ;; any other instruction in the table, each operand read by its kind: a register by its
+   ;; architectural name, off(base) memory, a csr by name or number, a fence's sets, a rounding
+   ;; mode llvm's default when left out. no label operand
+   (gr-at l s) (: (go i l) (? !(two? l) -1 (<l = s) i (go (i + 1) >l)) (go 0 l))
+   (gr-num nm ab s) (gr-at ab s @ k (k >= 0 ? k (gr-at (map (i \ name (nm + show i)) ^32) s)))
+   (gr-take k l) (k < 1 || !(two? l) ? () (<l . gr-take (k - 1) >l))
+   ;; an operand's tokens -> (s name), (m off base) or (i n)
+   (gr-tok toks)
+    (: n #toks
+       (? (n = 1 && <<toks = 'sym) ['s (name (toks 0 1))]
+          (n >= 3 && toks (n - 1) = '(ch 41) && toks (n - 3) = '(ch 40) && <(toks (n - 2)) = 'sym)
+           ['m (n = 3 ? 0 (gimm (gr-take (n - 3) toks))) (name (toks (n - 2) 1))]
+          ['i (gimm toks)]))
+   ;; a csr's number by llvm's name: a lone (number name), or a run (first count prefix from)
+   (gr-csrn s)
+    (: (go l) (? !(two? l) (scare 'gas-rv64-csr s)
+                 (#<l = 2) (<l 1 = s ? <<l (go >l))
+                 (: e <l k (gr-at (map (i \ name (show (e 2) + show (e 3 + i))) ^(e 1)) s)
+                    (k >= 0 ? (<e + k) (go >l))))
+       (go rvd-csrs))
+   (gr-fset s) (foldl (\ a c (a | (c @ 105 8 111 4 114 2 119 1 0))) 0 (chars (show s)))   ; iorw
+   ;; each immediate kind's range, as the field holds it. functions, not values: a bake-time
+   ;; assembly above reaches here before this block's later values are laid
+   (gr-range k) (k @ 'i12 [-2048 2047] 'u20 [0 1048575] 'sh6 [0 63] 'sh5 [0 31] 'zimm [0 31] 'csr [0 4095] ())
+   (gr-rm s) (gr-at '(rne rtz rdn rup rmm _ _ dyn) s)
+   (gr-val k o)
+    (: (bad _) (scare 'gas-rv64-operand [k o])
+       (ok v) (v < 0 ? (bad 0) v)
+       (in k v) (gr-range k @ r (!(two? r) || <r <= v && v <= r 1 ? v (bad 0)))
+       (xr s) (s = 'fp ? 8 (ok (gr-num "x" rvd-xn s))) (fr s) (ok (gr-num "f" rvd-fn s))
+       (? (elem k '(rd rs1 rs2)) (<o = 's ? (xr (o 1)) (bad 0))
+          (elem k '(fd fs1 fs2 fs3)) (<o = 's ? (fr (o 1)) (bad 0))
+          (elem k '(m ms)) (<o = 'm ? [(in 'i12 (o 1)) (xr (o 2))] (bad 0))
+          (k = 'am) (<o = 'm && o 1 = 0 ? (xr (o 2)) (bad 0))
+          (k = 'rm) (<o = 's ? (ok (gr-rm (o 1))) (bad 0))
+          (k = 'csr) (? (<o = 'i) (in k (o 1)) (<o = 's) (gr-csrn (o 1)) (bad 0))
+          (elem k '(b j)) (bad 0)
+          (<o = 'i) (in k (o 1))
+          (bad 0)))
+   (gr-tab m raw)
+    (rv-row m @ ra
+     (? !(two? ra) (scare 'gas-rv64-op m)
+        (: ks (rv-kinds <ra) os (map gr-tok raw) n #os
+           ; a fence's sets ride one kind; an rm left out is llvm's
+           vs (? (ks = '(fence)) (n = 0 ? [[15 15]] [[(gr-fset (os 0 1)) (gr-fset (os 1 1))]])
+                 (last ks = 'rm && n + 1 = #ks)
+                  (map (i \ i < n ? (gr-val (ks i) (os i)) (elem m rvd-exact ? 0 7)) ^#ks)
+                 (n = #ks) (map (i \ gr-val (ks i) (os i)) ^n)
+                 (scare 'gas-rv64-operands [m n]))
+           [['raw (le32 (rve-word <ra vs (ra 1)))]])))
    (gr-line toks)
     (gline toks @ l
        (l @ ('label s) [['label s]]
-            ('ins m os) (gr-ins m (map gr-opnd os))
+            ; what the lowering takes stays its own; the table takes the rest, else the first refusal
+            ('ins m os) (trap (_ \ gr-ins m (map gr-opnd os) os) 0
+                              (a \ b \ (two? (rv-row m) ? (trap (_ \ gr-tab m os) 0 (_ \ _ \ scare a b)) (scare a b))))
             ()))
 
    ;; thumb: the same operand grammar as a64 over r0..r12, a register list, a shifted operand

@@ -114,14 +114,18 @@
    ;; a row's word, aq the atomics' aq and rl bits
    (rve-word row vs aq)
     (: (go w ks vs) (? !(two? ks) w (go (w | rve-op <ks <vs) >ks >vs))
-       (go (row 1 | aq << 25) (<(row 3) = 'aqrl ? >(row 3) (row 3)) vs))
+       (go (row 1 | aq << 25) (rv-kinds row) vs))
    rv-byname (foldl (\ t r (pin t (r 0) r)) {} rv-tab)
-   ;; a name and its operands to the word; an atomic's .aq .rl .aqrl rides its name
-   (rv-word mn vs)
+   ;; a name's row and its aq and rl bits, an atomic's .aq .rl .aqrl riding its name; () for none
+   (rv-row mn)
     (: s (show mn) (cut x) (#s > #x && snip s (#s - #x) #s = x)
        aq (? (cut ".aqrl") 3 (cut ".aq") 2 (cut ".rl") 1 0)
        row (peep rv-byname (aq = 0 ? mn (name (snip s 0 (#s - (aq @ 3 5 2 3 3))))) ())
-       (two? row ? (rve-word row vs aq) (scare 'rv-enc mn)))
+       (two? row ? [row aq] ()))
+   ;; a row's operand kinds in text order
+   (rv-kinds row) (<(row 3) = 'aqrl ? >(row 3) (row 3))
+   ;; a name and its operands to the word
+   (rv-word mn vs) (rv-row mn @ ra (two? ra ? (rve-word <ra vs (ra 1)) (scare 'rv-enc mn)))
    (rvo mn vs) (le32 (rv-word mn vs))
    ;; decode.l's items to the raw operands, a target against pc
    (rv-raw o pc) (? (elem <o '(mem fence)) >o (<o = 'lbl) (o 1 - pc) (o 1))
