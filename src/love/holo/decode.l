@@ -718,11 +718,7 @@
                 (4 8 7 6 tlbi vmalls12e1 0) (4 8 3 6 tlbi vmalls12e1is 0) (6 8 7 0 tlbi alle3 0)
                 (6 8 3 0 tlbi alle3is 0) (6 8 7 1 tlbi vae3 1) (6 8 3 1 tlbi vae3is 1)
                 (4 8 4 1 tlbi ipas2e1 1) (4 8 0 1 tlbi ipas2e1is 1))
-   a6d-rcls '(r R x w X W f fs v vb vw vn vf b h s d q)
    a6d-hints {0 'nop 1 'yield 2 'wfe 3 'wfi 4 'sev 5 'sevl 7 'xpaclri}
-   a6d-arr ["8b" "16b" "4h" "8h" "2s" "4s" "1d" "2d"]
-   a6d-shn '(lsl lsr asr ror)
-   a6d-extn '(uxtb uxth uxtw uxtx sxtb sxth sxtw sxtx)
    ;; system registers llvm names: (op0 op1 crn crm op2 name)
    a6d-sregs '((3 3 4 2 0 NZCV) (3 3 4 2 1 DAIF) (3 3 4 4 0 FPCR) (3 3 4 4 1 FPSR)
                (3 3 13 0 2 TPIDR_EL0) (3 3 13 0 3 TPIDRRO_EL0) (3 0 13 0 4 TPIDR_EL1)
@@ -755,11 +751,6 @@
                    rot (el // a6d-p2 r + (el % a6d-p2 r) * a6d-p2 (e - r))
                    (foldl (\ a i (a + rot * a6d-p2 (e * i))) 0 ^(wd // e)))))))
    ;; an fmov immediate, imm8 -> its text, eight places as llvm writes them
-   (a6d-fimm i8)
-    (: m (16 + (i8 & 15)) bcd (i8 >> 4 & 7) ex (bcd < 4 ? (bcd + 1) (bcd - 7))
-       n (ex >= 4 ? (m * 100000000 * a6d-p2 (ex - 4)) (m * 100000000 // a6d-p2 (4 - ex)))
-       fr (show (n % 100000000))
-       ("#" + (i8 >> 7 ? "-" "") + show (n // 100000000) + "." + catall (map (_ \ "0") ^(8 - #fr)) + fr))
    (a6d-sreg k)
     (: o0 (2 + (k >> 14 & 1)) o1 (k >> 11 & 7) cn (k >> 7 & 15) cm (k >> 3 & 15) o2 (k & 7)
        e (rvd-first (r \ <r = o0 && r 1 = o1 && r 2 = cn && r 3 = cm && r 4 = o2) a6d-sregs)
@@ -778,10 +769,10 @@
             'X ['x (n = 31 ? 32 n)] 'W ['w (n = 31 ? 32 n)]
             'f (ft = 2 ? 'bad ['f (ft @ 0 's 1 'd 'h) n])
             'fs ['f (ft & 1 ? 'd 's) n]
-            'v ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k = 6 ? 'bad ['v n (a6d-arr k)]))
+            'v ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k = 6 ? 'bad ['v n (a6t-arr k)]))
             'vb ['v n (w >> 30 & 1 ? "16b" "8b")]
             'vw (ft = 3 ? 'bad ['v n (["8h" "4s" "2d"] ft)])
-            'vn ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k > 5 ? 'bad ['v n (a6d-arr k)]))
+            'vn ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k > 5 ? 'bad ['v n (a6t-arr k)]))
             'vf (: q (w >> 30 & 1) sz (w >> 22 & 1)
                    (sz && !q ? 'bad ['v n (sz ? "2d" (q ? "4s" "2s"))]))
             ['f c n]))
@@ -795,7 +786,7 @@
     (: (b hi lo) (a6d-b w hi lo) sf (w >> 31) q (b 30 30)
        (fld f) (f @ 'd (b 4 0) 'n (b 9 5) 'm (b 20 16) (b 14 10))
        (one o) (o = 'bad ? 'bad [o])
-       (? (two? k && elem <k a6d-rcls) (one (a6d-reg <k (fld (k 1)) w))
+       (? (two? k && elem <k a6t-rcls) (one (a6d-reg <k (fld (k 1)) w))
           (k @
            'aimm (b 22 22 ? [['im (b 21 10)] ['sh 'lsl 12]] [['im (b 21 10)]])
            'bimm (a6d-bimm (b 22 22) (b 21 16) (b 15 10) (sf ? 64 32) @ v (v = () ? 'bad [['im v]]))
@@ -823,15 +814,15 @@
            'sreg [['sys (b 19 5)]]
            'prf [['prf (b 4 0)]]
            'lsh (!sf && b 15 15 ? 'bad
-                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6d-shn (b 23 22)) (b 15 10)]]))
+                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6t-shn (b 23 22)) (b 15 10)]]))
            'ash (b 23 22 = 3 || !sf && b 15 15 ? 'bad
-                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6d-shn (b 23 22)) (b 15 10)]]))
+                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6t-shn (b 23 22)) (b 15 10)]]))
            'xm [[(sf && b 14 13 = 3 ? 'x 'w) (b 20 16)]]
            'ext (: o (b 15 13) i (b 12 10)
                    sp (b 9 5 = 31 || !(b 29 29) && b 4 0 = 31)
                    (? (i > 4) 'bad
                       (sp && o = (sf ? 3 2)) (i = 0 ? () [['sh 'lsl i]])
-                      [['ext (a6d-extn o) i]]))
+                      [['ext (a6t-extn o) i]]))
            'cond [['cc (b 15 12)]] 'nzcv [['im (b 3 0)]] 'ccimm [['im (b 20 16)]]
            ('mu s) [['mem (b 9 5) (b 21 10 * s)]]
            'mo [['mem (b 9 5) (a6d-sx (b 20 12) 9)]]
@@ -839,19 +830,19 @@
            'mpre [['pre (b 9 5) (a6d-sx (b 20 12) 9)]]
            ('mr s) (: o (b 15 13)
                       (o & 2 = 0 ? 'bad
-                         [['memr (b 9 5) [(o & 1 ? 'x 'w) (b 20 16)] (o = 3 ? 'lsl (a6d-extn o))
+                         [['memr (b 9 5) [(o & 1 ? 'x 'w) (b 20 16)] (o = 3 ? 'lsl (a6t-extn o))
                            (b 12 12 ? (s @ 1 0 2 1 4 2 8 3 4) 0) (b 12 12)]]))
            ('mp s) [['mem (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
            ('mpp s) [['post (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
            ('mpr s) [['pre (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
            'm0 [['mem (b 9 5) 0]]
            'fz [['raw "#0.0"]] 'z0 [['raw "#0"]]
-           'fimm [['raw (a6d-fimm (b 20 13))]]
+           'fimm [['raw (a6t-fimm (b 20 13))]]
            'modi (a6d-modi w)
            'shr (a6d-ish w @ e (e < 0 ? 'bad [['im ((16 << e) - b 22 16)]]))
            'shl (a6d-ish w @ e (e < 0 ? 'bad [['im (b 22 16 - (8 << e))]]))
-           ('vi f) (a6d-ish w @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
-           ('vin f) (a6d-ish w @ e (e < 0 || e = 3 ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
+           ('vi f) (a6d-ish w @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6t-arr (e << 1 | q))]]))
+           ('vin f) (a6d-ish w @ e (e < 0 || e = 3 ? 'bad [['v (fld f) (a6t-arr (e << 1 | q))]]))
            ('viw f) (a6d-ish w @ e (e < 0 || e = 3 ? 'bad [['v (fld f) (["8h" "4s" "2d"] e)]]))
            'fbits (!sf && !(b 15 15) ? 'bad [['im (64 - b 15 10)]])
            'vsz (b 23 22 @ s (s = 3 || s = 2 && !q ? 'bad [['f (a6d-ech s) (b 4 0)]]))
@@ -861,7 +852,7 @@
            'v2d [['v (b 9 5) "2d"]]
            'v4sd [['v (b 4 0) "4s"]] 'v4sn [['v (b 9 5) "4s"]]
            'vd1n [['el (b 9 5) 'd 1]] 'vd1d [['el (b 4 0) 'd 1]]
-           ('v5 f) (a6d-esz (b 20 16) @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
+           ('v5 f) (a6d-esz (b 20 16) @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6t-arr (e << 1 | q))]]))
            ('e5 f) (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['el (fld f) (a6d-ech e) (b 20 16 >> (e + 1))]]))
            'g5 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [[(e = 3 ? 'x 'w) (b 9 5)]]))
            'gq [[(q ? 'x 'w) (b 4 0)]]
@@ -876,7 +867,7 @@
                        (o = 2) [['list (b 4 0) 1 "h" (q << 2 | s << 1 | z >> 1)]]
                        (z = 0) [['list (b 4 0) 1 "s" (q << 1 | s)]]
                        [['list (b 4 0) 1 "d" q]]))
-           'list1 ((w >> 10 & 3) << 1 | q @ k (k = 6 ? 'bad [['list (b 4 0) 1 (a6d-arr k) -1]]))
+           'list1 ((w >> 10 & 3) << 1 | q @ k (k = 6 ? 'bad [['list (b 4 0) 1 (a6t-arr k) -1]]))
            'bad)))
    ;; a modified immediate: the register, the value and its shift, by cmode and op
    (a6d-modi w)
@@ -886,11 +877,11 @@
           (cm < 12) (catall [[['v d (q ? "8h" "4h")] ['im i8]] (cm >> 1 & 1 ? [['sh 'lsl 8]] ())])
           (cm < 14) [['v d (q ? "4s" "2s")] ['im i8] ['sh 'msl (cm & 1 ? 16 8)]]
           (cm = 14 && !op) [['v d (q ? "16b" "8b")] ['im i8]]
-          (cm = 15 && !op) [['v d (q ? "4s" "2s")] ['raw (a6d-fimm i8)]]
+          (cm = 15 && !op) [['v d (q ? "4s" "2s")] ['raw (a6t-fimm i8)]]
           (cm = 14)
            (: v (foldl (\ a i (a + (i8 >> i & 1) * 255 * a6d-p2 (8 * i))) 0 ^8)
               [(q ? ['v d "2d"] ['f 'd d]) ['m64 v]])
-          (q ? [['v d "2d"] ['raw (a6d-fimm i8)]] 'bad)))
+          (q ? [['v d "2d"] ['raw (a6t-fimm i8)]] 'bad)))
    ;; the rows by their top bits; a row whose match leaves a bit free lists under each
    (a6d-index tab)
     (foldl (\ t r (: m (r 2 >> 25) v (r 1 >> 25)
@@ -1030,5 +1021,13 @@
    (a6d-data s i pc)
     (#s - i >= 4 ? [4 ['dir (".word\t0x" + a6d-hx (dc-le s i 4) 8) 'data]]
        [1 ['dir (".byte\t0x" + a6d-hx (s i) 2) 'data]])
-   (a64-data s base lo hi) (od-walk a6d-data s base lo hi))
+   (a64-data s base lo hi) (od-walk a6d-data s base lo hi)
+   ;; a64-tab both ways: a row's word from its operands, and the word decodes back to them
+   (a64-lay r ops pc)
+    (a64-fit r ops pc @ w
+       (w = () ? () (map (k \ a6d-op k w pc) (r 3) @ back (elem 'bad back || catall back != ops ? () w))))
+   ;; an instruction by name from the decoder's operands: the first of its rows that lays them
+   (a64-enc mn ops pc)
+    (: (go l) (? !(two? l) (scare 'a64-enc [mn ops]) (a64-lay <l ops pc @ w (w = () ? (go >l) w)))
+       (go (peep a64-byname mn ()))))
 ) ; module 'holo
