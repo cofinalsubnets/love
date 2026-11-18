@@ -129,7 +129,7 @@ void gpio_put(unsigned pin, int hi) {
 
 int gpio_get(unsigned pin) { return (REG(SIO_GPIO_IN) >> pin) & 1u; }
 
-// --- the flash's unique id ------------------------------------------------
+// --- the chip's unique id: its flash's ------------------------------------
 // its 0x4b read: four dummy bytes, then eight. xip is off while it runs, so the exchange runs
 // from ram (.data, copied by crt0) and boot2, copied to the stack first, puts xip back after.
 // the rom's flush also lets go of chip select
@@ -152,8 +152,13 @@ static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flus
   REG(0x4001800cu) = (REG(0x4001800cu) & ~0x300u) | 0x300u;   // ss high
   flush(), boot2(); }
 
-void flash_uid(uint8_t id[8]) {
+void chip_uid(uint8_t id[8]) {
   uint32_t b2[64];
   for (uint32_t i = 0; i < 64; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
   flash_uid_ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
                 (romfn) ((uintptr_t) b2 | 1u)); }
+
+// --- into the rom's usb boot: reset_usb_boot, by its two-letter code ------
+void rom_bootsel(void) {
+  void (*const boot)(uint32_t, uint32_t) = (void (*)(uint32_t, uint32_t)) rom_fn('U' | 'B' << 8);
+  boot(0, 0); }

@@ -1,13 +1,19 @@
-// the rp2040's usb controller as a cdc-acm device, under ../../../src/inle/usbcdc.h's class
+// the rp2040's usb controller (and the rp2350's, the same block) as a cdc-acm device, under ../../../src/inle/usbcdc.h's class
 // half, at full speed and polled: usb_poll takes setup packets, bus resets and finished
 // buffers. endpoint 0 and the data endpoints move at most a packet a buffer, so a longer
 // transfer goes a packet at a time from the buffer-done path
 #include <stdint.h>
+#ifdef RP2350
+#include "../rp2350/rp2350.h"
+#else
 #include "rp2040.h"
+#endif
 #define UCDC_VID 0x1209
 #define UCDC_PID 0x0001
+#ifndef UCDC_PRODUCT
 #define UCDC_PRODUCT "love swd probe"
-static char serial[17];   // the flash's unique id in hex, set by usb_init
+#endif
+static char serial[17];   // the chip's unique id in hex, set by usb_init
 #define UCDC_SERIAL serial
 #include "../../../src/inle/usbcdc.h"
 
@@ -108,13 +114,7 @@ static void usbhw_tx(void const *src, uint32_t n) {
 
 static uint32_t usbhw_ms(void) { return clock_ms(); }
 
-// the mask rom's reset_usb_boot, found by its two-letter code
-static void usbhw_reboot(void) {
-  typedef void *(*lookup_t)(uint16_t const *, uint32_t);
-  lookup_t const look = (lookup_t) (uintptr_t) *(uint16_t const *) 0x18u;
-  uint16_t const *const tab = (uint16_t const *) (uintptr_t) *(uint16_t const *) 0x14u;
-  void (*const boot)(uint32_t, uint32_t) = (void (*)(uint32_t, uint32_t)) look(tab, 'U' | 'B' << 8);
-  boot(0, 0); }
+static void usbhw_reboot(void) { rom_bootsel(); }
 
 void usb_poll(void) {
   uint32_t const s = UREG(SIE_STATUS);
@@ -145,12 +145,12 @@ void usb_poll(void) {
     else if (txlast == ucdc_pkt) txlast = 0, arm(2, 0, 0, 0);
     else txon = 0; } }
 
-// the serial the flash's id; pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
+// the serial the chip's id; pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
 // as present, the pullup on. the rom's usb boot leaves the pll running and feeding clk_usb, so
 // the clock stops and the pll resets before either is set
 void usb_init(void) {
   uint8_t id[8];
-  flash_uid(id);
+  chip_uid(id);
   for (uint32_t i = 0; i < 16; i++) serial[i] = "0123456789ABCDEF"[id[i / 2] >> (i & 1 ? 0 : 4) & 15u];
   REG(CLK_USB_CTRL) = 0;
   for (volatile uint32_t k = 0; k < 64; k++) {}
