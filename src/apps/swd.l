@@ -233,14 +233,16 @@
  (nrf-mode w m) (nrf-idle w 100000, swd-wr w (nv + 0x504) m)
  (nrf-erase w a) (nrf-mode w 2, swd-wr w (nv + 0x508) a, nrf-mode w 0)
  (nrf-write w a s) (nrf-mode w 1, swd-wrs w a (f4-words s), nrf-mode w 0)
- ; erase the pages s covers from a, write it, read it back: 1, or where it differs first;
- ; nothing to write, or bytes past the flash, scare before the chip is touched
+ ; each page s covers from a that holds other bytes erased and written, the rest left alone,
+ ; then all of it read back: 1, or where it differs first. nothing to write, or bytes past
+ ; the flash, scare before the chip is touched
  (nrf-flash w a s)
   (: ids (nrf-ids w) ps (ids 1)
      _ (!(string? s) || #s = 0 ? (scare 'nrf-empty a))
      _ (!(0 <= a && a + #s <= ps * ids 2) ? (scare 'nrf-range [a #s]))
-     _ (map (p \ nrf-erase w (ps * p)) (drop (a // ps) ^((a + #s - 1) // ps + 1)))
-     _ (nrf-write w a s)
+     (part p) (: lo (max a (ps * p)) hi (min (a + #s) (ps * (p + 1))) [lo (snip s (lo - a) (hi - a))])
+     (put p) (part p @ [lo t] (f4-read w lo #t = t ? 0 (nrf-erase w (ps * p), nrf-write w lo t)))
+     _ (map put (drop (a // ps) ^((a + #s - 1) // ps + 1)))
      b (f4-read w a #s)
      (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
      (at 0))

@@ -818,6 +818,17 @@
          (0x12345678 = b 'mem () 0x3000) ('nrf-empty = e) ('nrf-range = f)
          (b 'erased () = [0x1000 0x2000])))
 
+; flashed again, the same bytes erase nothing; one byte changed in the second page erases that
+; page alone, and both read back
+(: b (swdt-nrf ()) w (dap-wire-on (swdt-dap (swdt-dp f4dp f4aps 0 b))) _ (swd-connect w)
+   s (string (map (i \ i * 7 + 3 & 255) ^5001))
+   _ (nrf-flash w 0x1000 s) e0 (b 'erased ())
+   r1 (nrf-flash w 0x1000 s) e1 (b 'erased ())
+   t (snip s 0 4100 + string [(s 4100 ^ 0xFF)] + snip s 4101 5001)
+   r2 (nrf-flash w 0x1000 t) e2 (b 'erased ())
+   (test (e0 = [0x1000 0x2000]) (1 = r1) (e1 = e0) (1 = r2) (e2 = e0 + [0x2000])
+         (f4-read w 0x1000 5001 = t)))
+
 ; --- batching: a run's transfers in few batches ---
 
 ; a batch whose third transfer waits: the wait asked again from it, alone with the rest, and
