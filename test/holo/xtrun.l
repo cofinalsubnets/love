@@ -1,8 +1,9 @@
 ; the xtensa backend run whole: n checks laid as one program, each answer held to love's own
 ; 32-bit arithmetic, a miss exiting 100 + its index; all held, exit 42. the sources are cat in
 ; before it; XT_OUT names the linux ELF it writes, entered at 0x10060, for qemu-xtensa. with
-; XT_BOARD=esp32 it writes an ELF whose one segment loads at iram's 0x40080000 for esprom's
-; ram download, entered at its first byte, which says each line out of uart0 and spins
+; XT_BOARD=esp32 (or esp32s3) it writes an ELF whose one segment loads at iram (0x40080000, the
+; s3's 0x40378000) for esprom's ram download, entered at its first byte, which says each line
+; out of uart0 (the s3's USB-Serial-JTAG) and spins
 (borrow 'posix)
 (borrow 'holo)
 (: seed {0 12345}
@@ -73,15 +74,21 @@
        34 (rnd 0 % 32 @ c (sh 'ror4 c (a \ c \ w (w a >> c | w a << (32 - c)))))
        35 (shv 'rorv4 (a \ c \ w (w a >> c | w a << (32 - c))))
        _ (bin 'add (a \ b \ a + b)))
-   board (getenv "XT_BOARD" = "esp32")
+   kind (getenv "XT_BOARD")
+   s3 (kind = "esp32s3")
+   board (s3 || kind = "esp32")
+   iram (s3 ? 0x40378000 0x40080000)
    n 300
    cases (map gen ^n)
    ; check i: answer in r2 against the expected, a miss exits 100 + i % 100
    (chk i c) ((c 0) + [['li 'r3 (s (w (c 1)))] ['cmp 'r2 'r3] ['br 'ne (name "F\(i)")]])
-   ; uart0's fifo at 0x3FF40000, its fill in bits 16..23 of the status word at +28
+   ; uart0's fifo at 0x3FF40000, its fill in bits 16..23 of the status word at +28; the s3's
+   ; USB-Serial-JTAG endpoint at 0x60038000, room in bit 1 of +4, each byte sent on its own
    (say t) (catall (map (c \ [['li 'r0 c] ['call 'PUTC]]) (chars t)))
-   putc [['align 4] ['label 'PUTC] ['li 'r6 0x3FF40000] ['label 'W] ['ld 'r7 'r6 28] ['shr 'r7 16]
-         ['and 'r7 'r7 255] ['cmp 'r7 120] ['br 'ge 'W] ['st 'r6 0 'r0] ['ret]]
+   putc (s3 ? [['align 4] ['label 'PUTC] ['li 'r6 0x60038000] ['label 'W] ['ld 'r7 'r6 4] ['and 'r7 'r7 2]
+               ['cmp 'r7 0] ['br 'eq 'W] ['st 'r6 0 'r0] ['li 'r7 1] ['st 'r6 4 'r7] ['ret]]
+              [['align 4] ['label 'PUTC] ['li 'r6 0x3FF40000] ['label 'W] ['ld 'r7 'r6 28] ['shr 'r7 16]
+               ['and 'r7 'r7 255] ['cmp 'r7 120] ['br 'ge 'W] ['st 'r6 0 'r0] ['ret]])
    (fails i) (board ? ([['label (name "F\(i)")]] + say "xtensa: check \(show i) missed\r\n" + [['jmp 'Z]])
                       [['label (name "F\(i)")] ['li 'r4 (100 + i % 100)] ['jmp 'X]])
    tail (board ? (say "xtensa: all \(show n) checks held\r\n" + [['label 'Z] ['jmp 'Z]])
@@ -93,10 +100,10 @@
    code (holo-bytes 'xtensa prog)
    (zs k) (map (i \ 0) ^k)
    ; one PT_LOAD over the file at 0x10000, the code at 0x60 so a call0's word grain holds
-   hdr ([127 69 76 70 1 1 1 0] + zs 8 + le16 2 + le16 94 + le32 1 + le32 (board ? 0x40080000 0x10060) + le32 52 + le32 0
+   hdr ([127 69 76 70 1 1 1 0] + zs 8 + le16 2 + le16 94 + le32 1 + le32 (board ? iram 0x10060) + le32 52 + le32 0
         + le32 0x300 + le16 52 + le16 32 + le16 1 + le16 0 + le16 0 + le16 0)
-   ; on the board, the code alone at iram's 0x40080000, for esprom's ram download
-   ph (board ? (le32 1 + le32 0x60 + le32 0x40080000 + le32 0x40080000 + le32 #code + le32 #code + le32 5 + le32 4)
+   ; on the board, the code alone at iram, for esprom's ram download
+   ph (board ? (le32 1 + le32 0x60 + le32 iram + le32 iram + le32 #code + le32 #code + le32 5 + le32 4)
          (le32 1 + le32 0 + le32 0x10000 + le32 0x10000 + le32 (0x60 + #code) + le32 (0x60 + #code) + le32 5 + le32 0x1000))
    (write-bytes (getenv "XT_OUT") (hdr + ph + zs (0x60 - 84) + code),
     puts "xtrun: \(show n) checks laid, \(show #code) bytes\n", 0))
