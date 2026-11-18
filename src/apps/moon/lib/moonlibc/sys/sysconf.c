@@ -64,4 +64,4 @@ long sysconf(int name) {
      if (er(sc1(NR_sysinfo, (long) &si)) < 0) return -1;
      unsigned long u = si.mem_unit ? si.mem_unit : 1;
      return (long) ((unsigned long long) (name == _SC_PHYS_PAGES ? si.totalram : si.freeram) * u / page_size()); } }
-  __errno_v = EINVAL; return -1; }
+  errno = EINVAL; return -1; }

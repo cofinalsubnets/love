@@ -7,7 +7,7 @@ int vdprintf(int fd, char const *fmt, va_list ap) {
   if (n < 0) return -1;
   for (int at = 0; at < n; ) {
     long k = write(fd, b + at, n - at);
-    if (k < 0) { if (__errno_v == EINTR) continue; free(b); return -1; }
+    if (k < 0) { if (errno == EINTR) continue; free(b); return -1; }
     at += (int) k; }
   free(b);
   return n; }

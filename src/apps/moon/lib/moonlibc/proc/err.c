@@ -12,7 +12,7 @@ static void __errsay(int e, int with, char const *fmt, va_list ap) {
   if (fmt) { vfprintf(stderr, fmt, ap); if (with) fputs(": ", stderr); }
   if (with) fputs(strerror(e), stderr);
   fputc('\n', stderr); }
-void vwarn(char const *fmt, va_list ap) { __errsay(__errno_v, 1, fmt, ap); }
+void vwarn(char const *fmt, va_list ap) { __errsay(errno, 1, fmt, ap); }
 void vwarnx(char const *fmt, va_list ap) { __errsay(0, 0, fmt, ap); }
 void verr(int st, char const *fmt, va_list ap) { vwarn(fmt, ap); exit(st); }
 void verrx(int st, char const *fmt, va_list ap) { vwarnx(fmt, ap); exit(st); }

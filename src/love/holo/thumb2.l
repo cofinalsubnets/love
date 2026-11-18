@@ -441,6 +441,8 @@
       (t32 ((0xEC40 | rn hi) << 16 | (rn lo << 12 | (0xB10 | frn f)))) 
    (thumb-movrrq lo hi f)                                     ; vmov Rlo, Rhi, Df, any two
       (t32 ((0xEC50 | rn hi) << 16 | (rn lo << 12 | (0xB10 | frn f))))
+   (thumb-xorpd d s)                                          ; zeroing only (d = s): vmov Dd, r12, r12 of a 0
+      (? (d = s) (thumb-movw 'r12 0 + thumb-movqrr d 'r12 'r12) (scare 'thumb-xorpd-general [d s]))
    (thumb-movqrx glo f)                                       ; vmov Rlo, Rlo+1, Df (the pair out)
       (: gn (rn glo) fn (frn f)
          (t32 ((0xEC50 | gn + 1) << 16 | (gn << 12 | (0xB10 | fn)))))
@@ -474,6 +476,13 @@
    (thumb-smull dl dh a b)
       (: ln (rn dl) hn (rn dh) an (rn a) bn (rn b)
          (t32 ((0xFB80 | an) << 16 | (ln << 12 | (hn << 8 | bn)))))
+   (thumb-mulh d a b) (thumb-smull 'r12 d a b)                   ; the high word, the low into r12
+   ;; branch to lbl on signed overflow: the high word must equal the low's sign fill. t differs from a, b and d
+   (thumb-mulo d a b t lbl)
+      (thumb-smull d t a b + thumb-alush 'subs 'pc t d 'sar 31 + [(fix 4 'bcc lbl (look arm-cc 'ne 'badcc))])
+   (thumb-decm base off) (thumb-ld 'r12 base off + thumb-aluop 'subs 'r12 'r12 1 + thumb-st base off 'r12)   ; [base+off] -= 1 through r12, the flags set
+   ;; lar: a label's code address from the pc, the thumb bit set so bx and blx stay in thumb
+   (thumb-lar d label) (thumb-lap d label + thumb-logimm 'or d d 1)
 
    ;; the 128-bit kit: the value in r0..r3 low word first, a binop's left in a 16-byte cell at
    ;; [sp]. r12 is the scratch and a variable shift's count. one IR form each, so no pass parts a
@@ -565,14 +574,15 @@
 
    thumb-emitters (emsof
         [('li . thumb-li) ('lis . thumb-lis) ('mov . thumb-mov) ('cmp . thumb-cmp) ('imul . thumb-imul)
-          ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla)
+          ('umull . thumb-umull) ('smull . thumb-smull) ('mla . thumb-mla) ('mulh . thumb-mulh) ('mulo . thumb-mulo)
+          ('decm . thumb-decm) ('lar . thumb-lar)
           ('addsd . thumb-addsd) ('subsd . thumb-subsd) ('mulsd . thumb-mulsd)
           ('divsd . thumb-divsd) ('movsd . thumb-movsd) ('movapd . thumb-movpair) ('movss . thumb-movss) ('negss . thumb-negss) ('ucomisd . thumb-ucomisd) ('ucomiss . thumb-ucomiss)
           ('ucom0 . thumb-ucom0) ('fimm . thumb-fimm) ('fli . thumb-fli) ('flal . thumb-flal)
           ('ldsspi . thumb-ldsspi) ('stsspi . thumb-stsspi) ('ldpi4 . thumb-ldpi4) ('stpi4 . thumb-stpi4)
           ('cvtsi2sd . thumb-cvtsi2sd) ('cvtui2sd . thumb-cvtui2sd)
           ('cvttsd2si . thumb-cvttsd2si) ('cvttsd2ui . thumb-cvttsd2ui)
-          ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx) ('movqrr . thumb-movqrr) ('movrrq . thumb-movrrq)
+          ('movqxr . thumb-movqxr) ('movqrx . thumb-movqrx) ('movqrr . thumb-movqrr) ('movrrq . thumb-movrrq) ('xorpd . thumb-xorpd)
           ('addss . thumb-addss) ('subss . thumb-subss) ('mulss . thumb-mulss) ('divss . thumb-divss)
           ('addss3 . thumb-addss3) ('subss3 . thumb-subss3) ('mulss3 . thumb-mulss3) ('divss3 . thumb-divss3)
           ('cvtsi2ss . thumb-cvtsi2ss) ('cvtui2ss . thumb-cvtui2ss)
@@ -702,7 +712,7 @@
            'lis 1
            'sform thumb-sform
            'flagr '(br set adc sbc adcs sbcs raw asis)
-           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss ucom0 lis)
+           'flagw '(cmp test adds subs adcs sbcs ands ors eors bics rsbs lsls lsrs asrs muls mvns ucomisd ucomiss ucom0 lis decm mulo)
            'patch thumb-patch
            'refix thumb-refix
            'lapa thumb-lapa

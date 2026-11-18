@@ -1,24 +1,26 @@
 #!/bin/sh
-# test/gate/rv64love.sh -- the whole rv64 artifact under qemu-user: the corpus over the egg, its
+# test/gate/qlove.sh -- a cross-built artifact under qemu-user: the corpus over the egg, its
 # own bake, the corpus on the wake, the hook's laws, and the glaze against the interpreter.
 #
-# usage: rv64love.sh OUTDIR XLOVE CAT CORPUS.l ..
+# usage: qlove.sh ARCH OUTDIR XLOVE CAT CORPUS.l ..   (ARCH: rv64 arm)
 . test/gate/skip.sh
 set -u
 
-ho=$1
-xl=$2
-cat=$3
-shift 3
-name=test_love_rv64
+xa=$1
+ho=$2
+xl=$3
+cat=$4
+shift 4
+name=test_love_$xa
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
-command -v qemu-riscv64 >/dev/null || gate_skip "$name: skipped (no qemu-riscv64)"
+case $xa in rv64) qe=qemu-riscv64 t=1800 ;; arm) qe=qemu-arm t=5400 ;; *) fail "no qemu for $xa" ;; esac   # arm's corpus runs about an hour
+command -v $qe >/dev/null || gate_skip "$name: skipped (no $qe)"
 
-r=$ho/rv64love
+r=$ho/${xa}love
 mkdir -p "$r"
 ulimit -c 0
 cat "$@" > "$r/corpus.l"
-q="timeout 1800 qemu-riscv64"
+q="timeout $t $qe"
 
 LOVE_NO_IMAGE=1 $q "$xl" "$r/corpus.l" > "$r/egg.out" 2>&1 || fail "the egg's corpus (exit $?)"
 tail -1 "$r/egg.out"
@@ -34,4 +36,4 @@ LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 LOVE_BUDGET_MB=400 $q "$xl" test/gate/glazefuzz.
 [ "$(sed -n 's/^fires=//p' "$r/on")" -gt 0 ] || fail "the fuzz native-backed nothing"
 sed '$d' "$r/on" > "$r/on.b"; sed '$d' "$r/off" > "$r/off.b"
 cmp -s "$r/on.b" "$r/off.b" || fail "the glaze disagrees with the interpreter"
-echo "$name: the rv64 love under qemu-riscv64 -- corpus, bake, wake, hook, fuzz"
+echo "$name: the $xa love under $qe -- corpus, bake, wake, hook, fuzz"

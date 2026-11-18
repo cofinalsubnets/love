@@ -14,5 +14,4 @@ void siglongjmp(sigjmp_buf, int);
  * longjmp is a function, as C asks, so its address can be taken */
 #define setjmp(env) __sigsetjmp(env, 0)
 #define _setjmp(env) __sigsetjmp(env, 0)
-void longjmp(jmp_buf, int);
-void _longjmp(jmp_buf, int);
+void longjmp(jmp_buf, int), _longjmp(jmp_buf, int);

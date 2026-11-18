@@ -11,7 +11,7 @@ static int __love_mackev(int kq, struct kevent const *ch, int nch,
     for (int i = 0; i < k; i++) {
       struct kevent const *c = ch + at + i;
       long id = (long) c->ident;
-      if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) { __errno_v = EINVAL; return -1; }
+      if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) { errno = EINVAL; return -1; }
       b[i].ident = (unsigned long) id; b[i].filter = c->filter;
       b[i].flags = c->flags; b[i].fflags = c->fflags;
       b[i].data = (long) c->data; b[i].udata = c->udata; }
@@ -33,7 +33,7 @@ static int __love_mackev(int kq, struct kevent const *ch, int nch,
  * ident translates, and one with no BSD twin (STKFLT, PWR) is EINVAL */
 int kevent(int kq, struct kevent const *ch, int nch,
            struct kevent *ev, int nev, struct timespec const *ts) {
-  if (__love_osv < 2) { __errno_v = ENOSYS; return -1; }
+  if (__love_osv < 2) { errno = ENOSYS; return -1; }
 #ifdef LvMac
   if (__love_osv == 4) return __love_mackev(kq, ch, nch, ev, nev, ts);
 #endif
@@ -44,7 +44,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
   __fbts f32; __nbts n32;
   if (ts && nb) n32.tv_sec = ts->tv_sec, n32.tv_nsec = (long) ts->tv_nsec, tw = (long) &n32;
   else if (ts) {
-    if (ts->tv_sec != (int) ts->tv_sec) { __errno_v = EOVERFLOW; return -1; }
+    if (ts->tv_sec != (int) ts->tv_sec) { errno = EOVERFLOW; return -1; }
     f32.tv_sec = (int) ts->tv_sec, f32.tv_nsec = (long) ts->tv_nsec, tw = (long) &f32; }
 #endif
   /* changes first, 8 a call, then the wait */
@@ -55,7 +55,7 @@ int kevent(int kq, struct kevent const *ch, int nch,
       struct kevent const *c = ch + at + i;
       long id = (long) c->ident;
       if (c->filter == EVFILT_SIGNAL && (id = __love_sigfb(id)) < 0) {
-        __errno_v = EINVAL; return -1; }
+        errno = EINVAL; return -1; }
       if (nb) {
         memset(nc + i, 0, sizeof nc[i]);
         nc[i].ident = (unsigned long) id;

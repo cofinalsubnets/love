@@ -76,7 +76,7 @@ static lvm(lvm_mul_rep) {
    n = (uintptr_t) (v < 0 ? -v : v); }
  else n = (uintptr_t) maxcharm;                      // |big|: refused below
  // the apcap rule (prel.l): refused here, as Hp + n in Have() can wrap and read as room
- if (n > ((uintptr_t) 1 << 40)) love_musttail return Push(ZeroPoint);
+ if (n > words_max) love_musttail return Push(ZeroPoint);
  if (chainp(seq)) {
   if (!n) love_musttail return Push(ZeroPoint);
   uintptr_t m = llen(seq), total = mulsat(m, n);
@@ -192,7 +192,7 @@ lvm(data_pair_apply) {
 // any value -> the kind it dispatches as; a tray dispatches by element tier
 enum q kind(word x) {
  if (charmp(x)) return KCharm;
- if (!datp(x)) return tabp(x) ? KTablet : KHot;
+ if (!datp(x)) return KHot;
  enum d r = typ(x);
  if (r == DTray) return (enum q) (KTrayZ + tray(x)->type);
  return kind_of_d[r]; }
@@ -599,7 +599,12 @@ static love_noinline int tray_eq(struct g *g, word a, word b, word *base, word *
   for (uintptr_t i = 0; i < n; i++)
    if (tray_get_int(va, i) != tray_get_int(vb, i)) return 0;
   return 1; }
- for (uintptr_t i = 0; i < n; i++)                  // a float on either side: as doubles
+ if (va->type == love_Z || vb->type == love_Z) {        // an int against a float: exact
+  struct tray *z = va->type == love_Z ? va : vb, *f = z == va ? vb : va;
+  for (uintptr_t i = 0; i < n; i++)
+   if (zf_cmp(tray_get_int(z, i), tray_get_flo(f, i))) return 0;
+  return 1; }
+ for (uintptr_t i = 0; i < n; i++)
   if (!same_flo(tray_get_flo(va, i), tray_get_flo(vb, i))) return 0;
  return 1; }
 
@@ -617,7 +622,7 @@ static int eq_value(struct g *g, word a, word b, word *base, word *top) {
       && (twinp(a) ? twin_im(a) : 0) == (twinp(b) ? twin_im(b) : 0);
  if (coinp(a) || coinp(b))
   return numband(g, a) && numband(g, b) ? love_cmp3(g, a, b) == 0 : eql_at(g, a, b, base, top);
- if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && (toflo(a) == toflo(b));
+ if (gemp(a) || gemp(b)) return isnum(a) && isnum(b) && numf_cmp(a, b) == 0;
  return eql_at(g, a, b, base, top); }
 
 lvm(lvm_eq) {
@@ -694,7 +699,8 @@ static word obin_elem(struct g **fp, int op, word a, word b) {
   return r > 0 ? putcharm(1) : zero; }                         // spent: obin_run takes the room
  if (op >= vop_lt) {
   if (!isnum(a) || !isnum(b)) return zero;       // a twin is unordered
-  intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
+  int const c = gemp(a) || gemp(b) ? numf_cmp(a, b) : 0;
+  intptr_t t = (gemp(a) || gemp(b)) ? c != 2 && vcmp_int(op, c, 0)
              : (bigp(a) || bigp(b)) ? vcmp_int(op, big_cmp(a, b), 0)
                                     : vcmp_int(op, toint(a), toint(b));
   return t ? putcharm(1) : zero; }
