@@ -1,8 +1,8 @@
 #!/bin/sh
 # test/gate/objdump.sh -- love objdump -d against llvm-objdump -d, line for line: every test/cc
 # file compiled to an object by gcc and clang at -O0 and -O2 for x86-64, and by mooncc and clang
-# for rv64; the two disassemblies must be the same text. llvm is told rv64gc, since mooncc's
-# objects carry no attributes. skips without llvm-objdump or a C compiler.
+# for rv64 and a64; the two disassemblies must be the same text. llvm is told rv64gc, since
+# mooncc's objects carry no attributes. skips without llvm-objdump or a C compiler.
 # usage: objdump.sh LOVE OUTDIR      (from the repo root; LOVE is a word list, not a path)
 . test/gate/skip.sh
 set -u
@@ -39,6 +39,12 @@ for f in test/cc/*.c; do
     command -v clang > /dev/null 2>&1 \
       && clang --target=riscv64-linux-gnu -march=rv64gc -c -O$o -o $x.o $f > /dev/null 2>&1 \
       && judge $x --mattr=+m,+a,+f,+d,+c
+    x=$d/$b.a6.$o
+    $love cc -t a64 -O$o -c -o $x.o $f > /dev/null 2>&1 && judge $x
+    x=$d/$b.a6clang.$o
+    command -v clang > /dev/null 2>&1 \
+      && clang --target=aarch64-linux-gnu -c -O$o -o $x.o $f > /dev/null 2>&1 \
+      && judge $x
   done
 done
 echo "test_objdump: $n objects, $bad differ, $lines lines"

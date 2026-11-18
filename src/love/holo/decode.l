@@ -697,4 +697,338 @@
           (rvd-alias mn (filter (o \ !(quiet? o)) (it 2)) @ m
            [(show <m + (two? (m 1) ? ("\t" + xa-join ", " (map (o \ rvd-opt o sym) (m 1))) "")
              + (3 < #it ? (sym (it 3)) "")) ()]))))
+
+;; a64: a word decoded by its row in a64-tab (a64.l), and shown as llvm-objdump writes it. an
+;; operand: (x n) (w n) with 31 zr and 32 sp, (f c n), (v n arr), (el n c i), (im v) (dec v)
+;; (sh name v) (ext name v), (cc k), (mem n off) (pre n off) (post n off) (memr n m ext amt s),
+;; (lbl a), (sys k), (bar k), (prf k), (raw text), (list n k arr idx)
+(: ;; sys's aliases: (op1 crn crm op2 name reg), reg 1 when the op takes xt
+   a6d-sysops '((0 7 1 0 ic ialluis 0) (0 7 5 0 ic iallu 0) (3 7 5 1 ic ivau 1)
+                (3 7 4 1 dc zva 1) (0 7 6 1 dc ivac 1) (0 7 6 2 dc isw 1) (3 7 10 1 dc cvac 1)
+                (0 7 10 2 dc csw 1) (3 7 11 1 dc cvau 1) (3 7 14 1 dc civac 1) (0 7 14 2 dc cisw 1)
+                (3 7 12 1 dc cvap 1)
+                (0 7 8 0 at s1e1r 1) (0 7 8 1 at s1e1w 1) (0 7 8 2 at s1e0r 1) (0 7 8 3 at s1e0w 1)
+                (4 7 8 0 at s1e2r 1) (4 7 8 1 at s1e2w 1) (6 7 8 0 at s1e3r 1) (6 7 8 1 at s1e3w 1)
+                (0 8 3 0 tlbi vmalle1is 0) (0 8 7 0 tlbi vmalle1 0) (0 8 3 1 tlbi vae1is 1)
+                (0 8 7 1 tlbi vae1 1) (0 8 3 2 tlbi aside1is 1) (0 8 7 2 tlbi aside1 1)
+                (0 8 3 3 tlbi vaae1is 1) (0 8 7 3 tlbi vaae1 1) (0 8 3 5 tlbi vale1is 1)
+                (0 8 7 5 tlbi vale1 1) (0 8 3 7 tlbi vaale1is 1) (0 8 7 7 tlbi vaale1 1)
+                (4 8 7 0 tlbi alle2 0) (4 8 3 0 tlbi alle2is 0) (4 8 7 1 tlbi vae2 1)
+                (4 8 3 1 tlbi vae2is 1) (4 8 7 4 tlbi alle1 0) (4 8 3 4 tlbi alle1is 0)
+                (4 8 7 6 tlbi vmalls12e1 0) (4 8 3 6 tlbi vmalls12e1is 0) (6 8 7 0 tlbi alle3 0)
+                (6 8 3 0 tlbi alle3is 0) (6 8 7 1 tlbi vae3 1) (6 8 3 1 tlbi vae3is 1)
+                (4 8 4 1 tlbi ipas2e1 1) (4 8 0 1 tlbi ipas2e1is 1))
+   a6d-rcls '(r R x w X W f fs v vb vw vn vf b h s d q)
+   a6d-hints {0 'nop 1 'yield 2 'wfe 3 'wfi 4 'sev 5 'sevl 7 'xpaclri}
+   a6d-arr ["8b" "16b" "4h" "8h" "2s" "4s" "1d" "2d"]
+   a6d-shn '(lsl lsr asr ror)
+   a6d-extn '(uxtb uxth uxtw uxtx sxtb sxth sxtw sxtx)
+   ;; system registers llvm names: (op0 op1 crn crm op2 name)
+   a6d-sregs '((3 3 4 2 0 NZCV) (3 3 4 2 1 DAIF) (3 3 4 4 0 FPCR) (3 3 4 4 1 FPSR)
+               (3 3 13 0 2 TPIDR_EL0) (3 3 13 0 3 TPIDRRO_EL0) (3 0 13 0 4 TPIDR_EL1)
+               (3 3 14 0 0 CNTFRQ_EL0) (3 3 14 0 1 CNTPCT_EL0) (3 3 14 0 2 CNTVCT_EL0)
+               (3 3 0 0 1 CTR_EL0) (3 3 0 0 7 DCZID_EL0)
+               (3 0 0 0 0 MIDR_EL1) (3 0 0 0 5 MPIDR_EL1) (3 0 0 4 0 ID_AA64PFR0_EL1)
+               (3 0 0 4 1 ID_AA64PFR1_EL1) (3 0 0 6 0 ID_AA64ISAR0_EL1) (3 0 0 6 1 ID_AA64ISAR1_EL1)
+               (3 0 0 7 0 ID_AA64MMFR0_EL1) (3 0 0 7 1 ID_AA64MMFR1_EL1) (3 0 4 2 2 CurrentEL)
+               (3 0 1 0 0 SCTLR_EL1) (3 0 1 0 2 CPACR_EL1) (3 0 2 0 0 TTBR0_EL1) (3 0 2 0 1 TTBR1_EL1)
+               (3 0 2 0 2 TCR_EL1) (3 0 4 0 0 SPSR_EL1) (3 0 4 0 1 ELR_EL1) (3 0 4 1 0 SP_EL0)
+               (3 0 5 2 0 ESR_EL1) (3 0 6 0 0 FAR_EL1) (3 0 7 4 0 PAR_EL1) (3 0 10 2 0 MAIR_EL1)
+               (3 0 12 0 0 VBAR_EL1) (3 0 13 0 1 CONTEXTIDR_EL1) (3 0 14 1 0 CNTKCTL_EL1)
+               (3 3 14 2 0 CNTP_TVAL_EL0) (3 3 14 2 1 CNTP_CTL_EL0) (3 3 14 2 2 CNTP_CVAL_EL0)
+               (3 3 14 3 0 CNTV_TVAL_EL0) (3 3 14 3 1 CNTV_CTL_EL0) (3 3 14 3 2 CNTV_CVAL_EL0)
+               (3 4 1 0 0 SCTLR_EL2) (3 4 1 1 0 HCR_EL2) (3 4 4 0 0 SPSR_EL2) (3 4 4 0 1 ELR_EL2)
+               (3 4 14 1 0 CNTHCTL_EL2) (3 4 14 0 3 CNTVOFF_EL2) (2 0 0 2 2 MDSCR_EL1))
+   (a6d-b w hi lo) (w >> lo & ((1 << (hi - lo + 1)) - 1))
+   (a6d-sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
+   ;; 2^k as a number past the word's reach of & and <<
+   (a6d-p2 k) (k 2)
+   (a6d-ones k) (a6d-p2 k - 1)
+   ;; a logical immediate (DecodeBitMasks) at width wd, or () for a reserved pattern
+   (a6d-bimm n immr imms wd)
+    (: v (n << 6 | (imms ^ 63))
+       len ((: (go k) (k < 0 || (v >> k & 1) = 1 ? k (go (k - 1)))) 6)
+       (len < 1 || n = 1 && wd = 32 ? ()
+          (: e (1 << len) lv (e - 1) s (imms & lv) r (immr & lv)
+             (s = lv ? ()
+                (: el (a6d-ones (s + 1))
+                   rot (el // a6d-p2 r + (el % a6d-p2 r) * a6d-p2 (e - r))
+                   (foldl (\ a i (a + rot * a6d-p2 (e * i))) 0 ^(wd // e)))))))
+   ;; an fmov immediate, imm8 -> its text, eight places as llvm writes them
+   (a6d-fimm i8)
+    (: m (16 + (i8 & 15)) bcd (i8 >> 4 & 7) ex (bcd < 4 ? (bcd + 1) (bcd - 7))
+       n (ex >= 4 ? (m * 100000000 * a6d-p2 (ex - 4)) (m * 100000000 // a6d-p2 (4 - ex)))
+       fr (show (n % 100000000))
+       ("#" + (i8 >> 7 ? "-" "") + show (n // 100000000) + "." + catall (map (_ \ "0") ^(8 - #fr)) + fr))
+   (a6d-sreg k)
+    (: o0 (2 + (k >> 14 & 1)) o1 (k >> 11 & 7) cn (k >> 7 & 15) cm (k >> 3 & 15) o2 (k & 7)
+       e (rvd-first (r \ <r = o0 && r 1 = o1 && r 2 = cn && r 3 = cm && r 4 = o2) a6d-sregs)
+       (two? e ? (show (e 5))
+          ("S" + show o0 + "_" + show o1 + "_C" + show cn + "_C" + show cm + "_" + show o2)))
+   (a6d-bar k) (peep {15 "sy" 14 "st" 13 "ld" 11 "ish" 10 "ishst" 9 "ishld" 7 "nsh" 6 "nshst"
+                      5 "nshld" 3 "osh" 2 "oshst" 1 "oshld"} k ("#" + od-hex k))
+   (a6d-prf k)
+    (: t (k >> 3) l (k >> 1 & 3)
+       (t = 3 || l = 3 ? ("#" + show k)
+          (["pld" "pli" "pst"] t + "l" + show (l + 1) + (k & 1 ? "strm" "keep"))))
+   ;; a register: c the class, n its number, w the word
+   (a6d-reg c n w)
+    (: sf (w >> 31) ft (w >> 22 & 3)
+       (c @ 'r [(sf ? 'x 'w) n] 'R [(sf ? 'x 'w) (n = 31 ? 32 n)] 'x ['x n] 'w ['w n]
+            'X ['x (n = 31 ? 32 n)] 'W ['w (n = 31 ? 32 n)]
+            'f (ft = 2 ? 'bad ['f (ft @ 0 's 1 'd 'h) n])
+            'fs ['f (ft & 1 ? 'd 's) n]
+            'v ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k = 6 ? 'bad ['v n (a6d-arr k)]))
+            'vb ['v n (w >> 30 & 1 ? "16b" "8b")]
+            'vw (ft = 3 ? 'bad ['v n (["8h" "4s" "2d"] ft)])
+            'vn ((w >> 22 & 3) << 1 | w >> 30 & 1 @ k (k > 5 ? 'bad ['v n (a6d-arr k)]))
+            'vf (: q (w >> 30 & 1) sz (w >> 22 & 1)
+                   (sz && !q ? 'bad ['v n (sz ? "2d" (q ? "4s" "2s"))]))
+            ['f c n]))
+   ;; an element size by imm5's lowest set bit: 0 b .. 3 d, else -1
+   (a6d-esz i5) (? (i5 & 1) 0 (i5 & 2) 1 (i5 & 4) 2 (i5 & 8) 3 -1)
+   (a6d-ech k) (['b 'h 's 'd] k)
+   ;; the shift-by-immediate element: 0 b .. 3 d by immh, -1 for none
+   (a6d-ish w) (w >> 19 & 15 @ h (? (h >= 8) 3 (h >= 4) 2 (h >= 2) 1 (h = 1) 0 -1))
+   ;; a kind -> its operands, or 'bad
+   (a6d-op k w pc)
+    (: (b hi lo) (a6d-b w hi lo) sf (w >> 31) q (b 30 30)
+       (fld f) (f @ 'd (b 4 0) 'n (b 9 5) 'm (b 20 16) (b 14 10))
+       (one o) (o = 'bad ? 'bad [o])
+       (? (two? k && elem <k a6d-rcls) (one (a6d-reg <k (fld (k 1)) w))
+          (k @
+           'aimm (b 22 22 ? [['im (b 21 10)] ['sh 'lsl 12]] [['im (b 21 10)]])
+           'bimm (a6d-bimm (b 22 22) (b 21 16) (b 15 10) (sf ? 64 32) @ v (v = () ? 'bad [['im v]]))
+           'imm16 (!sf && b 22 22 ? 'bad
+                     (b 22 21 ? [['im (b 20 5)] ['sh 'lsl (16 * b 22 21)]] [['im (b 20 5)]]))
+           'immr (b 22 22 != sf || !sf && (b 21 21 || b 15 15) ? 'bad [['dec (b 21 16)]])
+           'imms [['dec (b 15 10)]]
+           'lsb (b 22 22 != sf || !sf && b 15 15 ? 'bad [['im (b 15 10)]])
+           'adr [['lbl (pc + a6d-sx (b 23 5 << 2 | b 30 29) 21)]]
+           'adrp [['lbl (pc - pc % 4096 + a6d-sx (b 23 5 << 2 | b 30 29) 21 * 4096)]]
+           'l26 [['lbl (pc + 4 * a6d-sx (b 25 0) 26)]]
+           'l19 [['lbl (pc + 4 * a6d-sx (b 23 5) 19)]]
+           'l14 [['lbl (pc + 4 * a6d-sx (b 18 5) 14)]]
+           'tr [[(sf ? 'x 'w) (b 4 0)]]
+           'tbit [['im (sf << 5 | b 23 19)]]
+           'x16 [['imx (b 20 5)]] 'u16 [['im (b 15 0)]]
+           ('v4s f) [['v (fld f) "4s"]] ('v16b f) [['v (fld f) "16b"]]
+           'hint7 [['im (b 11 5)]] 'crm (b 11 8 = 15 ? () [['im (b 11 8)]])
+           'bar [['bar (b 11 8)]] 'isbo (b 11 8 = 15 ? () [['bar (b 11 8)]])
+           'pstate [['pst (b 18 16) (b 7 5)] ['im (b 11 8)]]
+           'sysop [['raw ("#" + show (b 18 16))] ['raw ("c" + show (b 15 12))] ['raw ("c" + show (b 11 8))]
+                   ['raw ("#" + show (b 7 5))] ['x (b 4 0)]]
+           'sysl [['raw ("#" + show (b 18 16))] ['raw ("c" + show (b 15 12))] ['raw ("c" + show (b 11 8))]
+                  ['raw ("#" + show (b 7 5))]]
+           'sreg [['sys (b 19 5)]]
+           'prf [['prf (b 4 0)]]
+           'lsh (!sf && b 15 15 ? 'bad
+                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6d-shn (b 23 22)) (b 15 10)]]))
+           'ash (b 23 22 = 3 || !sf && b 15 15 ? 'bad
+                   (b 23 22 = 0 && b 15 10 = 0 ? () [['sh (a6d-shn (b 23 22)) (b 15 10)]]))
+           'xm [[(sf && b 14 13 = 3 ? 'x 'w) (b 20 16)]]
+           'ext (: o (b 15 13) i (b 12 10)
+                   sp (b 9 5 = 31 || !(b 29 29) && b 4 0 = 31)
+                   (? (i > 4) 'bad
+                      (sp && o = (sf ? 3 2)) (i = 0 ? () [['sh 'lsl i]])
+                      [['ext (a6d-extn o) i]]))
+           'cond [['cc (b 15 12)]] 'nzcv [['im (b 3 0)]] 'ccimm [['im (b 20 16)]]
+           ('mu s) [['mem (b 9 5) (b 21 10 * s)]]
+           'mo [['mem (b 9 5) (a6d-sx (b 20 12) 9)]]
+           'mpost [['post (b 9 5) (a6d-sx (b 20 12) 9)]]
+           'mpre [['pre (b 9 5) (a6d-sx (b 20 12) 9)]]
+           ('mr s) (: o (b 15 13)
+                      (o & 2 = 0 ? 'bad
+                         [['memr (b 9 5) [(o & 1 ? 'x 'w) (b 20 16)] (o = 3 ? 'lsl (a6d-extn o))
+                           (b 12 12 ? (s @ 1 0 2 1 4 2 8 3 4) 0) (b 12 12)]]))
+           ('mp s) [['mem (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
+           ('mpp s) [['post (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
+           ('mpr s) [['pre (b 9 5) (a6d-sx (b 21 15) 7 * s)]]
+           'm0 [['mem (b 9 5) 0]]
+           'fz [['raw "#0.0"]] 'z0 [['raw "#0"]]
+           'fimm [['raw (a6d-fimm (b 20 13))]]
+           'modi (a6d-modi w)
+           'shr (a6d-ish w @ e (e < 0 ? 'bad [['im ((16 << e) - b 22 16)]]))
+           'shl (a6d-ish w @ e (e < 0 ? 'bad [['im (b 22 16 - (8 << e))]]))
+           ('vi f) (a6d-ish w @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
+           ('vin f) (a6d-ish w @ e (e < 0 || e = 3 ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
+           ('viw f) (a6d-ish w @ e (e < 0 || e = 3 ? 'bad [['v (fld f) (["8h" "4s" "2d"] e)]]))
+           'fbits (!sf && !(b 15 15) ? 'bad [['im (64 - b 15 10)]])
+           'vsz (b 23 22 @ s (s = 3 || s = 2 && !q ? 'bad [['f (a6d-ech s) (b 4 0)]]))
+           'vszw (b 23 22 @ s (s = 3 || s = 2 && !q ? 'bad [['f (a6d-ech (s + 1)) (b 4 0)]]))
+           'vpsz [['f (b 22 22 ? 'd 's) (b 4 0)]]
+           'vp [['v (b 9 5) (b 22 22 ? "2d" "2s")]]
+           'v2d [['v (b 9 5) "2d"]]
+           'v4sd [['v (b 4 0) "4s"]] 'v4sn [['v (b 9 5) "4s"]]
+           'vd1n [['el (b 9 5) 'd 1]] 'vd1d [['el (b 4 0) 'd 1]]
+           ('v5 f) (a6d-esz (b 20 16) @ e (e < 0 || e = 3 && !q ? 'bad [['v (fld f) (a6d-arr (e << 1 | q))]]))
+           ('e5 f) (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['el (fld f) (a6d-ech e) (b 20 16 >> (e + 1))]]))
+           'g5 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [[(e = 3 ? 'x 'w) (b 9 5)]]))
+           'gq [[(q ? 'x 'w) (b 4 0)]]
+           'e4 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['el (b 9 5) (a6d-ech e) (b 14 11 >> e)]]))
+           's5 (a6d-esz (b 20 16) @ e (e < 0 ? 'bad [['f (a6d-ech e) (b 4 0)]]))
+           'tlist [['list (b 9 5) (b 14 13 + 1) "16b" -1]]
+           'exti (!q && b 14 14 ? 'bad [['im (b 14 11)]])
+           'fel (b 22 22 && b 21 21 ? 'bad
+                   [['el (b 20 16) (b 22 22 ? 'd 's) (b 22 22 ? (b 11 11) (b 11 11 << 1 | b 21 21))]])
+           'lane (: o (b 15 13) s (b 12 12) z (b 11 10)
+                    (? (o = 0) [['list (b 4 0) 1 "b" (q << 3 | s << 2 | z)]]
+                       (o = 2) [['list (b 4 0) 1 "h" (q << 2 | s << 1 | z >> 1)]]
+                       (z = 0) [['list (b 4 0) 1 "s" (q << 1 | s)]]
+                       [['list (b 4 0) 1 "d" q]]))
+           'list1 ((w >> 10 & 3) << 1 | q @ k (k = 6 ? 'bad [['list (b 4 0) 1 (a6d-arr k) -1]]))
+           'bad)))
+   ;; a modified immediate: the register, the value and its shift, by cmode and op
+   (a6d-modi w)
+    (: q (w >> 30 & 1) op (w >> 29 & 1) cm (w >> 12 & 15) d (w & 31)
+       i8 ((w >> 16 & 7) << 5 | w >> 5 & 31)
+       (? (cm < 8) (catall [[['v d (q ? "4s" "2s")] ['im i8]] (cm >> 1 ? [['sh 'lsl (8 * (cm >> 1))]] ())])
+          (cm < 12) (catall [[['v d (q ? "8h" "4h")] ['im i8]] (cm >> 1 & 1 ? [['sh 'lsl 8]] ())])
+          (cm < 14) [['v d (q ? "4s" "2s")] ['im i8] ['sh 'msl (cm & 1 ? 16 8)]]
+          (cm = 14 && !op) [['v d (q ? "16b" "8b")] ['im i8]]
+          (cm = 15 && !op) [['v d (q ? "4s" "2s")] ['raw (a6d-fimm i8)]]
+          (cm = 14)
+           (: v (foldl (\ a i (a + (i8 >> i & 1) * 255 * a6d-p2 (8 * i))) 0 ^8)
+              [(q ? ['v d "2d"] ['f 'd d]) ['m64 v]])
+          (q ? [['v d "2d"] ['raw (a6d-fimm i8)]] 'bad)))
+   ;; the rows by their top bits; a row whose match leaves a bit free lists under each
+   (a6d-index tab)
+    (foldl (\ t r (: m (r 2 >> 25) v (r 1 >> 25)
+                     (foldl (\ t k (k & m = v ? (pin t k (peep t k () + [r])) t)) t ^128)))
+           {} tab)
+   ;; -> (n item): (op name ops w), or (dir "<unknown>")
+   (a6d-dec ix s i pc)
+    (: w (dc-le s i 4)
+       (go l) (? !(two? l) [4 ['dir "<unknown>"]]
+                 (w & <l 2 != <l 1) (go >l)
+                 (: r <l ops (map (k \ a6d-op k w pc) (r 3))
+                    (elem 'bad ops ? (go >l)
+                       [4 ['op <r (catall ops) w (r 3)]])))
+       (#s - i < 4 ? [(#s - i) ['dir "<unknown>"]] (go (peep ix (w >> 25) ()))))
+   (a64-disasm s base lo hi) (od-walk (a6d-dec (a6d-index a64-tab)) s base lo hi)
+   ;; llvm's aliases, the operands as written -> (name ops note)
+   (a6d-zr? o) (two? o && elem <o '(x w) && o 1 = 31)
+   (a6d-sp? o) (two? o && elem <o '(x w) && o 1 = 32)
+   (a6d-inv k) (k ^ 1)
+   (a6d-mov v wd) (: sv (wd = 32 && v >= a6d-p2 31 ? (v - a6d-p2 32) (v >= a6d-p2 63 ? (v - a6d-p2 64) v))
+                     [[['im sv]] ("// =" + show sv)])
+   ;; movz shapes: v at shift sh, by 16 within the width
+   (a6d-movz? v sh wd) (: m (a6d-p2 wd)
+                          (: u (v % m) (u = 0 && sh != 0 ? 0 (u % a6d-p2 sh = 0 && u // a6d-p2 sh < 65536))))
+   (a6d-movn? v sh wd) (: m (a6d-p2 wd) (a6d-movz? v sh wd ? 0 (a6d-movz? (m - 1 - v % m) sh wd)))
+   (a6d-movw? v wd) (any (k \ a6d-movz? v (16 * k) wd || a6d-movn? v (16 * k) wd) ^(wd // 16))
+   (a6d-alias mn ops w)
+    (: a (dc-at ops 0) b (dc-at ops 1) c (dc-at ops 2) d (dc-at ops 3) e (dc-at ops 4)
+       sf (w >> 31) wd (sf ? 64 32) s (show mn)
+       (fld hi lo) (a6d-b w hi lo)
+       (? (elem mn '(movz movn))
+           (: hw (fld 22 21) i (fld 20 5) m (a6d-p2 wd)
+              v (mn = 'movz ? (i * a6d-p2 (16 * hw)) (m - 1 - i * a6d-p2 (16 * hw)))
+              ok (mn = 'movz ? (a6d-movz? v (16 * hw) wd) (a6d-movn? v (16 * hw) wd))
+              (ok ? (a6d-mov v wd @ r ['mov (a . <r) (r 1)]) [mn ops ()]))
+          (mn = 'orr && fld 28 23 = 0x24 && a6d-zr? b && !(a6d-movw? (c 1) wd))
+           (a6d-mov (c 1) wd @ r ['mov (a . <r) (r 1)])
+          (mn = 'orr && fld 28 24 = 0x0a && a6d-zr? b && #ops = 3) ['mov [a c] ()]
+          (mn = 'orn && fld 28 24 = 0x0a && a6d-zr? b) ['mvn (a . >>ops) ()]
+          (elem mn '(add sub adds subs) && fld 28 24 = 0x11 && fld 22 22)
+           (: n ("// =" + od-hex (fld 21 10 * 4096))
+              (? (mn = 'subs && a6d-zr? a) ['cmp >ops n] (mn = 'adds && a6d-zr? a) ['cmn >ops n] [mn ops n]))
+          (mn = 'add && fld 28 24 = 0x11 && fld 21 10 = 0 && (a6d-sp? a || a6d-sp? b)) ['mov [a b] ()]
+          (elem mn '(subs adds) && a6d-zr? a) [(mn = 'subs ? 'cmp 'cmn) >ops ()]
+          (mn = 'ands && a6d-zr? a) ['tst >ops ()]
+          (elem mn '(sub subs) && fld 28 24 = 0x0b && fld 21 21 = 0 && a6d-zr? b)
+           [(mn = 'sub ? 'neg 'negs) (a . >>ops) ()]
+          (elem mn '(sbc sbcs) && a6d-zr? b) [(mn = 'sbc ? 'ngc 'ngcs) [a c] ()]
+          (elem mn '(lslv lsrv asrv rorv)) [(name (snip s 0 3)) ops ()]
+          (elem mn '(sbfm ubfm))
+           (: r (c 1) t (d 1) sg (mn = 'sbfm) ww (sf ? 64 32)
+              (wr o) ['w (o 1)]
+              (? (r = 0 && (t = 7 || t = 15) && (sg || !sf))
+                  [(name ((sg ? "s" "u") + (t = 7 ? "xtb" "xth"))) [a (wr b)] ()]
+                 (r = 0 && t = 31 && sf && sg) ['sxtw [a (wr b)] ()]
+                 (!sg && t != ww - 1 && t + 1 = r) ['lsl [a b ['dec (ww - 1 - t)]] ()]
+                 (t = ww - 1) [(sg ? 'asr 'lsr) [a b ['dec r]] ()]
+                 (r > t) [(sg ? 'sbfiz 'ubfiz) [a b ['dec (ww - r)] ['dec (t + 1)]] ()]
+                 [(sg ? 'sbfx 'ubfx) [a b ['dec r] ['dec (t - r + 1)]] ()]))
+          (mn = 'bfm)
+           (: r (c 1) t (d 1) ww (sf ? 64 32)
+              (? (a6d-zr? b && (r = 0 || t < r)) ['bfc [a ['dec ((ww - r) % ww)] ['dec (t + 1)]] ()]
+                 (t < r) ['bfi [a b ['dec ((ww - r) % ww)] ['dec (t + 1)]] ()]
+                 ['bfxil [a b ['dec r] ['dec (t - r + 1)]] ()]))
+          (mn = 'extr && b = c) ['ror [a b d] ()]
+          (elem mn '(csinc csinv) && a6d-zr? b && a6d-zr? c && d 1 < 14)
+           [(mn = 'csinc ? 'cset 'csetm) [a ['cc (a6d-inv (d 1))]] ()]
+          (elem mn '(csinc csinv csneg) && b = c && d 1 < 14)
+           [(mn @ 'csinc 'cinc 'csinv 'cinv 'cneg) [a b ['cc (a6d-inv (d 1))]] ()]
+          (elem mn '(madd msub smaddl smsubl umaddl umsubl) && a6d-zr? d)
+           [(mn @ 'madd 'mul 'msub 'mneg 'smaddl 'smull 'smsubl 'smnegl 'umaddl 'umull 'umnegl)
+            [a b c] ()]
+          (mn = 'hint && nom? (peep a6d-hints (a 1) ()))
+           [(peep a6d-hints (a 1) ()) () ()]
+          (mn = 'ret && a = ['x 30]) ['ret () ()]
+          (mn = 'sys) (a6d-sysa w ops)
+          (fld 29 24 = 0x38 && fld 21 21 = 1 && fld 11 10 = 0 && fld 15 15 = 0 && fld 23 23 = 0 && a6d-zr? b)
+           [(name ("st" + snip s 2 #s)) [a c] ()]
+          (mn = 'umov && elem (b 2) '(s d)) ['mov ops ()]
+          (mn = 'ins) ['mov ops ()]
+          (mn = 'dup && fld 31 24 = 0x5e) ['mov ops ()]
+          (mn = 'orr && fld 28 21 = 0x75 && b = c) ['mov [a b] ()]
+          (mn = 'not) ['mvn ops ()]
+          [mn ops ()]))
+   (a6d-sysa w ops)
+    (: (b hi lo) (a6d-b w hi lo) rt (b 4 0)
+       e (rvd-first (r \ <r = b 18 16 && r 1 = b 15 12 && r 2 = b 11 8 && r 3 = b 7 5) a6d-sysops)
+       (? !(two? e) ['sys ops ()]
+          (e 6 = 1) [(e 4) [['raw (show (e 5))] ['x rt]] ()]
+          (rt = 31) [(e 4) [['raw (show (e 5))]] ()]
+          ['sys ops ()]))
+   ;; a name with 2 when the row widens or narrows the upper half
+   (a6d-two mn ks w) (w >> 30 & 1 && w >> 28 & 1 = 0 && any (k \ two? k && elem <k '(vw viw)) ks
+                      && !(elem mn '(ins mov)) ? (name (show mn + "2")) mn)
+   (a6d-r o) (: n (o 1)
+              (<o = 'x ? (? (n = 31) "xzr" (n = 32) "sp" ("x" + show n))
+                 (? (n = 31) "wzr" (n = 32) "wsp" ("w" + show n))))
+   (a6d-ix i) (i < 0 ? "" ("[" + show i + "]"))
+   (a6d-opt o sym)
+    (<o @ 'x (a6d-r o) 'w (a6d-r o)
+          'f (show (o 1) + show (o 2))
+          'v ("v" + show (o 1) + "." + o 2)
+          'el ("v" + show (o 1) + "." + show (o 2) + "[" + show (o 3) + "]")
+          'im ("#" + od-hex (o 1)) 'dec ("#" + show (o 1))
+          'imx (o 1 = 0 ? "#0" ("#" + od-hex (o 1)))
+          'm64 (o 1 = 0 ? "#0000000000000000"
+                  (radix (o 1) 16 @ h ("#0x" + catall (map (_ \ "0") ^(max 0 (14 - #h))) + h)))
+          'sh (show (o 1) + " #" + show (o 2))
+          'ext (show (o 1) + (o 2 = 0 ? "" (" #" + show (o 2))))
+          'cc (show (a6t-cc (o 1)))
+          'mem ("[" + a6d-r ['x (o 1 = 31 ? 32 (o 1))] + (o 2 = 0 ? "" (", #" + od-hex (o 2))) + "]")
+          'pre ("[" + a6d-r ['x (o 1 = 31 ? 32 (o 1))] + ", #" + od-hex (o 2) + "]!")
+          'post ("[" + a6d-r ['x (o 1 = 31 ? 32 (o 1))] + "], #" + od-hex (o 2))
+          'memr ("[" + a6d-r ['x (o 1 = 31 ? 32 (o 1))] + ", " + a6d-r (o 2)
+                 + (o 5 ? (", " + show (o 3) + " #" + show (o 4)) (o 3 = 'lsl ? "" (", " + show (o 3)))) + "]")
+          'lbl (od-hex (o 1) + sym (o 1))
+          'sys (a6d-sreg (o 1)) 'bar (a6d-bar (o 1)) 'prf (a6d-prf (o 1))
+          'pst (peep {5 "SPSel" 30 "DAIFSet" 31 "DAIFClr" 3 "UAO" 4 "PAN"} (o 1 << 3 | o 2)
+                     ("#" + show (o 1 << 3 | o 2)))
+          'list ("{ " + xa-join ", " (map (i \ "v" + show ((o 1 + i) % 32) + "." + o 3) ^(o 2)) + " }"
+                 + a6d-ix (o 4))
+          'raw (o 1)
+          (show o))
+   ;; a row -> (text notes) as x64-od answers; a note pads to the fortieth column
+   (a64-od r a sym)
+    (: it (r 2)
+       (? (<it = 'skip) ["..." ()] (<it = 'dir) [(it 1) ()]
+          (a6d-alias (it 1) (it 2) (it 3) @ m
+           (: mn (show (a6d-two <m (it 4) (it 3)))
+              ops (xa-join ", " (map (o \ a6d-opt o sym) (m 1)))
+              t (mn + (two? (m 1) ? ("\t" + ops) ""))
+              col ((8 + #mn) // 8 * 8 + 8 + #ops)
+              [(m 2 = () ? t (t + catall (map (_ \ " ") ^(max 1 (40 - col))) + m 2)) ()]))))
+
+   ;; a $d region as llvm shows it: a word at a time, a byte at the tail
+   (a6d-hx v n) (radix v 16 @ h (catall (map (_ \ "0") ^(max 0 (n - #h))) + h))
+   (a6d-data s i pc)
+    (#s - i >= 4 ? [4 ['dir (".word\t0x" + a6d-hx (dc-le s i 4) 8) 'data]]
+       [1 ['dir (".byte\t0x" + a6d-hx (s i) 2) 'data]])
+   (a64-data s base lo hi) (od-walk a6d-data s base lo hi))
 ) ; module 'holo

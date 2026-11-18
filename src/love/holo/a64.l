@@ -4,6 +4,220 @@
 ; immediate; mul has none, and an immediate that cannot encode scares.
 
 (module 'holo
+(: ;; the instruction table, one row a machine instruction: [name match mask kinds], a word is
+   ;; the first row's with (w & mask) = match, its operands the kinds in text order (decode.l
+   ;; reads them). a register kind is (class field): class r x w by sf or fixed, R X W with 31
+   ;; as sp, f by ftype, b h s d q fixed, v vb vw vf vn by the vector arrangement; field d n m a
+   ;; the register at bit 0, 5, 16 or 10
+   (a6t-cc k) ('(eq ne hs lo mi pl vs vc hi ls ge lt gt le al nv) k)
+   (a6t-in nm c) (show nm @ s (name (snip s 0 2 + c + snip s 2 #s)))
+   (a6t-ls r)
+    (: nm <r u (r 1) t (r 2) sc (r 3) b (u - 0x1000000) pf (nm = 'prfm)
+       int (two? t && elem <t '(w x))
+       (catall [[[nm u 0xffc00000 [t ['mu sc]]] [(pf ? 'prfum (a6t-in nm "u")) b 0xffe00c00 [t 'mo]]
+                 [nm (b | 0x200800) 0xffe00c00 [t ['mr sc]]]]
+                (pf ? () [[nm (b | 0x400) 0xffe00c00 [t 'mpost]] [nm (b | 0xc00) 0xffe00c00 [t 'mpre]]])
+                (int ? [[(a6t-in nm "t") (b | 0x800) 0xffe00c00 [t 'mo]]] ())]))
+   (a6t-pair r)
+    (: nm <r b (r 1) c (r 2) sc (r 3) (ks k) [[c 'd] [c 'a] [k sc]]
+       (catall [[[nm (b | 0x1000000) 0xffc00000 (ks 'mp)] [nm (b | 0x800000) 0xffc00000 (ks 'mpp)]
+                 [nm (b | 0x1800000) 0xffc00000 (ks 'mpr)]]
+                (nm = 'ldpsw ? () [[(name (snip (show nm) 0 2 + "np")) b 0xffc00000 (ks 'mp)]])]))
+   (a6t-sz s) (["b" "h" "" ""] s)
+   (a6t-ex s)
+    (: rt (s = 3 ? 'x 'w) b (s << 30 | 0x08007c00)
+       (map (r \ [(name (show <r + a6t-sz s)) (b | r 1) (r 2) (r 3)])
+            [['stxr 0 0xffe0fc00 [['w 'm] [rt 'd] 'm0]] ['stlxr 0x8000 0xffe0fc00 [['w 'm] [rt 'd] 'm0]]
+             ['ldxr 0x5f0000 0xfffffc00 [[rt 'd] 'm0]] ['ldaxr 0x5f8000 0xfffffc00 [[rt 'd] 'm0]]
+             ['stllr 0x9f0000 0xfffffc00 [[rt 'd] 'm0]] ['stlr 0x9f8000 0xfffffc00 [[rt 'd] 'm0]]
+             ['ldlar 0xdf0000 0xfffffc00 [[rt 'd] 'm0]] ['ldar 0xdf8000 0xfffffc00 [[rt 'd] 'm0]]]))
+   (a6t-al k) (["" "l" "a" "al"] k)
+   (a6t-cas s)
+    ((s = 3 ? 'x 'w) @ rt
+     (map (k \ [(name ("cas" + a6t-al k + a6t-sz s)) (s << 30 | 0x08a07c00 | (k >> 1) << 22 | (k & 1) << 15)
+                0xffe0fc00 [[rt 'm] [rt 'd] 'm0]])
+          ^4))
+   (a6t-lse s)
+    ((s = 3 ? 'x 'w) @ rt
+     (catmap (k \ map (o \ [(name (show <o + a6t-al k + a6t-sz s))
+                           (s << 30 | 0x38200000 | (k >> 1) << 23 | (k & 1) << 22 | o 1 << 12) 0xffe0fc00
+                           [[rt 'm] [rt 'd] 'm0]])
+                     '((ldadd 0) (ldclr 1) (ldeor 2) (ldset 3) (ldsmax 4) (ldsmin 5) (ldumax 6)
+                       (ldumin 7) (swp 8)))
+             ^4))
+   ;; rows (name match) sharing a mask and kinds
+   (a6t-all mask ks l) (map (r \ [<r (r 1) mask ks]) l)
+   a64-tab (catall [
+     (a6t-all 0x7f800000 '((R d) (R n) aimm) '((add 0x11000000) (sub 0x51000000)))
+     (a6t-all 0x7f800000 '((r d) (R n) aimm) '((adds 0x31000000) (subs 0x71000000)))
+     (a6t-all 0x7f800000 '((R d) (r n) bimm) '((and 0x12000000) (orr 0x32000000) (eor 0x52000000)))
+     [['ands 0x72000000 0x7f800000 '((r d) (r n) bimm)]]
+     (a6t-all 0x7f800000 '((r d) imm16) '((movn 0x12800000) (movz 0x52800000) (movk 0x72800000)))
+     (a6t-all 0x7f800000 '((r d) (r n) immr imms) '((sbfm 0x13000000) (bfm 0x33000000) (ubfm 0x53000000)))
+     [['extr 0x13800000 0x7fa00000 '((r d) (r n) (r m) lsb)]
+      ['adr 0x10000000 0x9f000000 '((x d) adr)] ['adrp 0x90000000 0x9f000000 '((x d) adrp)]
+      ['b 0x14000000 0xfc000000 '(l26)] ['bl 0x94000000 0xfc000000 '(l26)]]
+     (map (c \ [(name ("b." + show (a6t-cc c))) (0x54000000 | c) 0xff00001f '(l19)]) ^16)
+     (a6t-all 0x7f000000 '((r d) l19) '((cbz 0x34000000) (cbnz 0x35000000)))
+     (a6t-all 0x7f000000 '(tr tbit l14) '((tbz 0x36000000) (tbnz 0x37000000)))
+     (a6t-all 0xfffffc1f '((x n)) '((br 0xd61f0000) (blr 0xd63f0000) (ret 0xd65f0000)))
+     [['eret 0xd69f03e0 0xffffffff ()] ['drps 0xd6bf03e0 0xffffffff ()]]
+     (a6t-all 0xffe0001f '(x16) '((svc 0xd4000001) (hvc 0xd4000002) (smc 0xd4000003) (brk 0xd4200000)
+                                  (hlt 0xd4400000)))
+     [['udf 0 0xffff0000 '(u16)]
+      ['hint 0xd503201f 0xfffff01f '(hint7)] ['clrex 0xd503305f 0xfffff0ff '(crm)]
+      ['dsb 0xd503309f 0xfffff0ff '(bar)] ['dmb 0xd50330bf 0xfffff0ff '(bar)]
+      ['isb 0xd50330df 0xfffff0ff '(isbo)]
+      ['msr 0xd500401f 0xfff8f01f '(pstate)]
+      ['sys 0xd5080000 0xfff80000 '(sysop)] ['sysl 0xd5280000 0xfff80000 '((x d) sysl)]
+      ['msr 0xd5100000 0xfff00000 '(sreg (x d))] ['mrs 0xd5300000 0xfff00000 '((x d) sreg)]
+      ['ldr 0x18000000 0xff000000 '((w d) l19)] ['ldr 0x58000000 0xff000000 '((x d) l19)]
+      ['ldrsw 0x98000000 0xff000000 '((x d) l19)] ['ldr 0x1c000000 0xff000000 '((s d) l19)]
+      ['ldr 0x5c000000 0xff000000 '((d d) l19)] ['ldr 0x9c000000 0xff000000 '((q d) l19)]
+      ['prfm 0xd8000000 0xff000000 '(prf l19)]]
+     (catmap a6t-ls
+      '((strb 0x39000000 (w d) 1) (ldrb 0x39400000 (w d) 1) (ldrsb 0x39800000 (x d) 1)
+        (ldrsb 0x39c00000 (w d) 1) (strh 0x79000000 (w d) 2) (ldrh 0x79400000 (w d) 2)
+        (ldrsh 0x79800000 (x d) 2) (ldrsh 0x79c00000 (w d) 2) (str 0xb9000000 (w d) 4)
+        (ldr 0xb9400000 (w d) 4) (ldrsw 0xb9800000 (x d) 4) (str 0xf9000000 (x d) 8)
+        (ldr 0xf9400000 (x d) 8) (prfm 0xf9800000 prf 8)
+        (str 0x3d000000 (b d) 1) (ldr 0x3d400000 (b d) 1) (str 0x3d800000 (q d) 16)
+        (ldr 0x3dc00000 (q d) 16) (str 0x7d000000 (h d) 2) (ldr 0x7d400000 (h d) 2)
+        (str 0xbd000000 (s d) 4) (ldr 0xbd400000 (s d) 4) (str 0xfd000000 (d d) 8)
+        (ldr 0xfd400000 (d d) 8)))
+     (catmap a6t-pair
+      '((stp 0x28000000 w 4) (ldp 0x28400000 w 4) (ldpsw 0x68400000 x 4) (stp 0xa8000000 x 8)
+        (ldp 0xa8400000 x 8) (stp 0x2c000000 s 4) (ldp 0x2c400000 s 4) (stp 0x6c000000 d 8)
+        (ldp 0x6c400000 d 8) (stp 0xac000000 q 16) (ldp 0xac400000 q 16)))
+     (catmap a6t-ex ^4) (catmap a6t-cas ^4) (catmap a6t-lse ^4)
+     (a6t-all 0x7f200000 '((r d) (r n) (r m) lsh)
+      '((and 0x0a000000) (bic 0x0a200000) (orr 0x2a000000) (orn 0x2a200000) (eor 0x4a000000)
+        (eon 0x4a200000) (ands 0x6a000000) (bics 0x6a200000)))
+     (a6t-all 0x7f200000 '((r d) (r n) (r m) ash)
+      '((add 0x0b000000) (adds 0x2b000000) (sub 0x4b000000) (subs 0x6b000000)))
+     (a6t-all 0x7fe00000 '((R d) (R n) xm ext) '((add 0x0b200000) (sub 0x4b200000)))
+     (a6t-all 0x7fe00000 '((r d) (R n) xm ext) '((adds 0x2b200000) (subs 0x6b200000)))
+     (a6t-all 0x7fe0fc00 '((r d) (r n) (r m))
+      '((adc 0x1a000000) (adcs 0x3a000000) (sbc 0x5a000000) (sbcs 0x7a000000)
+        (udiv 0x1ac00800) (sdiv 0x1ac00c00) (lslv 0x1ac02000) (lsrv 0x1ac02400) (asrv 0x1ac02800)
+        (rorv 0x1ac02c00)))
+     (a6t-all 0x7fe00c10 '((r n) (r m) nzcv cond) '((ccmn 0x3a400000) (ccmp 0x7a400000)))
+     (a6t-all 0x7fe00c10 '((r n) ccimm nzcv cond) '((ccmn 0x3a400800) (ccmp 0x7a400800)))
+     (a6t-all 0x7fe00c00 '((r d) (r n) (r m) cond)
+      '((csel 0x1a800000) (csinc 0x1a800400) (csinv 0x5a800000) (csneg 0x5a800400)))
+     (a6t-all 0x7ffffc00 '((r d) (r n)) '((rbit 0x5ac00000) (rev16 0x5ac00400) (clz 0x5ac01000) (cls 0x5ac01400)))
+     (a6t-all 0xfffffc00 '((r d) (r n)) '((rev 0x5ac00800) (rev32 0xdac00800) (rev 0xdac00c00)))
+     (a6t-all 0xffe0fc00 '((w d) (w n) (w m))
+      '((crc32b 0x1ac04000) (crc32h 0x1ac04400) (crc32w 0x1ac04800)
+        (crc32cb 0x1ac05000) (crc32ch 0x1ac05400) (crc32cw 0x1ac05800)))
+     (a6t-all 0xffe0fc00 '((w d) (w n) (x m)) '((crc32x 0x9ac04c00) (crc32cx 0x9ac05c00)))
+     (a6t-all 0x7fe08000 '((r d) (r n) (r m) (r a)) '((madd 0x1b000000) (msub 0x1b008000)))
+     (a6t-all 0xffe08000 '((x d) (w n) (w m) (x a))
+      '((smaddl 0x9b200000) (smsubl 0x9b208000) (umaddl 0x9ba00000) (umsubl 0x9ba08000)))
+     (a6t-all 0xffe08000 '((x d) (x n) (x m)) '((smulh 0x9b400000) (umulh 0x9bc00000)))
+     ;; floating point, the width by ftype
+     (a6t-all 0xff3ffc00 '((f d) (f n))
+      '((fmov 0x1e204000) (fabs 0x1e20c000) (fneg 0x1e214000) (fsqrt 0x1e21c000)
+        (frintn 0x1e244000) (frintp 0x1e24c000) (frintm 0x1e254000) (frintz 0x1e25c000)
+        (frinta 0x1e264000) (frintx 0x1e274000) (frinti 0x1e27c000)))
+     [['fcvt 0x1e22c000 0xfffffc00 '((d d) (s n))] ['fcvt 0x1e624000 0xfffffc00 '((s d) (d n))]
+      ['fcvt 0x1e23c000 0xfffffc00 '((h d) (s n))] ['fcvt 0x1e63c000 0xfffffc00 '((h d) (d n))]
+      ['fcvt 0x1ee24000 0xfffffc00 '((s d) (h n))] ['fcvt 0x1ee2c000 0xfffffc00 '((d d) (h n))]]
+     (a6t-all 0xff20fc00 '((f d) (f n) (f m))
+      '((fmul 0x1e200800) (fdiv 0x1e201800) (fadd 0x1e202800) (fsub 0x1e203800) (fmax 0x1e204800)
+        (fmin 0x1e205800) (fmaxnm 0x1e206800) (fminnm 0x1e207800) (fnmul 0x1e208800)))
+     (a6t-all 0xff208000 '((f d) (f n) (f m) (f a))
+      '((fmadd 0x1f000000) (fmsub 0x1f008000) (fnmadd 0x1f200000) (fnmsub 0x1f208000)))
+     (a6t-all 0xff20fc1f '((f n) (f m)) '((fcmp 0x1e202000) (fcmpe 0x1e202010)))
+     (a6t-all 0xff20fc1f '((f n) fz) '((fcmp 0x1e202008) (fcmpe 0x1e202018)))
+     (a6t-all 0xff200c10 '((f n) (f m) nzcv cond) '((fccmp 0x1e200400) (fccmpe 0x1e200410)))
+     [['fcsel 0x1e200c00 0xff200c00 '((f d) (f n) (f m) cond)]
+      ['fmov 0x1e201000 0xff201fe0 '((f d) fimm)]]
+     (a6t-all 0xfffffc00 '((w d) (s n)) '((fmov 0x1e260000)))
+     (a6t-all 0xfffffc00 '((s d) (w n)) '((fmov 0x1e270000)))
+     (a6t-all 0xfffffc00 '((x d) (d n)) '((fmov 0x9e660000)))
+     (a6t-all 0xfffffc00 '((d d) (x n)) '((fmov 0x9e670000)))
+     (a6t-all 0xfffffc00 '((w d) (h n)) '((fmov 0x1ee60000)))
+     (a6t-all 0xfffffc00 '((h d) (w n)) '((fmov 0x1ee70000)))
+     (a6t-all 0xfffffc00 '((x d) (h n)) '((fmov 0x9ee60000)))
+     (a6t-all 0xfffffc00 '((h d) (x n)) '((fmov 0x9ee70000)))
+     [['fmov 0x9eae0000 0xfffffc00 '((x d) vd1n)] ['fmov 0x9eaf0000 0xfffffc00 '(vd1d (x n))]]
+     (a6t-all 0x7f3ffc00 '((r d) (f n))
+      '((fcvtns 0x1e200000) (fcvtnu 0x1e210000) (fcvtas 0x1e240000) (fcvtau 0x1e250000)
+        (fcvtps 0x1e280000) (fcvtpu 0x1e290000) (fcvtms 0x1e300000) (fcvtmu 0x1e310000)
+        (fcvtzs 0x1e380000) (fcvtzu 0x1e390000)))
+     (a6t-all 0x7f3ffc00 '((f d) (r n)) '((scvtf 0x1e220000) (ucvtf 0x1e230000)))
+     (a6t-all 0x7f3f0000 '((r d) (f n) fbits) '((fcvtzs 0x1e180000) (fcvtzu 0x1e190000)))
+     (a6t-all 0x7f3f0000 '((f d) (r n) fbits) '((scvtf 0x1e020000) (ucvtf 0x1e030000)))
+     (a6t-all 0xffbffc00 '((fs d) (fs n))
+      '((scvtf 0x5e21d800) (ucvtf 0x7e21d800) (fcvtzs 0x5ea1b800) (fcvtzu 0x7ea1b800)))
+     ;; simd. the modified immediates come before the shifts, which share their bits
+     (a6t-all 0xbff89c00 '(modi) '((movi 0x0f000400) (orr 0x0f001400) (mvni 0x2f000400) (bic 0x2f001400)))
+     (a6t-all 0xbff8dc00 '(modi) '((movi 0x0f008400) (orr 0x0f009400) (mvni 0x2f008400) (bic 0x2f009400)))
+     (a6t-all 0xbff8ec00 '(modi) '((movi 0x0f00c400) (mvni 0x2f00c400)))
+     (a6t-all 0xbff8fc00 '(modi) '((movi 0x0f00e400) (fmov 0x0f00f400) (movi 0x2f00e400)))
+     [['fmov 0x6f00f400 0xfff8fc00 '(modi)]]
+     (a6t-all 0xbf80fc00 '((vi d) (vi n) shr)
+      '((sshr 0x0f000400) (ushr 0x2f000400) (ssra 0x0f001400) (usra 0x2f001400) (sri 0x2f004400)))
+     (a6t-all 0xbf80fc00 '((vi d) (vi n) shl) '((shl 0x0f005400) (sli 0x2f005400)))
+     (a6t-all 0xbf80fc00 '((vin d) (viw n) shr) '((shrn 0x0f008400) (rshrn 0x0f008c00)))
+     (a6t-all 0xbf80fc00 '((viw d) (vin n) shl) '((sshll 0x0f00a400) (ushll 0x2f00a400)))
+     (a6t-all 0xbf20fc00 '((v d) (v n) (v m))
+      '((add 0x0e208400) (sub 0x2e208400) (cmeq 0x2e208c00) (cmtst 0x0e208c00) (cmhs 0x2e203c00)
+        (cmhi 0x2e203400) (cmge 0x0e203c00) (cmgt 0x0e203400) (mla 0x0e209400) (mls 0x2e209400)
+        (mul 0x0e209c00) (ushl 0x2e204400) (sshl 0x0e204400) (addp 0x0e20bc00) (smax 0x0e206400)
+        (smin 0x0e206c00) (umax 0x2e206400) (umin 0x2e206c00)))
+     (a6t-all 0xbfe0fc00 '((vb d) (vb n) (vb m))
+      '((and 0x0e201c00) (bic 0x0e601c00) (orr 0x0ea01c00) (orn 0x0ee01c00) (eor 0x2e201c00)
+        (bsl 0x2e601c00) (bit 0x2ea01c00) (bif 0x2ee01c00)))
+     (a6t-all 0xbfa0fc00 '((vf d) (vf n) (vf m))
+      '((fadd 0x0e20d400) (fsub 0x0ea0d400) (fmul 0x2e20dc00) (fdiv 0x2e20fc00) (faddp 0x2e20d400)
+        (fmla 0x0e20cc00) (fmls 0x0ea0cc00) (fmax 0x0e20f400) (fmin 0x0ea0f400) (fcmeq 0x0e20e400)
+        (fcmge 0x2e20e400) (fcmgt 0x2ea0e400)))
+     (a6t-all 0xbffffc00 '((vb d) (vb n)) '((cnt 0x0e205800) (not 0x2e205800) (rbit 0x2e605800)))
+     (a6t-all 0xbf3ffc00 '((v d) (v n))
+      '((rev64 0x0e200800) (rev32 0x2e200800) (rev16 0x0e201800) (abs 0x0e20b800) (neg 0x2e20b800)))
+     (a6t-all 0xbf3ffc00 '((v d) (v n) z0)
+      '((cmgt 0x0e208800) (cmge 0x2e208800) (cmeq 0x0e209800) (cmle 0x2e209800) (cmlt 0x0e20a800)))
+     (a6t-all 0xbf3ffc00 '((vn d) (vw n)) '((xtn 0x0e212800)))
+     (a6t-all 0xbfbffc00 '((vf d) (vf n))
+      '((fabs 0x0ea0f800) (fneg 0x2ea0f800) (fsqrt 0x2ea1f800) (scvtf 0x0e21d800) (ucvtf 0x2e21d800)
+        (fcvtzs 0x0ea1b800) (fcvtzu 0x2ea1b800)))
+     (a6t-all 0xbfbffc00 '((vf d) (vf n) fz)
+      '((fcmgt 0x0ea0c800) (fcmeq 0x0ea0d800) (fcmlt 0x0ea0e800) (fcmge 0x2ea0c800) (fcmle 0x2ea0d800)))
+     (a6t-all 0xbf3ffc00 '(vsz (v n)) '((addv 0x0e31b800) (smaxv 0x0e30a800) (sminv 0x0e31a800)
+                                        (umaxv 0x2e30a800) (uminv 0x2e31a800)))
+     (a6t-all 0xbf3ffc00 '(vszw (v n)) '((saddlv 0x0e303800) (uaddlv 0x2e303800)))
+     [['faddp 0x7e30d800 0xffbffc00 '(vpsz vp)] ['addp 0x5ef1b800 0xfffffc00 '((d d) v2d)]]
+     (a6t-all 0xbf20fc00 '((vw d) (v n) (v m))
+      '((saddl 0x0e200000) (ssubl 0x0e202000) (uaddl 0x2e200000) (usubl 0x2e202000) (smull 0x0e20c000)
+        (umull 0x2e20c000) (smlal 0x0e208000) (umlal 0x2e208000)))
+     (a6t-all 0xbf20fc00 '((vw d) (vw n) (v m))
+      '((saddw 0x0e201000) (ssubw 0x0e203000) (uaddw 0x2e201000) (usubw 0x2e203000)))
+     [['dup 0x0e000400 0xbfe0fc00 '((v5 d) (e5 n))] ['dup 0x0e000c00 0xbfe0fc00 '((v5 d) g5)]
+      ['smov 0x0e002c00 0xbfe0fc00 '(gq (e5 n))] ['umov 0x0e003c00 0xbfe0fc00 '(gq (e5 n))]
+      ['ins 0x4e001c00 0xffe0fc00 '((e5 d) g5)] ['ins 0x6e000400 0xffe08400 '((e5 d) e4)]
+      ['dup 0x5e000400 0xffe0fc00 '(s5 (e5 n))]
+      ['tbl 0x0e000000 0xbfe09c00 '((vb d) tlist (vb m))] ['tbx 0x0e001000 0xbfe09c00 '((vb d) tlist (vb m))]
+      ['ext 0x2e000000 0xbfe08400 '((vb d) (vb n) (vb m) exti)]
+      ['sha256su0 0x5e282800 0xfffffc00 '((v4s d) (v4s n))] ['sha1su1 0x5e281800 0xfffffc00 '((v4s d) (v4s n))]
+      ['sha1h 0x5e280800 0xfffffc00 '((s d) (s n))]]
+     (a6t-all 0xffe0fc00 '((q d) (s n) (v4s m)) '((sha1c 0x5e000000) (sha1p 0x5e001000) (sha1m 0x5e002000)))
+     (a6t-all 0xffe0fc00 '((q d) (q n) (v4s m)) '((sha256h 0x5e004000) (sha256h2 0x5e005000)))
+     (a6t-all 0xffe0fc00 '((v4s d) (v4s n) (v4s m)) '((sha1su0 0x5e003000) (sha256su1 0x5e006000)))
+     (a6t-all 0xfffffc00 '((v16b d) (v16b n)) '((aese 0x4e284800) (aesd 0x4e285800) (aesmc 0x4e286800)
+                                               (aesimc 0x4e287800)))
+     (a6t-all 0xbf20fc00 '((v d) (v n) (v m))
+      '((uzp1 0x0e001800) (trn1 0x0e002800) (zip1 0x0e003800) (uzp2 0x0e005800) (trn2 0x0e006800)
+        (zip2 0x0e007800)))
+     (a6t-all 0xff80f400 '((fs d) (fs n) fel) '((fmla 0x5f801000) (fmls 0x5f805000) (fmul 0x5f809000)))
+     (a6t-all 0xbf80f400 '((vf d) (vf n) fel) '((fmla 0x0f801000) (fmls 0x0f805000) (fmul 0x0f809000)))
+     [['ld1 0x0d400000 0xbfffe000 '(lane m0)] ['ld1 0x0d404000 0xbfffe400 '(lane m0)]
+      ['ld1 0x0d408000 0xbfffec00 '(lane m0)] ['ld1 0x0d408400 0xbffffc00 '(lane m0)]
+      ['st1 0x0d000000 0xbfffe000 '(lane m0)] ['st1 0x0d004000 0xbfffe400 '(lane m0)]
+      ['st1 0x0d008000 0xbfffec00 '(lane m0)] ['st1 0x0d008400 0xbffffc00 '(lane m0)]
+      ['ld1 0x0c407000 0xbffff000 '(list1 m0)] ['st1 0x0c007000 0xbffff000 '(list1 m0)]]]))
+
 (: ;; r19..r28 are callee-saved. x16 (IP0) is borrowed by the indexed stores, the far-memory lane
    ;; and the 128-bit kit, x17 by the kit: mooncc allocates neither, so a hand-written lay naming
    ;; them must keep clear of those
