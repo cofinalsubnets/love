@@ -122,17 +122,18 @@
  (view-scaled lv st s) (pin st 'scale s, lv 'size st (st 'w) (st 'h // 2))
  ; ..or moved a step at a time by the frame's time: a gauge over steps whose pixels are pix,
  ; finest first, at step i, a frame's goal in ms with the song's feed counted in it
- (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low () 'sl () 'seen {}}
+ (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low () 'sl () 'bk () 'seen {}}
  ; ..a frame's paint and feed ms, and whether the horn is running low, at clock t: the step
  ; to draw at. coarser half a second after a step on a low horn, a second after it over the
- ; goal, where the coarser step's frame is guessed under 0.9 of this one's; back a step a
- ; second on where this one's is not under 0.9 of the finer's, measured; finer only three
- ; seconds from a step, where its frame is guessed under 0.8 of the goal; neither back nor
- ; finer within three seconds of a low horn. a step's frame is its own, a slow mean with a
- ; spike held to twice it, measured half a second on and kept half a minute, else a line
- ; through this step's and the nearest other measured, a part fixed and a part by the pixels,
- ; else the pixels' share of this one. the feed's share is a slow mean, so a phrase's spike
- ; leans on the horn's lead rather than the picture
+ ; goal, five on one come back to, where the coarser step's frame is guessed under 0.9 of
+ ; this one's; back a step a second on where this one's is not under 0.9 of the finer's,
+ ; measured; finer three seconds from a step, where its frame is guessed under 0.8 of the
+ ; goal, or tried where this one's is under half the goal and the finer's is not measured;
+ ; neither back nor finer within three seconds of a low horn. a step's frame is its own, a
+ ; slow mean with a spike held to twice it, measured half a second on and kept half a minute,
+ ; else a line through this step's and the nearest other measured, a part fixed and a part by
+ ; the pixels, else the pixels' share of this one. the feed's share is a slow mean, so a
+ ; phrase's spike leans on the horn's lead rather than the picture
  (view-gauged g ms fd low t) (: (avg o x k) (o @ () (1.0 * x) (o + k * (x - o)))
    p (avg (g 'p) ms 0.25) f (avg (g 'f) fd 0.0625) at (g 'at @ () t a a) i (g 'i) pix (g 'pix)
    b (g 'goal - f) held (t - at) lw (low ? t (g 'low)) quiet (lw = () || 3000 <= t - lw)
@@ -146,11 +147,12 @@
                         c (max 0.0 ((sl - fresh m) / (pix i - pix m))) a (max 0.0 (sl - c * pix i))
                         (a + c * pix k))))
                q q)
-   j (? (i + 1 < #pix && (low && 500 <= held || b < sl && 1000 <= held) && guess (i + 1) < 0.9 * sl) (i + 1)
-        (0 < i && 1000 <= held && quiet && (fresh (i - 1) @ () 0 q (0.9 * q <= sl))) (i - 1)
-        (0 < i && 3000 <= held && quiet && guess (i - 1) < 0.8 * b) (i - 1)
+   bk (0 < i && 1000 <= held && quiet && (fresh (i - 1) @ () 0 q (0.9 * q <= sl)))
+   j (? (i + 1 < #pix && (low && 500 <= held || b < sl && (g 'bk = i ? 5000 1000) <= held) && guess (i + 1) < 0.9 * sl) (i + 1)
+        bk (i - 1)
+        (0 < i && 3000 <= held && quiet && (guess (i - 1) < 0.8 * b || fresh (i - 1) = () && sl < 0.5 * b)) (i - 1)
         i)
-   (pins g 'p (j = i ? p (guess j)) 'sl (j = i ? sl ()) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
+   (pins g 'p (j = i ? p (guess j)) 'sl (j = i ? sl ()) 'bk (? (j = i) (g 'bk) (bk && j < i) j ()) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
@@ -294,13 +296,14 @@
    (feed _) (? (hn && fd) (song-keep hn pace song-lead (_ \ (fd st))) fd (fd st) 0)
    ; ..the pixel scale gauged where a picture's pixels are the scale's, a window's or kitty's,
    ; from the tenth frame, past the first ones' warming, until a key moves it by hand; the
-   ; horn low once what it holds would last under a gap and a quarter between feeds, and falling
-   scales [1 2 4 8] gz {'g () 'on 1 'l0 0}
+   ; horn low once what it holds would last under a frame and a quarter, the last one's, and falling
+   scales [1 2 4 8] gz {'g () 'on 1 'l0 0 't ()}
    (gauged? _) (gz 'on && 10 <= st 't && (tablet? win || st 'kitty) && st 'pic-w != ())
    (steer paint feed l0 t) (: g (gz 'g @ () (: g0 (view-gauge [64 16 4 1] (scale-step (peep st 'scale 2)) (1.0 * tick)) (pin gz 'g g0, g0)) g g)
-     lw (hn && l0 * 1000 < 1.25 * pace 'gap * song-rate && l0 < gz 'l0) i (g 'i)
+     per (gz 't @ () tick u (t - u))
+     lw (hn && l0 * 1000 < 1.25 * per * song-rate && l0 < gz 'l0) i (g 'i)
      j (view-gauged g paint feed lw t)
-     (pin gz 'l0 l0, j != i ? (view-scaled lv st (scales j))))
+     (pins gz 'l0 l0 't t, j != i ? (view-scaled lv st (scales j))))
    (scale-step s) (s @ 1 0 2 1 4 2 3)
    (go _) (: t0 (clock 0)
              l0 (hn ? (horn-lag hn) 0)
