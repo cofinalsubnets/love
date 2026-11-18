@@ -44,7 +44,9 @@
        (gc 0 0.15 200 @ l (ch l = 1 && l 199 = 0))     ; 60 ms finer fits: one step, held
        (gc 0 1.2 200 @ l (ch l = 1 && l 199 = 2))      ; 120 ms over: one step coarser, held
        (gc 95 0.05 200 @ l (l 10 = 2 && l 20 = 1 && ch l = 2)) ; 100 ms over, 96 coarser: tried, and back
-       (gc 60 0.4 200 @ l (l 10 = 2 && ch l = 1))))    ; 100 ms over, 70 coarser: one step, held
+       (gc 60 0.4 200 @ l (l 10 = 2 && ch l = 1))      ; 100 ms over, 70 coarser: one step, held
+       (gc 40 0.01 200 @ l (l 29 = 1 && l 30 = 0 && ch l = 1)) ; 41 ms, under half: finer tried, 44 kept
+       (gc 10 0.3 200 @ l (l 30 = 0 && l 40 = 1 && ch l = 2)))) ; 40 ms: tried, 130 over, back
 
 ; a level's bindings over view's: its own win, () unbinds, view's untouched; help in list order
 (: wb (view-bind view-binds {112 'where 104 () 108 'spin})
