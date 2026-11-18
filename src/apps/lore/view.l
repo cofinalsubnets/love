@@ -294,11 +294,11 @@
    (feed _) (? (hn && fd) (song-keep hn pace song-lead (_ \ (fd st))) fd (fd st) 0)
    ; ..the pixel scale gauged where a picture's pixels are the scale's, a window's or kitty's,
    ; from the tenth frame, past the first ones' warming, until a key moves it by hand; the
-   ; horn low once under half its lead and falling
+   ; horn low once what it holds would last under a gap and a quarter between feeds, and falling
    scales [1 2 4 8] gz {'g () 'on 1 'l0 0}
    (gauged? _) (gz 'on && 10 <= st 't && (tablet? win || st 'kitty) && st 'pic-w != ())
    (steer paint feed l0 t) (: g (gz 'g @ () (: g0 (view-gauge [64 16 4 1] (scale-step (peep st 'scale 2)) (1.0 * tick)) (pin gz 'g g0, g0)) g g)
-     lw (hn && l0 * 2 < song-lead-of (pace 'gap) && l0 < gz 'l0) i (g 'i)
+     lw (hn && l0 * 1000 < 1.25 * pace 'gap * song-rate && l0 < gz 'l0) i (g 'i)
      j (view-gauged g paint feed lw t)
      (pin gz 'l0 l0, j != i ? (view-scaled lv st (scales j))))
    (scale-step s) (s @ 1 0 2 1 4 2 3)
