@@ -9,10 +9,11 @@
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
-             swd-reg swd-regw swd-call rp-rom rp-flash
+             swd-reg swd-regw swd-call rp-rom rp-crc rp-flash
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire dap-wire-on dap-wire)
 (borrow 'bytes)
 (borrow 'posix)
+(borrow 'hashes)
 (:
  ; the low n bits of x out, then n bits in as a number
  (swd-bits w x n) (n > 0 ? (w 'out (x & 1), swd-bits w (x >> 1) (n - 1)) 0)
@@ -268,29 +269,54 @@
  ; an rp2040: no flash controller, so the rom's own routines erase and program the qspi flash,
  ; run on core 0 halted. the rom's lookup and its table are halfwords at 0x18 and 0x14, a
  ; routine named by two letters; a bkpt at sram's base, the image staged above it
- rp-sram 0x20000000 rp-top 0x20042000 rp-xip 0x10000000 rp-chunk 0x10000
+ rp-sram 0x20000000 rp-top 0x20042000 rp-xip 0x10000000 rp-raw 0x13000000 rp-chunk 0x10000
  (rp-rd16 w a) (: e (swd-rd w (a - (a & 3))) ((a & 2) = 2 ? (e >> 16) (e & 0xFFFF)))
  (rp-rom w nm) (: f (swd-call w (rp-rd16 w 0x18) [(rp-rd16 w 0x14) (nm 0 | nm 1 << 8)] rp-top rp-sram 100)
                   (f = 0 ? (scare 'rp-rom nm) f))
- ; erase the 4K sectors s covers from a, program it in 64K pieces padded with ones to a
- ; page, flash's cache flushed and xip back, then read back: 1, or where it differs first
+ ; the crc32 of n bytes at a, the chip's own: dma channel 0 reads them to one word, its sniffer
+ ; on (crc32 of bit-reversed data, out reversed and inverted, seeded with ones); the dma block
+ ; out of reset first, the channel aborted
+ rp-dma 0x50000000
+ (rp-until w a m k) ((swd-rd w a & m) = 0 ? 1 (k > 0 ? (rp-until w a m (k - 1)) (scare 'rp-dma a)))
+ (rp-crc w a n)
+  (: d rp-dma
+     _ (swd-wr w 0x4000F000 4)
+     _ ((swd-rd w 0x4000C008 & 4) = 4 ? 0 (scare 'rp-dma-reset 0))
+     _ (swd-wr w (d + 0x444) 1) _ (rp-until w (d + 0x444) 1 100)
+     _ (swd-wr w (d + 0x438) 0xFFFFFFFF) _ (swd-wr w (d + 0x434) 0xC21)
+     _ (swd-wr w d a) _ (swd-wr w (d + 4) (rp-sram + 4)) _ (swd-wr w (d + 8) (n // 4))
+     _ (swd-wr w (d + 12) 0xBF8019)       ; en, words, read steps, permanent, quiet, sniffed
+     _ (rp-until w (d + 12) 0x1000000 1000)
+     _ ((swd-rd w (d + 12) >> 31) = 1 ? (scare 'rp-dma-bus a) 0)
+     (swd-rd w (d + 0x438)))
+ ; the 4K sectors s covers from a whose crc differs from the image's (each padded with ones,
+ ; what an erase leaves) erased and programmed, runs of them at once, in 64K pieces padded
+ ; to a page; the flash in its slow xip first, so it reads whatever ran, and back in it
+ ; after. answers 1 once every sector's crc matches, or the first sector that does not
  (rp-flash w a s)
   (: o (a - rp-xip)
      _ (!(string? s) || #s = 0 ? (scare 'rp-empty a))
      _ (o < 0 || (o & 4095) != 0 || o + #s > 0x1000000 ? (scare 'rp-range [a #s]))
      _ (swd-wr w rp-sram 0xBE00BE00)
      (go nm args k) (swd-call w (rp-rom w nm) args rp-top rp-sram k)
-     _ (go "IF" [] 100) _ (go "EX" [] 100)
-     _ (go "RE" [o ((#s + 4095) // 4096 * 4096) 0x10000 0xD8] 1000000)
-     (put i) (: t (snip s i (min #s (i + rp-chunk)))
-                p (t + string (map (_ \ 255) ^((256 - #t % 256) % 256)))
-                _ (swd-wrs w (rp-sram + 256) (f4-words p))
-                (go "RP" [(o + i) (rp-sram + 256) #p] 1000000))
-     _ (map (i \ put (i * rp-chunk)) ^((#s + rp-chunk - 1) // rp-chunk))
-     _ (go "FC" [] 100) _ (go "CX" [] 100)
-     b (f4-read w a #s)
-     (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
-     (at 0))
+     (sec i) (: t (snip s (4096 * i) (min #s (4096 * (i + 1)))) (t + string (map (_ \ 255) ^(4096 - #t))))
+     ns ((#s + 4095) // 4096)
+     want (map (i \ crc32 (sec i)) ^ns)
+     (same? i) (rp-crc w (rp-raw + o + 4096 * i) 4096 = want i)
+     (runs l) (two? l ? (: (more i j r) (two? r && <r = j + 1 ? (more i (j + 1) >r) ([i j] . runs r)) (more <l <l >l)) ())
+     (put lo hi) (lo >= hi ? 0
+                  (: t (snip s lo (min hi (lo + rp-chunk)))
+                     p (t + string (map (_ \ 255) ^((256 - #t % 256) % 256)))
+                     _ (swd-wrs w (rp-sram + 256) (f4-words p))
+                     _ (go "RP" [(o + lo) (rp-sram + 256) #p] 1000000)
+                     (put (lo + rp-chunk) hi)))
+     (burn r) (r @ [i j] (: _ (go "RE" [(o + 4096 * i) (4096 * (j - i + 1)) 0x10000 0xD8] 1000000)
+                            (put (4096 * i) (min #s (4096 * (j + 1))))))
+     _ (go "IF" [] 100) _ (go "CX" [] 100)
+     bad (filter (i \ !(same? i)) ^ns)
+     _ (two? bad ? (: _ (go "EX" [] 100) _ (map burn (runs bad)) _ (go "FC" [] 100) (go "CX" [] 100)) 0)
+     left (filter (i \ !(same? i)) bad)
+     (two? left ? ['differs (a + 4096 * <left)] 1))
 
  ; linux's gpio character device, its v2 uapi: a request of 592 bytes (64 line offsets, the
  ; consumer's name at 256, a config at 288, the line count at 560), its line fd answered at
