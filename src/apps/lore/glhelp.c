@@ -67,7 +67,6 @@ enum {
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5 };
 
 #define EGLFNS(X) \
- X(EGLDisplay, eglGetPlatformDisplay, (GLenum, void *, const intptr_t *)) \
  X(unsigned, eglInitialize, (EGLDisplay, EGLint *, EGLint *)) \
  X(unsigned, eglChooseConfig, (EGLDisplay, const EGLint *, EGLConfig *, EGLint, EGLint *)) \
  X(unsigned, eglBindAPI, (GLenum)) \
@@ -123,6 +122,10 @@ enum {
 #define DECL(r, n, a) static r (*n) a;
 EGLFNS(DECL)
 GLFNS(DECL)
+static EGLDisplay (*eglGetPlatformDisplay) (GLenum, void *, const intptr_t *);   // egl 1.5: not before android 10
+// ..a 32-bit libc's off_t is its own width, not our headers': its 64-bit names take a long long
+static long long (*seek64) (int, long long, int);
+static void *(*map64) (void *, size_t, int, int, int, long long);
 
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
@@ -150,12 +153,12 @@ static void *need(void *h, const char *n) {
 // the shared file, mapped whole again once it has grown
 static unsigned char *bytes(struct helper *H, size_t off, size_t n) {
  // ..its size by lseek: a struct stat laid by our headers is not the system libc's
- off_t const e = lseek(H->fd, 0, SEEK_END);
+ long long const e = seek64(H->fd, 0, SEEK_END);
  if (e < 0) return NULL;
  if ((size_t) e != H->sz) {
   if (H->map) munmap(H->map, H->sz);
   H->sz = (size_t) e;
-  H->map = H->sz ? mmap(NULL, H->sz, PROT_READ | PROT_WRITE, MAP_SHARED, H->fd, 0) : NULL;
+  H->map = H->sz ? map64(NULL, H->sz, PROT_READ | PROT_WRITE, MAP_SHARED, H->fd, 0) : NULL;
   if (H->map == MAP_FAILED) H->map = NULL, H->sz = 0; }
  return H->map && off <= H->sz && n <= H->sz - off ? H->map + off : NULL; }
 
@@ -244,11 +247,16 @@ static int setup(struct helper *H) {
  if (!egl) egl = dlopen("libEGL.so", RTLD_NOW);
  if (!gl) gl = dlopen("libGLESv2.so", RTLD_NOW);
  if (!egl || !gl) { dprintf(1, "err no gles: %s\n", dlerror()); return 0; }
+ void *libc = dlopen(NULL, RTLD_NOW);   // the program and its libraries: bionic's RTLD_DEFAULT is not 0
+ seek64 = (long long (*) (int, long long, int)) (libc ? dlsym(libc, "lseek64") : NULL);
+ map64 = (void *(*) (void *, size_t, int, int, int, long long)) (libc ? dlsym(libc, "mmap64") : NULL);
+ if (!seek64 || !map64) { dprintf(1, "err no lseek64\n"); return 0; }
 #define LOADE(r, n, a) if (!(n = (r (*) a) need(egl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
 #define LOADG(r, n, a) if (!(n = (r (*) a) need(gl, #n))) { dprintf(1, "err no %s\n", #n); return 0; }
  EGLFNS(LOADE)
  GLFNS(LOADG)
- EGLDisplay d = eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL);
+ eglGetPlatformDisplay = (EGLDisplay (*) (GLenum, void *, const intptr_t *)) need(egl, "eglGetPlatformDisplay");
+ EGLDisplay d = eglGetPlatformDisplay ? eglGetPlatformDisplay(EGL_PLATFORM_SURFACELESS_MESA, NULL, NULL) : NULL;
  EGLint ma, mi, n = 0;
  if (!d || !eglInitialize(d, &ma, &mi)) d = eglGetDisplay(NULL);
  if (!d || !eglInitialize(d, &ma, &mi)) { dprintf(1, "err no egl display\n"); return 0; }
