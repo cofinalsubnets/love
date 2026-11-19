@@ -138,8 +138,8 @@
      _ ((cite 'guts 'pinv) c 0 4 4 cs) _ ((cite 'guts 'pinf) c (4 * n) 4 ds)
      (put! g c, ask g "under \(show cw) \(show ch) 0"))
  (gpu-win g xid) (ask g "win \(show xid)")
- ; ..laid past the frame's own room, which the helper may still be filling, and answered
- ; when the file is next written
+ ; ..laid past the frame's own room, which the helper may still be filling, a kept one from the
+ ; copy the helper made of it, the last taken; and answered when the file is next written
  (gpu-show g f w h W H at rs P)
   (: o (8 * w * h) kp (two? f) sp (kp && two? (f 1) ? (f 1) ()) I (two? sp ? (iota (sp 0 >= 0)) ()) ns #I
      n (kp ? (8 * ns) (4 * w * h)) (size r) (4 * (r 2 - r 0) * (r 3 - r 1)) c (cask (n + +(map size rs)))
@@ -149,7 +149,7 @@
      (rows r a) (foldl (\ a y (pour c a P (4 * (y * W + r 0)) (4 * (r 2 - r 0)), a + 4 * (r 2 - r 0))) a (map (+ (r 1)) ^(r 3 - r 1)))
      _ (foldl (\ a r (rows r a)) n rs)
      (room! g (o + #c), fdpush (g 'w) c 0 o #c,
-      say (g 'to) ("show \(show w) \(show h) \(show W) \(show H) \(show (at 0)) \(show (at 1)) \(show o) \(kp ? "1" "0") \(show ns) \(show #rs)"
+      say (g 'to) ("show \(show w) \(show h) \(show W) \(show H) \(show (at 0)) \(show (at 1)) \(show o) \(kp ? (show (g 'ks + 1)) "0") \(show ns) \(show #rs)"
                    + foldl (\ a r (a + " " + unwords (map show r))) "" rs + "\n"),
       pin g 'shows (peep g 'shows 0 + 1), ()))
  (num x) (show (1.0 * x))
@@ -157,7 +157,7 @@
  (gpu-send g w h mat ids o)
   (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
                                      + unwords (map show ids) + "\n"), ())
- (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept" 'kept "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
+ (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by

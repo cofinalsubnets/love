@@ -73,6 +73,10 @@
    ; ..but one with a pixel bare is read, though the scene culled its back faces
    bf (gw = () ? (gpu-frame g 4 4 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 (8 + 512)]) ())
    _ (? (gw = ()) (test (tray? bf) (16 = #bf) ((-1) = amax bf)))
+   ; ..and a kept frame shown while the next draws, as the pipe does, is the one kept: green, not red
+   ga (gw = () ? (gpu-send g 4 4 mat [] [65280 0.0 0.0 0.0 0.0 0.0 0.0 512], gpu-take g 4 4) ())
+   _ (ga = 'kept ? (gpu-send g 4 4 mat [] [16711680 0.0 0.0 0.0 0.0 0.0 0.0 512], gpu-show g ['kept ()] 4 4 320 200 [0 0] () p, gpu-take g 4 4) 0)
+   _ (? (gw = ()) (test ('kept = ga) ([0 255 0] = seen 10 10 [0 255 0] 100) ([0 255 0] = px xw 310 190)))
    _ (tablet? g ? (gpu-close g) 0)
    _ (window-show win 0 200)
    qx (: _ (w8 s 98, w8 s 0, w16 s 4, w16 s 5, w16 s 0)

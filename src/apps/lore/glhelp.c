@@ -151,8 +151,9 @@ struct helper {
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
  EGLDisplay d; EGLConfig cf; EGLContext c; EGLSurface ws; void *xd;   // ws: the window shown on, by xd's display
- GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz; int kept;
- GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot   // kept: the frame drawn left unread, none of it the cpu's
+ GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz;
+ GLuint kt[2]; int kv[2], ks;   // the frames kept unread, none of it the cpu's: a copy each, the next drawn over neither
+ GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -527,14 +528,14 @@ static int spots(struct helper *H, unsigned char const *p, int ns, int w, int h)
  return 1; }
 
 // ..a picture w by h laid over the window W by H at [ax ay]: the words at off, or with kept
-// the frame last drawn and kept, ns spots over its sky, at off; then n rects x0 y0 x1 y1 of
+// above 0 the frame kept in slot kept - 1, ns spots over its sky, at off; then n rects x0 y0 x1 y1 of
 // the window's own, their words after; and shown
 static void cmd_show(struct helper *H, char *l) {
  int w, h, W, Hh, ax, ay, kept, ns, n, k = 0; long off;
  if (sscanf(l, "%d %d %d %d %d %d %ld %d %d %d%n", &w, &h, &W, &Hh, &ax, &ay, &off, &kept, &ns, &n, &k) != 10 || w < 1 || h < 1 || W < 1 || Hh < 1 || n < 0 || ns < 0) {
   dprintf(1, "err show size\n"); return; }
  if (!H->ws) { dprintf(1, "err no window\n"); return; }
- if (kept && !(H->kept && w == H->fw && h == H->fh)) { dprintf(1, "err no frame kept\n"); return; }
+ if (kept && !(kept <= 2 && H->kv[kept - 1] && w == H->fw && h == H->fh)) { dprintf(1, "err no frame kept\n"); return; }
  unsigned char const *sp = kept && ns ? bytes(H, (size_t) off, 8 * (size_t) ns) : NULL;
  if (kept && ns && !(sp && spots(H, sp, ns, w, h))) { dprintf(1, "err show spots\n"); return; }
  size_t at = (size_t) off + (kept ? 8 * (size_t) ns : 4 * (size_t) w * h);
@@ -547,7 +548,7 @@ static void cmd_show(struct helper *H, char *l) {
  glClearColor(0.0f, 0.0f, 0.0f, 1.0f); glClear(GL_COLOR_BUFFER_BIT);
  glEnable(GL_SCISSOR_TEST);
  if (kept && ns) glActiveTexture(GL_TEXTURE1), glBindTexture(GL_TEXTURE_2D, H->ot), glActiveTexture(GL_TEXTURE0);
- GLuint t = kept ? H->rb : put(H, p, w, h);
+ GLuint t = kept ? H->kt[kept - 1] : put(H, p, w, h);
  if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh), W, Hh);
  char *s = l + k;
  for (int i = 0, x0, y0, x1, y1, j; i < n; i++, s += j) {
@@ -623,7 +624,8 @@ static void cmd_drop(struct helper *H, int id) {
 static int target(struct helper *H, int w, int h) {
  if (w == H->fw && h == H->fh) return 1;
  if (H->fb) glDeleteFramebuffers(1, &H->fb), glDeleteFramebuffers(1, &H->gb), glDeleteTextures(1, &H->rb),
-            glDeleteRenderbuffers(1, &H->db), glDeleteTextures(1, &H->gr), glDeleteTextures(1, &H->mk);
+            glDeleteRenderbuffers(1, &H->db), glDeleteTextures(1, &H->gr), glDeleteTextures(1, &H->mk), glDeleteTextures(2, H->kt);
+ H->kv[0] = H->kv[1] = 0;
  glGenFramebuffers(1, &H->fb); glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
  H->rb = plain(GL_RGBA8, GL_UNSIGNED_BYTE, w, h);
  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, H->rb, 0);
@@ -638,6 +640,7 @@ static int target(struct helper *H, int w, int h) {
  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, H->db);
  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { H->fw = H->fh = 0; return 0; }
  H->mk = plain(GL_RGBA8, GL_UNSIGNED_BYTE, w, h);   // ..the marks the sky asks, copied
+ H->kt[0] = plain(GL_RGBA8, GL_UNSIGNED_BYTE, w, h), H->kt[1] = plain(GL_RGBA8, GL_UNSIGNED_BYTE, w, h);
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
  // ..and the lenses' depths, a texture the frame asks
  if (H->lf) glDeleteFramebuffers(1, &H->lf), glDeleteTextures(1, &H->lz);
@@ -793,7 +796,6 @@ static void cmd_frame(struct helper *H, char *args) {
   for (int r = 0; r < sb->nrun; r++) glDrawElements(GL_TRIANGLES, sb->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) sb->runs[r].at));
   glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); }
  // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
- H->kept = 0;
  if ((int) v[10] & 512) {
   glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDepthMask(0);
   glUseProgram(H->kprog); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->rb);
@@ -801,7 +803,11 @@ static void cmd_frame(struct helper *H, char *args) {
   glBeginQuery(GL_ANY_SAMPLES_PASSED, H->kq); glDrawArrays(GL_TRIANGLES, 0, 3); glEndQuery(GL_ANY_SAMPLES_PASSED);
   glGetQueryObjectuiv(H->kq, GL_QUERY_RESULT, &any);
   glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glDepthMask(1); glUseProgram(H->prog);
-  if (!any) { H->kept = 1; dprintf(1, "kept\n"); return; } }
+  if (!any) {
+   int const k = H->ks;
+   glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, H->kt[k]); glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+   glBindTexture(GL_TEXTURE_2D, H->mk); glActiveTexture(GL_TEXTURE0);
+   H->kv[k] = 1, H->ks = !k; dprintf(1, "kept %d\n", k); return; } }
  size_t const N = (size_t) w * h;
  glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, out + 4 * N);
  if (glassy) {
