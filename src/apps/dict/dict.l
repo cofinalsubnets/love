@@ -3,11 +3,13 @@
 ; bisected on disk; the text is plain, or a dictzip: a gzip whose extra field "RA" lists its
 ; chunks, each a deflate run ended by a full flush, so each inflates alone
 ;   (dict-db name index data)   -> a database: its flags, short name and chunks read
-;   (dict-find db word strat)   -> [[headword offset length] ..], strat 'exact or 'prefix
+;   (dict-find db word strat)   -> [[headword offset length] ..] by a strategy: 'exact 'lev ..
+;   (dict-match db word name)   -> MATCH's headwords, each once, by a strategy's name
+;   (dict-soundex s) (dict-lev1 word alphabet same)  -> a word's soundex; the words an edit away
 ;   (dict-text db off len)      -> a definition's bytes
 ;   (dict-session dbs host id)  -> [banner reply]: (reply line) -> [text quit?]
 (module 'dict
-(borrow '(bytes posix text gz))
+(borrow '(bytes posix text gz re))
 (:
    ; --- the index -------------------------------------------------------------
    b64 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -26,19 +28,29 @@
        (go 0))
    find fsub
    (rd p off n) (uread-at p off n @ r (two? r ? <>r ""))
+   ; the index through a cache of 4K blocks, dropped whole once it holds 4096
+   blk 4096
+   (ird db off n)
+    (: a (off // blk) b ((off + n - 1) // blk)
+       (get k) (peep (db 'cache) k () @
+                  () (: s (rd (db 'index) (k * blk) blk)
+                        _ (? (4096 <= db 'cn) (pins db 'cache {} 'cn 0) 0)
+                        (pin (db 'cache) k s, pin db 'cn (db 'cn + 1), s))
+                  s s)
+       (n < 1 ? "" (snip (cats (map get (map (+ a) ^(b - a + 1)))) (off - a * blk) (off - a * blk + n))))
    ; the line opening at p -> [text next], () past the end
    (line-at db p)
-    (: ix (db 'index) n (db 'size)
-       (go w) (rd ix p w @ b (: k (find b "\n" 0)
-                                (? (0 <= k) [(snip b 0 k) (p + k + 1)]
-                                   (n <= p + #b) [b n]
-                                   (go (w * 4)))))
+    (: n (db 'size)
+       (go w) (ird db p w @ b (: k (find b "\n" 0)
+                                 (? (0 <= k) [(snip b 0 k) (p + k + 1)]
+                                    (n <= p + #b) [b n]
+                                    (go (w * 4)))))
        (p < n ? (go 512) ()))
    ; the first line opening at or past p
    (start-at db p)
-    (: ix (db 'index) n (db 'size)
-       (go q) (rd ix q 512 @ b (: k (find b "\n" 0)
-                                  (? (0 <= k) (q + k + 1) (n <= q + #b) n (go (q + #b)))))
+    (: n (db 'size)
+       (go q) (ird db q 512 @ b (: k (find b "\n" 0)
+                                   (? (0 <= k) (q + k + 1) (n <= q + #b) n (go (q + #b)))))
        (p <= 0 ? 0 (go (p - 1))))
    (fields l) (split "\t" l @ [h o n] [h (dict-num o) (dict-num n)] _ ())
    ; the first line whose key is q's or past it
@@ -49,14 +61,91 @@
                         (? (n <= s) (go lo mid)
                            (line-at db s @ [l _] (dict-key db (<(split "\t" l)) < q ? (go (mid + 1) hi) (go lo mid))))))
        (go 0 n))
-   (dict-find db w strat)
+   ; dictd stops a search at 2000 hits, ahead of taking each headword once
+   hits 2000
+   ; from q's place on, the lines whose keys hit? takes, until one does not or m are taken
+   (walk db q hit?) (walk-n db q hit? hits)
+   (walk-n db q hit? m)
+    (: (go p acc k) (line-at db p @
+                      [l nx] (: f (fields l) (k < m && hit? (dict-key db <f) ? (go nx (f . acc) (k + 1)) (rev acc)))
+                      _ (rev acc))
+       (go (lbound db q) () 0))
+   ; every line whose headword keep? takes, in the index's order: a read of the whole of it,
+   ; or of the lines from p0 to n
+   (scan db keep?) (scan-in db 0 (db 'size) keep?)
+   (scan-in db p0 n keep?)
+    (: ix (db 'index)
+       (one l acc) (#acc < hits ? (fields l @ () acc f (keep? <f ? (f . acc) acc)) acc)
+       (go p carry acc) (? (n <= p || hits <= #acc) (rev (#carry > 0 ? (one carry acc) acc))
+                           (: b (rd ix p 1048576) ls (split "\n" (carry + b))
+                              (#b < 1 ? (go n carry acc) (go (p + #b) (last ls) (foldl (\ a l (one l a)) acc (take (#ls - 1) ls))))))
+       (go p0 "" ()))
+
+   ; --- the strategies ----------------------------------------------------------
+   ; soundex as dictd's: past what is no ascii letter or digit, the first kept, upper cased;
+   ; then each letter's digit, a run of one digit once, a vowel, h, w or y parting two
+   ; alike; what is no ascii letter goes past
+   sxt "01230120022455012623010202"
+   (sxd c) (: l (65 <= c <= 90 ? (c + 32) c) (97 <= l <= 122 ? (sxt (l - 97) - 48) -1))
+   (dict-soundex s)
+    (: (go i was acc) (? (#s <= i || 2 < #acc) acc
+                         (: d (sxd (s i)) (? (d < 0) (go (i + 1) was acc)
+                                             (d = 0) (go (i + 1) 0 acc)
+                                             (d = was) (go (i + 1) was acc)
+                                             (go (i + 1) d (acc + [d])))))
+       (lead i) (? (#s <= i) -1 (: c (s i) (? (48 <= c <= 57 || 0 <= sxd c) i (lead (i + 1)))))
+       (lead 0 @ -1 ""
+                 i (string [(s i @ c (97 <= c <= 122 ? (c - 32) c))]
+                    + join "" (map show (take 3 (go (i + 1) (sxd (s i) @ d (d < 0 ? 0 d)) [] + [0 0 0]))))))
+   ; the words one edit from q, in the order dictd tries them: each swap of two neighbours,
+   ; each letter of the alphabet put on the end, then at each place its deletion and each
+   ; letter put in and put over. a utf-8 database's walk puts a letter over itself too (same)
+   (dict-lev1 q al same)
+    (: cs (map utf8 (cps q)) n #cs
+       (w l) (join "" l)
+       (put i c k) (w (take i cs + [c] + drop (i + k) cs))
+       sw (cats (map (i \ cs i = cs (i + 1) ? () [(w (take i cs + [(cs (i + 1)) (cs i)] + drop (i + 2) cs))])
+                     ^(n < 2 ? 0 (n - 1))))
+       (at i) ([(w (take i cs + drop (i + 1) cs))]
+               + cats (map (c \ [(put i c 0)] + (same || c != cs i ? [(put i c 1)] ())) al))
+       (uniq (sw + map (c \ put n c 0) al + cats (map at ^n))))
+   strats [["exact" "Match headwords exactly"] ["prefix" "Match prefixes"]
+           ["nprefix" "Match prefixes (skip, count)"] ["substring" "Match substring occurring anywhere in a headword"]
+           ["suffix" "Match suffixes"] ["re" "POSIX 1003.2 (modern) regular expressions"]
+           ["regexp" "Old (basic) regular expressions"] ["soundex" "Match using SOUNDEX algorithm"]
+           ["lev" "Match headwords within Levenshtein distance one"] ["word" "Match separate words within headwords"]
+           ["first" "Match the first word within headwords"] ["last" "Match the last word within headwords"]]
+   ; a strategy's entries for w, by its name: 'exact 'prefix 'substring 'suffix 're 'regexp
+   ; 'soundex 'lev 'word 'first 'last. a regular expression is caseless, on the headword; a
+   ; word is what single spaces part
+   (dict-find db w s)
     (: q (dict-key db w)
-       (hit? k) (strat = 'exact ? (k = q) (starts? k q))
-       (go p acc) (line-at db p @
-                    [l nx] (: f (fields l) k (dict-key db <f)
-                              (hit? k ? (go nx (f . acc)) (rev acc)))
-                    _ (rev acc))
-       (go (lbound db q) ()))
+       (keyed f) (scan db (h \ f (dict-key db h)))
+       ; ..soundex's over the keys that open on q's first byte, or all of them past a space
+       (lead f) (? (#q < 1 || q 0 = 32) (keyed f)
+                   (scan-in db (lbound db (string [(q 0)])) (q 0 < 255 ? (lbound db (string [(q 0 + 1)])) (db 'size))
+                            (h \ f (dict-key db h))))
+       (pat mk) (mk w @ [1 m _] (: f (refold m) (scan db (h \ rehas f h))) _ ())
+       (s @ 'exact (walk db q (= q))
+            'prefix (walk db q (k \ starts? k q))
+            'substring (keyed (k \ 0 <= find k q 0))
+            'suffix (keyed (k \ ends? k q))
+            're (pat reere) 'regexp (pat rebre)
+            'soundex (: x (dict-soundex w) (lead (k \ dict-soundex k = x)))
+            'lev (take hits (cats (map (c \ walk db c (= c)) (dict-lev1 q (db 'alpha) (db 'utf8)))))
+            'word (keyed (k \ elem q (split " " k)))
+            'first (keyed (k \ <(split " " k) = q))
+            'last (keyed (k \ last (split " " k) = q))
+            _ ()))
+   ; MATCH's headwords, each once, by a strategy's name; nprefix's word is SKIP#COUNT#PREFIX,
+   ; its skip and count over the index's lines, or a prefix alone
+   (dict-match db w s)
+    (? (s = "nprefix") (w @ (a + "#" + b + "#" + p) (: i (unum a) j (unum b) q (dict-key db p)
+                                                      (charm? i && charm? j
+                                                       ? (uniq (map cap (drop i (walk-n db q (k \ starts? k q) (i + j))))) ()))
+                            (_ && 0 <= find w "#" 0) ()
+                            _ (dict-match db w "prefix"))
+       (uniq (map cap (dict-find db w (intern s)))))
 
    ; --- the text ----------------------------------------------------------------
    ; a dictzip's chunks -> [chunk-length [their offsets, the end last]], () for a plain text
@@ -95,21 +184,25 @@
                                                          (snip t (k + 1) #t))))
                  _ "")
    (dict-db name ix data)
-    (: db {'name name 'index ix 'data data 'all 1 'utf8 1
+    (: db {'name name 'index ix 'data data 'all 1 'utf8 1 'cache {} 'cn 0
            'size (stat ix @ s (two? s ? <s 0)) 'zip (dz-head data)}
        all (holds? db "00-database-allchars")
        _ (pins db 'all all 'utf8 0)
        _ (pin db 'utf8 (holds? db (all ? "00-database-utf8" "00databaseutf8")))
+       ; lev's letters: the database's alphabet, else a to z and the digits
+       al (rstrip (meta db (all ? "00-database-alphabet" "00databasealphabet")))
        (pins db 'short (strip (meta db (all ? "00-database-short" "00databaseshort")))
-                'info (all ? "00-database-info" "00databaseinfo")))
+                'info (all ? "00-database-info" "00databaseinfo")
+                'alpha (map utf8 (cps (#al > 0 ? al "abcdefghijklmnopqrstuvwxyz0123456789")))))
 
    ; --- the protocol ------------------------------------------------------------
-   ; a command's words: spaces part them, "" and '' quote, a backslash takes the next byte
+   ; a command's words: spaces part them, "" and '' quote; a backslash and the byte after it
+   ; stay, that byte no quote
    (dict-args s)
     (: n #s
        (go k q cur acc) (? (n <= k) (rev (cur = () ? acc (string (rev cur) . acc)))
                            (: c (s k)
-                              (? (c = 92 && k + 1 < n) (go (k + 2) q (s (k + 1) . (cur || [])) acc)
+                              (? (c = 92 && k + 1 < n) (go (k + 2) q (s (k + 1) . c . (cur || [])) acc)
                                  (q && c = q) (go (k + 1) 0 (cur || []) acc)
                                  q (go (k + 1) q (c . cur) acc)
                                  (c = 34 || c = 39) (go (k + 1) c (cur || []) acc)
@@ -121,7 +214,6 @@
    (body t) (: ls (lines t)
                (cats (map (l \ crlf (starts? l "." ? ("." + l) l)) ls)))
    (q s) ("\"" + s + "\"")
-   strats [["exact" "Match headwords exactly"] ["prefix" "Match prefixes"]]
    help (unlines ["DEFINE database word         -- look up word in database"
                   "MATCH database strategy word -- match word in database using strategy"
                   "SHOW DB                      -- list all accessible databases"
@@ -132,6 +224,7 @@
                   "SHOW SERVER                  -- provide site-specific information"
                   "OPTION MIME                  -- use MIME headers"
                   "CLIENT info                  -- identify client to server"
+                  "AUTH user string             -- provide authentication information"
                   "STATUS                       -- display timing information"
                   "HELP                         -- display this help information"
                   "QUIT                         -- terminate connection"])
@@ -159,15 +252,16 @@
                                     hs)
                         + crlf "250 ok \(stats 0)")))))
        (match n s w)
-        (? (!(elem s ["exact" "prefix" "."])) (crlf "551 invalid strategy, use SHOW STRAT for a list")
-           (pick n (db \ uniq (map cap (dict-find db w (s = "exact" ? 'exact 'prefix)))) @
+        (: s1 (lower s @ "." "lev" x x)
+           (!(elem s1 (map cap strats)) ? (crlf "551 invalid strategy, use SHOW STRAT for a list")
+           (pick n (db \ dict-match db w s1) @
              'none (crlf (bad 0))
              got (: hs (cats (map (x \ map (h \ [<x h]) (x 1)) got))
                     (? (!(two? hs)) (crlf "552 no match \(stats 0)")
                        (: _ (pin st 'm (st 'm + #hs))
                           (head "152 \(#hs) matches found"
                            + cats (map (\ [db hw] (crlf "\(db 'name) \(q hw)")) hs)
-                           + crlf "." + crlf "250 ok \(stats 0)"))))))
+                           + crlf "." + crlf "250 ok \(stats 0)")))))))
        (listing code what rows) (head "\(code) \(#rows) \(what)" + cats (map crlf rows) + crlf "." + crlf "250 ok")
        (show a)
         (a @ ["db"] (two? dbs ? (listing 110 "databases present" (map (db \ "\(db 'name) \(q (db 'short))") dbs))
@@ -190,7 +284,7 @@
              "help"   [(head "113 help text follows" + body help + crlf "." + crlf "250 ok") 0]
              "option" (map lower >a @ ["mime"] (: _ (pin st 'mime 1) [(crlf "250 ok - using MIME headers") 0])
                                       _ [(crlf "501 syntax error, illegal parameters") 0])
-             "auth"   [(crlf "502 command not implemented") 0]
+             "auth"   [(crlf "531 auth denied") 0]
              "quit"   [(crlf "221 bye \(stats 0)") 1]
              ""       [(crlf "500 unknown command") 0]
              _        [(crlf "500 unknown command") 0]))
