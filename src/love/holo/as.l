@@ -353,44 +353,13 @@
                  (? (elem b as-vcomm && <c = 'rg && hi? c && !(hi? a)) (vx <ld 1 <>ld 0 (as-regn d) (as-regn c) a)
                     (vx <ld 1 <>ld 0 (as-regn d) (as-regn a) c))
                 ()))))
-   ;; x87: the nullaries, a memory operand by its mnemonic (opcode digit), the waiting forms (9b
-   ;; ahead of their fn twin), %st(i)'s own rows, and the arithmetic over two stack registers
-   as-x87n {'fninit '(219 227) 'finit '(155 219 227) 'fwait '(155) 'wait '(155) 'fnclex '(219 226) 'fclex '(155 219 226)
-            'fld1 '(217 232) 'fldz '(217 238) 'fldpi '(217 235) 'fldl2e '(217 234) 'fldl2t '(217 233) 'fldlg2 '(217 236)
-            'fldln2 '(217 237) 'fchs '(217 224) 'fabs '(217 225) 'ftst '(217 228) 'fxam '(217 229) 'fsqrt '(217 250)
-            'frndint '(217 252) 'fscale '(217 253) 'fprem '(217 248) 'fprem1 '(217 245) 'fsin '(217 254) 'fcos '(217 255)
-            'fsincos '(217 251) 'fptan '(217 242) 'fpatan '(217 243) 'f2xm1 '(217 240) 'fyl2x '(217 241) 'fyl2xp1 '(217 249)
-            'fxtract '(217 244) 'fincstp '(217 247) 'fdecstp '(217 246) 'fnop '(217 208) 'fcompp '(222 217) 'fucompp '(218 233)}
-   as-x87m {'flds [217 0] 'fldl [221 0] 'fldt [219 5] 'fsts [217 2] 'fstl [221 2] 'fstps [217 3] 'fstpl [221 3] 'fstpt [219 7]
-            'fadds [216 0] 'faddl [220 0] 'fmuls [216 1] 'fmull [220 1] 'fcoms [216 2] 'fcoml [220 2] 'fcomps [216 3] 'fcompl [220 3]
-            'fsubs [216 4] 'fsubl [220 4] 'fsubrs [216 5] 'fsubrl [220 5] 'fdivs [216 6] 'fdivl [220 6] 'fdivrs [216 7] 'fdivrl [220 7]
-            'filds [223 0] 'fildl [219 0] 'fildll [223 5] 'fildq [223 5] 'fists [223 2] 'fistl [219 2]
-            'fistps [223 3] 'fistpl [219 3] 'fistpll [223 7] 'fistpq [223 7]
-            'fisttps [223 1] 'fisttpl [219 1] 'fisttpll [221 1] 'fisttpq [221 1]
-            'fiadds [222 0] 'fiaddl [218 0] 'fimuls [222 1] 'fimull [218 1] 'fisubs [222 4] 'fisubl [218 4] 'fidivs [222 6] 'fidivl [218 6]
-            'fldcw [217 5] 'fnstcw [217 7] 'fnstsw [221 7] 'fldenv [217 4] 'fnstenv [217 6] 'frstor [221 4] 'fnsave [221 6]
-            'fbld [223 4] 'fbstp [223 6]}
-   as-x87w {'fstcw 'fnstcw 'fstsw 'fnstsw 'fstenv 'fnstenv 'fsave 'fnsave}
-   ; %st(i) alone, or beside %st; none is gas's %st(1)
-   as-x87r {'fld [217 192] 'fst [221 208] 'fstp [221 216] 'fxch [217 200] 'ffree [221 192]
-            'fucom [221 224] 'fucomp [221 232] 'fcom [216 208] 'fcomp [216 216]
-            'fcomi [219 240] 'fcomip [223 240] 'fucomi [219 232] 'fucomip [223 232]
-            'faddp [222 192] 'fmulp [222 200] 'fsubp [222 224] 'fsubrp [222 232] 'fdivp [222 240] 'fdivrp [222 248]}
-   ; %st(i),%st onto d8, %st,%st(i) onto dc at the same row: AT&T's sub and div name the
-   ; reversed op there (and in the p forms), as llvm-mc lays them
-   as-x87a {'fadd 192 'fmul 200 'fsub 224 'fsubr 232 'fdiv 240 'fdivr 248}
+   ;; x87: a waiting form is 9b ahead of its fn twin; these take st(1), or it beside the top, when
+   ;; at&t names fewer
+   as-x87w {'fstcw 'fnstcw 'fstsw 'fnstsw 'fstenv 'fnstenv 'fsave 'fnsave 'finit 'fninit 'fclex 'fnclex}
+   as-x87d '(fld fst fstp fxch ffree fucom fucomp fcom fcomp fcomi fcomip fucomi fucomip faddp fmulp fsubp fsubrp fdivp fdivrp)
    (as-more md mn w ops)
     (: nm (show mn) n #ops d (n > 0 ? (ops 0) ()) s (n > 1 ? (ops 1) ())
-       x7 (peep as-x87w mn mn)
-       (? (n = 0 && two? (as-x87n mn)) (as-x87n mn)
-          (n = 1 && as-mem? d && two? (as-x87m x7))
-           ((x7 = mn ? () [155]) + (as-x87m x7 @ r (as-emit md 0 0 [<r] <>r d)))
-          (n = 1 && elem mn '(fnstsw fstsw) && <d = 'rg && as-regn d = 0) ((mn = 'fstsw ? [155] ()) + [223 224])
-          (n <= 2 && two? (as-x87r mn) && all (o \ <o = 'st) ops)
-           (: i (? (n = 0) 1 (n = 1) <>d (<>d != 0) <>d <>s) (as-x87r mn @ r [<r (<>r + i)]))
-          (n = 2 && charm? (as-x87a mn) && <d = 'st && <s = 'st)
-           (as-x87a mn @ r (<>d = 0 ? [216 (r + <>s)] [220 (r + <>d)]))
-          (two? (as-s38 mn) && (n = 2 || (n = 3 && elem mn '(sha256rnds2 pblendvb blendvps blendvpd)
+       (? (two? (as-s38 mn) && (n = 2 || (n = 3 && elem mn '(sha256rnds2 pblendvb blendvps blendvpd)
                                                    && <(ops 2) = 'rg && as-regw (ops 2) = 16 && as-regn (ops 2) = 0)))
            (as-s38 mn @ r (as-sse-op3 md <r 56 <>r (as-regn d) s))
           (n = 3 && two? (as-s3a mn) && <(ops 2) = 'im)
@@ -463,7 +432,7 @@
           (starts? t "cmov") (as-ccl t 4 @ v (0 < v ? (x6t-ccn "cmov" (v - 128)) mn))
           (starts? t "set") (as-ccl t 3 @ v (0 < v ? (x6t-ccn "set" (v - 128)) mn))
           (starts? t "j") (as-ccl t 1 @ v (0 < v ? (x6t-ccn "j" (v - 128)) (as-brn mn)))
-          (as-brn mn)))
+          (mn @ 'wait 'fwait 'fildq 'fildll 'fistpq 'fistpll 'fisttpq 'fisttpll (as-brn mn))))
    (as-brn mn) (mn @ ('callw || 'calll || 'callq) 'call ('jmpw || 'jmpl || 'jmpq) 'jmp 'loopz 'loope 'loopnz 'loopne
                      ('jecxz || 'jcxz) 'jrcxz mn)
    ;; a branch's target: rel8 for loop and jrcxz, else the operand's width, pc-relative
@@ -487,11 +456,17 @@
        ow (mn @ ('callw || 'jmpw) 2 ('calll || 'jmpl) 4 (md = 16 ? 2 4))
        bw (? (md = 64) 0 (ow = dw) 0 ow)
        os (map (as-bro md tn ow) (two? cp ? (ops + [['im (cp 1)]]) ops))
-       (enc w) (x64-encm md tn w (map (as-tabo md w) os) 0 @ b (rip? ? (riptail b) b))
+       (enc1 w os) (x64-encm md tn w (map (as-tabo md w) os) 0 @ b (rip? ? (riptail b) b))
+       (enc w) (enc1 w os)
+       wt (peep as-x87w mn ())
+       sts (? (#ops = 0) [[['st 1]] [['st 0] ['st 1]] [['st 1] ['st 0]]] [[['st 0] <ops] [<ops ['st 0]]])
        ; inc and dec of a whole register outside 64 lay 40+r and 48+r, as-1's
        inc? (md != 64 && elem mn '(inc dec) && #ops = 1 && <(ops 0) = 'rg && 1 < as-regw (ops 0))
        ; jecxz in a 64-bit segment is 67 jrcxz
-       (? (inc? || !(two? (peep x64-byname tn ()))) ()
+       (? (nom? wt) (as-tab md wt w0 ops @ b (two? b ? ([155] + b) ()))
+          (inc? || !(two? (peep x64-byname tn ()))) ()
+          (#ops < 2 && elem tn as-x87d && all (o \ <o = 'st) ops && !(two? (enc 0)))
+           (foldl (\ b o (two? b ? b (enc1 0 o))) () sts)
           (tn = 'jrcxz) (enc 0 @ b (two? b && mn = 'jecxz && md = 64 ? ([103] + b) b))
           (elem tn '(call jmp loop loope loopne)) (enc bw)
           (w != 0) (enc w)

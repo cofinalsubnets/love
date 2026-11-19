@@ -81,7 +81,7 @@
 ;; one-byte map, 1 0F, 2 0F 38, 3 0F 3A. kinds in Intel order (dest first), a role and a width:
 ;; G the modrm reg field, E its r/m, V and W the same as xmm, Z a register in the opcode's low
 ;; bits, A the accumulator, CL, S a segment register, C D a control or debug register, N an
-;; indirect r/m; I a signed immediate kept with its size, U an unsigned one, ub a bare byte, J
+;; indirect r/m, T an x87 st(i) in r/m and K the stack's top; I a signed immediate kept with its size, U an unsigned one, ub a bare byte, J
 ;; a relative target. widths: b w d q 1 2 4 8, v the operand size (66, REX.W), p a push's
 ;; (64 unless 66), y 4 or 8 by REX.W, z an immediate's 2 or 4. attrs: p the mandatory prefix
 ;; (none 66 f3 f2), d the modrm digit, mod r or m, rm the whole modrm byte, b REX.B, w REX.W,
@@ -134,13 +134,37 @@
      [(x6t-r 'xchg 0 134 '(Gb Eb) ()) (x6t-r 'xchg 0 135 '(Gv Ev) ())]
      [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () ())
       (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () ())
-      (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))
-      ; the x87 escapes: fninit and fnclex, the state doors over memory
-      (x6t-r 'fninit 0 219 () '((rm 227))) (x6t-r 'fnclex 0 219 () '((rm 226)))]
-     (x6t-dig 0 217 '(Ed) '((mod m) (iw 0)) '(() () () () () fldcw () fnstcw))
-     (x6t-dig 0 219 '(Ed) '((mod m) (iw 0)) '(fildl))
-     (x6t-dig 0 221 '(Ed) '((mod m) (iw 0)) '(() () () () frstor () fnsave fnstsw))
-     (x6t-dig 0 223 '(Ed) '((mod m) (iw 0)) '(filds () () () () fildll))
+      (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))]
+     ;; the x87 escapes d8..df: memory by the digit, at&t's names carrying the width
+     (catmap (e \ x6t-dig 0 (216 + <e) '(Ed) '((mod m) (iw 0)) (e 1))
+             '((0 (fadds fmuls fcoms fcomps fsubs fsubrs fdivs fdivrs))
+               (1 (flds () fsts fstps fldenv fldcw fnstenv fnstcw))
+               (2 (fiaddl fimull ficoml ficompl fisubl fisubrl fidivl fidivrl))
+               (3 (fildl fisttpl fistl fistpl () fldt () fstpt))
+               (4 (faddl fmull fcoml fcompl fsubl fsubrl fdivl fdivrl))
+               (5 (fldl fisttpll fstl fstpl frstor () fnsave fnstsw))
+               (6 (fiadds fimuls ficoms ficomps fisubs fisubrs fidivs fidivrs))
+               (7 (filds fisttps fists fistps fbld fildll fbstp fistpll))))
+     ; ..over the stack: T st(i) in r/m, K the top. dc's sub and div are at&t's, as gas and llvm read them
+     (x6t-dig 0 216 '(K T) '((mod r)) '(fadd fmul () () fsub fsubr fdiv fdivr))
+     (x6t-dig 0 216 '(T) '((mod r)) '(() () fcom fcomp))
+     (x6t-dig 0 217 '(T) '((mod r)) '(fld fxch))
+     (x6t-dig 0 218 '(K T) '((mod r)) '(fcmovb fcmove fcmovbe fcmovu))
+     (x6t-dig 0 219 '(K T) '((mod r)) '(fcmovnb fcmovne fcmovnbe fcmovnu () fucomi fcomi))
+     (x6t-dig 0 220 '(T K) '((mod r)) '(fadd fmul () () fsub fsubr fdiv fdivr))
+     (x6t-dig 0 221 '(T) '((mod r)) '(ffree () fst fstp fucom fucomp))
+     (x6t-dig 0 222 '(T K) '((mod r)) '(faddp fmulp () () fsubp fsubrp fdivp fdivrp))
+     (x6t-dig 0 223 '(T) '((mod r)) '(ffreep))
+     (x6t-dig 0 223 '(K T) '((mod r)) '(() () () () () fucomip fcomip))
+     ; ..and the whole modrm byte
+     (map (e \ x6t-r (e 1) 0 <e () [['rm (e 2)]])
+          '((217 fnop 208) (217 fchs 224) (217 fabs 225) (217 ftst 228) (217 fxam 229) (217 fld1 232)
+            (217 fldl2t 233) (217 fldl2e 234) (217 fldpi 235) (217 fldlg2 236) (217 fldln2 237) (217 fldz 238)
+            (217 f2xm1 240) (217 fyl2x 241) (217 fptan 242) (217 fpatan 243) (217 fxtract 244) (217 fprem1 245)
+            (217 fdecstp 246) (217 fincstp 247) (217 fprem 248) (217 fyl2xp1 249) (217 fsqrt 250) (217 fsincos 251)
+            (217 frndint 252) (217 fscale 253) (217 fsin 254) (217 fcos 255) (218 fucompp 233)
+            (219 fnclex 226) (219 fninit 227) (222 fcompp 217)))
+     [(x6t-r 'fnstsw 0 223 '(Aw) '((rm 224)))]
      ;; the string ops, Intel's names (the AT&T shower respells movsd's)
      (catmap (e \ (: op <e b (e 1)
                      [(x6t-r (name (b + "b")) 0 op () ()) (x6t-r (name (b + "w")) 0 (op + 1) () '((ow 2)))
@@ -334,7 +358,7 @@
         (filter (i \ elem (wl i) '(v p y) && elem (rl i) '(G E Z A)) ^n)
         (any (i \ elem (wl i) '(v p y z)) ^n || a 'ow != () || a 'iw = 'p)
         (any (i \ wl i = 'b && nelem (rl i) '(I U J)) ^n)
-        (idx '(G V S C D)) (idx '(E W N)) (idx '(Z))
+        (idx '(G V S C D)) (idx '(E W N T)) (idx '(Z))
         (catmap (ro \ filter (i \ rl i = ro) ^n) '(G E Z A) @ (i . _) i _ -1)
         (a 'ow) (a 'iw) (a 'p) (a 'mod) (a 'rm) (a 'd) (a 'w) (a 'b)
         ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl || a 'iw = 'p)
@@ -361,6 +385,7 @@
              'E (gpr? o l || x6e-mem? o) 'V (x6e-rg? o && o 2 = 16) 'W (x6e-rg? o && o 2 = 16 || x6e-mem? o)
              'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = (md = 64 ? 8 osz) || x6e-mem? (o 1)))
              'S (two? o && <o = 'sr) 'C (two? o && <o = 'cr) 'D (two? o && <o = 'dr)
+             'T (two? o && <o = 'st && charm? (o 1)) 'K (o = ['st] || o = ['st 0])
              (two? o && elem <o '(im lbl)))
        (oks os rs ls) (? !(two? os) 1 (ok <os <rs <ls) (oks >os >rs >ls) 0)
        ; the item's width as the decoder names it: iw, else the first general register kind's.
@@ -369,7 +394,7 @@
        jn (any (r \ elem r '(J N)) rl)
        (? (#ops != n || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
            || (ow != () && w > 0 && vsz && w != ow) || (hasp && md = 64 && osz = 4)
-           || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
+           || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'st || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
            ()
           (: eo (ei < 0 ? () (ops ei @ ('ind x) x x x))
@@ -380,6 +405,7 @@
              mk (? (rm != ()) [[rm] 0 0]
                    (eo = ()) (gi >= 0 || ad != () ? () [() 0 0])
                    (x6e-rg? eo) [[(x86-modrm 3 rf (eo 1))] 0 (eo 1 >> 3 & 1)]
+                   (<eo = 'st) [[(x86-modrm 3 rf (eo 1))] 0 0]
                    (md = 64 && (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0)) 'base
                    'mem)
              ; [b+d]: all but the displacement, laid once

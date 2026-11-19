@@ -114,8 +114,9 @@
                         "Z" (go >ks pos (dc-reg (oc & 7 | pf p 'b << 3) (wd (x64-wl q)) rexp . acc))
                         "A" (go >ks pos (dc-reg 0 (wd (x64-wl q)) rexp . acc))
                         "CL" (go >ks pos (['rg 1 1] . acc))
+                        "T" (go >ks pos (['st (m & 7)] . acc)) "K" (go >ks pos (['st] . acc))
                         (imm pos (show q) @ (o nx) (go >ks nx (o . acc))))))
-           st (mr ? (md 0) (peep at 'rm () != () ? (k + 1) k))
+           st (mr ? (md 0) (peep at 'rm () != () || any (k \ x64-role k = "T") ks ? (k + 1) k))
            ; the item's width: the first general register's, reg field ahead of r/m
            gw (catmap (ro \ filter (k \ x64-role k = ro) ks) ["G" "E" "Z" "A"] @ l (two? l ? <l ()))
            iw (peep at 'iw () @ v (? (v = 'p) w8 (v != ()) v (gw = () ? 0 (kw gw))))
@@ -198,6 +199,7 @@
           'seg (od-op <>>o w nx sym @ r [("%" + show <>o + ":" + <r) ""])
           'mem [(od-mem o) ""]
           'dr [("%dr" + show <>o) ""]
+          'st [(#o = 1 ? "%st" ("%st(" + show <>o + ")")) ""]
           [(at-op o) ""])
    (od-mem? ops) (any (o \ <o = 'mem || <o = 'rip || <o = 'seg) ops)
    ;; the string ops' implicit operands, the accumulator at the suffix's width
@@ -263,6 +265,7 @@
     (: s (show mn)
        (? (elem mn '(call ret push pop pushf popf)) (s + "q")
           (mn = 'fwait) "wait"
+          (elem mn '(fucomip fcomip)) (mn @ 'fucomip "fucompi" "fcompi")
           (elem mn '(lar lsl)) (s + xa-wsfx w)
           (elem mn '(lldt ltr)) (s + "w")
           (elem mn '(sldt str smsw rdfsbase rdgsbase wrfsbase wrgsbase))
