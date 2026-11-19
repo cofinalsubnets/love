@@ -708,10 +708,14 @@
              + "queue, once in a union at its head. join, write the row gating with this head, or pass --no-row "
              + "REASON (lock_acquire's no_row)")))
      ; each red lane and the rows whose paths owed it: a member's paths are its own head's change from
-     ; the row's gated-on; a lane no member's paths owed is the row's own -> [[lane [[pos session branch
+     ; its own gated-on where that is past the row's (a row it stacked on, merged in), else from the
+     ; row's gated-on; a lane no member's paths owed is the row's own -> [[lane [[pos session branch
      ; paths] ..] why] ..]. the owners are told, and those rows split out of the union
      (gate-owe r rows b plan reds)
-      (: mp (map (\ m (: rw (rows m) hm (rw 4) [m (rw 1) (rw 2) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)]))
+      (: (under? x y) (git1 ("merge-base --is-ancestor " + sh-quote x + " " + sh-quote y + " && echo yes") = "yes")
+         (own-base rw) (: o (rw 3) hm (rw 4)
+                     (? (#(git-sha o) > 0 && under? o hm && !(under? o b)) o (git1 ("merge-base " + sh-quote b + " " + sh-quote hm))))
+         mp (map (\ m (: rw (rows m) [m (rw 1) (rw 2) (row-paths (own-base rw) (rw 4))]))
                  (r . q-folds rows r))
          (why l) (: p (filter (= l * cap) plan) (? (two? p) (<p 3) ()))
          (map (\ l (: os (filter (o \ any (p \ elem p (o 3)) (why l)) mp)
