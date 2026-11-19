@@ -118,7 +118,7 @@
            st (mr ? (md 0) (peep at 'rm () != () ? (k + 1) k))
            ; the item's width: the first general register's, reg field ahead of r/m
            gw (catmap (ro \ filter (k \ x64-role k = ro) ks) ["G" "E" "Z" "A"] @ l (two? l ? <l ()))
-           iw (peep at 'iw () @ v (v != () ? v (gw = () ? 0 (kw gw))))
+           iw (peep at 'iw () @ v (? (v = 'p) w8 (v != ()) v (gw = () ? 0 (kw gw))))
            ate (? (peep at 'ate 0) 1 (peep at 'x 0) (elem px '(f2 f3) ? 1 0) 0)
            (go ks st () @ (pos ops)
               (peep at 'fw 0 && pos < n && 216 <= dc-at s pos <= 223 ? (dc-op s i pos p @ r (<r . ([['op 'fwait 0 ()]] + >r)))

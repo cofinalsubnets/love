@@ -85,7 +85,7 @@
 ;; a relative target. widths: b w d q 1 2 4 8, v the operand size (66, REX.W), p a push's
 ;; (64 unless 66), y 4 or 8 by REX.W, z an immediate's 2 or 4. attrs: p the mandatory prefix
 ;; (none 66 f3 f2), d the modrm digit, mod r or m, rm the whole modrm byte, b REX.B, w REX.W,
-;; ow the operand size, iw the item's width when not its first register's, x rep and repne go
+;; ow the operand size, iw the item's width when not its first register's (p a push's), x rep and repne go
 ;; to a mandatory f3 or f2, ate the rep it reads, fw a wait that may lead an escape
 (: x6t-cc '(o no b ae e ne be a s ns p np l ge le g)
    (x6t-ccn pre k) (name (pre + show (x6t-cc k)))
@@ -116,7 +116,7 @@
                       (x6t-r n 0 (b + 3) '(Gv Ev) ()) (x6t-r n 0 (b + 4) '(Ab Ib) ()) (x6t-r n 0 (b + 5) '(Av Iz) ())]))
              ^8)
      (map (r \ x6t-r 'push 0 (80 + r) '(Zp) ()) ^8) (map (r \ x6t-r 'pop 0 (88 + r) '(Zp) ()) ^8)
-     [(x6t-r 'movsl 0 99 '(Gv Ed) ()) (x6t-r 'push 0 104 '(Id) '((iw 8))) (x6t-r 'push 0 106 '(Ib) '((iw 8)))
+     [(x6t-r 'movsl 0 99 '(Gv Ed) ()) (x6t-r 'push 0 104 '(Iz) '((iw p))) (x6t-r 'push 0 106 '(Ib) '((iw p)))
       (x6t-r 'imul 0 105 '(Gv Ev Iz) ()) (x6t-r 'imul 0 107 '(Gv Ev Ib) ())]
      (map (k \ x6t-r (x6t-ccn "j" k) 0 (112 + k) '(Jb) ()) ^16)
      (x6t-dig 0 128 '(Eb Ib) () x6t-alu) (x6t-dig 0 129 '(Ev Iz) () x6t-alu) (x6t-dig 0 131 '(Ev Ib) () x6t-alu)
@@ -156,6 +156,7 @@
       (x6t-r 'mov 0 198 '(Eb Ib) ()) (x6t-r 'mov 0 199 '(Ev Iz) ())
       (x6t-r 'leave 0 201 () ()) (x6t-r 'int3 0 204 () ()) (x6t-r 'int 0 205 '(ub) ()) (x6t-r 'xlat 0 215 () ())
       (x6t-r 'call 0 232 '(Jz) ()) (x6t-r 'jmp 0 233 '(Jz) ()) (x6t-r 'jmp 0 235 '(Jb) ())
+      (x6t-r 'loopne 0 224 '(Jb) ()) (x6t-r 'loope 0 225 '(Jb) ()) (x6t-r 'loop 0 226 '(Jb) ()) (x6t-r 'jrcxz 0 227 '(Jb) ())
       (x6t-r 'hlt 0 244 () ()) (x6t-r 'cmc 0 245 () ()) (x6t-r 'clc 0 248 () ()) (x6t-r 'stc 0 249 () ())
       (x6t-r 'cli 0 250 () ()) (x6t-r 'sti 0 251 () ()) (x6t-r 'cld 0 252 () ()) (x6t-r 'std 0 253 () ())
       (x6t-r 'pushf 0 156 () ()) (x6t-r 'popf 0 157 () ())]
@@ -331,12 +332,12 @@
        (idx role) (filter (i \ elem (rl i) role) ^n @ (i . _) i _ -1)
        [r n rl wl
         (filter (i \ elem (wl i) '(v p y) && elem (rl i) '(G E Z A)) ^n)
-        (any (i \ elem (wl i) '(v p y z)) ^n || a 'ow != ())
+        (any (i \ elem (wl i) '(v p y z)) ^n || a 'ow != () || a 'iw = 'p)
         (any (i \ wl i = 'b && nelem (rl i) '(I U J)) ^n)
         (idx '(G V S C D)) (idx '(E W N)) (idx '(Z))
         (catmap (ro \ filter (i \ rl i = ro) ^n) '(G E Z A) @ (i . _) i _ -1)
         (a 'ow) (a 'iw) (a 'p) (a 'mod) (a 'rm) (a 'd) (a 'w) (a 'b)
-        ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl)
+        ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl || a 'iw = 'p)
         (filter (i \ elem (rl i) '(I U ub J)) ^n @ is (map (i \ [i (show (ks i))]) is))
         (r 2)])
    ;; a row's lay for operands of this shape, or (): all the shape decides, once, and a
@@ -352,19 +353,22 @@
        o66 (osz != dsz && (osz = 2 || osz = 4))
        (wd l) (l @ 'b 1 'w 2 'd 4 'q 8 'v osz 'p osz 'y osz 0)
        ; a field's width, for a fix laid in it
-       (fw l) (l @ ("Jb" || "Ib" || "ub") 1 "Jz" 4 "Id" 4 "Uw" 2 ("Iz" || "Uv") (osz = 2 ? 2 (l = "Uv" && osz = 8 ? 8 4)) 0)
+       (fw l) (l @ ("Jb" || "Ib" || "ub") 1 "Jz" (osz = 2 ? 2 4) "Id" 4 "Uw" 2 ("Iz" || "Uv") (osz = 2 ? 2 (l = "Uv" && osz = 8 ? 8 4)) 0)
        (gpr? o l) (x6e-rg? o && (o 2 = wd l) && ((o 1 < 16) || (wd l = 1 && (o 1 < 24))))
        (ok o r l)
         (r @ 'G (gpr? o l) 'Z (gpr? o l && (o 1 & 7) = (oc & 7))
              'A (gpr? o l && o 1 = 0) 'CL (o = ['rg 1 1])
              'E (gpr? o l || x6e-mem? o) 'V (x6e-rg? o && o 2 = 16) 'W (x6e-rg? o && o 2 = 16 || x6e-mem? o)
-             'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = 8 || x6e-mem? (o 1)))
+             'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = (md = 64 ? 8 osz) || x6e-mem? (o 1)))
              'S (two? o && <o = 'sr) 'C (two? o && <o = 'cr) 'D (two? o && <o = 'dr)
              (two? o && elem <o '(im lbl)))
        (oks os rs ls) (? !(two? os) 1 (ok <os <rs <ls) (oks >os >rs >ls) 0)
-       ; the item's width as the decoder names it: iw, else the first general register kind's
-       iw (iw0 != () ? iw0 (gwi < 0 ? 0 (wd (wl gwi))))
-       (? (#ops != n || iw != w || !(oks ops rl wl) || (ow != () && w > 0 && vsz && w != ow)
+       ; the item's width as the decoder names it: iw, else the first general register kind's.
+       ; outside 64 a target's or an indirect one's is the operand size it names
+       iw (? (iw0 = 'p) (md = 64 ? (osz = 2 ? 2 8) osz) (iw0 != ()) iw0 (gwi < 0 ? 0 (wd (wl gwi))))
+       jn (any (r \ elem r '(J N)) rl)
+       (? (#ops != n || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
+           || (ow != () && w > 0 && vsz && w != ow) || (hasp && md = 64 && osz = 4)
            || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
            ()
@@ -387,7 +391,7 @@
              R (rf >> 3 & 1)
              zb (zi >= 0 ? (ops zi 1 >> 3 & 1) ())
              sg (eo @ ('seg s _) (x86-seg s) _ ())
-             pre1 (catall [(o66 && vsz || ap = 66 ? [102] ()) pfx])
+             pre1 (catall [(o66 && (vsz || jn) || ap = 66 ? [102] ()) pfx])
              (? (mk = () || (aw = 0 && W)) ()
                 (: ; the head before the immediates, of a modrm laid
                    (head mrm) (: X (two? mrm ? (mrm 1) 0)
@@ -399,7 +403,7 @@
                    hd0 (? (mk = 'mem) () (mk = 'base) (head (mb 1)) (head mk))
                    ; each immediate or target's lay, of the operand and where its field starts
                    (lay1 l)
-                    (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") 4 0) im (x6e-immf l osz byte?)
+                    (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") w 0) im (x6e-immf l osz byte?)
                        (\ o at
                           (: v (o 1)
                              (? (fix? v) (v 1 = w ? [v] ())

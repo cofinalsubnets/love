@@ -96,44 +96,13 @@
    ;; own field, so the fix's aux steps back over the n immediate bytes that follow it
    (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)
    (as-riptail bs n) (map (x \ (two? x && <x = 'fix && x 2 = 'rel32 ? (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
+   ;; what the table leaves of one operand: inc and dec of a whole register outside 64-bit, 40+r
+   ;; and 48+r; neg not inc dec with no width say so
    (as-1 md mn w a)
-      (: k <a  frc (as-frc a)
-         ; push/pop take 66 but never REX.W; outside 64 the width is the suffix's or the register's
-         pw (? (md = 64) (w @ 2 2 0) (w > 0) w (k = 'rg) (as-regw a) 0)
-         ; a near target: its field is the operand's width (callw in a 32-bit segment, calll in a 16-bit one)
-         ow (? (elem mn '(callw jmpw)) 2 (elem mn '(calll jmpl)) 4 (md = 16) 2 4)
-         (rel sym) (ow = 2 ? (fix 2 'rel16 sym 0) (fix 4 (md = 64 ? 'rel32 'pc32) sym 0))
-         (? (mn = 'push)                                     ; ff /6
-            (k @ 'rg (as-regn a @ n
-                        (as-osz md pw + (n >= 8 ? [65 (80 | as-lo n)] [(80 | n)])))
-                 ; 6a ib where it fits, else 68 with the operand's word (a 64-bit push's four, sign-extended)
-                 'im (: v <>a iw (? (pw = 2) 2 (pw = 4) 4 (md = 16) 2 4)
-                        (as-osz md pw + (fits8 v ? [106 (byte v)] (104 . (iw = 2 ? (le16 v) (le32 v))))))
-                 (as-emit md pw 0 '(255) 6 a))
-            (mn = 'pop)                                      ; 8f /0
-            (k @ 'rg (as-regn a @ n
-                        (as-osz md pw + (n >= 8 ? [65 (88 | as-lo n)] [(88 | n)])))
-                 (as-emit md pw 0 '(143) 0 a))
-            ; inc and dec of a whole register outside 64-bit: 40+r and 48+r
-            (elem mn '(inc dec) && md != 64 && k = 'rg && 1 < w)
-             (as-osz md w + [((mn = 'inc ? 64 72) + as-lo (as-regn a))])
-            (elem mn '(neg not inc dec))
-            (: opc (elem mn '(inc dec) ? 255 247)
-               ext (mn @ 'neg 3 'not 2 'inc 0 1)
-               (w @ 0 (scare 'as-nowidth [mn a]) (as-emit md w frc [(as-opw opc w)] ext a)))
-            (k = 'ind)                                       ; call/jmp through a register or memory
-            (a 1 @ o
-               (? (elem mn '(call calll callw callq)) (as-emit md (mn @ 'callw 2 'calll 4 0) 0 '(255) 2 o)
-                  (elem mn '(jmp jmpl jmpw jmpq)) (as-emit md (mn @ 'jmpw 2 'jmpl 4 0) 0 '(255) 4 o)
-                  (scare 'as-op1 mn)))
-            (elem mn '(call jmp calll jmpl callw jmpw))
-            (a 1 @ sym ((mn @ 'callw (as-osz md 2) 'calll (as-osz md 4) 'jmpw (as-osz md 2) 'jmpl (as-osz md 4) ())
-                        + (elem mn '(call calll callw) ? [232 (rel sym)] [233 (rel sym)])))
-            (as-cc mn) (a 1 @ sym [15 (peep as-cc mn 0) (rel sym)])
-            ; the rel8-only branches: loop, and jecxz (67 in a 64-bit segment, which jrcxz spells bare)
-            (charm? (as-loops mn))
-             (a 1 @ sym ((mn = 'jecxz && md = 64 ? [103] ()) + [(as-loops mn) (fix 1 'pc8 sym 0)]))
-            (scare 'as-op1 mn)))
+      (? (elem mn '(inc dec) && md != 64 && <a = 'rg && 1 < w)
+          (as-osz md w + [((mn = 'inc ? 64 72) + as-lo (as-regn a))])
+         (elem mn '(neg not inc dec) && w = 0) (scare 'as-nowidth [mn a])
+         (scare 'as-op1 mn))
    ;; the nullaries: the reader folds AT&T's c<from>t<to> family and retq/leaveq/xlatb onto these
    as-nils {'ret '(195) 'nop '(144) 'hlt '(244)
             'syscall '(15 5) 'leave '(201)
@@ -431,9 +400,6 @@
           ; pextrd: the xmm in reg, the destination in r/m
           (n = 3 && elem mn '(pextrb pextrd) && <(ops 2) = 'im && <s = 'rg)
            (as-imt (as-sse-op3 md [102] 58 (mn = 'pextrb ? 20 22) (as-regn s) d + [(byte <>(ops 2))]) 1 d)
-          ; push $sym: the segment's width unless a suffix says (pushw in a 32-bit one, pushl in a 16-bit)
-          (n = 1 && mn = 'push && <d = 'ims)
-           (: pw (? (w > 0) w (md = 16) 2 4) (as-osz md pw + [104 (md = 64 ? (as-syms d) (as-symw d (pw = 2 ? 2 4)))]))
           ; crc32 by its source's suffix: F2 0F 38 F0 a byte, F1 the rest; the destination's REX.W
           (n = 2 && elem mn '(crc32 crc32b crc32w crc32l crc32q) && <d = 'rg && (mn != 'crc32 || as-gp? s))
            (: sw (mn = 'crc32 ? (as-regw s) (xa-sfxw (nm 5))) ew (? (sw = 1) (as-regw d = 8 ? 8 4) (sw = 2) 4 sw)   ; gas lays 66 ahead of F2
@@ -496,24 +462,41 @@
        (? (mn = 'sal) 'shl
           (starts? t "cmov") (as-ccl t 4 @ v (0 < v ? (x6t-ccn "cmov" (v - 128)) mn))
           (starts? t "set") (as-ccl t 3 @ v (0 < v ? (x6t-ccn "set" (v - 128)) mn))
-          mn))
+          (starts? t "j") (as-ccl t 1 @ v (0 < v ? (x6t-ccn "j" (v - 128)) (as-brn mn)))
+          (as-brn mn)))
+   (as-brn mn) (mn @ ('callw || 'calll || 'callq) 'call ('jmpw || 'jmpl || 'jmpq) 'jmp 'loopz 'loope 'loopnz 'loopne
+                     ('jecxz || 'jcxz) 'jrcxz mn)
+   ;; a branch's target: rel8 for loop and jrcxz, else the operand's width, pc-relative
+   (as-bro md tn ow o) (? (<o != 'lbl) o
+                          (elem tn '(loop loope loopne jrcxz)) ['lbl (fix 1 'pc8 <>o 0)]
+                          ['lbl (ow = 2 ? (fix 2 'rel16 <>o 0) (fix 4 (md = 64 ? 'rel32 'pc32) <>o 0))])
    (as-tabo md w o)
     (<o @ 'im (charm? <>o && 0 < w && w < 8 ? ['im (as-sx w <>o)] o)
           'ims ['im (md = 64 && w = 8 ? (as-syms o) (as-symw o (w = 2 ? 2 4)))]
           'rip (nom? <>o ? ['rip () (fix 4 'rel32 <>o <>>o)] ['rip () <>>o])
+          'ind ['ind (<(o 1) = 'lbl ? (xa-symoff (show <>(o 1)) @ so ['mem -1 -1 1 >so <so]) (as-tabo md w <>o))]
           o)
-   (as-tab md mn w ops)
-    (: br? (xa-branch? mn || xa-cc? mn || charm? (as-loops mn) || elem mn '(calll callw jmpl jmpw))
-       rip? (any (o \ <o = 'rip) ops)
+   (as-tab md mn w0 ops)
+    (: rip? (any (o \ <o = 'rip || <o = 'ind && <(o 1) = 'rip) ops)
        cp (as-cmpn (show mn))
        tn (two? cp ? <cp (as-tabn mn))
-       os (two? cp ? (ops + [['im (cp 1)]]) ops)
+       ; a push's or pop's width unsuffixed, or the reader's 8 outside 64, is the segment's
+       pp? (elem tn '(push pop)) dw (? (md = 64) 8 (md = 16) 2 4)
+       w (pp? && md != 64 && w0 = 8 ? 0 w0)
+       ; a branch's operand size by its suffix: callw jmpw 2, calll jmpl 4
+       ow (mn @ ('callw || 'jmpw) 2 ('calll || 'jmpl) 4 (md = 16 ? 2 4))
+       bw (? (md = 64) 0 (ow = dw) 0 ow)
+       os (map (as-bro md tn ow) (two? cp ? (ops + [['im (cp 1)]]) ops))
        (enc w) (x64-encm md tn w (map (as-tabo md w) os) 0 @ b (rip? ? (riptail b) b))
        ; inc and dec of a whole register outside 64 lay 40+r and 48+r, as-1's
        inc? (md != 64 && elem mn '(inc dec) && #ops = 1 && <(ops 0) = 'rg && 1 < as-regw (ops 0))
-       (? (br? || inc? || !(two? (peep x64-byname tn ()))) ()
+       ; jecxz in a 64-bit segment is 67 jrcxz
+       (? (inc? || !(two? (peep x64-byname tn ()))) ()
+          (tn = 'jrcxz) (enc 0 @ b (two? b && mn = 'jecxz && md = 64 ? ([103] + b) b))
+          (elem tn '(call jmp loop loope loopne)) (enc bw)
           (w != 0) (enc w)
           (mn = 'movd) (enc 4)
+          (pp? && two? (enc dw)) (enc dw)
           (enc 0 @ b (two? b ? b
              (filter two? (map enc '(1 2 4 8)) @ l (#l = 1 ? <l ()))))))
    (as-moffs md op w o)
