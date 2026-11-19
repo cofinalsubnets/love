@@ -1200,7 +1200,7 @@
        c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
              mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        ent (dx ? ["_start" "atexit"] '("__love_start"))
-       all (arm? || so ? srcs
+       all (arm? || so || tgt = 'mips && nostd ? srcs   ; mips has no crt0 yet: a -nostdlib link brings its own _start
                    (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.

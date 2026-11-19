@@ -246,6 +246,8 @@
        (kind = 'mj26) (w | target >> 2 & 0x3ffffff)
        (kind = 'mhi16) (w | (target + 0x8000) >> 16 & 0xffff)
        (kind = 'mlo16) (w | target & 0xffff)
+       ; a link's own: a GOT16's lw of a page turned to the lui of the high half, its rt kept
+       (kind = 'mgotlui) (0x3c000000 | w & 0x1f0000 | (target + 0x8000) >> 16 & 0xffff)
        (scare 'badfix kind))
    (mips-patch kind target site width aux)
     (? (kind = 'abs32) (be32 (target + aux))

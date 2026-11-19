@@ -67,7 +67,7 @@ fi
 
 # o32 REL objects, as gcc and GNU as lay them, read by holo's link beside a mooncc object: clang
 # builds test/holo/mipsrel.c, mipsrela.s and an archive of mipsrelb.c, which exit 42 linked by
-# holo as by lld (100+n names the first address that disagreed)
+# holo as by lld (100+n names the first address that disagreed), laid plain and laid -fpic
 rl=""
 for t in clang llvm-ar; do command -v $t > /dev/null 2>&1 || rl="no $t"; done
 if [ -z "$rl" ]; then
@@ -89,11 +89,29 @@ if [ -z "$rl" ]; then
     a=$?
     [ "$a" -eq 42 ] || fail "lld's link of the REL objects answered $a, want 42"
   fi
-  # an abicalls object wants a got: refused by name
-  clang --target=mips-linux-gnu -mcpu=mips32r2 -msoft-float -c test/holo/mipsrelb.c -o "$d/rel/pic.o" || fail "clang could not lay pic.o"
-  ! $love mooncc -t mips -os none -nostdlib -Ttext 0x400000 -o "$d/rel/pic.elf" "$d/rel/relm.o" "$d/rel/pic.o" > "$d/rel/pic.log" 2>&1 \
-    && grep -q link-mips-abicalls "$d/rel/pic.log" || { cat "$d/rel/pic.log"; fail "an abicalls object was not refused by name"; }
-  rl="; REL objects from clang (and an archive of one) linked beside mooncc's to 42, an abicalls one refused"
+  # the same laid -fpic, as gcc's default and musl's libc.a are: holo lays a static got
+  pcc() { clang --target=mips-linux-gnu -mcpu=mips32r2 -msoft-float -fpic -G0 -O1 -c "$@"; }
+  pcc test/holo/mipsrel.c -o "$d/rel/pic.o" && pcc test/holo/mipsrelb.c -o "$d/rel/picb.o" \
+    && clang --target=mips-linux-gnu -mcpu=mips32r2 -msoft-float -fpic -c test/holo/mipsrelg.s -o "$d/rel/relg.o" \
+    || fail "clang could not lay the pic objects"
+  rm -f "$d/rel/libpicb.a"; llvm-ar rcs "$d/rel/libpicb.a" "$d/rel/picb.o" || fail "llvm-ar could not lay libpicb.a"
+  po="$d/rel/relm.o $d/rel/pic.o $d/rel/rela.o $d/rel/relg.o $d/rel/libpicb.a"
+  $love mooncc -t mips -os linux -nostdlib -o "$d/rel/pic.elf" $po || fail "holo's link refused the pic objects"
+  timeout 60 qemu-mips -cpu 24Kc "$d/rel/pic.elf"
+  a=$?
+  [ "$a" -eq 42 ] || fail "holo's link of the pic objects answered $a, want 42"
+  if command -v ld.lld > /dev/null 2>&1; then
+    ld.lld -e _start -o "$d/rel/pic.lld" $po || fail "lld refused the pic objects"
+    timeout 60 qemu-mips -cpu 24Kc "$d/rel/pic.lld"
+    a=$?
+    [ "$a" -eq 42 ] || fail "lld's link of the pic objects answered $a, want 42"
+  fi
+  # a jal from outside pic into a pic function, whose gp wants $t9: refused by name
+  printf 'int bump(int);\nint f(void) { return bump(1); }\n' > "$d/rel/la.c"
+  $love mooncc -t mips -os none -c -o "$d/rel/la.o" "$d/rel/la.c" || fail "mooncc could not lay la.c"
+  ! $love mooncc -t mips -os linux -nostdlib -o "$d/rel/la.elf" "$d/rel/relm.o" "$d/rel/pic.o" "$d/rel/rela.o" "$d/rel/relg.o" "$d/rel/la.o" "$d/rel/picb.o" > "$d/rel/la.log" 2>&1 \
+    && grep -q link-mips-la25 "$d/rel/la.log" || { cat "$d/rel/la.log"; fail "a jal into a pic function was not refused by name"; }
+  rl="; REL objects from clang (and an archive of one) linked beside mooncc's to 42, plain and pic, a jal into pic refused"
 else
   gate_partly "$name: the REL objects unchecked ($rl)"; rl=""
 fi

@@ -2,7 +2,7 @@
 # (its addend in the two fields) and by a .word, against a global (relbig, mipsrel.c's) and a local
 # (relloc, which the assembler turns into .bss plus an offset); sixteen offsets a page apart, so
 # whatever the base some cross the low half's carry. reljal reaches a local by R_MIPS_26, its
-# target in the field
+# target in the field. cc_entry enters cc_main with its address in $t9, as a pic function's gp wants
 	.set noreorder
 	.bss
 	.align 4
@@ -29,6 +29,13 @@ relprobe:
 	addiu $2, $2, %lo(relloc + 0x1000 * \k + 0x7ff8)
 	nop
 	.endr
+
+	.globl cc_entry
+cc_entry:
+	lui $25, %hi(cc_main)
+	addiu $25, $25, %lo(cc_main)
+	jr $25
+	nop
 
 	.globl reljal
 reljal:	addiu $sp, $sp, -8		# reljal(): relfar's answer, 26
