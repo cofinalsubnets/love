@@ -33,7 +33,19 @@ for sc in 's/b.*/\U&/' 's/\(.\)\(.*\)/\u\1\U\2\E!/' 's/[a-z]*/\L\u&/' 's/z/\U\lZ
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
 bothrc "sed -E case" sed -E 's/^([a-z])([a-z]*)/\U\1\L\2/' "$ho/.sd1"
-# \n and \t in a replacement are a newline and a tab, as apparmor's caps mask ends
+# GNU's \t \n \a \f \r \v in a pattern, a bracket and a replacement, as apparmor's tables spell them
+printf 'a\tb\na\\b\nab\n' > "$ho/.sd2"
+for sc in 's/a[ \t]+b/X/' 's/a\tb/Y/' 's/a[\\t]b/W/' 's/[\a]/V/' 's/b/\t\r&/'; do
+  bothrc "sed -r '$sc'" sed -r "$sc" "$ho/.sd2"
+done
+rm -f "$ho/.sd2"
+# each escape bare and in a bracket; \n a newline, not an n
+printf 'p\aq\np\fq\np\rq\np\tq\np\vq\nanb\nab\n' > "$ho/.sd4"
+for sc in 's/p\aq/X/' 's/p[\a]q/Y/' 's/p\fq/X/' 's/p[\f]q/Y/' 's/p\rq/X/' 's/p[\r]q/Y/' \
+          's/p\tq/X/' 's/p[\t]q/Y/' 's/p\vq/X/' 's/p[\v]q/Y/' 's/a\n*b/X/' 's/a[\n]*b/Y/'; do
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd4"
+done
+rm -f "$ho/.sd4"
 for sc in 's/ *$/"\n/' 's/b/\t&\t/g'; do
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
