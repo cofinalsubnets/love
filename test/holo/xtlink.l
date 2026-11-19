@@ -12,5 +12,5 @@
         [[".text" 1 6 4 [['align 4] ['label 'FN] ['jmp 'G] ['trap] ['label 'G] ['mov 'r2 'r0] ['add 'r2 'r2 'r1] ['ret]]]
          [".data" 1 3 4 [['align 4] ['label 'VAL] ['raw [30 0 0 0]]]]]
         '("FN") '("VAL") () ())
-   (ld-write (getenv "XT_OUT") (ldlink 'xtensa 0 () [["a.o" (string a)] ["b.o" (string b)]] "love" ()),
+   (ld-write (getenv "XT_OUT") (ldlink 'xtensa 0 () [["a.o" (string a)] ["b.o" (string b)]] "love" () ()),
     puts "xtlink: two objects linked\n", 0))

@@ -115,7 +115,7 @@
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)
-    (deflate s @ z
+    ((deflate-best s @ b (string? b ? b (deflate s))) @ z
        (string? z ? 0 (die ("deflate refused " + sym)),
         say out ("static unsigned char const " + sym + "[] =\n"),
         zrows z 0 #z,

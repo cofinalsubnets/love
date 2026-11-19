@@ -15,7 +15,7 @@
 #define k_map_top 0x100000000ull
 #include "k.h"
 
-// the two symbols the door borrows: kmain owns kboot, and the projection patches
+// the two symbols the door borrows: kmain owns kboot, and the transpose patches
 // k_image_top. Here the gate owns both -- 0x80400000 is comfortably past this small
 // image, and the door must hand the heap nothing below it.
 struct k_boot kboot;

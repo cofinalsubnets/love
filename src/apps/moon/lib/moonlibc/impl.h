@@ -39,17 +39,34 @@
 #include <netinet/in.h>
 
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
-/* a test-and-set: a plain swap where the core has no exclusive load (v6-m, xtensa's lx6),
- * whose one thread the swap serves */
+/* no kernel: an isa with no syscall door (bare thumb, xtensa), or -os none. every call
+ * answers ENOSYS (os.c), and on a bare isa nosys.c lays the leaves mksys lays elsewhere */
+#if defined(__arm__) && !defined(__ARM_EABI__) || defined(__xtensa__)
+# define LvBare 1
+#endif
+#if defined(LvBare) || !defined(__unix__) && !defined(__APPLE__)
+# define LvOsNone 1
+#endif
+/* the read-modify-writes: plain where the core has none (v6-m, xtensa's lx6), whose one
+ * thread they serve; the order is the builtin's */
 #if defined(__ARM_ARCH_6M__) || defined(__xtensa__)
 static int __love_tas(int volatile *p, int v) { int o = *p; *p = v; return o; }
 static void __love_rel(int volatile *p) { *p = 0; }
+static int __love_xchg(int volatile *p, int v, int mo) { int o = *p; *p = v; return o; }
+static int __love_fadd(int volatile *p, int v, int mo) { int o = *p; *p = o + v; return o; }
+static int __love_cas(int volatile *p, int *e, int v, int mo) {
+  if (*p != *e) { *e = *p; return 0; }
+  *p = v;
+  return 1; }
 #else
 # define __love_tas(p, v) __sync_lock_test_and_set(p, v)
 # define __love_rel(p) __sync_lock_release(p)
+# define __love_xchg(p, v, mo) __atomic_exchange_n(p, v, mo)
+# define __love_fadd(p, v, mo) __atomic_fetch_add(p, v, mo)
+# define __love_cas(p, e, v, mo) __atomic_compare_exchange_n(p, e, v, 0, mo, mo)
 #endif
-/* the tables compile everywhere but wasm and rv32; without the sigtramp netbsd's sigaction refuses by name */
-#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__))   /* wasm's one kernel is the page's loader; rv32 has only linux */
+/* the tables compile everywhere but wasm, rv32 and a kernel-less link; without the sigtramp netbsd's sigaction refuses by name */
+#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__)) && !defined(LvOsNone)   /* wasm's one kernel is the page's loader; rv32 has only linux */
 # define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -342,9 +359,10 @@ struct _IO_FILE {
 #define NR_waitid          95
 #define NR_prlimit64      261
 #endif
-#elif defined(__ARM_EABI__)
+#elif defined(__ARM_EABI__) || defined(LvBare)
 /* arm eabi: 64-bit off_t and time_t through the *64 and *_time64 calls; before linux 5.1
- * the 32-bit twins named beside them answer */
+ * the 32-bit twins named beside them answer. a bare isa takes these numbers too, which no
+ * kernel reads */
 #define NR_read             3
 #define NR_write            4
 #define NR_close            6

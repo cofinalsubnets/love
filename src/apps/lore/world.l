@@ -2196,7 +2196,8 @@
                'win (o 'win)})
  ; ..the level named, else the tree's own on disk, else the one the binary carries
  ; ..read on the stage, so the loading screen stands for it; why it would not read comes after
- (world-run o) (: p (o 'level @ () (two? (stat the-level) ? the-level ("/love/" + the-level)) q q)
+ (carried p) (two? (stat p) ? p ("/love/" + p))
+ (world-run o) (: p (o 'level @ () (carried the-level) q q)
                   bad {}
                   r (view-stage (pin o 'level p)
                        (o2 \ world-tick o2 p @ lv (string? lv ? (pin bad 'why lv) (world-go o2 lv)))
@@ -2213,6 +2214,10 @@
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--sway" 'sway 1) view-window view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])
  (world-main as) (view-main "world" world-usage world-opts world-run as)
+ ; ..and the dream, a game of its levels from the apartment on: the apartment, earth, the ring
+ ; and the lighthouse
+ dream-usage "usage: love play dream [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (the world's keys; ? says them)"
+ (dream-main as) (view-main "dream" dream-usage world-opts world-run (["--level" (carried "src/apps/lore/levels/apartment.l")] + as))
  ; --- the editor: the level's text in vi on the right and its scene on the left, in one
  ;     window. ctrl-w w goes between them, a click on the scene puts vi on the form that made
  ;     what it hit, the right button held looks by the mouse, and coming back to the scene
@@ -2690,5 +2695,6 @@
  (edit-main as) (#as @ 1 (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-shelve 'world (udoor 'world world-main world-usage 1 1))
  _ (cite 'lore 'lore-shelve 'world-edit (udoor 'world-edit edit-main edit-usage 1 1))
- _ (cite 'lore 'lore-alias 'corridor 'world))
+ _ (cite 'lore 'lore-alias 'corridor 'world)
+ _ (cite 'lore 'lore-enlist 'dream (udoor 'dream dream-main dream-usage 1 1)))
 ) ; module world

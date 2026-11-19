@@ -268,16 +268,12 @@ void par_run(intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
 #endif
 }
 
-love_noinline static struct g *host_par_width(struct g *g) {
- word nw = g->sp[0];
- g->sp[0] = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
- return g; }
-static LvmWrap(lvm_par_width, host_par_width)
+static lvm(lvm_par_width) {
+ word const nw = Sp[0], r = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
+ love_musttail return Answer(r); }
 LvDef("par-width", par_width, 1, "pool");
 // (par-cpus m) the whole cpus a spare of m thousandths allows, the rounding the width takes: the laws'
-love_noinline static struct g *host_par_cpus(struct g *g) {
- word mw = g->sp[0];
- g->sp[0] = putcharm(oddp(mw) && getcharm(mw) >= 0 ? pool_cpus((uint64_t) getcharm(mw)) : 0);
- return g; }
-static LvmWrap(lvm_par_cpus, host_par_cpus)
+static lvm(lvm_par_cpus) {
+ word const mw = Sp[0], r = putcharm(oddp(mw) && getcharm(mw) >= 0 ? pool_cpus((uint64_t) getcharm(mw)) : 0);
+ love_musttail return Answer(r); }
 LvDef("par-cpus", par_cpus, 1, "pool");

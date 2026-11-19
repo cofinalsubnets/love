@@ -2,6 +2,7 @@
 ; worst pauses at 14 and 15), and please, a collection on demand (() minor, a charm major)
 ; answering the count
 (test ((word ? charm? sun?) (clock 0)) (0 <= nclock (nclock 0)) (17 = tally (gauge 0)))   ; epoch ms pass a 32-bit word's charms
+(: a (nclock 0) b (nclock 0) (test (5000000000 < nclock -5000000000) (a <= b)))   ; ns, and a t, pass them too
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
  (test (c1 < c2)))
 

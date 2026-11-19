@@ -154,7 +154,7 @@
    (t32? g) (elem (g 'tgt) '(thumb2 thumb2sp arm thumb1))   ; AAPCS32: armv7e-m, linux's arm, armv6-M
    (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an sp-only fpu: f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
-   (t32f? g) (t32? g && !(v6m? g))  ; with an fpu, hence AAPCS-VFP: floats ride s0..s15
+   (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
@@ -180,6 +180,10 @@
    (x86? g) (x64? g || ia32? g)
    (ilp32? g) (t32? g || ia32? g || w32s? g)      ; the 32-bit word: a long and a pointer one register, a long long the r0:r1 pair
    (soft? g) (v6m? g || w32s? g)                 ; no float file: every float op a helper call
+   ; where a float rides a call: the words with no float file or under -mfloat-abi=softfp (the
+   ; float file still computes), else AAPCS-VFP's s0..s15
+   (sfa? g) (soft? g || t32? g && xkask? g 'sfp)
+   (t32vfp? g) (t32f? g && !(xkask? g 'sfp))
    (m16? g) (g 'tgt = 'i386m16)
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
    (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
@@ -291,7 +295,7 @@
    (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp arg, filled and answered by the callee.
    ; AAPCS32 past 4 bytes (but a VFP seat's HFA, carried in s/d), SysV past 16
-   (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
+   (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32vfp? g && t32hfa? g ty) || amem? g ty || refm? g ty))
    ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
    ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
    (refm? g ty) (stru? ty && (rv32? g ? (8 < tsz g ty) (16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))))

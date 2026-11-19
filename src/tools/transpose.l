@@ -1,24 +1,24 @@
-; src/tools/kproject.l -- the metal projection: re-base a hosted -pie love's PT_LOADs at the
+; src/tools/transpose.l -- a hosted -pie love laid as its kernel: re-base its PT_LOADs at the
 ; kernel base, apply love_rela ahead of time, lay and patch boot.o below the image, write
 ; k_image_top, and emit the flat ELF. cat after src/love/holo/{elf,obj,link}.l:
 ;
 ;   love <cat> in.pie boot.o out.elf arch [kernel.o ..]
 ;
-; (kproject pie bootb out arch kobs) takes bytes, kobs the kernel's objects as [path bytes], laid
-; past the data copy; the `love kernel` verb projects the running binary.
+; (transpose pie bootb out arch kobs) takes bytes, kobs the kernel's objects as [path bytes], laid
+; past the data copy; the `love seed kernel` verb transposes the running binary.
 
 (: (kparams arch)                       ; target, kernel base, entry symbol, image window
-    ; x64's image runs in the upper half, leaving the lower half to a process; boot stays physical
+    ; the images run in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
-            "a64"  ['a64 0x40200000 "a64boot" 0]
+            "a64"  ['a64 0x40200000 "a64boot" 0xffffff8000000000]
             ; the pi's firmware enters at the start of the flat image, so boot leads
-            "a64pi" ['a64 0x80000 "a64boot" 0]
-            ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-            "rv64" ['rv64  0x80200000 "rvboot" 0]
-            (scare 'kproject-arch arch))
-   (kread p) (uread p @ r (two? r ? [p <>r] (scare 'kproject-open p)))
+            "a64pi" ['a64 0x80000 "a64boot" 0xffffff8000000000]
+            ; entered at the lowest load, not the entry symbol -- transpose lays boot first
+            "rv64" ['rv64  0x80200000 "rvboot" 0xffffffe000000000]
+            (scare 'transpose-arch arch))
+   (kread p) (uread p @ r (two? r ? [p <>r] (scare 'transpose-open p)))
 
-   (kproject pie bootb out arch kobs)
+   (transpose pie bootb out arch kobs)
    (: kp (kparams arch)
       tgt (kp 0) kbase (kp 1) entnm (kp 2) xw (kp 3)
       mach (peep elf-machines tgt 0)
@@ -38,14 +38,14 @@
                            acc)))) 0 ())
       ; ..and past the last, the first writable load's bytes again, base 0 and unpatched: where a
       ; process laid from this image starts its data
-      dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
+      dl ((: (go l) (? (atom? l) (scare 'transpose-data) (0 < <l 4 & 2) <l (go >l))) pls)
       pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
       dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
       (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
       loads (pls + [dcopy])
-      (shfind nm) ((: (go i) (? (shnum <= i) (scare 'kproject-section nm)
+      (shfind nm) ((: (go i) (? (shnum <= i) (scare 'transpose-section nm)
                                 (sname i = nm) i (go (i + 1)))) 1)
       relo (: x (shfind ".love.rela") (rle64 pie (sho x + 24)))
       relz (: x (shfind ".love.rela") (rle64 pie (sho x + 32)))
@@ -61,7 +61,7 @@
                                ? (rle64 pie (e + 8))
                                  (go (e + 24)))))) symo)
       (va2off v) ((: (go l)                      ; a vaddr's file offset, through its load
-                      (? (atom? l) (scare 'kproject-va v)
+                      (? (atom? l) (scare 'transpose-va v)
                          (: g <l
                             (g 0 <= v && v < g 0 + g 2
                              ? (v - g 0 + g 1)
@@ -104,63 +104,47 @@
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)
                    (go (e + 24))))) symo)
-      ; ..and each page holding a door, again and unpatched, past the kernel: a process's text
-      ; is the kernel's but for these
-      dpgs (foldl (\ a v (: p (v - v % 4096) (elem p a ? a (p . a)))) () (sort (map (k \ doors k) (keys doors))))
-      _ (? (16 < #dpgs) (scare 'kproject-doors #dpgs) 0)
-      tv (ld-align 4096 (kend - bias))
-      tcopy ((: (go l i acc)
-                 (? (atom? l) (rev acc)
-                    (: p <l g <(filter (g \ g 0 <= p && p < g 0 + g 2) pls)
-                       (go >l (i + 1) ([(tv + i * 4096) (p - g 0 + g 1) (min 4096 (g 0 + g 2 - p))
-                                        (min 4096 (g 0 + g 2 - p)) 4] . acc)))))
-             (rev dpgs) 0 ())
-      loads2 (loads + [kload] + tcopy)
+      ; each door's slot (love.h's love_door), a word of the image's data: the kernel's body, where
+      ; the copy a process lays from keeps the hosted one
+      slots ({} @ t ((each (keys doors) (\ nm (pie-sym (nm + "__slot") @ v
+                                                (charm? v ? (pin t v <(glo nm)) (scare 'transpose-slot nm))))),
+                     t))
+      loads2 (loads + [kload])
       top ((: (go l m) (? (atom? l) m
                           (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
            loads2 0)
-      eaddr (: r (glo entnm) (two? r ? <r (scare 'kproject-entry entnm)))
+      eaddr (: r (glo entnm) (two? r ? <r (scare 'transpose-entry entnm)))
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       nifx (shfind ".love.nifs")
       nifa (bias + rle64 pie (sho nifx + 16))
       nifz (rle64 pie (sho nifx + 32))
+      ; the bracket is whole rows from the first: a skewed one binds every nif to its neighbour
+      _ (nifa % 8 = 0 && nifz % 24 = 0 ? 0 (scare 'transpose-nifs [nifa nifz]))
       cx [glo nifa (nifa + nifz) b0 b0 () (mach = 243) () (backends tgt) (ld-extents (objs + kobjs)) ()]
-      (ksym nm) (: r (glo nm) (two? r ? (<r - bias) (scare 'kproject-ksym nm)))
+      (ksym nm) (: r (glo nm) (two? r ? (<r - bias) (scare 'transpose-ksym nm)))
       kt (ldemitn cx 'text kobjs (ldemit cx 'text k0 kobjs ()))
       ko (ldemitn cx 'rodata kobjs (ldemit cx 'rodata ko0 kobjs (>kt + (gapz <kt ko0))))
       kd (ldemitn cx 'data kobjs (ldemit cx 'data kd0 kobjs (>ko + (gapz <ko kd0))))
       kbytes (foldl (\ a p (a + (string? p ? p (string (cask p))))) "" >kd)
-      ; each door's refusing body takes a jump to the kernel's own; the rest of its word is kept
-      (door-site nm)
-       (: v (doors nm)
-          f (va2off v)
-          rel (<(glo nm) - (bias + v))
-          [v (show tgt @
-              "x64" (0xe9 + (rel - 5 & 0xffffffff) * 256 + (rle32 pie (f + 5) & 0xffffff) * 1099511627776)
-              "a64" (0x14000000 + (rel // 4 & 0x3ffffff) + rle32 pie (f + 4) * 4294967296)
-              ; rv64: auipc t0, then jalr through it
-              (: lo ((rel + 0x800 & 0xfff) - 0x800)
-                 (0x297 + (rel - lo & 0xfffff000) + (lo & 0xfff) * 1048576 * 4294967296 + 0x28067 * 4294967296)))])
-
-      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base, k_pie_data and
-      ; k_pie_door take the image's far edge (physical), the pie's base, the data copy and the door
-      ; copy with its pages. ascending, for the one-pass splice below
+      ; --- the patch list: love_rela sites slide by bias, but a door's slot takes the kernel's
+      ; body; k_image_top, k_pie_base and k_pie_data take the image's far edge (physical), the
+      ; pie's base and the data copy. ascending, for the one-pass splice below
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
-      sites (foldl (\ a nm (ins (door-site nm) a))
+      sites (foldl (\ a v (ins [v (slots v)] a))
             (ins [(ksym "k_image_top") (top - xw)]
             (ins [(ksym "k_pie_base") bias]
             (ins [(ksym "k_pie_data") (bias + dcopy 0)]
-            (foldl (\ a s (ins s a))
-                   (rev ((: (go k acc)
-                             (? (relz <= k) acc
-                                (: v (rle64 pie (relo + k))
-                                   (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                        0 ()))
-                   ((: (go l i acc) (? (atom? l) acc (go >l (i + 1) ([(ksym "k_pie_door" + 16 + 8 * i) <l] . acc))))
-                    (rev dpgs) 0 [[(ksym "k_pie_door") (bias + tv)] [(ksym "k_pie_door" + 8) #dpgs]])))))
-            (sort (keys doors)))
+            (rev ((: (go k acc)
+                      (? (relz <= k) acc
+                         (: v (rle64 pie (relo + k))
+                            (go (k + 8) (!(nil? (peep slots v ())) ? acc
+                                           ([v (bias + rle64 pie (va2off v))] . acc))))))
+                 0 ())))))
+            (sort (keys slots)))
+      ; a site within a word of the one before would splice its bytes twice
+      _ ((: (go l) (? (atom? >l) 0 (<>l 0 < <l 0 + 8) (scare 'transpose-sites [<l <>l]) (go >l))) sites)
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        (: src (go0 < #pie ? pie kbytes)
@@ -175,7 +159,7 @@
       nsz (foldl (\ a ob (a + ld-lanesz ob 'note)) 0 objs)
       nph (2 + #loads2 - (0 < nsz ? 0 1))
       hdrsz (64 + 56 * nph)
-      _ (4096 < hdrsz + nsz ? (scare 'kproject-headers hdrsz))
+      _ (4096 < hdrsz + nsz ? (scare 'transpose-headers hdrsz))
       (fo a) (a - kbase + 4096)
       ; each load's file offset: dense from where boot stopped, moved only to keep p_offset
       ; congruent to p_vaddr mod the page; address-linear would restore the zeros the link removed.
@@ -243,11 +227,11 @@
                  + (esy + kxy + [(snip pie stro (stro + strz)) kxs <shstr
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
-   ; the file driver (the Makefile's KPROJ). arity-gated, since the `love kernel` verb evals this
+   ; the file driver (the Makefile's recipe). arity-gated, since the `love seed kernel` verb evals this
    ; file too. a def, so the outer `:` stays define-mode and the call below is its own form.
-   (kdrive as)
-    (#as >= 4 ? (kproject <>(kread <as) <>(kread <>as) (as 2) (as 3)
+   (tdrive as)
+    (#as >= 4 ? (transpose <>(kread <as) <>(kread <>as) (as 2) (as 3)
                           (map kread (>(>(>(>as))))))
                0))
 
-(kdrive >argv)
+(tdrive >argv)

@@ -5,6 +5,9 @@
 long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, 4 macos, -1 inle */
 
 long __love_call(long n, long a, long b, long c, long d, long e, long f) {
+#ifdef LvOsNone
+  return -38;                                         /* ENOSYS: no kernel to ask */
+#endif
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
   if (v < 0) return __love_inle(n, a, b, c, d, e, f);   /* inle translates nothing, before the BSD read */
@@ -45,6 +48,9 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   }
   return r; }
 long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
+#ifdef LvOsNone
+  return -38;
+#endif
 #ifdef LvMac
   long r = __love_osv == 4 ? __love_door(n, a, b, c, d, e, f) : LvNoDoor;
   if (r == LvNoDoor) r = __love_sys(__love_osv == 4 ? n | LvMacUnix : n, a, b, c, d, e, f);
@@ -57,9 +63,19 @@ long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
   return r; }
 #endif
 
-/* inle's door, for a link without the kernel: ENOSYS. aligned for the jump a kernel patches in */
-__attribute__((weak, aligned(16)))
+/* inle's door, for a link without the kernel: ENOSYS. natively through __love_inle__slot, which
+   a kernel image points at its own (love.h's love_door, spelled out: libc has no love.h) */
+#if defined(__mooncc__) && !defined(__wasm__)
+long __love_inle__host(long n, long a, long b, long c, long d, long e, long f);
+long (*volatile __love_inle__slot)(long, long, long, long, long, long, long) = __love_inle__host;
+__attribute__((weak, noinline))
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
+  return __love_inle__slot(n, a, b, c, d, e, f); }
+long __love_inle__host(long n, long a, long b, long c, long d, long e, long f) {
+#else
+__attribute__((weak))
+long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
+#endif
   return -38; }
 
 /* a refused address the program can make good: 1 retries the call */
@@ -171,7 +187,9 @@ unsigned long __love_selfpath(char *b, unsigned long n) {
   return 0; }
 
 long __love_osdetect(void) {
-#ifndef LvOsTranslate
+#ifdef LvOsNone
+  return 1;                       /* no kernel; the door answers ENOSYS before it asks */
+#elif !defined(LvOsTranslate)
   /* no tables on this arch: the kernel is whichever -os named */
 # if defined(__linux__)
   return 1;

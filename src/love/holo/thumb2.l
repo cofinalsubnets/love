@@ -44,6 +44,8 @@
    ;; (align 4) (lapool Rd) (abs32 word): LDR.W Rd,[pc,#4] ; B.N over ; NOP pad. for playdate,
    ;; whose loader relocates abs32 words, never a MOVW/MOVT pair
    (thumb-lapool d) (rn d @ dn (catall [(t32 (0xF8DF0004 | dn << 12)) (t16 0xE002) (t16 0xBF00)]))
+   ;; add Rd, pc (the 16-bit hi form): a pooled pc-relative word made an address, as lap's add
+   (thumb-addpc d) (rn d @ dn (t16 (0x4478 | (dn >> 3) << 7 | dn & 7)))
 
    ;; mov is the 16-bit hi form, which keeps the flags and reaches sp and pc
    (thumb-mov d s) (thumb-movr d s)
@@ -604,7 +606,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool)
+          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
@@ -643,7 +645,8 @@
       (target - (site + 4) @ o
          (kind @ ('b || 'bl) (tbw o (kind = 'bl ? 0xD000 0x9000))
             'bcc
-            (: imm11 (o >> 1 & 2047)  imm6 (o >> 12 & 63)
+            (: _ (thumb-bcc-reach? o ? 0 (scare 'thumb-bcc-reach o))
+               imm11 (o >> 1 & 2047)  imm6 (o >> 12 & 63)
                j1 (o >> 18 & 1)  j2 (o >> 19 & 1)  s (o >> 20 & 1)
                hw1 (0xF000 | (s << 10 | (aux << 6 | imm6)))
                hw2 (0x8000 | (j1 << 13 | (j2 << 11 | imm11)))
@@ -668,18 +671,23 @@
             'movw16p (thumb-mw16 0xF240 aux (target - (site + 12) & 65535))
             'movt16p (thumb-mw16 0xF2C0 aux (target - (site + 8) >> 16 & 65535))
             (scare 'badfix kind)))
+   (thumb-bcc-reach? o) (-1048576 <= o && o <= 1048574)
    ;; a REL movw/movt's addend is its imm16 sign-extended, the high half's too: lap's own
    (thumb-lapa kind aux) (kind = 'movw16p ? (thumb-mw16 0xF240 aux 65524) (thumb-mw16 0xF2C0 aux 65528))
 
    ;; the linker's door. ARM is rel: movw16/movt16 read Rd back out of hw2, and the field must
    ;; equal patch's own zero-addend encoding or it refuses -- no inverse scatter. the thumb bit
-   ;; in target passes through: every field shifts the offset right by at least one
+   ;; in target passes through: every field shifts the offset right by at least one. () past
+   ;; a branch's reach
    (thumb-refix kind bs target site width)
-      (: aux (? (elem kind '(movw16 movt16 movw16p movt16p)) (bs 3 & 15)      ; MOVW/MOVT t3: Rd, hw2 bits 11:8
+      (: o (target - (site + 4))
+         aux (? (elem kind '(movw16 movt16 movw16p movt16p)) (bs 3 & 15)      ; MOVW/MOVT t3: Rd, hw2 bits 11:8
                 (kind = 'bcc) ((((bs 1 << 8) | bs 0) >> 6) & 15)  ; Bcc t3: the cond, hw1 bits 9:6
                 0)
          ((? (elem kind '(movw16p movt16p)) (thumb-lapa kind aux) (thumb-patch kind 0 0 width aux)) = bs ? 0 (scare 'thumb-refix-addend kind),
-          thumb-patch kind target site width aux))
+          (? (elem kind '(b bl) && !(tbw-reach? o)) ()
+             (kind = 'bcc && !(thumb-bcc-reach? o)) ()
+             (thumb-patch kind target site width aux))))
 
    ;; the relaxer's hook: a lone wide b or bcc whose pessimistic reach fits goes narrow; the
    ;; pc reads site + 4 for both widths. a lal loads its pool word where the word-aligned pc,

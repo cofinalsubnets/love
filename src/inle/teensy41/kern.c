@@ -7,8 +7,8 @@
 #include "psram.h"
 #include "../k.h"
 #include "../bput.h"
+#include "../kface.h"
 
-void kq(uint8_t);
 uintptr_t te_ms(void);
 void kmain(void);
 uint32_t sd_sectors(void);
@@ -64,7 +64,6 @@ void k_kb_sync(int room) {
   for (; room > 0 && usb_rx_ready(); room--) kq((uint8_t) usb_getc()); }
 
 // asmops' k_wait: nothing interrupts a wait here, so it drains output and polls
-void k_kb_poll(void);
 void k_idle(void) { usb_flush(), k_tick_sync(), k_kb_poll(); }
 
 // the microSD slot in blk.c's place

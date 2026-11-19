@@ -208,8 +208,8 @@
                   (charm? p && 0 <= p ? (wait p) 127))
              (0 != r ? (src-die "the roster bake failed (exit \(r))")))))
 
-   ; the imageless projection of a binary, written beside p. a binary carrying no image
-   ; is its own projection, which is how seed-fix reads either side's state.
+   ; a binary without its image, written beside p. a binary carrying no image
+   ; is its own, which is how seed-fix reads either side's state.
    (seed-bare exe p)
     (: _ (unlink p)
        r (hark [exe "bake" "-n" "-o" p])
@@ -277,7 +277,7 @@
     lay this binary's source under DIR (default .) and rebuild it, byte for byte
       ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
       FORMAT apk | aab: android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
-      kernel this binary projected onto the metal, as DIR/love-ARCH.elf: a reformat, its
+      kernel this binary transposed onto the metal, as DIR/love-ARCH.elf: a reformat, its
              code the running binary's, its own objects compiled from the carried tree
       -g     build with the system cc and tools, ours filling the gaps
 
@@ -347,7 +347,7 @@
           dst (two? a3 ? <a3)
           (elem xa seed-formats ? (seed-app root xa dst (two? a3 ? >a3)) (seed-wait root xa dst))))
 
-   ; --- `love seed kernel [DIR]` -- the metal projection of this binary --------
+   ; --- `love seed kernel [DIR]` -- this binary transposed onto the metal ------
    ; the boot stub is laid, not stored: the cat below evals off the carried tree in the
    ; Makefile's order. the arch is this binary's own, read off e_machine
    ; the kernel's objects come from the carried source, by its own Makefile, in a tree
@@ -394,10 +394,10 @@
             + "(borrow 'kore)"
             + kern-pick "src/apps/kore/asbook.l"
             + kern-pick "src/inle/mkboot.l"
-            + kern-pick "src/tools/kproject.l"
+            + kern-pick "src/tools/transpose.l"
             + "(: kb (peep (cite 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
-            + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0) (peep kb 'kobs 0)))")
+            + "   (transpose (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0) (peep kb 'kobs 0)))")
        (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0)),
         pull vt 'kern-in 0,
         puts ";; wrote \(out) (\(arch))\n",

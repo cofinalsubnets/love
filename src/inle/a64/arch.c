@@ -5,7 +5,6 @@
 #include "k.h"                       // kboot, and kputc/kputs/kputn (src/inle/kmain.c)
 #include "../mmio.h"                  // mmio_rd/mmio_wr, device registers off the direct map
 
-void kq(uint8_t);                      // kmain's input queue, one byte
 void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 
 // qemu virt's fixed MMIO; another board would read the device tree
@@ -143,6 +142,7 @@ void archinit(void) {
   // a bootloader may enter at EL1t with FP/SIMD trapping: settle both before anything faults
   k_sp_to_el1h();
   k_fpen_enable();
+  k_el0_open();
   k_wr_vbar_el1((uintptr_t) vectors);
   if (khhdm) mmio_map();
   gic_init();

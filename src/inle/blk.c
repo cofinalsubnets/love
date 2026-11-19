@@ -8,7 +8,6 @@
 #include "bput.h"
 #include <stdint.h>
 
-void serial_putc(int);
 static void bputs(char const *s) { bput_s(serial_putc, s); }
 static void bputn(uintptr_t v) { bput_n(serial_putc, v, 10); }
 

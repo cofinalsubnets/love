@@ -3,6 +3,7 @@
 #include "../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 #include <sys/utsname.h>
+#include "kface.h"
 
 // what a hosted __love_start would arm: the environment (seat.l's envt starts as a copy) and
 // stdout/stderr write-through on fds 1 and 2. kmain calls this after the osv
@@ -13,42 +14,7 @@ void k_seat_init(void) {
   stderr->fd = 2; stderr->wr = 1; }
 
 // a kernel-side fd is an absolute row: a task's `write(1, ..)` reaches row 1, not what its parent
-// handed it; redirection lives in the task's ports. the faces below are kmain.c's
-extern void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-extern void kfree(void *p), k_drop(void *p);
-
-// the ramfs path faces, each 0 or a negative errno
-struct k_st { uintptr_t size, ms, mode; };
-extern int
- k_fs_open(char const *p, uintptr_t pn, char m),
- k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow),
- k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode),
- k_fs_rmdir(char const *p, uintptr_t pn),
- k_fs_unlink(char const *p, uintptr_t pn),
- k_fs_rename(char const *o, uintptr_t on, char const *n, uintptr_t nn),
- k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn),
- k_fs_chdir(char const *p, uintptr_t pn),
- k_fs_getcwd(char *b, uintptr_t n),
- k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode),
- k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms);
-// readlink answers a count, not a status
-extern intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n);
-extern uintptr_t k_clock_ms(void);     // ms since the epoch, the kernel's one scale
-
-// the fd faces, g-free: which task runs never crosses this seam
-extern long
- k_fd_pipe(int fds[2]),
- k_fd_dup(int src, int at),
- k_fd_dup3(int src, int dst),
- k_fd_stat(int fd, struct k_st *st),
- k_fd_dents(int fd, void *buf, long cap),
- k_fs_opendir(char const *p, uintptr_t pn),
- k_fd_chdir(int fd),
- k_fd_write(int fd, void const *b, long n),
- k_fd_read(int fd, void *b, long n),
- k_fd_close(int fd),
- k_fd_lseek(int fd, long off, int whence),
- k_fd_truncate(int fd, long n);
+// handed it; redirection lives in the task's ports. the faces are kmain.c's (kface.h)
 
 // a dirfd is honored as AT_FDCWD only: the ramfs has one cwd
 static long at_ok(long dfd, char const *p) {
@@ -230,10 +196,6 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 
 // processes: a wasm instance, or on x64 an address space (x64/proc.c), calling k_proc_call.
 // the kernel keeps its pid, parent, cwd and fds; status as wait4 lays it, the signal in the low byte
-extern void k_fs_cwd_swap(char *cwd, uintptr_t *n);
-extern bool k_fd_blocks(int fd);
-extern int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols);
-extern bool ready(int fd, int events);
 
 #define k_proc_fds 64
 struct k_proc { int pid, ppid, live, status, exitw; uint64_t cx, nb; uintptr_t cwd_n; char cwd[256];
@@ -330,7 +292,8 @@ static char *k_proc_code(struct k_proc *p, char const *path, uintptr_t pn, uintp
 static char const k_self[] = "/proc/self/exe";
 
 // a path to a program runs as itself; anything else, a bare word above all, is love's,
-// woken from /proc/image where there is one
+// woken from the door's /proc/image, else from the one seat.l baked, else bare. the prime's
+// own verbs, bake and wake, are always bare
 static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t an,
                       char const *ev, uintptr_t en) {
   bool self = !strcmp(f, k_self);
@@ -340,14 +303,18 @@ static long k_proc_go(struct k_proc *p, char const *f, char const *av, uintptr_t
     long r = k_proc_start(p->pid, av, an, ev, en, code, cn);
     kfree(code);
     return r; }
-  static char const wake[] = "love\0wake\0/proc/image";
+  static char const wake[] = "love\0wake\0/proc/image", baked[] = "love\0wake\0/tmp/.love.img";
   struct k_st st;
+  bool bare = !strcmp(f, "bake") || !strcmp(f, "wake"),
+       door = !bare && !k_fs_stat("/proc/image", 11, &st, true),
+       own = !bare && !door && !k_fs_stat(baked + 10, sizeof baked - 11, &st, true);
+  char const *wk = own ? baked : wake;
   uintptr_t a0 = an ? strlen(av) + 1 : 0,
-            pn = k_fs_stat("/proc/image", 11, &st, true) ? 5 : sizeof wake,
+            pn = door ? sizeof wake : own ? sizeof baked : 5,
             fw = self ? 0 : fn + 1, n = pn + fw + an - a0;
   char *b = k_grab(n);
   if (!b) return -ENOMEM;
-  memcpy(b, wake, pn), memcpy(b + pn, f, fw), memcpy(b + pn + fw, av + a0, an - a0);
+  memcpy(b, wk, pn), memcpy(b + pn, f, fw), memcpy(b + pn + fw, av + a0, an - a0);
   long r = k_proc_start(p->pid, b, n, ev, en, NULL, 0);
   k_drop(b);
   return r; }
