@@ -15,6 +15,8 @@
 //   'P'            the wiring: four bytes of the three lines' levels (bit 0 swclk, 1 nrst, 2 swdio),
 //                  all pulled up, all pulled down, then swclk and then swdio driven low with
 //                  the others pulled up. nrst is never driven; every line is let go after
+// beside it a second usb port is a serial adapter: uart0 on gp0 tx and gp1 rx (the xiao's d6
+// d7) at the line coding the host sets on that port, its bytes both ways between commands
 #include <stdint.h>
 #ifdef RP2350
 #include "../rp2350/rp2350.h"
@@ -33,11 +35,17 @@ int usb_rx_ready(void);
 int usb_getc(void);
 void usb_putc(int c);
 void usb_flush(void);
+uint32_t usb_uart_codings(void);
+void usb_uart_coding(uint8_t lc[7]);
+int usb_uart_ready(void);
+int usb_uart_getc(void);
+void usb_uart_putc(int c);
+void usb_uart_push(void);
 #ifdef RP2350
 void serial_putc(int c) { usb_putc(c); }   // rp2350.c's fault report, out the usb port
 #endif
 
-struct probe { uint32_t half, on, stop; };
+struct probe { uint32_t half, on, stop, codings; };
 
 static void spin(uint32_t n) { for (volatile uint32_t k = 0; k < n; k++) {} }
 
@@ -130,15 +138,58 @@ static uint32_t rate(struct probe *p, uint32_t hz) {
   p->half = want > bit_cyc ? (want - bit_cyc) / (2u * loop_cyc) : 0;
   return sys_hz / (bit_cyc + 2u * loop_cyc * p->half); }
 
-// the answers go out when the host has nothing more waiting
-static int get(void) {
+// uart0 on gp0 and gp1, rx pulled up so an open line idles; clk_peri on clk_sys, so the
+// divisor reaches past the crystal's 750 kbaud
+static void uart_init(void) {
+  for (unsigned i = 0; i < 2; i++) {
+    REG(IO_BANK0_GPIO_CTRL(i)) = IO_FUNC_UART;
+    REG(PADS_BANK0_GPIO(i) + REG_CLR) = PADS_OD | PADS_PDE;
+    REG(PADS_BANK0_GPIO(i) + REG_SET) = PADS_IE | PADS_PUE;
+#ifdef PADS_ISO
+    REG(PADS_BANK0_GPIO(i) + REG_CLR) = PADS_ISO;
+#endif
+  }
+  REG(CLK_PERI_CTRL) = 0;
+  spin(64);
+  REG(CLK_PERI_CTRL) = CLK_PERI_ENABLE; }   // auxsrc 0, clk_sys
+
+// a cdc line coding on the uart: baud, stop bits (1.5 taken as 2), parity (mark and space by
+// the stick bit), data bits. the fifos empty across it
+static void uart_coding(uint8_t const lc[7]) {
+  uint32_t const baud = lc[0] | lc[1] << 8 | lc[2] << 16 | (uint32_t) lc[3] << 24, par = lc[5];
+  if (!baud) return;
+  uint32_t const div = 8u * sys_hz / baud, bits = lc[6] < 5 || lc[6] > 8 ? 8u : lc[6];
+  uint32_t ib = div >> 7, fb = ((div & 0x7Fu) + 1u) >> 1;
+  if (!ib) ib = 1, fb = 0;
+  if (ib > 0xFFFFu) ib = 0xFFFFu, fb = 0;
+  uint32_t h = (bits - 5u) << 5 | UART_LCR_H_FEN | (lc[4] ? UART_LCR_H_STP2 : 0);
+  if (par) h |= UART_LCR_H_PEN | (par == 2 || par == 4 ? UART_LCR_H_EPS : 0) | (par >= 3 ? UART_LCR_H_SPS : 0);
+  REG(UART_CR) = 0;
+  while (REG(UART_FR) & UART_FR_BUSY) {}
+  REG(UART_LCR_H) = 0;
+  REG(UART_IBRD) = ib, REG(UART_FBRD) = fb, REG(UART_LCR_H) = h;   // lcr_h's write latches the divisor
+  REG(UART_CR) = UART_CR_UARTEN | UART_CR_TXE | UART_CR_RXE; }
+
+// the serial port's turn: a new coding, the uart's bytes up, the host's down as the fifo takes them
+static void bridge(struct probe *p) {
+  uint32_t const k = usb_uart_codings();
+  if (k != p->codings) {
+    uint8_t lc[7];
+    usb_uart_coding(lc), uart_coding(lc), p->codings = k; }
+  for (uint32_t n = 0; n < 32 && !(REG(UART_FR) & UART_FR_RXFE); n++) usb_uart_putc((int) (REG(UART_DR) & 0xFFu));
+  while (usb_uart_ready() && !(REG(UART_FR) & UART_FR_TXFF)) REG(UART_DR) = (uint32_t) usb_uart_getc();
+  usb_uart_push(); }
+
+// the answers go out when the host has nothing more waiting; the uart has its turn at every byte
+static int get(struct probe *p) {
+  bridge(p);
   if (!usb_rx_ready()) usb_flush();
-  while (!usb_rx_ready()) usb_poll();
+  while (!usb_rx_ready()) usb_poll(), bridge(p);
   return usb_getc(); }
 
-static uint32_t get32(void) {
+static uint32_t get32(struct probe *p) {
   uint32_t v = 0;
-  for (uint32_t i = 0; i < 4; i++) v |= (uint32_t) get() << 8 * i;
+  for (uint32_t i = 0; i < 4; i++) v |= (uint32_t) get(p) << 8 * i;
   return v; }
 
 static void put32(uint32_t v) { for (uint32_t i = 0; i < 4; i++) usb_putc((int) (v >> 8 * i & 0xFFu)); }
@@ -146,10 +197,10 @@ static void put32(uint32_t v) { for (uint32_t i = 0; i < 4; i++) usb_putc((int) 
 static void puts_(char const *s) { for (; *s; s++) usb_putc(*s); }
 
 int main(void) {
-  struct probe p = { 0, 0, 0 };
+  struct probe p = { 0, 0, 0, 0 };
   unsigned const pins[3] = { swclk, nrst, swdio };
   // the blocks it uses from their reset, whatever the rom left them in
-  uint32_t const blk = RST_IO_BANK0 | RST_PADS_BANK0 | RST_TIMER;
+  uint32_t const blk = RST_IO_BANK0 | RST_PADS_BANK0 | RST_TIMER | RST_UART0;
   REG(RESETS_RESET + REG_SET) = blk;
   REG(RESETS_RESET + REG_CLR) = blk;
   while ((REG(RESETS_RESET_DONE) & blk) != blk) {}
@@ -157,25 +208,27 @@ int main(void) {
   pulls(1);
   REG(SIO_GPIO_OUT_CLR) = PIN(nrst);
   rate(&p, 1000000u);
+  uart_init();
+  { uint8_t lc[7]; usb_uart_coding(lc), uart_coding(lc); }
   usb_init();
   for (;;) {
-    int const c = get();
+    int const c = get(&p);
     if (c == 'T') {
-      uint32_t const rq = (uint32_t) get(), w = rq & 4u ? 0 : get32();
+      uint32_t const rq = (uint32_t) get(&p), w = rq & 4u ? 0 : get32(&p);
       uint32_t r = 0, par = 0, ack = 0;
       if (!p.stop) ack = xfer(&p, rq, w, &r, &par), p.stop = ack != 1u;
       usb_putc((int) ack);
       if (ack == 1u && rq & 4u) put32(r), usb_putc((int) par); }
-    else if (c == 'N') { uint32_t const rq = (uint32_t) get(), w = get32(); if (!p.stop) noack(&p, rq, w); }
+    else if (c == 'N') { uint32_t const rq = (uint32_t) get(&p), w = get32(&p); if (!p.stop) noack(&p, rq, w); }
     else if (c == 'B') {
-      uint32_t n = (uint32_t) get();
-    n |= (uint32_t) get() << 8;
+      uint32_t n = (uint32_t) get(&p);
+    n |= (uint32_t) get(&p) << 8;
       take(&p);
       for (uint32_t i = 0; i < n; i += 8) {
-        uint32_t const b = (uint32_t) get();
+        uint32_t const b = (uint32_t) get(&p);
         for (uint32_t k = 0; k < 8 && i + k < n; k++) wbit(&p, b >> k); } }
-    else if (c == 'R') REG(get() ? SIO_GPIO_OE_SET : SIO_GPIO_OE_CLR) = PIN(nrst);
-    else if (c == 'C') put32(rate(&p, get32()));
+    else if (c == 'R') REG(get(&p) ? SIO_GPIO_OE_SET : SIO_GPIO_OE_CLR) = PIN(nrst);
+    else if (c == 'C') put32(rate(&p, get32(&p)));
     else if (c == 'Z') release(&p);
     else if (c == 'E') p.stop = 0, usb_putc('e');
     else if (c == 'I') puts_("lovswd1\n");
