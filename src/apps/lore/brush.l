@@ -140,6 +140,12 @@
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
      (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
      (map I ^#I))
+   ; ..or among C, the brushes near a box holding fb: the same test, a brush at a time
+   (near-in fb C) (: lo (fb 'lo) hi (fb 'hi)
+     (filter (c \ all (k \ peep (H k) c 0 >= lo k - 0.01 && peep (L k) c 0 - 0.01 <= hi k) ^3) C))
+   ; ..a box holding all faces js of brush b
+   (ubox b js) (: bxs (map (j \ box-of (b 'faces j)) js)
+     {'lo (map (k \ foldl min 1e300 (map (x \ x 0 k) bxs)) ^3) 'hi (map (k \ foldl max -1e300 (map (x \ x 1 k) bxs)) ^3)})
    ; ..and the medium at points ps, a tray, of only those: a brush holding a place a hair off
    ; the face is near it. the last brush holding a point says, each weighed over all at once
    (xyz ps) (map (k \ gem-tray [#ps] (map (p \ 1.0 * p k) ps)) ^3)
@@ -164,7 +170,7 @@
    (meets c pl) (catmap (k \ (: g (c 'faces k) s (map (side pl) g)
                                   (#g >= 3 && foldl min 1e9 s <= 1e-6 && foldl max -1e9 s >= -1e-6 ? [(c 'planes k)] ())))
                            ^#(c 'planes))
-   (piece i b j) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near fb)
+   (piece i b j C) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near-in fb C)
      (rel k) (? (k < i) -1 (k > i) 1 0)
      (key _) ['face j (ft i) (map (k \ [(rel k) (ft k)]) ks)]
      ky (tablet? kp ? (key ()) ()) fi (tablet? kp ? ((kp 'id) ky) ())
@@ -179,7 +185,8 @@
                                     ^np))))
      qt (tab qs) (map (m \ (: q (qt m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
    (ok? i j) (!(tablet? want) || peep want [i j] 0 > 0)
-   (catmap (i \ (: b (bt i) _ (tick 'faces (i / nb)) (catmap (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes)))) ^nb))
+   (catmap (i \ (: b (bt i) _ (tick 'faces (i / nb)) js (filter (j \ #(b 'faces j) >= 3 && shut? b j && ok? i j) ^#(b 'planes))
+                  (atom? js ? () (: C (near (ubox b js)) (catmap (j \ piece i b j C) js))))) ^nb))
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
  (grids ps c fine split?) (c <= fine ? (poly-grid ps fine)
