@@ -58,18 +58,15 @@ static uint32_t life_step(uint32_t b) {
       if (c == 3 || (c == 2 && (b >> (y * LED_N + x) & 1u))) n |= 1u << (y * LED_N + x); }
   return n; }
 
-// a board of the game: a generation every 250 ms, a cell just died shown dim; it runs on
-// through still lifes and blinkers, and only a board gone empty reseeds, a generation after,
-// off the noise's xorshift
+// a board of the game: a generation every 250 ms, a cell just died shown dim. a board is
+// seeded off the noise's xorshift when life is shown afresh (main zeroes its clock), and runs on
+// through still lifes, blinkers and an empty board until then
 static void life(uint8_t *lv, uint32_t t, uint32_t *g, uint32_t *z) {
-  if (t - g[2] >= 250u || !(g[0] | g[1])) {
-    uint32_t n = g[0] ? life_step(g[0]) : 0;
-    g[1] = g[0], g[2] = t;
-    if (!g[0]) {
-      uint32_t x = *z;
-      x ^= x << 13, x ^= x >> 17, x ^= x << 5, *z = x;
-      n = x & ((1u << LED_N * LED_N) - 1u), g[1] = 0; }
-    g[0] = n; }
+  if (!g[2]) {
+    uint32_t x = *z;
+    x ^= x << 13, x ^= x >> 17, x ^= x << 5, *z = x;
+    g[0] = x & ((1u << LED_N * LED_N) - 1u), g[1] = 0, g[2] = t | 1u; }
+  else if (t - g[2] >= 250u) g[1] = g[0], g[0] = life_step(g[0]), g[2] = t | 1u;
   for (int k = 0; k < LED_N * LED_N; k++)
     lv[k] = (uint8_t) ((g[0] >> k & 1u) ? LED_MAX : (g[1] >> k & 1u) ? 2 : 0); }
 
@@ -143,14 +140,17 @@ int main(void) {
     bs[j] = v; }
   uint32_t base = bs[4] ? bs[4] : 1, z = 0x9E3779B9u ^ clock_us();
   int touched = 0;
-  uint32_t gl[3] = { 0, 0, 0 };   // life: the board, the one before, its clock
+  uint32_t gl[3] = { 0, 0, 0 };   // life: the board, the one before, its clock (0: seed anew)
+  int was = 0;                    // the last pass's mode, b's value or 3 for the static
   puts_("; logo "), putu(base), puts_(" us\n");
   led_put(0);
   // the beacon every tenth pass, ~100 ms; the temperature read again each second
   for (uint32_t n = 0;; n++) {
     uint32_t t = clock_ms(), us = logo_us();
     touched = touched ? us * 2 > base * 3 : us > base * 2;
-    int b = buttons(), hiss = touched || b == 3;
+    int b = buttons(), hiss = touched || b == 3, mode = hiss ? 3 : b;
+    if (mode == 2 && was != 2) gl[2] = 0;
+    was = mode;
     if (hiss) snow(lv, &z);
     else if (b == 1) moon(lv, t, sn, nx, nz);
     else if (b == 2) life(lv, t, gl, &z);
