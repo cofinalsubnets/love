@@ -125,7 +125,14 @@
    ;; a row's operand kinds in text order
    (rv-kinds row) (<(row 3) = 'aqrl ? >(row 3) (row 3))
    ;; a name and its operands to the word
-   (rv-word mn vs) (rv-row mn @ ra (two? ra ? (rve-word <ra vs (ra 1)) (scare 'rv-enc mn)))
+   (rv-walk mn vs) (rv-row mn @ ra (two? ra ? (rve-word <ra vs (ra 1)) (scare 'rv-enc mn)))
+   ;; ..once per name and operands, which the lowering repeats; a bounded memo, as a bake keeps it
+   rv-memo {} rv-memo-n {'n 0}
+   (rv-word mn vs)
+    (: k [mn vs] w (peep rv-memo k ())
+       (? (w != ()) w
+          (: w (rv-walk mn vs)
+             (rv-memo-n 'n < 4096 ? (pin rv-memo k w, pin rv-memo-n 'n (rv-memo-n 'n + 1), w) w))))
    (rvo mn vs) (le32 (rv-word mn vs))
    ;; decode.l's items to the raw operands, a target against pc
    (rv-raw o pc) (? (elem <o '(mem fence)) >o (<o = 'lbl) (o 1 - pc) (o 1))
@@ -587,8 +594,13 @@
 
    (rvc-s16? n)            (n >= -512 && (n <= 496 && n % 16 = 0))
 
-   ;; the C word, or () where no form fits
+   ;; the C word, or () where no form fits; once per word, as rv-word
+   rvc-memo {} rvc-memo-n {'n 0}
    (rvc-of w)
+    (peep rvc-memo w 'none @
+     'none (: c (rvc-walk w) (rvc-memo-n 'n < 4096 ? (pin rvc-memo w c, pin rvc-memo-n 'n (rvc-memo-n 'n + 1), c) c))
+     c c)
+   (rvc-walk w)
     (: op (w & 127) rd (w >> 7 & 31) f3 (w >> 12 & 7)
        rs1 (w >> 15 & 31) rs2 (w >> 20 & 31) f7 (w >> 25 & 127)
        i (rvc-i12 w) s (rvc-s12 w) sh (rs2 | (f7 & 1) << 5)

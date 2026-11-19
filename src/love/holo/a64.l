@@ -398,9 +398,16 @@
            (a6e-op <ks os acc pc @ e (e = () ? () (go >ks (snip os (e 1) #os) (acc | <e)))))
        (go (r 3) ops (r 1) @ w (w = () || w & r 2 != r 1 ? () w)))
    ;; the lowering's word, the first row of the name its operands fit: its forms are its own
-   (a64-word mn ops)
+   (a64-walk mn ops)
     (: (go l) (? !(two? l) (scare 'a64-word [mn ops]) (a64-fit <l ops 0 @ w (w = () ? (go >l) w)))
-       (go (peep a64-byname mn ()))))
+       (go (peep a64-byname mn ())))
+   ;; ..once per name and operands, which the lowering repeats; a bounded memo, as a bake keeps it
+   a6-memo {} a6-memo-n {'n 0}
+   (a64-word mn ops)
+    (: k [mn ops] w (peep a6-memo k ())
+       (? (w != ()) w
+          (: w (a64-walk mn ops)
+             (a6-memo-n 'n < 4096 ? (pin a6-memo k w, pin a6-memo-n 'n (a6-memo-n 'n + 1), w) w)))))
 
 (: ;; r19..r28 are callee-saved. x16 (IP0) is borrowed by the indexed stores, the far-memory lane
    ;; and the 128-bit kit, x17 by the kit: mooncc allocates neither, so a hand-written lay naming
