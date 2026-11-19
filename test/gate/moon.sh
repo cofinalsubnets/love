@@ -1615,6 +1615,13 @@ grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member mus
 printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
 moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
 grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
+# a member named twice, directly or through an anonymous member, is refused
+printf 'struct s { int a; int a; };\nint main(void) { return 0; }\n' > "$ho/.cc7d.c"
+moonrun "$ho/.cc7d.c" "$ho/.ccx" > "$ho/.cc7d.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7d.out" || fail "mooncc duplicate member must refuse: $(head -1 "$ho/.cc7d.out")"
+printf 'struct s { int a; struct { int b, a; }; };\nint main(void) { return 0; }\n' > "$ho/.cc7e.c"
+moonrun "$ho/.cc7e.c" "$ho/.ccx" > "$ho/.cc7e.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7e.out" || fail "mooncc duplicate anonymous member must refuse: $(head -1 "$ho/.cc7e.out")"
 # sizeof an incomplete struct is no size
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
