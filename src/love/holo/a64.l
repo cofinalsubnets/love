@@ -428,13 +428,24 @@
 
    ;; a word by its row in a64-tab, the operands as decode.l reads them
    (a6o mn ops) (le32 (a64-word mn ops))
+   ;; ..or by the emitter's own integer key, a shape tag in its low 4 bits: the operands built
+   ;; only on a miss. a key names every operand's value, so it answers what a64-word would
+   a6-km {} a6-km-n {'n 0}
+   (a6q mn key f)
+    (: t (peep a6-km mn () @ () (: t {} (pin a6-km mn t, t)) t t)
+       w (peep t key ())
+       (? (w != ()) w
+          (: w (a64-word mn (f 0))
+             (a6-km-n 'n < 8192 ? (pin t key w, pin a6-km-n 'n (a6-km-n 'n + 1), w) w))))
+   (a6qo mn key f) (le32 (a6q mn key f))
+   (a6k3 a b c tag) (((a * 32 + b) * 32 + c) * 16 + tag)
    (ax n) ['x n]
    (aw n) ['w n]
    (afd n) ['f 'd n]
    (afs n) ['f 's n]
    (aim v) ['im v]
    (axs l) (map (r \ ax (rn r)) l)
-   (a64-hw mn dn v k) (a6o mn [(ax dn) (aim v) ['sh 'lsl (16 * k)]])     ; movz/movn/movk d, v, lsl 16k
+   (a64-hw mn dn v k) (a6qo mn (a6k3 v k dn 1) (_ \ [(ax dn) (aim v) ['sh 'lsl (16 * k)]]))     ; movz/movn/movk d, v, lsl 16k
 
    ;; //% and not &/>>: u can be a bignum >= 2^63, where & drops the high limb
    (a64-lane u k) ((u // k 65536) % 65536)                                     ; (k 65536) is 65536^k
@@ -454,14 +465,15 @@
    (a64-mov d s) (: dn (rn d) sn (rn s)
       (? (elem 'zr [d s] && elem 'sp [d s]) (scare 'a64-mov-sp [d s])
          (d = 'sp || s = 'sp) (a6o 'add [(ax dn) (ax sn) (aim 0)])
-         (a6o 'orr [(ax dn) (ax 31) (ax sn)])))
+         (a6qo 'orr (a6k3 dn 31 sn 2) (_ \ [(ax dn) (ax 31) (ax sn)]))))
 
    ;; the shifted-register form reads 31 as xzr in every slot, so sp scares: move sp with lea
    ;; and do the arithmetic in a plain register
    (alu-rrr mn d a b) (: dn (rn d) an (rn a) bn (rn b)
       (dn = 31 || an = 31 || bn = 31 ? (scare 'a64-alu-sp [d a b]) 0,
-       a6o mn [(ax dn) (ax an) (ax bn)]))
-   (alu-rri mn d a imm) (a6o mn [(ax (rn d)) (ax (rn a)) (aim imm)])
+       a6qo mn (a6k3 dn an bn 2) (_ \ [(ax dn) (ax an) (ax bn)])))
+   (alu-rri mn d a imm) (: dn (rn d) an (rn a)
+      (charm? imm && imm < 1099511627776 && imm > -1099511627776 ? (a6qo mn (a6k3 imm an dn 3) (_ \ [(ax dn) (ax an) (aim imm)])) (a6o mn [(ax dn) (ax an) (aim imm)])))
    ;; imm12, or up to 24 bits as the LSL #12 form plus the low tail (add/sub only: a split S-form
    ;; would leave the tail's flags)
    (a64-addsub-imm op d a imm)
@@ -482,9 +494,9 @@
 
    (a64-cmp a b)                                            ; subs xzr, a, b; cmn for a negative imm
       (rn a @ an
-         (reg? b ? (a6o 'subs [(ax 31) (ax an) (ax (rn b))])
+         (reg? b ? (rn b @ bn (a6qo 'subs (a6k3 31 an bn 2) (_ \ [(ax 31) (ax an) (ax bn)])))
             (: pos (b < 0 ? (0 - b) b) mn (b < 0 ? 'adds 'subs)
-               (? (pos <= 4095) (a6o mn [(ax 31) (ax an) (aim pos)])
+               (? (pos <= 4095) (a6qo mn (a6k3 pos an 31 3) (_ \ [(ax 31) (ax an) (aim pos)]))
                   (pos % 4096 = 0 && pos >> 12 <= 4095) (a6o mn [(ax 31) (ax an) (aim (pos >> 12)) ['sh 'lsl 12]])
                   (a64-li 'r17 b + a64-cmp a 'r17)))))                      ; past imm12, through x17
 
@@ -518,10 +530,11 @@
    (a64-mem-raw lmn umn sc rt bn off)
       (charm? off ? 0 (scare 'mem-disp off),
        0 = off % sc && off >= 0 && off // sc <= 4095 ?
-         (a6o umn [rt ['mem bn off]])
+         (a6mem umn rt bn off)
          (off >= -256 && off <= 255 ?
-            (a6o lmn [rt ['mem bn off]])
+            (a6mem lmn rt bn off)
             (a64-far umn rt bn off)))
+   (a6mem mn rt bn off) (<rt = 'x ? (a6qo mn (a6k3 off bn (rt 1) 4) (_ \ [rt ['mem bn off]])) (a6o mn [rt ['mem bn off]]))
    (a64-mem-sz lmn umn sc c d base off) (a64-mem-raw lmn umn sc (c (rn d)) (rn base) off)
    (a64-ld d base off)  (a64-mem-sz 'ldur 'ldr 8 ax d base off)
    (a64-st base off s)  (a64-mem-sz 'stur 'str 8 ax s base off)
@@ -562,28 +575,31 @@
 
    ;; a fix's base word: its row laid against a target at the site, the field left 0
    (a64-fw mn ops) (a64-word mn (ops + [['lbl 0]]))
-   (a64-jmp  label)    [(fix 4 'b26 label (a64-fw 'b ()))]
+   (a6fw0 mn) (a6q mn 5 (_ \ [['lbl 0]]))
+   (a6fwx mn dn) (a6q mn (dn * 16 + 6) (_ \ [(ax dn) ['lbl 0]]))
+   (a64-jmp  label)    [(fix 4 'b26 label (a6fw0 'b))]
    (a64-cbr w r label) [(fix 4 'b19 label (w | rn r))]   ; cbz/cbnz, X or W by the word
    (a64-tbr w r label) [(fix 4 'b14 label (w | rn r))]   ; tbz/tbnz, the bit and the op in the word
    (a64-afix k w label ad) [(fix 4 k label (w | (ad & 4294967295) << 32))]   ; adrp, :lo12:, the addend aboard
-   (a64-call label)    [(fix 4 'b26 label (a64-fw 'bl ()))]
+   (a64-call label)    [(fix 4 'b26 label (a6fw0 'bl))]
    ;; la: adrp + add (+-4GB), the pair ELF relocates as PG_HI21 + ABS_LO12_NC
    (a64-la d label)    (rn d @ dn
                           [(fix 4 'adrp21 label (a64-fw 'adrp [(ax dn)]))
                             (fix 4 'addlo12 label (a64-word 'add [(ax dn) (ax dn) (aim 0)]))])
    ;; lar: adr, byte pc-relative (+-1MB), right at any load address -- adrp is right only when
    ;; the image loads page-aligned, which a code blob in a runtime mapping is not
-   (a64-lar d label)   [(fix 4 'adr21 label (a64-fw 'adr [(ax (rn d))]))]
+   (a64-lar d label)   [(fix 4 'adr21 label (a6fwx 'adr (rn d)))]
    ;; lia: the linked address, not where the pc runs -- for a kernel linked high that runs low
    ;; until the MMU is on. an inline literal word: ldr xd, .+8 ; b .+12 ; .quad label.
    ;; put an ('align 8) before it: an unaligned literal faults on Device memory, as before the MMU
    (a64-lia d label)   (a6o 'ldr [(ax (rn d)) ['lbl 8]] + a6o 'b [['lbl 12]] + [(fix 8 'abs64 label 0)])
    (a64-br cond label) (look arm-cc cond 'badcc @ cc
-                          [(fix 4 'b19 label (a64-fw (name ("b." + show (a6t-cc cc))) ()))])
-   (a64-jmpr d) (a6o 'br [(ax (rn d))])
+                          [(fix 4 'b19 label (a6fw0 (a6-bcc cc)))])
+   (a64-jmpr d) (rn d @ dn (a6qo 'br (dn * 16 + 7) (_ \ [(ax dn)])))
+   a6-bcc (map (c \ name ("b." + show (a6t-cc c))) ^16)
    ;; the table and its targets are for the analyses, not the machine
    (a64-jmpt d tl labs) (a64-jmpr d)
-   (a64-callr d) (a6o 'blr [(ax (rn d))])
+   (a64-callr d) (rn d @ dn (a6qo 'blr (dn * 16 + 7) (_ \ [(ax dn)])))
    ;; branch to lbl on signed overflow: smulh must equal the low half's sign fill. t must
    ;; differ from a, b and d
    (a64-mulo d a b t lbl)
@@ -605,8 +621,10 @@
             (scare 'badshift op)))
    ;; tst = ands xzr, a, b; b a register or a bitmask immediate
    (a64-test a b)
-      (reg? b ? (a6o 'ands [(ax 31) (ax (rn a)) (ax (rn b))])
-         (: _ (bitmask-field b) (a6o 'ands [(ax 31) (ax (rn a)) (aim b)])))
+      (reg? b ? (: an (rn a) bn (rn b) (a6qo 'ands (a6k3 31 an bn 2) (_ \ [(ax 31) (ax an) (ax bn)])))
+         (: _ (bitmask-field b) an (rn a)
+            (b < 1099511627776 && b > -1099511627776 ? (a6qo 'ands (a6k3 b an 31 3) (_ \ [(ax 31) (ax an) (aim b)]))
+               (a6o 'ands [(ax 31) (ax an) (aim b)]))))
    ;; rem = a - (a/b)*b by msub through t, which must differ from a and b
    (a64-div d a b)   (a6o 'sdiv (axs [d a b]))
    (a64-rem d a b t) (a6o 'sdiv (axs [t a b]) + a6o 'msub (axs [d t b a]))
@@ -731,7 +749,7 @@
 
    ;; base + ix*scale by add lsl, in the dest for loads and leax, in x16 for stores
    (a64-shiftamt scale) (? (scale = 1) 0 (scale = 2) 1 (scale = 4) 2 (scale = 8) 3 (scare 'badscale scale))
-   (a64-addsh dn bn ixn amt) (a6o 'add [(ax dn) (ax bn) (ax ixn) ['sh 'lsl amt]])   ; add Xdn, Xbn, Xixn, lsl #amt
+   (a64-addsh dn bn ixn amt) (a6qo 'add (a6k3 (amt * 32 + dn) bn ixn 8) (_ \ [(ax dn) (ax bn) (ax ixn) ['sh 'lsl amt]]))   ; add Xdn, Xbn, Xixn, lsl #amt
    ;; or one word, [Xn, Xm, LSL #s]: no displacement, scale 1 or the element size (S = 1)
    (a64-norof _) (getenv "MOON_ABLATE" @ s (string? s && (s = "rof" || s = "fsel,rof")))
    (a64-rof? scale disp sz) (disp = 0 && (scale = 1 || scale = sz) && !(a64-norof 0))
