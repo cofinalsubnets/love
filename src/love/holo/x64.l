@@ -270,19 +270,20 @@
    ;; [b+d]'s mod: none, a byte, a dword
    (x6md b d) (? (d = 0 && (b & 7) != 5) 0 (fits8 d) 1 2)
    (x6e-dsp md d) (md @ 0 () 1 [(byte d)] (le32 d))
-   (x6e-imm l v osz byte?)
-    (? (l = "Uv" && osz = 8) (le64 v)
-       !(charm? v) ()
-       (l @ "Ib" (x6e-in -128 v (byte? ? 255 127) ? [(byte v)] ())
-            "Iz" (? (osz = 2) (x6e-in -32768 v 65535 ? (le16 v) ())
-                    (osz = 8) (fits32 v ? (le32 v) ())
-                    (x6e-in -2147483648 v 4294967295 ? (le32 v) ()))
-            "Id" (fits32 v ? (le32 v) ())
-            "Uv" (? (osz = 2) (x6e-in -32768 v 65535 ? (le16 v) ())
-                    (x6e-in -2147483648 v 4294967295 ? (le32 v) ()))
-            "Uw" (x6e-in 0 v 65535 ? (le16 v) ())
-            "ub" (x6e-in -128 v 255 ? [(byte v)] ())
-            ()))
+   ;; the lay of an immediate of kind l, for the operand size: a number -> bytes, or ()
+   (x6e-immf l osz byte?)
+    (: (in lo hi f) (v \ (charm? v && x6e-in lo v hi) ? (f v) ())
+       (b1 v) [(byte v)]
+       (? (l = "Uv" && osz = 8) le64
+          (l @ "Ib" (in -128 (byte? ? 255 127) b1)
+               "Iz" (? (osz = 2) (in -32768 65535 le16)
+                       (osz = 8) (in -2147483648 2147483647 le32)
+                       (in -2147483648 4294967295 le32))
+               "Id" (in -2147483648 2147483647 le32)
+               "Uv" (osz = 2 ? (in -32768 65535 le16) (in -2147483648 4294967295 le32))
+               "Uw" (in 0 65535 le16)
+               "ub" (in -128 255 b1)
+               (v \ ()))))
    ;; a row's plan, all of the row that its operands do not change: its roles and widths as
    ;; symbols, the indices of its sized, G, E and Z items, its opcode bytes, its immediates
    (x6e-plan r)
@@ -352,26 +353,36 @@
                                     (pre0 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
                    ; ..once, where no memory operand lays it
                    hd0 (? (mk = 'mem) () (mk = 'base) (head (mb 1)) (head mk))
+                   ; each immediate or target's lay, of the operand and where its field starts
+                   (lay1 l)
+                    (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") 4 0) im (x6e-immf l osz byte?)
+                       (\ o at
+                          (: v (o 1)
+                             (? (fix? v) (v 1 = w ? [v] ())
+                                (z = 1) (: d (v - (at + 1)) (fits8 d ? [(byte d)] ()))
+                                (z = 4) (: d (v - (at + 4)) (fits32 d ? le32 d ()))
+                                (im v @ b ((two? b && (#o < 3 || o 2 = #b)) ? b ()))))))
+                   lays (map (q \ [(q 0) (lay1 (q 1))]) ims)
                    ; the immediates and targets, in order, after hd
                    (tail hd pc is acc ops)
                     (? !(two? is) acc
-                       (: i (<is 0) l (<is 1) o (ops i)
-                          (? (fix? (o 1)) (o 1 1 = (fw l) ? (tail hd pc >is (acc + [(o 1)]) ops) ())
-                             (elem l ["Jb" "Jz"])
-                              (: z (l = "Jb" ? 1 4) d (o 1 - (pc + #hd + #acc + z))
-                                 ((l = "Jb" ? (fits8 d) (fits32 d)) ? (tail hd pc >is (acc + (z = 1 ? [(byte d)] (le32 d))) ops) ()))
-                             (x6e-imm l (o 1) osz byte? @ b (two? b && (#o < 3 || o 2 = #b) ? (tail hd pc >is (acc + b) ops) ())))))
+                       (: q <is b ((q 1) (ops (q 0)) (pc + #hd + #acc))
+                          (b = () ? () (tail hd pc >is (acc + b) ops))))
                    (eo-of ops) (ops ei @ ('ind x) x x x)
                    (? (mk != 'mem && hd0 = ()) ()
                       (!(two? ims) && mk = 'base) (mb 0 @ 0 (\ ops pc hd0)
                                                         1 (\ ops pc (hd0 + [(byte (eo-of ops 4))]))
                                                         (\ ops pc (hd0 + le32 (eo-of ops 4))))
                       !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-mem rf (eo-of ops)))) (\ ops pc hd0))
+                      ; a head laid once and one immediate or target, at a known offset
+                      (mk != 'mem && mk != 'base && #lays = 1)
+                       (: i (lays 0 0) f (lays 0 1) nh #hd0
+                          (\ ops pc (f (ops i) (pc + nh) @ () () b (hd0 + b))))
                       (\ ops pc
                          (: hd (? (mk = 'mem) (head (x6e-mem rf (eo-of ops)))
                                   (mk = 'base) (hd0 + x6e-dsp (mb 0) (eo-of ops 4))
                                   hd0)
-                            (? (hd = ()) () (tail hd pc ims () ops @ t (t = () ? () (hd + t)))))))))))) _ ())
+                            (? (hd = ()) () (tail hd pc lays () ops @ t (t = () ? () (hd + t)))))))))))) _ ())
    ;; a row's bytes for the operands, pc where the instruction starts (a target is absolute), or ()
    (x6e-lay p w ops pc) (x6e-stage p w ops @ () () f (f ops pc))
 
