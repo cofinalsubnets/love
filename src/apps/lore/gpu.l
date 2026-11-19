@@ -2,10 +2,12 @@
 ; loads the system's gles through dlopen. $LOVE_GLHELP where it names one (an apk's, from the lib
 ; dir an app may run), else built once and kept in the nest's cache, keyed by its
 ; source: by mooncc, an executable naming the system's loader, else by the
-; system's cc. LOVE_GPU_CC picks one, moon or cc. the bulk rides a tmpfs file both hold, a
-; line each way says what to do with it.
+; system's cc. LOVE_GPU_CC picks one, moon or cc. under android's bridge, its socket
+; LOVE_GPU_FACE instead: glhelp in the app's own process, on the app's window. the bulk rides a
+; file both hold (a tmpfs, else TMPDIR), a line each way says what to do with it.
 ;   (gpu-open x)                 a helper, or a nom with why: 'no-helper 'no-gpu; with x, one
-;                                that can show on an X window
+;                                that can show on an X window; the bridge's shows on the app's
+;                                window, 'face set, with no gpu-win
 ;   (gpu-win g xid)              the X window it shows on, () where it can
 ;   (gpu-show g f w h W H at rs P) the picture f w by h shown over the window W by H at [x y],
 ;                                or ['kept [S C]] the frame the helper kept, the pixels S over its
@@ -96,23 +98,32 @@
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
  (ask g s) (say (g 'to) (s + "\n"), (line (g 'from) @ () "the helper has gone" "ok" () r r))
  (gpu-how g) (g 'how)
- (gpu-open x)
-  (: argv (helper-argv ())
-     (? !(two? argv) ['no-helper argv]
-        (: sp (dir? "/dev/shm" ? "/dev/shm" (cache-dir ()))
-           f (sp + "/glhelp-" + show (getpid 0) + "-" + show (clock 0))
-           w (openfd f 1) r (openfd f 0)
+ ; ..the file the bulk goes through: in a tmpfs, else where the process keeps its own
+ (bulk-file _) (: sp (dir? "/dev/shm" ? "/dev/shm" (getenv "TMPDIR" @ t (string? t && dir? t ? t (cache-dir ()))))
+                  (string? sp ? (sp + "/glhelp-" + show (getpid 0) + "-" + show (clock 0))))
+ (hello hi) (string? hi && 6 < #hi && snip hi 0 6 = "ready ")
+ ; ..in an app's own process, on its window: the bridge's (LOVE_GPU_FACE), told the file first
+ (face-open p) (: f (bulk-file ()) s (string? f ? (connect ['unix p]))
+   (? !(port? s) ['no-gpu "the bridge's gpu is not there"]
+      (: w (openfd f 1) r (openfd f 0) _ (say s (f + "\n")) hi (line s) _ (unlink f)
+         (hello hi ? {'to s 'from s 'pid () 'w w 'r r 'room 0 'how (snip hi 6 #hi) 'face 1}
+            (close s, close w, close r, ['no-gpu (string? hi ? hi "the bridge's gpu said nothing")])))))
+ (gpu-open x) (getenv "LOVE_GPU_FACE" @ fc (string? fc ? (face-open fc) (spawned x)))
+ (spawned x)
+  (: argv (helper-argv ()) f (bulk-file ())
+     (? !(two? argv) ['no-helper argv] !(string? f) ['no-helper 'no-file]
+        (: w (openfd f 1) r (openfd f 0)
            a (pipe 0) b (pipe 0)
            p (spawnio (argv + [f] + (x ? ["x"] ())) <a >b -1 [>a <b] -1 0)
            _ (close <a) _ (close >b)
            q (fdopen <b)
            hi (line q)
            _ (unlink f)
-           (? (string? hi && 6 < #hi && snip hi 0 6 = "ready ")
+           (? (hello hi)
               {'to >a 'from q 'pid p 'w w 'r r 'room 0 'how (snip hi 6 #hi) 'argv argv}
               (close >a, close q, close w, close r, (charm? p ? (wait p) 0),
                  ['no-gpu (string? hi ? hi "the helper said nothing")])))))
- (gpu-close g) (say (g 'to) "quit\n", close (g 'to), close (g 'from), close (g 'w), close (g 'r), wait (g 'pid), ())
+ (gpu-close g) (say (g 'to) "quit\n", close (g 'to), (g 'pid @ () 0 p (close (g 'from), wait p)), close (g 'w), close (g 'r), ())
  ; ..the shared file at least n bytes, once the shows it holds are done with
  (room! g n) (settle g, (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g))
  (settle g) (0 < peep g 'shows 0 ? (line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)

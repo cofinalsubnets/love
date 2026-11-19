@@ -25,7 +25,9 @@
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
-   input stream's s16 frames go back. the framework is a fourth (LOVE_DROID=PATH), a session
+   input stream's s16 frames go back. the gpu is a fifth (LOVE_GPU_FACE=PATH): glhelp (glhelp.c,
+   built in) on a thread a connection, its first line the file it shares, drawing on the window
+   while its love has the top of the deck on the screen. the framework is a fourth (LOVE_DROID=PATH), a session
    per connection, each op a record (u32 n, then n bytes: its letter, then words NUL-separated):
      'c' NAME            a class by the boot loader (android.*, java.*)
      'l' NAME            a class by the app's own loader, NAME dotted
@@ -117,8 +119,10 @@ void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void 
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
 struct dirent { unsigned long long ino; long long off; unsigned short reclen; unsigned char type; char name[256]; };
 void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *);
+int getsockopt(int, int, int, void *, unsigned *);
+int glhelp_serve(int, void *(*)(void *, int, int, int), void *);
 
-enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
+enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS, GPU };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 /* a session: a love, the windows it started in a stack, a socket of its own so they land here */
@@ -130,7 +134,8 @@ typedef struct {
 
 typedef struct {
   ANativeActivity *a; void *vm, *looper, *win, *queue;   /* a is 0 between activities, stay's only; the act lock guards it */
-  int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
+  int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, gsock, vh, shown;
+  void *gl; int lost, gw;                 /* the gpu session drawing on the window, its picture's width; one that let it go */
   int bare;                               /* the client on top has not been told its pixels are gone */
   int baking, tick;                       /* love's first run lays its image, no client yet */
   deck decks[NDECK], *d;                  /* d is on the screen */
@@ -139,7 +144,7 @@ typedef struct {
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
   char argv[2048], label[64]; long nargv;
   uint32_t *fb; size_t fbsz;              /* a frame as love sent it */
-  char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
+  char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], gpu[600], line[2048]; int nline;
 } br;
 
 #define LOG(s) __android_log_write(4, "love", s)
@@ -177,8 +182,12 @@ static int writeall(int fd, void const *p, size_t n) {
 
 static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
 
-/* how many of the window's pixels a frame's pixel is: whole, so none is filtered */
-static int zoom(br *b) { return b->fw && b->ww >= b->fw ? b->ww / b->fw : 1; }
+/* how many of the window's pixels a frame's pixel is: whole, so none is filtered; the gpu's
+   picture's while it draws */
+static int zoom(br *b) {
+  int const w = b->gl ? b->gw : b->fw;
+  return w && b->ww >= w ? b->ww / w : 1;
+}
 
 static void block(ANativeWindow_Buffer *o, int x, int y, int w, int h) {
   for (int j = y; j < y + h && j < o->height; j++)
@@ -215,6 +224,7 @@ static void notice(br *b) {
    under the lock */
 static void paint(br *b) {
   int w = b->fw, ht = b->fh;
+  if (b->gl) return;                           /* the gpu's */
   if (b->win && b->baking && !b->fb) notice(b);
   if (b->win && b->fb && w) {
     int k = zoom(b), vh = vis(b);
@@ -796,6 +806,56 @@ static void *hear(void *p) {
   return 0;
 }
 
+/* a gpu session: the window its glhelp draws on, while its love (the peer of the gpu socket and of
+   the deck's top) has the screen; the lock held from a take to its give */
+typedef struct { br *b; int fd, pid; } gses;
+static int peer(int fd) {
+  int u[3] = {0, 0, 0}; unsigned n = sizeof u;   /* struct ucred: pid, uid, gid */
+  return fd >= 0 && !getsockopt(fd, 1, 17, u, &n) ? u[0] : -1;   /* SOL_SOCKET, SO_PEERCRED */
+}
+/* the window off the cpu, which a lock left connected, so egl may: perform's api disconnect.
+   the ndk has no call for it; the window's own table does, past its base and fields */
+static void uncpu(void *w) {
+  int (*perform)(void *, int, ...) = *(int (**)(void *, int, ...)) ((char *) w + 152);
+  if (*(int *) w == ('_' << 24 | 'w' << 16 | 'n' << 8 | 'd')) perform(w, 14, 2);   /* NATIVE_WINDOW_API_DISCONNECT, _CPU */
+}
+/* the window the cpu's again, its love told to draw all of it. the lock held */
+static void regive(br *b) {
+  b->gl = 0; b->lost = 0; b->bare = 1;
+  if (b->win) ANativeWindow_setBuffersGeometry(b->win, 0, 0, 1);
+  paint(b);
+}
+/* op 0 takes the window for a picture w wide, or 0, the lock held until op 1 gives it; op 2: the
+   session's gl gone */
+static void *gpuwin(void *p, int op, int w, int h) {
+  (void) h;
+  gses *g = p; br *b = g->b;
+  if (op == 1) {
+    int lost = b->lost; if (lost) regive(b);
+    pthread_mutex_unlock(b->mu);
+    if (lost && b->ww) sized(b);
+    return 0;
+  }
+  pthread_mutex_lock(b->mu);
+  if (op == 2) {
+    int had = b->gl == g; if (had) regive(b);
+    pthread_mutex_unlock(b->mu);
+    if (had && b->ww) sized(b);
+    return 0;
+  }
+  int top = b->win && __atomic_load_n(&b->up, 2) && peer(b->d->csock) == g->pid;
+  if (top && b->gl != g) b->gl = g, uncpu(b->win);
+  if (top) b->gw = w;
+  else if (!top && b->gl == g) b->lost = 1;   /* its surface goes before the give */
+  return top ? b->win : 0;
+}
+static void *gpu(void *p) {
+  gses *g = p;
+  glhelp_serve(g->fd, gpuwin, g);
+  close(g->fd); munmap(g, sizeof *g);
+  return 0;
+}
+
 static void face(br *b, deck *d, char *p, size_t n) {
   int i = (int) (d - b->decks);
   if (i) snprintf(p, n, "%s.%d", b->sock, i); else snprintf(p, n, "%s", b->sock);
@@ -888,6 +948,7 @@ static void *loop(void *p) {
   ALooper_addFd(b->looper, b->hsock, HORN, 1, 0, 0);
   ALooper_addFd(b->looper, b->esock, EAR, 1, 0, 0);
   ALooper_addFd(b->looper, b->dsock, DROID, 1, 0, 0);
+  ALooper_addFd(b->looper, b->gsock, GPU, 1, 0, 0);
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
@@ -945,6 +1006,13 @@ static void *loop(void *p) {
       sess *s = c >= 0 ? mmap(0, sizeof(sess), 3, 0x22, -1, 0) : 0;
       if (s && s != (void *) -1) s->b = b, s->fd = c, ALooper_addFd(b->looper, c, SESS, 1, 0, s);
       else if (c >= 0) close(c);
+    } else if (id == GPU) {
+      long t; int c = accept4(b->gsock, 0, 0, O_CLOEXEC);
+      gses *g = c >= 0 ? mmap(0, sizeof(gses), 3, 0x22, -1, 0) : 0;
+      if (g && g != (void *) -1) {
+        g->b = b; g->fd = c; g->pid = peer(c);
+        if (pthread_create(&t, 0, gpu, g)) close(c), munmap(g, sizeof *g); else pthread_detach(t);
+      } else if (c >= 0) close(c);
     } else if (id == SESS) {
       if (sessop(d)) sessend(d);
     } else if (id == LOG) {
@@ -961,7 +1029,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400], gh[640];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400], gh[640], gf[640];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -991,9 +1059,10 @@ static void spawn(br *b, deck *d) {
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
   snprintf(gh, sizeof gh, "LOVE_GLHELP=%s/libglhelp.so", b->dir);   /* the gpu's helper, run from where the app may exec */
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img; ev[8] = gh;
-  int e = 9;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=", "LOVE_GLHELP=" };
+  snprintf(gf, sizeof gf, "LOVE_GPU_FACE=%s", b->gpu);
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img; ev[8] = gh; ev[9] = gf;
+  int e = 10;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=", "LOVE_GLHELP=", "LOVE_GPU_FACE=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
@@ -1219,6 +1288,7 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
   snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
   snprintf(b->droid, sizeof b->droid, "%s/droid", b->data);
+  snprintf(b->gpu, sizeof b->gpu, "%s/gpu", b->data);
   b->a = a; b->vm = a->vm; b->d = b->decks;
   for (int i = 0; i < NDECK; i++) b->decks[i].csock = b->decks[i].lsock = -1;
   hook(a, b);
@@ -1251,6 +1321,10 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   unlink(b->droid);
   b->dsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->dsock, &du, sizeof du); listen(b->dsock, 4);
+  struct sockaddr_un gu = {1}; snprintf(gu.path, sizeof gu.path, "%s", b->gpu);
+  unlink(b->gpu);
+  b->gsock = socket(1, 1 | O_CLOEXEC, 0);
+  bind(b->gsock, &gu, sizeof gu); listen(b->gsock, 2);
   perms(a);
   if (b->stay) service(b, a);
   lay(b); deckup(b, b->d);
