@@ -25,7 +25,9 @@
                         (keep? u ? (say o (utf8 (cplower u))) 0, go (k + m))))))
        (go 0))
    find fsub
-   (rd p off n) (uread-at p off n @ r (two? r ? <>r ""))
+   ; where a read at an offset will not go, as inle's seatless one, the file's whole, cut
+   (rd p off n) (trap (_ \ uread-at p off n) 0 (\ a b ()) @ [1 t] t
+                 _ (uread p @ [1 s] (snip s off (off + n)) _ ""))
    ; the line opening at p -> [text next], () past the end
    (line-at db p)
     (: ix (db 'index) n (db 'size)
@@ -96,7 +98,7 @@
                  _ "")
    (dict-db name ix data)
     (: db {'name name 'index ix 'data data 'all 1 'utf8 1
-           'size (stat ix @ s (two? s ? <s 0)) 'zip (dz-head data)}
+           'size (stat ix @ s (charm? <s ? <s (uread ix @ [1 t] #t _ 0))) 'zip (dz-head data)}
        all (holds? db "00-database-allchars")
        _ (pins db 'all all 'utf8 0)
        _ (pin db 'utf8 (holds? db (all ? "00-database-utf8" "00databaseutf8")))
