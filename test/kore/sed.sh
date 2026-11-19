@@ -39,6 +39,13 @@ for sc in 's/a[ \t]+b/X/' 's/a\tb/Y/' 's/a[\\t]b/W/' 's/[\a]/V/' 's/b/\t\r&/'; d
   bothrc "sed -r '$sc'" sed -r "$sc" "$ho/.sd2"
 done
 rm -f "$ho/.sd2"
+# each escape bare and in a bracket; \n a newline, not an n
+printf 'p\aq\np\fq\np\rq\np\tq\np\vq\nanb\nab\n' > "$ho/.sd4"
+for sc in 's/p\aq/X/' 's/p[\a]q/Y/' 's/p\fq/X/' 's/p[\f]q/Y/' 's/p\rq/X/' 's/p[\r]q/Y/' \
+          's/p\tq/X/' 's/p[\t]q/Y/' 's/p\vq/X/' 's/p[\v]q/Y/' 's/a\n*b/X/' 's/a[\n]*b/Y/'; do
+  bothrc "sed '$sc'" sed "$sc" "$ho/.sd4"
+done
+rm -f "$ho/.sd4"
 for sc in 's/ *$/"\n/' 's/b/\t&\t/g'; do
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
