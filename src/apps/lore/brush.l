@@ -257,7 +257,10 @@
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf)
-     by (foldl (\ t pc (: _ (tick 'chunks ()) q (ck (pc 0)) (fresh? q ? (pin t q (pc . t q)) t))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
+     ; ..by a chunk's number, its name made once a chunk: a column's cell under 2^19 each way
+     (cn m) (: c (col m) (c 0 * 1048576 + c 1))
+     byn (foldl (\ t pc (: _ (tick 'chunks ()) n (cn (pc 0)) (pin t n (pc . t n)))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
+     by (foldl (\ t n (: its (byn n) q (ck (<its 0)) (fresh? q ? (pin t q its) t))) {} (keys byn))
      made (map (q \ (: its (rev (by q)) ky [q (map (x \ x 2) its)]
                        [q ky (_ \ weave (map (x \ x 1) its))]))
                (keys by))
