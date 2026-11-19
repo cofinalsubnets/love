@@ -635,6 +635,17 @@
    _ (test (0 = chat k 4) (19990 = chat k 5))
    l (re k 2 10)
    _ (test (19990 = chat l 4) (1 = (glass l 4 0 >> 21 & 3)) (6 = cur l))
+   f (h-mkscr 3 10)
+   _ (scribe f "abcde")                             ; a line filling the new width: the cursor waits
+   g (re f 3 5)
+   _ (test (4 = cur g) ("abcde" = rowtx g 0))
+   _ (scribe g "\r\nZ")
+   _ (test ("abcde" = rowtx g 0) ("Z    " = rowtx g 1))
+   p (h-mkscr 3 5)
+   _ (scribe p "abcde")                             ; old's cursor waiting past e
+   q (re p 3 10)
+   _ (scribe q "f")
+   _ (test ("abcdef    " = rowtx q 0))
    a (h-mkscr 3 5)
    _ (scribe a "\e[?1049habcdefgh")
    c (re a 3 10)
