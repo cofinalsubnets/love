@@ -3,7 +3,13 @@
 ; source: by mooncc, an executable naming the system's loader, else by the
 ; system's cc. LOVE_GPU_CC picks one, moon or cc. the bulk rides a tmpfs file both hold, a
 ; line each way says what to do with it.
-;   (gpu-open _)                 a helper, or a nom with why: 'no-helper 'no-gpu
+;   (gpu-open x)                 a helper, or a nom with why: 'no-helper 'no-gpu; with x, one
+;                                that can show on an X window
+;   (gpu-win g xid)              the X window it shows on, () where it can
+;   (gpu-show g f w h W H at rs P) the picture f w by h shown over the window W by H at [x y],
+;                                or ['kept [S C]] the frame the helper kept, the pixels S over its
+;                                sky laid with the colours C; then rects rs [x0 y0 x1 y1]
+;                                of the paper P laid on it as they are
 ;   (gpu-tex g id w h t)         texture id, w by h: a tray of 0x00rrggbb (below 0 a hole), rows
 ;                                top first, or a list of them, each level half the last
 ;   (gpu-buf g id verts tris st) buf id: facets's verts (st numbers a vertex, 8, or 11 with the
@@ -38,7 +44,7 @@
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-tex gpu-buf gpu-verts gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -88,14 +94,14 @@
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
  (ask g s) (say (g 'to) (s + "\n"), (line (g 'from) @ () "the helper has gone" "ok" () r r))
  (gpu-how g) (g 'how)
- (gpu-open _)
+ (gpu-open x)
   (: argv (helper-argv ())
      (? !(two? argv) ['no-helper argv]
         (: sp (dir? "/dev/shm" ? "/dev/shm" (cache-dir ()))
            f (sp + "/glhelp-" + show (getpid 0) + "-" + show (clock 0))
            w (openfd f 1) r (openfd f 0)
            a (pipe 0) b (pipe 0)
-           p (spawnio (argv + [f]) <a >b -1 [>a <b] -1 0)
+           p (spawnio (argv + [f] + (x ? ["x"] ())) <a >b -1 [>a <b] -1 0)
            _ (close <a) _ (close >b)
            q (fdopen <b)
            hi (line q)
@@ -105,8 +111,9 @@
               (close >a, close q, close w, close r, (charm? p ? (wait p) 0),
                  ['no-gpu (string? hi ? hi "the helper said nothing")])))))
  (gpu-close g) (say (g 'to) "quit\n", close (g 'to), close (g 'from), close (g 'w), close (g 'r), wait (g 'pid), ())
- ; ..the shared file at least n bytes
- (room! g n) (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g)
+ ; ..the shared file at least n bytes, once the shows it holds are done with
+ (room! g n) (settle g, (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g))
+ (settle g) (0 < peep g 'shows 0 ? (line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)
  (put! g c) (room! g #c, fdpush (g 'w) c 0 0 #c)
  (gpu-tex g id w h t)
   (: ls (two? t && !(tray? t) ? t [t])
@@ -130,12 +137,27 @@
   (: ch (shape ds 0) cw (shape ds 1) n (cw * ch) c (cask (8 * n))
      _ ((cite 'guts 'pinv) c 0 4 4 cs) _ ((cite 'guts 'pinf) c (4 * n) 4 ds)
      (put! g c, ask g "under \(show cw) \(show ch) 0"))
+ (gpu-win g xid) (ask g "win \(show xid)")
+ ; ..laid past the frame's own room, which the helper may still be filling, a kept one from the
+ ; copy the helper made of it, the last taken; and answered when the file is next written
+ (gpu-show g f w h W H at rs P)
+  (: o (8 * w * h) kp (two? f) sp (kp && two? (f 1) ? (f 1) ()) I (two? sp ? (iota (sp 0 >= 0)) ()) ns #I
+     n (kp ? (8 * ns) (4 * w * h)) (size r) (4 * (r 2 - r 0) * (r 3 - r 1)) c (cask (n + +(map size rs)))
+     _ (? kp (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
+          ((cite 'guts 'pinv) c 0 4 4 f))
+     ; ..each rect's rows, one after another
+     (rows r a) (foldl (\ a y (pour c a P (4 * (y * W + r 0)) (4 * (r 2 - r 0)), a + 4 * (r 2 - r 0))) a (map (+ (r 1)) ^(r 3 - r 1)))
+     _ (foldl (\ a r (rows r a)) n rs)
+     (room! g (o + #c), fdpush (g 'w) c 0 o #c,
+      say (g 'to) ("show \(show w) \(show h) \(show W) \(show H) \(show (at 0)) \(show (at 1)) \(show o) \(kp ? (show (g 'ks + 1)) "0") \(show ns) \(show #rs)"
+                   + foldl (\ a r (a + " " + unwords (map show r))) "" rs + "\n"),
+      pin g 'shows (peep g 'shows 0 + 1), ()))
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
   (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
                                      + unwords (map show ids) + "\n"), ())
- (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
+ (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
@@ -188,12 +210,17 @@
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
                  y (string? u ? u (sky! s sk))
-                 e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0))]))
+                 ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
+                 ; or one that says its spots
+                 kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) ? 512 0)
+                 e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0) + kp)]))
                  p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
                  (? (string? e) (pin s 'g (), ())
                     !(peep s 'pipe 0) (now () @ () () q (q 0))
                     (two? pr) (pins s 'pend p 'last pr, pr)
-                    (s 'last @ () (now () @ () () q (pin s 'last q, q)) l (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))
+                    ; ..the last shown again while this one draws, but a kept one, whose frame this one drew over
+                    (: (fresh _) (now () @ () () q (pin s 'last q, q))
+                       (s 'last @ () (fresh ()) l (nom? (l 0) ? (fresh ()) (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))))
  ; ..a frame sent as [w h c], taken: [f c], or the helper's words
  (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..and one sent and no longer wanted, the last shown forgotten with it
