@@ -5,7 +5,7 @@
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-paint mesh-gone
          mesh-glb mesh-glb-of)
 (borrow '(view window vec sky json gpu quay))
 (borrow 'lore)                          ; lamp-light, facets, lace and the frame's layouts, in C
@@ -419,11 +419,17 @@
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
    up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs) (peep st 'slide [0 0]))
-   _ (up ? (each rs (mesh-under f w h P W H)) (frame-paint f w (max 1 (min (W // w) (H // h))) P W))
+   _ (up ? (each rs (mesh-under f w h P W H)) (mesh-paint f w h P W H))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
    "")
+ ; ..the picture f w by h on the paper P, W by H, at the largest whole scale that fits; the
+ ; paper past it black, so nothing laid there before stays
+ (mesh-paint f w h P W H) (: s (max 1 (min (W // w) (H // h))) cw (min W (w * s)) ch (min H (h * s)) Z (cask (4 * W))
+   _ (frame-paint f w s P W)
+   _ (cw < W ? (each ^ch (y \ pour P (4 * (y * W + cw)) Z 0 (4 * (W - cw)))) 0)
+   (each (map (+ ch) ^(H - ch)) (y \ pour P (4 * y * W) Z 0 (4 * W)), P))
  ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
  (mesh-under f w h P W H r) (: y0 (16 * r) n (min 16 (H - y0))
    (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (f (Y * h // H * w + X * w // W)) T (cask (W * n * 4))
