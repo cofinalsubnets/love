@@ -1038,12 +1038,14 @@
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb imp? bare)
     (: mach (peep elf-machines tgt 0)
-       ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
-       ; pulls it. a bare link has no crt0 to call it. a thread template owes it regardless,
-       ; for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright when the set owes
+       ; the runtime anything or lays a constructor: nothing else pulls it. a set that owes nothing
+       ; runs crt0's tail alone. a bare link has no crt0 to call it. a thread template owes it
+       ; regardless, for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
        lg (ldledger srcs mach) dt <lg
        home (!nostd && mhome ())
-       owed (!(lg 3 "__love_start") && (lg 2 || !bare && !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
+       owed (!(lg 3 "__love_start") && (lg 2 || (two? <>lg || lg 4) && !bare && !nostd && (string? home || vb))
+             ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        ; owed and no runtime in reach: the certain fact first
