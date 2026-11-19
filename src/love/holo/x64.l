@@ -360,7 +360,7 @@
                           (: v (o 1)
                              (? (fix? v) (v 1 = w ? [v] ())
                                 (z = 1) (: d (v - (at + 1)) (fits8 d ? [(byte d)] ()))
-                                (z = 4) (: d (v - (at + 4)) (fits32 d ? le32 d ()))
+                                (z = 4) (: d (v - (at + 4)) (fits32 d ? (le32 d) ()))
                                 (im v @ b ((two? b && (#o < 3 || o 2 = #b)) ? b ()))))))
                    lays (map (q \ [(q 0) (lay1 (q 1))]) ims)
                    ; the immediates and targets, in order, after hd
