@@ -125,7 +125,8 @@ else
            awk '{ for (i = 1; i <= NF; i++) if ($i == ".text.vectors") { print $NF; exit } }')
       [ "$al" = 2048 ] ||
         fail ".text.vectors must ask the linker for 2048-byte alignment; it asks for ${al:-nothing}"
-      # sixteen entries 0x80 apart, exactly one (slot 5) different
+      # sixteen entries 0x80 apart; three branch apart from the a_fault rest: slot 5 (current EL
+      # SP_ELx IRQ), 8 and 9 (lower EL a64 sync and IRQ, a process's)
       br=$(llvm-objdump -d --no-show-raw-insn "$obj" |
            awk '/^ +[0-9a-f]+:/ { off = strtonum("0x" substr($1, 1, length($1) - 1))
                                   if (off < 2048 && off % 128 == 0) print off, $2, $3 }')
@@ -133,12 +134,15 @@ else
       [ "$n" = 16 ] || fail "the vector table should hold 16 entries at 0x80 spacing; found $n"
       echo "$br" | awk '$2 != "b" { print "slot at " $1 " is not a branch" }' | while read -r m; do fail "$m"; done
       odd=$(echo "$br" | awk '{c[$3]++; t[$3] = t[$3] " " NR} END { for (k in c) if (c[k] == 1) print t[k] }')
-      [ "$(echo "$odd" | tr -d ' ')" = 6 ] ||
-        fail "exactly one of the sixteen vectors (slot 5, current EL SP_ELx IRQ) must differ; the odd one out is entry$odd"
+      odd=$(echo $odd | tr ' ' '\n' | sort -n | tr '\n' ' ')
+      [ "$odd" = "6 9 10 " ] ||
+        fail "the vectors of slots 5, 8 and 9 (entries 6 9 10) must differ from the rest, each its own; the odd ones out are entries $odd"
       ;;
     rv64)
-      # every register saved comes back, fcsr rides a0, and sret is the last word
-      d=$(llvm-objdump -d --no-show-raw-insn --mattr=+c,+d "$obj")
+      # the kernel's own entry, up to r_user (a process's): every register saved comes back,
+      # fcsr rides a0, and sret is the last word
+      d=$(llvm-objdump -d --no-show-raw-insn --mattr=+c,+d "$obj" | awk '
+            /<vectors>:/ {on = 1; next} /^[0-9a-f]+ </ {on = 0} on && NF && $2 != "nop" && $2 != "c.nop"')
       sd=$(echo "$d" | awk '$2 == "sd" { print $3 }' | sort)
       ld=$(echo "$d" | awk '$2 == "ld" { print $3 }' | sort)
       n=$(echo "$sd" | sort -u | grep -c .)

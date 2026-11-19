@@ -517,11 +517,11 @@ test_rvboot: host
 	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
-# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else $(ko).
-# two ifeqs, never an else-ifeq
-kvec_x64  = $(ko)/x64/x64/vec.o
-kvec_a64 = $(ko)/a64/a64/vec.o
-kvec_rv64 = $(ko)/rv64/rv64/vec.o
+# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else the
+# cross lane's. two ifeqs, never an else-ifeq
+kvec_x64  = out/x-x64/o/kvec.o
+kvec_a64 = out/x-a64/o/kvec.o
+kvec_rv64 = out/x-rv64/o/kvec.o
 ifeq ($(hosta),x64)
 kvec_x64  = $(moon_d)/kvec.o
 endif
