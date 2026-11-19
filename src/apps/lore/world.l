@@ -198,7 +198,7 @@
  ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
  ; the texture's own, lays it, [degrees [du dv]]
- (tix tt nm) (foldl (\ a i (tt i 0 = nm ? i a)) 0 ^#tt)
+ (tix tt nm) (: (go l i a) (atom? l ? a (go >l (i + 1) (<l 0 = nm ? i a))) (go tt 0 0))
  (look tt) (\ n b (: c (? (0.7 < n 1) 'floor (n 1 < -0.7) 'ceiling 'wall)
                      e (foldl (\ a e (e 0 = c ? e a)) () (b 'skin))
                      i (tix tt (two? e ? (e 1) c)) t (tt i) k (t 1 / t 3) ly (two? e ? (e 2) (t 4))
