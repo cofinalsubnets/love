@@ -597,12 +597,73 @@ static void cb_restock(struct cb *c, struct cb const *old) {
     uint32_t const g = cb_nth(c, i)->g;
     if (g & cb_pic && !(room && ni[cb_tslot(g)].live)) cb_nth(c, i)->g = g & 0xff000000u; } }
 
-// old laid into c, a fresh rows x cols screen: pen, modes, clusters and parser whole; rows clipped,
-// scrolled only as far as the cursor needs; no reflow. the history and the twin come too. no overlap
+// a cell a line's end need not keep: blank, no picture, the default ground
+static int cb_bare(struct cb_cell const *e) { return !e->g && cb_kind(e->bg) == cb_def; }
+
+// old's main row i, its history first, then its grid
+static struct cb_cell const *cb_orow(struct cb const *old, uint32_t i) {
+  return i < old->hn ? cb_hline(old, i) : old->cb + (uintptr_t) (i - old->hn) * old->cols; }
+
+// a flow's row r: c's grid row r - from, its row 0 standing in for a line bound for the history,
+// 0 past the grid or when only counting; laid blank
+static struct cb_cell *cb_frow(struct cb *c, uint32_t from, int lay, uint32_t r) {
+  struct cb_cell *row = !lay ? 0 : r < from ? c->cb
+                      : r - from < c->rows ? c->cb + (uintptr_t) (r - from) * c->cols : 0;
+  struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };
+  if (row) for (uint32_t q = 0; q < c->cols; q++) row[q] = blank;
+  return row; }
+
+// old's main screen, history then grid, laid again c->cols wide: a soft-wrapped run of rows is one
+// line, its bare cells off the end (never a cursor's). with lay, rows before from go into c's
+// history, the next c->rows into its grid. answers the rows; *end past the last holding a cell,
+// at[0] and at[1] the cursor and the saved one as row * cols + col
+static uint32_t cb_flow(struct cb *c, struct cb const *old, uint32_t from, int lay, uint32_t *end,
+                        uint32_t at[2]) {
+  uint32_t const oc = old->cols, cs = c->cols, n = old->hn + old->rows, base = old->hn * oc;
+  uint32_t const want[2] = { base + old->wpos, base + old->spos };
+  uint32_t r = 0, got = 0;
+  *end = 0, at[0] = at[1] = 0;
+  for (uint32_t i = 0; i < n; ) {
+    uint32_t j = i;
+    while (j + 1u < n && cb_orow(old, j)[oc - 1u].fg & cb_soft) j++;
+    uint32_t const a = i * oc, span = (j + 1u - i) * oc;
+    uint32_t len = span, k = 0;
+    while (len && cb_bare(&cb_orow(old, i + (len - 1u) / oc)[(len - 1u) % oc])) len--;
+    for (uint32_t m = 0; m < 2; m++)
+      if (want[m] >= a && want[m] < a + span && want[m] - a + 1u > len) len = want[m] - a + 1u;
+    struct cb_cell *row = cb_frow(c, from, lay, r);
+    for (uint32_t o = 0; o < len; o++) {
+      struct cb_cell const *e = &cb_orow(old, i + o / oc)[o % oc];
+      uint32_t const w = cb_wide(e->g), need = w == cb_lead && cs > 1u ? 2u : 1u;
+      if (w == cb_tail) continue;                   // laid with its lead
+      if (o % oc == oc - 1u && o + 1u < len && !e->g          // the blank a wide char wrapped past
+          && cb_wide(cb_orow(old, i + 1u + o / oc)[0].g) == cb_lead) continue;
+      if (k + need > cs) {                          // the row wraps into the next
+        if (row) row[cs - 1u].fg |= cb_soft;
+        if (lay && r < from) cb_line(c, row, cs);
+        row = cb_frow(c, from, lay, ++r), k = 0; }
+      for (uint32_t m = 0; m < 2; m++)
+        if (!(got >> m & 1u) && want[m] >= a && want[m] <= a + o) at[m] = r * cs + k, got |= 1u << m;
+      if (!cb_bare(e)) *end = r + 1u;
+      if (row) {
+        row[k] = *e, row[k].fg &= ~cb_soft;
+        if (need == 2u) row[k + 1u] = e[1], row[k + 1u].fg &= ~cb_soft; }
+      k += need; }
+    for (uint32_t m = 0; m < 2; m++)                // a mark on a cell not laid: where the line ends
+      if (!(got >> m & 1u) && want[m] >= a && want[m] < a + span)
+        at[m] = r * cs + (k < cs ? k : cs - 1u), got |= 1u << m;
+    if (lay && r < from) cb_line(c, row, cs);
+    r++, i = j + 1u; }
+  return r; }
+
+// old laid into c, a fresh rows x cols screen: pen, modes, clusters and parser whole. the main
+// screen reflows, its history too, scrolled only as far as the cursor needs; the alternate is
+// clipped, its program redraws. the twin comes too. no overlap
 void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
                uint32_t tw) {
-  uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols,
-                 from = cr >= rows ? cr - rows + 1u : 0, w = cols < ocols ? cols : ocols;
+  uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols, alt = old->flag & cb_alt,
+                 w = cols < ocols ? cols : ocols;
+  uint32_t from = cr >= rows ? cr - rows + 1u : 0, end, at[2];
   *c = *old;
   c->rows = rows, c->cols = cols;
   cb_store(c, sn);
@@ -610,9 +671,10 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
   c->flag &= (uint16_t) ~cb_pend;                 // a pending wrap named the old last column
   struct cb_cell const blank = { 0, cb_ink(cb_def, 0), cb_ink(cb_def, 0) };   // the default pen
   for (uint32_t i = 0, n = (uint32_t) rows * cols; i < n; i++) c->cb[i] = blank;
-  for (uint32_t r = from, dr = 0; r < orows && dr < rows; r++, dr++) {
-    for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
-    cb_mend(c, dr); }
+  if (alt)
+    for (uint32_t r = from, dr = 0; r < orows && dr < rows; r++, dr++) {
+      for (uint32_t k = 0; k < w; k++) c->cb[dr * cols + k] = old->cb[r * ocols + k];
+      cb_mend(c, dr); }
   cb_hist(c, hl), cb_twin(c, tw);
   for (uintptr_t i = 0, n = (uintptr_t) old->cx * cb_clun; i < n; i++) cb_xbase(c)[i] = cb_xbase(old)[i];
   struct cb_cell *nt = cb_twins(c);
@@ -621,11 +683,21 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
   if (nt && ot)
     for (uint32_t r = 0; r < orows && r < rows; r++)
       for (uint32_t k = 0; k < w; k++) nt[r * cols + k] = ot[r * ocols + k];
-  for (uint32_t k = 0; k < old->hn; k++) cb_line(c, cb_hline(old, k), w);
-  if (!(old->flag & cb_alt)) for (uint32_t r = 0; r < from; r++) cb_line(c, old->cb + r * ocols, w);
+  if (alt) {
+    for (uint32_t k = 0; k < old->hn; k++) cb_line(c, cb_hline(old, k), w);
+    c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
+    c->spos = cb_carry(old->spos, ocols, from, rows, cols); }
+  else {
+    cb_flow(c, old, 0, 0, &end, at);
+    uint32_t const wr = at[0] / cols, last = end > wr + 1u ? end : wr + 1u;
+    from = last > rows ? last - rows : 0;
+    if (from > wr) from = wr;
+    cb_flow(c, old, from, 1, &end, at);
+    for (uint32_t r = 0; r < rows; r++) cb_mend(c, r);
+    c->wpos = at[0] - from * cols;
+    uint32_t const sr = at[1] / cols;
+    c->spos = (sr < from ? 0 : sr - from >= rows ? rows - 1u : sr - from) * cols + at[1] % cols; }
   cb_restock(c, old);
-  c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
-  c->spos = cb_carry(old->spos, ocols, from, rows, cols);
   c->gset = old->gset, c->sgset = old->sgset;
   cb_dirt(c, 0, rows - 1u); }
 
