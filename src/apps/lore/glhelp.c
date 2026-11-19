@@ -23,6 +23,10 @@
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   sky ID TONE       the next frame's sky: buf ID drawn last, only where the frame is bare,
 //                     exposed by TONE, onto a glow kept there or through a glass's tint
+//   glow RX RY RZ UX UY UZ ZN ZF LEAD SOFT
+//                     the next frame's glows as facets has them: a buf all glow turned to face
+//                     the eye, each vertex u along R and v along U; a glow seen as much as what is
+//                     behind it lies past it less LEAD, over SOFT, ZN ZF the view's near and far
 //   frame W H OFF CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
 //                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
@@ -64,6 +68,7 @@ enum {
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
+ GL_TEXTURE6 = 0x84C6, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
  GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11, GL_ANY_SAMPLES_PASSED = 0x8C2F, GL_QUERY_RESULT = 0x8866, GL_POINTS = 0 };
@@ -119,6 +124,7 @@ enum {
  X(void, glBlendFuncSeparate, (GLenum, GLenum, GLenum, GLenum)) X(void, glDepthMask, (unsigned char)) \
  X(void, glFramebufferTexture2D, (GLenum, GLenum, GLenum, GLuint, GLint)) \
  X(void, glCopyTexSubImage2D, (GLenum, GLint, GLint, GLint, GLint, GLint, GLsizei, GLsizei)) \
+ X(void, glBlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum)) \
  X(void, glClearBufferfv, (GLenum, GLint, const GLfloat *)) X(void, glBlendEquationSeparate, (GLenum, GLenum)) \
  X(void, glColorMask, (unsigned char, unsigned char, unsigned char, unsigned char)) \
  X(void, glViewport, (GLint, GLint, GLsizei, GLsizei)) \
@@ -140,7 +146,7 @@ static void *(*map64) (void *, size_t, int, int, int, long long);
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
-struct buf { int id, nv, S; GLuint vao, vb, ib; int nrun; struct run *runs; };
+struct buf { int id, nv, S, glow; GLuint vao, vb, ib; int nrun; struct run *runs; };   // glow: its runs all glow
 struct helper {
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
@@ -149,6 +155,7 @@ struct helper {
  unsigned char *gx;   // ..read back; rb and gr textures, which the sky asks
  GLuint mk; int sky, spend; float stone; GLint u_fg;   // the sky drawn under the bare, over a copy of the frame's marks
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
+ GLuint zf, zt; GLint u_bb, u_br, u_bu, u_gz; float eye[10]; int epend;   // the glows' eye, and the depths they fade by
  GLuint sm; GLint u_lm, u_sun, u_bias, u_ss; float lm[16], bias; int sw, sh;   // the sun's view
  GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
@@ -190,8 +197,10 @@ static GLuint shader(int o, GLenum k, const char *src) {
 static char const vsrc[] =
  "#version 300 es\n"
  "layout(location=0) in vec3 p; layout(location=1) in vec2 t; layout(location=2) in vec3 c; layout(location=3) in vec3 sc;\n"
- "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
- "void main(){ vec4 q = m * vec4(p, 1.0); uv = t; col = c; scol = sc; lp = (lm * vec4(p, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
+ "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; uniform int bb; uniform vec3 br; uniform vec3 bu;\n"
+ "out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
+ "void main(){ vec3 P = bb != 0 ? p + t.x * br + t.y * bu : p;\n"
+ " vec4 q = m * vec4(P, 1.0); uv = t; col = c; scol = sc; lp = (lm * vec4(P, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
  " if (q.w > 0.0) { vec2 s = floor((q.xy / q.w * 0.5 + 0.5) * vp * 16.0 + 0.5) / 16.0; q.xy = (s / vp * 2.0 - 1.0) * q.w; }\n"
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
@@ -205,6 +214,7 @@ static char const fsrc[] =
  "uniform sampler2D tx; uniform vec2 ts; uniform int has; uniform vec3 fog; uniform vec2 fz; uniform float tone; uniform int mode;\n"
  "uniform highp sampler2D fbt; uniform highp sampler2D gbt; uniform int fg;\n"
  "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
+ "uniform highp sampler2D dz; uniform vec4 gz;\n"
  "float lit(int i, int j, float z) { return i < 0 || j < 0 || i >= ss.x || j >= ss.y || z <= texelFetch(sm, ivec2(i, j), 0).r ? 1.0 : 0.0; }\n"
  "float vis() { float sx = (lp.x * 0.5 + 0.5) * float(ss.x) - 0.5, sy = (0.5 - lp.y * 0.5) * float(ss.y) - 0.5, fi = floor(sx), fj = floor(sy),\n"
  "  fx = sx - fi, fy = sy - fj, z = lp.z - bias; int i = int(fi), j = int(fj);\n"
@@ -221,6 +231,8 @@ static char const fsrc[] =
  " if (has != 0) { vec4 k = texture(tx, uv / ts); if (k.a < 0.5) discard; if (gl) t = k.rgb; else c *= k.rgb; }\n"
  " if (fz.y > 0.0) { float f = clamp((w - fz.x) * fz.y, 0.0, 1.0); if (gl) c -= c * f, t += (1.0 - t) * f; else c += (fog - c) * f; }\n"
  " if (tone > 0.0) c = 255.0 * (1.0 - exp(-tone * c / 255.0));\n"
+ " if (mode == 1 && gz.w > 0.0) { float d = texelFetch(dz, ivec2(gl_FragCoord.xy), 0).r * 2.0 - 1.0;\n"
+ "  if (d > -1.0 && d < 1.0) c *= clamp((2.0 * gz.x * gz.y / (gz.y + gz.x - d * (gz.y - gz.x)) - w + gz.z) / gz.w, 0.0, 1.0); }\n"
  " if (mode == 5) { ivec2 p = ivec2(gl_FragCoord.xy); vec4 k = texelFetch(fbt, p, 0); float A = floor(k.a * 255.0 + 0.5);\n"
  "  if (A > 192.0) discard;\n"
  "  vec3 g = floor(vec3(k.b, k.g, k.r) * 255.0 + 0.5); float a = 254.0 / 255.0;\n"
@@ -358,6 +370,9 @@ static int setup(struct helper *H, int x) {
  H->u_fg = glGetUniformLocation(H->prog, "fg");
  H->u_lm = glGetUniformLocation(H->prog, "lm"); H->u_sun = glGetUniformLocation(H->prog, "sun");
  H->u_bias = glGetUniformLocation(H->prog, "bias"); H->u_ss = glGetUniformLocation(H->prog, "ss");
+ H->u_bb = glGetUniformLocation(H->prog, "bb"); H->u_br = glGetUniformLocation(H->prog, "br");
+ H->u_bu = glGetUniformLocation(H->prog, "bu"); H->u_gz = glGetUniformLocation(H->prog, "gz");
+ glUniform1i(glGetUniformLocation(H->prog, "dz"), 6);
  glPixelStorei(GL_PACK_ALIGNMENT, 4); glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
  glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
  return 1; }
@@ -457,7 +472,8 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S)
  glBufferData(GL_ELEMENT_ARRAY_BUFFER, 12 * (intptr_t) nt, ix, GL_STATIC_DRAW);
  glBindVertexArray(0);
  free(tr); free(ix);
- b->runs = runs, b->nrun = nrun, b->nv = nv, b->S = S;
+ b->runs = runs, b->nrun = nrun, b->nv = nv, b->S = S, b->glow = nrun > 0;
+ for (int r = 0; r < nrun; r++) b->glow &= runs[r].tex == -2;
  dprintf(H->out, "ok\n"); }
 
 // a buf's vertices laid again, its triangles kept: as many, as wide
@@ -645,6 +661,14 @@ static void cmd_sky(struct helper *H, int id, double tone) {
  H->sky = id, H->stone = (float) tone, H->spend = 1;
  dprintf(H->out, "ok\n"); }
 
+static int words(char *s, double *v, int max);
+static void cmd_glow(struct helper *H, char *args) {
+ double v[10];
+ if (words(args, v, 10) != 10) { dprintf(H->out, "err glow args\n"); return; }
+ for (int i = 0; i < 10; i++) H->eye[i] = (float) v[i];
+ H->epend = v[7] > v[6] && v[9] > 0;
+ dprintf(H->out, "ok\n"); }
+
 static void cmd_drop(struct helper *H, int id) {
  struct buf *b = buf_of(H, id);
  if (b) buf_free(b), *b = H->bufs[--H->nbuf];
@@ -679,6 +703,14 @@ static int target(struct helper *H, int w, int h) {
  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
  glGenFramebuffers(1, &H->lf); glBindFramebuffer(GL_FRAMEBUFFER, H->lf);
  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, H->lz, 0);
+ if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { H->fw = H->fh = 0; return 0; }
+ // ..and a copy of the frame's depths after what is opaque, which the glows fade by
+ if (H->zf) glDeleteFramebuffers(1, &H->zf), glDeleteTextures(1, &H->zt);
+ glGenTextures(1, &H->zt); glBindTexture(GL_TEXTURE_2D, H->zt);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+ glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, NULL);
+ glGenFramebuffers(1, &H->zf); glBindFramebuffer(GL_FRAMEBUFFER, H->zf);
+ glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, H->zt, 0);
  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { H->fw = H->fh = 0; return 0; }
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
  unsigned char *gx = realloc(H->gx, 16 * (size_t) w * h);
@@ -778,25 +810,41 @@ static void cmd_frame(struct helper *H, char *args) {
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
  glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, H->lz);
  glActiveTexture(GL_TEXTURE0);
+ // ..what is opaque first, then the glows and the glass in their order; between, when the
+ // glows face the eye, a copy of the depths they fade by
+ int const ey = H->epend;
+ float const *e = H->eye;
+ H->epend = 0;
+ glUniform4f(H->u_gz, e[6], e[7], e[8], ey ? e[9] : 0);
+ glUniform3f(H->u_br, e[0], e[1], e[2]); glUniform3f(H->u_bu, e[3], e[4], e[5]); glUniform1i(H->u_bb, 0);
  int glassy = 0;
- for (int k = lead; k < n; k++) {
-  struct buf *b = buf_of(H, (int) v[k]);
-  if (!b) continue;
-  glBindVertexArray(b->vao);
-  for (int r = 0; r < b->nrun; r++) {
-   int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
-   if (m == 2 && !H->dual) { glassy = -1; continue; }
-   glUniform1i(H->u_cls, class(b->runs[r].tex));
-   struct tex *t = tx >= 0 ? tex_of(H, tx) : tx <= -3 ? tex_of(H, -3 - tx) : NULL;
-   glUniform1i(H->u_has, t != NULL);
-   if (t) glBindTexture(GL_TEXTURE_2D, t->gl), glUniform2f(H->u_ts, (float) t->w, (float) t->h);
-   void *at = (void*) (4 * (uintptr_t) b->runs[r].at);
-   mode(H, m);
-   glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, at);
-   if (m == 2) {   // ..and on what is bare, its tint and sheen
-    glBindFramebuffer(GL_FRAMEBUFFER, H->gb); mode(H, 3);
+ for (int pass = 0; pass < 2; pass++) {
+  if (pass && ey) {
+   glBindFramebuffer(GL_READ_FRAMEBUFFER, H->fb); glBindFramebuffer(GL_DRAW_FRAMEBUFFER, H->zf);
+   glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+   glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
+   glActiveTexture(GL_TEXTURE6); glBindTexture(GL_TEXTURE_2D, H->zt); glActiveTexture(GL_TEXTURE0); }
+  for (int k = lead; k < n; k++) {
+   struct buf *b = buf_of(H, (int) v[k]);
+   if (!b) continue;
+   glBindVertexArray(b->vao);
+   glUniform1i(H->u_bb, ey && b->glow);
+   for (int r = 0; r < b->nrun; r++) {
+    int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
+    if ((m != 0) != pass) continue;
+    if (m == 2 && !H->dual) { glassy = -1; continue; }
+    glUniform1i(H->u_cls, class(b->runs[r].tex));
+    struct tex *t = tx >= 0 ? tex_of(H, tx) : tx <= -3 ? tex_of(H, -3 - tx) : NULL;
+    glUniform1i(H->u_has, t != NULL);
+    if (t) glBindTexture(GL_TEXTURE_2D, t->gl), glUniform2f(H->u_ts, (float) t->w, (float) t->h);
+    void *at = (void*) (4 * (uintptr_t) b->runs[r].at);
+    mode(H, m);
     glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, at);
-    glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glassy = glassy < 0 ? glassy : 1; } } }
+    if (m == 2) {   // ..and on what is bare, its tint and sheen
+     glBindFramebuffer(GL_FRAMEBUFFER, H->gb); mode(H, 3);
+     glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, at);
+     glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glassy = glassy < 0 ? glassy : 1; } } } }
+ glUniform1i(H->u_bb, 0); glUniform4f(H->u_gz, 0, 0, 0, 0);
  if (glassy < 0) { glBindVertexArray(0); mode(H, 0); dprintf(H->out, "err no glass here\n"); return; }
  // ..last, where any glass fell on the bare: in any order, a glow there is what it shows
  glUniform1i(H->u_cls, 0);
@@ -895,6 +943,7 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "win ", 4)) cmd_win(H, strtoul(l + 4, NULL, 10));
   else if (!strncmp(l, "show ", 5)) cmd_show(H, l + 5);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
+  else if (!strncmp(l, "glow ", 5)) cmd_glow(H, l + 5);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);
   else if (!strncmp(l, "base ", 5) && sscanf(l + 5, "%d %d %ld", &a, &b, &off) == 3) cmd_base(H, a, b, (size_t) off);

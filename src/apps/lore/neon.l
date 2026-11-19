@@ -1,6 +1,6 @@
 ; neon -- signs bent from glass tube: a stroke font, and a sign laid on a wall as three things
-; a scene draws -- the tubes, lit by nothing but themselves; the halo on the wall close by;
-; and a lamp (mesh.l's) for the light further off.
+; a scene draws -- the tubes, lit by nothing but themselves; a glow round them, off the wall;
+; and a lamp (mesh.l's) for the light on the wall and further off.
 ; (neon-strokes s) answers [lines w], polylines of [x y] in caps 1 tall; (neon-sign s o al up
 ; out h col) lays s from its bottom left o, h metres tall: {'tube pk 'halo pk 'lamp lamp 'w metres}
 (module (neon neon-font neon-strokes neon-sign)
@@ -76,8 +76,9 @@
    (go l x) (atom? l ? () (: c <l u (97 <= c <= 122 ? (c - 32) c)
                              (map (ln \ map (p \ [(k * (x + p 0)) (k * p 1)]) (pairs ln)) (neon-font u) + go >l (x + wd c + 1.5))))
    [(go cs 0.0) (k * (foldl (\ a c (a + wd c + 1.5)) 0.0 cs - 1.5))])
- ; --- the sign: the tubes as three sides of a square a stroke, the halo a band either side
- ;     of each stroke on the wall, bright down its middle and gone at its edges ---
+ ; --- the sign: the tubes as three sides of a square a stroke, the halo a band along each,
+ ;     level with the tube, a bell across and ramped over each end, so where two meet they
+ ;     sum to one ---
  (vx p c) [(p 0) (p 1) (p 2) 0.0 0.0 0.0 0.0 0.0 (c 0) (c 1) (c 2)]
  ; ..a triangle of vs turned so its front faces out
  (facing vs t out) (: a (vs (t 0)) b (vs (t 1)) c (vs (t 2))
@@ -88,17 +89,17 @@
      (at p d) (c+ o (c+ (c+ (c* (p 0) u) (c* (p 1) v)) (c* d out)))
      glass (cmix col [1.0 1.0 1.0] 0.15)          ; the tube's own colour, paler than its light
      segs (catmap (ln \ (: (go l) (atom? >l ? () ([<l <>l] . go >l)) (go ln))) (sk 0))
-     rt (0.035 * h) hw (0.35 * h) lift (0.04 + rt)
+     rt (0.035 * h) lift (0.04 + rt)
      (tube g) (: A (at (g 0) lift) B (at (g 1) lift) t (unit (c+ B (c* -1.0 A))) n2 (unit (cross t out))
        (face o2 o3) (: (cn q k) (c+ q (c+ (c* rt o2) (c* (k * rt) o3)))
                        (piece (map (q \ vx q glass) [(cn A -1.0) (cn B -1.0) (cn B 1.0) (cn A 1.0)]) [[0 1 2] [0 2 3]] o2))
        (mesh-join [(face out n2) (face n2 out) (face (c* -1.0 n2) out)]))
-     ; ..each band tapering to nothing past the stroke's ends, so they join without a seam
-     (halo g) (: A (at (g 0) 0.004) B (at (g 1) 0.004) t (c* hw (unit (c+ B (c* -1.0 A)))) n2 (c* hw (unit (cross t out)))
-       z [0.0 0.0 0.0] (e p) (vx p z) (m p) (vx p col) (neg v) (c* -1.0 v)
-       (row q k) [(e (c+ q n2)) (k q) (e (c+ q (neg n2)))]
-       (piece (row (c+ A (neg t)) e + row A m + row B m + row (c+ B t) e)
-              (catmap (r \ (: a (3 * r) [[a (a + 1) (a + 4)] [a (a + 4) (a + 3)] [(a + 1) (a + 2) (a + 5)] [(a + 1) (a + 5) (a + 4)]])) ^3)
+     hw (0.03 + 0.08 * h) across [-1.0 -0.4 0.0 0.4 1.0] bell [0.0 0.38 1.0 0.38 0.0]
+     (halo g) (: A (at (g 0) lift) B (at (g 1) lift) d (c+ B (c* -1.0 A)) L (sqrt (dot d d)) t (c* (1.0 / L) d)
+       n2 (c* hw (unit (cross t out))) e (min (0.5 * hw) (0.5 * L))
+       (row q k) (map (j \ vx (c+ q (c* (across j) n2)) (c* (k * bell j) col)) ^5)
+       (piece (row (c+ A (c* -e t)) 0.0 + row (c+ A (c* e t)) 1.0 + row (c+ B (c* -e t)) 1.0 + row (c+ B (c* e t)) 0.0)
+              (catmap (r \ catmap (j \ (: a (5 * r + j) [[a (a + 1) (a + 6)] [a (a + 6) (a + 5)]])) ^4) ^3)
               out))
      ; ..its light from the strokes' ends, one to each half-height square, so a busy glyph
      ; costs a lamp no more than a plain one

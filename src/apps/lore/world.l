@@ -47,6 +47,8 @@
                                                   ; opens and after it shuts, how fast it gathers speed
  chunk-m 8.0 cell 0.25 cell-top 2.0                   ; how fine the surfaces are cut near a lamp, for the
                                           ; light, and how coarse far from every one
+ lamp-cell 0.125 lamp-bow 0.03           ; ..and finer still where a lamp's light across a cell
+                                          ; bows from straight by more than lamp-bow of itself
  watch-every 10                           ; frames between looks at the files
  the-level "src/apps/lore/levels/earth.l"
  ; --- the level, read: (world-read s) runs a level file's text into a tablet {'name 'start
@@ -466,7 +468,7 @@
  (bulb-light lv b) (: p (b 'at) c (b 'c) r (room-in lv (p 0) (p 1) (p 2)) top (max 0.01 (max (c 0) (max (c 1) (c 2))))
    tint (c* (1.0 / top) c)
    (light [{'at [p] 'c c 'r 6.0 'soft 0.35 'keep (inside-y r)}] (b 'how)
-          [[(mesh-pack (nub p 0.04 (cmix tint white 0.55))) 4.0]] [[(mesh-pack (halo-ball p 0.35 tint)) 0.9]]))
+          [[(mesh-pack (nub p 0.04 (cmix tint white 0.55))) 4.0]] [[(mesh-pack (mesh-halo [p] 0.35 tint)) 0.9]]))
  ; ..a sconce: its face white-hot, standing out from the wall, its light thrown the way it looks
  (sconce-light lv q) (: a (q 'at) n (c+ (q 'np) (c* -1.0 a)) d (c+ (q 'up) (c* -1.0 a)) l (cross n d) L (q 'len) s 0.25
    (pt kn kd kl) (c+ a (c+ (c* kn n) (c+ (c* kd d) (c* kl l))))
@@ -481,7 +483,7 @@
    (tongue p) (mesh-join [(slab (c+ p [-0.009 0.0 -0.009]) (c+ p [0.009 0.04 0.009]) (_ \ [0.0 0.0]) -1 (cmix c white 0.5))
                           (slab (c+ p [-0.005 0.04 -0.005]) (c+ p [0.005 0.06 0.005]) (_ \ [0.0 0.0]) -1 c)])
    (light [{'at (map tip ps) 'c c 'r 3.5 'soft 0.2 'keep k}] (q 'how)
-          [[(mesh-pack (mesh-join (map tongue ps))) 3.0]] [[(mesh-pack (mesh-join (map (p \ halo-ball (tip p) 0.12 c) ps))) 0.7]]))
+          [[(mesh-pack (mesh-join (map tongue ps))) 3.0]] [[(mesh-pack (mesh-halo (map tip ps) 0.12 c)) 0.7]]))
  ; ..the cuts' rims smouldering: a band of embers just in from each edge, glowing and breathing
  ember-c [1.0 0.36 0.08]
  (ember-light lv es) (: p (es 0 'rim 0) k (inside (room-at lv (p 0) (p 2)))
@@ -491,13 +493,6 @@
            (catmap (j \ (: a j b (j + 1) ia (j + m + 1) ib (j + m + 2) [[a b ib -1] [a ib ia -1] [a ib b -1] [a ia ib -1]])) ^m)))
    (light [{'at (catmap (e \ map (e 'rim) [0 4 8 12]) es) 'c ember-c 'r 2.2 'soft 0.3 'keep k}] ['breathe]
           [[(mesh-pack (mesh-join (map band es))) 2.5]] ()))
- ; ..a glow round p, r across: three discs crossed, bright in the middle and gone at the
- ; edge, each seen from both sides
- (halo-ball p r col) (: n 12 z [0.0 0.0 0.0]
-   (vx q k) [(q 0) (q 1) (q 2) 0.0 0.0 0.0 0.0 0.0 (k 0) (k 1) (k 2)]
-   (disc u v) (: rim (map (i \ (: a (tau * i / n) (vx (c+ p (c+ (c* (r * cos a) u) (c* (r * sin a) v))) z))) ^n)
-     (mesh (vx p col . rim) (catmap (i \ (: a (1 + i) b (1 + (i + 1) % n) [[0 a b -1] [0 b a -1]])) ^n)))
-   (mesh-join [(disc [1.0 0.0 0.0] [0.0 1.0 0.0]) (disc [0.0 1.0 0.0] [0.0 0.0 1.0]) (disc [1.0 0.0 0.0] [0.0 0.0 1.0])]))
  (sign-light lv s) (: a (s 'at) sn (s 'n)
    hg (? (atom? sn) (hang lv (a 0) (a 1)) (: n (unit sn) [[(a 0) 0.0 (a 1)] n [-(n 2) 0.0 (n 0)]]))
    n (hg 1) rt (hg 2) h (a 3)
@@ -586,8 +581,8 @@
    (sheets o [0.0 h 0.0] (c* w rt) n (q \ (: d (c+ q (c* -1.0 o)) [(1.0 * tw / w * dot d rt) (1.0 * th / h * (h - d 1))])) tex white))
  ; ..whether a piece of surface c across is too coarse for the lamps lps: a lamp's light
  ; changes the more across a cell the nearer it is
- ; ..the lamps' points, each [p r keep], numbered, and their places and reaches as trays
- (lamp-pts lps) (: l (catmap (lp \ map (p \ [p (lp 'r) (lp 'keep)]) (lp 'at)) lps) n #l
+ ; ..the lamps' points, each [p r keep lamp], numbered, and their places and reaches as trays
+ (lamp-pts lps) (: l (catmap (lp \ map (p \ [p (lp 'r) (lp 'keep) lp]) (lp 'at)) lps) n #l
    (col j) (gem-tray [n] (map (q \ 1.0 * q 0 j) l)) (tab f) (foldl (\ t q (pin t #t (f q))) {} l)
    {'n n 'at (tab (q \ q)) 'ks (tab (q \ [(q 0) (q 1) (two? (q 2) ? 1 0)])) 'mk (tab (q \ two? (q 2)))
     'P (n @ 0 () (map col ^3))
@@ -610,6 +605,10 @@
  ; ..and, with db the brushes end to end (world-new's DB), where the sky's light changes
  ; across it by sky-step
  sky-step 0.15
+ ; ..the light lamp lp's point p throws on x of a face facing n, as lamp-light sums it
+ (lamp-on lp p n x) (: l (c- p x) d2 (dot l l) d (sqrt (d2 + 1e-9)) w (peep lp 'wrap 0.0) r (lp 'r) q (d2 / (r * r))
+   lam (sat ((dot n l / d + w) / (1.0 + w))) em (lp 'n @ () 1.0 m (sat (0.25 - dot m l / d))) f (sat (1.0 - q * q))
+   c (lp 'c) (lam * em * f * f / (d2 + sq (peep lp 'soft 0.1)) * max (c 0) (max (c 1) (c 2)) / #(lp 'at)))
  (coarse? lps tf tm db) (: all-pts (lamp-pts lps)
   ; ..asked of a face first, so its pieces weigh only the lamps that reach it, and the open
   ; on it once
@@ -628,11 +627,15 @@
     ; ..the open round the piece's own edges, among the brushes near the face
     (sky? _) (lamp-varies (flat ps) (sk 1) sky-step cell (sk 0))
     ; ..the lamps near enough, all at once, then their masks
-    (? (c > troffer-cut && any meets? tx) 1 (two? sk && sky? ()) 1
+    ; ..and past cell, where the light the lamps throw at its middle is not what its corners'
+    ; light, drawn straight between them, says
+    m (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps))
+    (bow i) (: q (pts i) (g x) (lamp-on (q 3) (q 0) n x) a (g m) [(abs (a - net (map g ps) / #ps)) a])
+    (? (c > troffer-cut && any meets? tx) 1 (two? sk && c > cell && sky? ()) 1
        (#pts = 0 || 6.0 * c - 0.5 <= 0.0) 0
        (: dx (out 0 PX) dy (out 1 PY) dz (out 2 PZ) L (min R (6.0 * c - 0.5))
-          ix (iota (2 dx + 2 dy + 2 dz < 2 L))
-          (any (j \ (: i (ix j) (lit? (pts i 2) (pts i 0)))) ^#ix))))))))
+          ix (iota (2 dx + 2 dy + 2 dz < 2 L)) on (filter (i \ lit? (pts i 2) (pts i 0)) (map ix ^#ix))
+          (c > cell ? (two? on) (: bs (map bow on) (lamp-bow * (0.1 + net (map (b \ b 1) bs)) < net (map (b \ b 0) bs)))))))))))
  ; ..a hair out from face f facing n, where the open changes the light along its edges a cell
  ; apart and at its middle, as what meets a face is cut round: the brushes near it and the
  ; lift, else ()
@@ -999,7 +1002,7 @@
      ; ..and buried where the open is round it: half the open's light, none of a room's
      [m (w 0 * w 1 * (1 - m))])
    cks (map (c \ [(c 0) (kept ['pack (c 0)] (c 1))])
-            (chunks-kept bs [cell-top cell (coarse? lps tft tfm (tablet? sk && two? ob && up ? DB ()))] (look tt) chunk-m more kp))
+            (chunks-kept bs [cell-top lamp-cell (coarse? lps tft tfm (tablet? sk && two? ob && up ? DB ()))] (look tt) chunk-m more kp))
    _ (pins memo 'pts pst 'wi wi 'ti ti 'tfb tfb, fresh ? (pin memo 'size (memo 'made)))
    drs (map (d \ kept ['door (vals d) tt] (_ \ mesh-pack (door-mesh d tt))) (lv 'doors))
    ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds

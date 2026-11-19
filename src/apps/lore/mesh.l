@@ -1,7 +1,7 @@
 ; mesh -- levels drawn in triangles: meshes built from shapes, lit by sun or lamps, packed
 ; for facets; a camera; textures; the frame out as half blocks, kitty's pixels, or a window.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
-(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
+(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-halo mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
          mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
@@ -67,6 +67,17 @@
  (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
    (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
    [(lace (catmap vtx ^3)) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
+ ; a glow round each of ps, r across, its colour col: a disc each, turned by facets to face the
+ ; eye by its u v, bright in the middle and falling as a bell to none at its rim
+ (mesh-halo ps r col) (: n 12 rs [0.3 0.6 1.0] m (#rs - 1) k (1 + #rs * n)
+   (bell a) ((exp (-6.0 * a * a) - exp -6.0) / (1.0 - exp -6.0))
+   ring ([0.0 0.0 1.0] . catmap (a \ map (i \ [(a * r * cos (tau * i / n)) (a * r * sin (tau * i / n)) (bell a)]) ^n) rs)
+   (at j i) (1 + j * n + i % n)
+   ts (map (i \ [0 (at 0 i) (at 0 (i + 1)) -1]) ^n
+       + catmap (j \ catmap (i \ (: a (at j i) b (at j (i + 1)) c (at (j + 1) i) d (at (j + 1) (i + 1))
+                                  [[a d b -1] [a c d -1]])) ^n) ^m)
+   (mesh (catmap (p \ map (q \ [(p 0) (p 1) (p 2) (q 0) (q 1) 0.0 0.0 0.0 (q 2 * col 0) (q 2 * col 1) (q 2 * col 2)]) ring) ps)
+         (catmap (o \ map (t \ [(t 0 + o) (t 1 + o) (t 2 + o) -1]) ts) (map (j \ j * k) ^#ps))))
  ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
@@ -310,6 +321,9 @@
    q (cos (th - as) - 0.5) w ((q > 0.0) * q * q) s (net w)
    (ch k) (255.0 * net (w * c k) / s)
    [(ch 0) (ch 1) (ch 2)])
+ ; a glow faces the eye, u v its offsets along the eye's right and up, and fades over glow-soft
+ ; metres as what is behind it comes within glow-lead of it
+ glow-lead 0.1 glow-soft 0.25
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
@@ -323,7 +337,9 @@
  ; whose pixels were bare, the sky's spots to lay over its sky
  (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (v 'under @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
-   o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
+   er (v 'r) eu (v 'u)
+   o (gem-tray [18] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias
+                     (er 0) (er 1) (er 2) (eu 0) (eu 1) (eu 2) (v 'near) (v 'far) glow-lead glow-soft])
    os (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())])
    gp (peep v 'gpu ()) sk (tablet? gp && two? bare && #bare = 3 ? (bare 2 0 v) ())
    c [v B0 bare (two? sk)] q (tablet? gp ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os (peep v 'keys ()) sk c) ())

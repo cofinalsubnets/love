@@ -202,6 +202,8 @@
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
  ; ..the sky, laid each frame
  (sky! s sk) (? !(two? sk) () (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r))
+ ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
+ (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
  ; ..the textures, laid again only when one of them is not the one laid
  (texs! s texs) (? (alike (s 'texs) texs) ()
    (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
@@ -222,7 +224,7 @@
            (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 y (string? u ? u (sky! s sk))
+                 y (string? u ? u (sky! s sk) @ () (glow! s o) r r)
                  ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
                  ; or one that says its spots
                  kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) ? 512 0)

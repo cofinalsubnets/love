@@ -548,7 +548,21 @@
 ; the sign: its strokes, a space between words, its width by its letters
 (: hi (neon-strokes "HI") sp (neon-strokes "H I") s (neon-sign "OK" [0.0 0.0 0.0] [1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 -1.0] 0.3 [1.0 0.2 0.6])
  (test (#(hi 0) = 6) (#(sp 0) = 6) (hi 1 < sp 1) (0 < s 'tube 'n) (0 < s 'halo 'n) (two? (s 'lamp 'at))
-       (all (p \ p 2 < 0.0) (s 'lamp 'at)) (s 'w = 0.3 * hi 1)))
+       (all (p \ p 2 < 0.0) (s 'lamp 'at)) (s 'w = 0.3 * hi 1)
+       ; ..its halo level with the tubes, off the wall
+       (aall (abs (s 'halo 'cols 2 + 0.0505) < 1e-9))))
+; a halo: a disc a point, its vertices all there and their u v the offsets the eye turns them by,
+; its colour whole in the middle and none at the rim
+(: h (mesh-halo [[1.0 2.0 3.0] [0.0 0.0 0.0]] 0.5 [1.0 0.0 0.0]) vs (h 0) n (#vs // 2) (r v) (sqrt (v 3 * v 3 + v 4 * v 4))
+ (test (all (v \ take 3 v = [1.0 2.0 3.0]) (take n vs)) (all (v \ take 3 v = [0.0 0.0 0.0]) (drop n vs))
+       (abs (vs 0 8 - 1.0) < 1e-9) (abs (foldl max 0.0 (map r vs) - 0.5) < 1e-9) (all (v \ r v < 0.49 || abs (v 8) < 1e-9) vs)
+       (all (t \ (t 0 < n) = (t 1 < n)) (h 1))))
+; a bulb's light cut to eighths of a metre on a ceiling where it hangs close, as its light bows
+; across a cell, and not where it hangs far
+(: (eighths b) (: ks (map (c \ c 'pk 'cols) (world-new 8 8 (lv ("(room [0 0 0] [4 3 4]) (bulb [2 " + b + " 2] (rgb 1 1 1))")) "" 'sc 'chunks))
+                 (odd? x) (abs (x * 8.0 - 2.0 * floor (x * 4.0) - 1.0) < 1e-6)
+                 #(filter (k \ any (i \ k 1 i > 2.9 && odd? (k 0 i)) ^#(k 1)) ks))
+ (test (eighths "1.5" = 0) (0 < eighths "2.85")))
 ;; the street's words: a sign facing its own way, a lit board, the spinning square; hanzi
 ;; a glyph and a half wider than latin's
 (: sl (world-read "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [10 4 10]) (start [5 0 5] 0 0) (neon [5 2 9] [0 0 -1] 0.5 \"中\" (rgb 1 0 0)) (ad [0.01 2 5] [1 0 0] [0 1 0] 3 2 t) (spinner [5 3 5] 1 1 t t) (breathe (flames (rgb 1 0.6 0.2) [[1 0 1] [2 0 1]])) (blink (bulb [1 3 1] (rgb 1 0 0))) (whole (solid (box [1 0 1] [2 1 2]))))")
