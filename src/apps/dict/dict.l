@@ -17,15 +17,16 @@
    (dict-num s) (foldl (\ n i (n * 64 + peep b64v (s i) 0)) 0 ^#s)
    ; dictd's key: lower case, and but for a database that keeps every character, letters,
    ; digits and spaces alone. a byte no character wears stays
+   ; a key with no byte db 'dirty matches is its own, as most are
    (dict-key db s)
-    (: o (jug 0) all (db 'all) u8 (db 'utf8)
+    (: o (jug 0) all (db 'all) u8 (db 'utf8) d (db 'dirty)
        (keep? c) (all || c = 32 || cpis "alnum" c)
        (go k) (#s <= k ? (slurp o)
                (: c (s k) m (c < 128 || !u8 ? 1 (cpn s k))
                   (? (m < 1 || c >= 128 && !u8) (put o c, go (k + 1))
                      (: u (c < 128 ? c (cpat s k))
                         (keep? u ? (say o (utf8 (cplower u))) 0, go (k + m))))))
-       (go 0))
+       (d && !(rehas d s) ? s (go 0)))
    find fsub
    (rd p off n) (uread-at p off n @ r (two? r ? <>r ""))
    ; the index through a cache of 4K blocks, dropped whole once it holds 4096
@@ -70,16 +71,39 @@
                       [l nx] (: f (fields l) (k < m && hit? (dict-key db <f) ? (go nx (f . acc) (k + 1)) (rev acc)))
                       _ (rev acc))
        (go (lbound db q) () 0))
-   ; every line whose headword keep? takes, in the index's order: a read of the whole of it,
-   ; or of the lines from p0 to n
-   (scan db keep?) (scan-in db 0 (db 'size) keep?)
-   (scan-in db p0 n keep?)
-    (: ix (db 'index)
-       (one l acc) (#acc < hits ? (fields l @ () acc f (keep? <f ? (f . acc) acc)) acc)
-       (go p carry acc) (? (n <= p || hits <= #acc) (rev (#carry > 0 ? (one carry acc) acc))
-                           (: b (rd ix p 1048576) ls (split "\n" (carry + b))
-                              (#b < 1 ? (go n carry acc) (go (p + #b) (last ls) (foldl (\ a l (one l a)) acc (take (#ls - 1) ls))))))
-       (go p0 "" ()))
+   ; the index's lines a megabyte at a time: (each line acc at) folded, at the line's offset,
+   ; until (done? acc)
+   (lines-of db each acc done?)
+    (: n (db 'size) ix (db 'index)
+       (go p carry acc) (: b (p < n && !(done? acc) ? (rd ix p 1048576) "") at (p - #carry)
+                           (? (#b < 1) (each carry acc at)
+                              (: ls (split "\n" (carry + b))
+                                 r (foldl (\ [a at] l [(each l a at) (at + #l + 1)]) [acc at] (take (#ls - 1) ls))
+                                 (go (p + #b) (last ls) <r))))
+       (go 0 "" acc))
+   ; every line whose headword keep? takes, in the index's order
+   (scan db keep?)
+    (: (one l [k acc] at) (: t (find l "\t" 0) (k < hits && 0 < t && keep? (snip l 0 t) ? (fields l @ () [k acc] f [(k + 1) (f . acc)]) [k acc]))
+       (rev ((lines-of db one [0 ()] (\ [k _] (hits <= k))) 1)))
+   ; v in 7 of dictd's base64 digits
+   (b64w v) (string [(b64 (v >> 36 & 63)) (b64 (v >> 30 & 63)) (b64 (v >> 24 & 63)) (b64 (v >> 18 & 63))
+                     (b64 (v >> 12 & 63)) (b64 (v >> 6 & 63)) (b64 (v & 63))])
+   ; every line's key, laid once in the index's order: "\n", the key, "\t", the line's offset
+   ; in 7 base64 digits
+   (keyline db)
+    (: o (jug 0)
+       (one l _ at) (: k (find l "\t" 0)
+                      (0 < k ? (say o "\n", say o (dict-key db (snip l 0 k)), say o "\t", say o (b64w at)) 0))
+       (peep db 'keys () @ () (: _ (lines-of db one 0 (_ \ 0)) _ (say o "\n") k (slurp o) (pin db 'keys k, k))
+                             k k))
+   ; the lines whose keys from p on hold pat, by (ok? K p e), e the line's end, its key ending
+   ; at e - 8, a hit it refuses looked past: each line
+   ; once, the first hits of them
+   (kfind db pat ok?)
+    (: K (keyline db)
+       (go i acc) (: p (#acc < hits ? (find K pat i) -1) e (p < 0 ? -1 (find K "\n" (p + 1)))
+                     (? (e < 0) (rev acc) (ok? K p e ? (go e (dict-num (snip K (e - 7) e) . acc)) (go (p + 1) acc))))
+       (filter (f \ 0 < #f) (map (o \ line-at db o @ [l _] (fields l) _ ()) (go 0 ()))))
 
    ; --- the strategies ----------------------------------------------------------
    ; soundex as dictd's: past what is no ascii letter or digit, the first kept, upper cased;
@@ -120,22 +144,32 @@
    ; word is what single spaces part
    (dict-find db w s)
     (: q (dict-key db w)
-       (keyed f) (scan db (h \ f (dict-key db h)))
-       ; ..soundex's over the keys that open on q's first byte, or all of them past a space
-       (lead f) (? (#q < 1 || q 0 = 32) (keyed f)
-                   (scan-in db (lbound db (string [(q 0)])) (q 0 < 255 ? (lbound db (string [(q 0 + 1)])) (db 'size))
-                            (h \ f (dict-key db h))))
+       (keyed f) (kfind db "\n" (\ K p e (f (snip K (p + 1) (e - 8)))))
+       ; a word C finds in the keys: one with no tab or newline. spaces, a tab or a newline
+       ; edge a key's words
+       plain (#q > 0 && find q "\t" 0 < 0 && find q "\n" 0 < 0)
+       one (find q " " 0 < 0)
+       (edge c) (c = 32 || c = 9 || c = 10)
+       (word f g) (? !one () plain (f 0) (keyed g))
        (pat mk) (mk w @ [1 m _] (: f (refold m) (scan db (h \ rehas f h))) _ ())
        (s @ 'exact (walk db q (= q))
             'prefix (walk db q (k \ starts? k q))
-            'substring (keyed (k \ 0 <= find k q 0))
-            'suffix (keyed (k \ ends? k q))
+            'substring (plain ? (kfind db q (\ K p e (p + #q <= e - 8))) (keyed (k \ 0 <= find k q 0)))
+            'suffix (plain ? (kfind db (q + "\t") (\ K p e 1)) (keyed (k \ ends? k q)))
             're (pat reere) 'regexp (pat rebre)
-            'soundex (: x (dict-soundex w) (lead (k \ dict-soundex k = x)))
+            ; soundex over the keys that open on q's first byte, or all of them past a space
+            ; a key opening on a letter or a digit opens its soundex on it
+            'soundex (: x (dict-soundex w) (sx k) (dict-soundex k = x)
+                        (al c) (48 <= c <= 57 || 0 <= sxd c)
+                        (up c) (97 <= c <= 122 ? (c - 32) c)
+                        (#q < 1 || q 0 = 32
+                         ? (kfind db "\n" (\ K p e (: c (K (p + 1)) (? (al c) (#x > 0 && up c = x 0 && sx (snip K (p + 1) (e - 8))) (sx (snip K (p + 1) (e - 8)))))))
+                         (kfind db ("\n" + string [(q 0)]) (\ K p e (sx (snip K (p + 1) (e - 8)))))))
             'lev (take hits (cats (map (c \ walk db c (= c)) (dict-lev1 q (db 'alpha) (db 'utf8)))))
-            'word (keyed (k \ elem q (split " " k)))
-            'first (keyed (k \ <(split " " k) = q))
-            'last (keyed (k \ last (split " " k) = q))
+            'word (word (_ \ kfind db q (\ K p e (p + #q <= e - 8 && edge (K (p - 1)) && edge (K (p + #q)))))
+                        (k \ elem q (split " " k)))
+            'first (word (_ \ kfind db ("\n" + q) (\ K p e (edge (K (p + 1 + #q))))) (k \ <(split " " k) = q))
+            'last (word (_ \ kfind db (q + "\t") (\ K p e (edge (K (p - 1))))) (k \ last (split " " k) = q))
             _ ()))
    ; MATCH's headwords, each once, by a strategy's name; nprefix's word is SKIP#COUNT#PREFIX,
    ; its skip and count over the index's lines, or a prefix alone
@@ -189,6 +223,11 @@
        all (holds? db "00-database-allchars")
        _ (pins db 'all all 'utf8 0)
        _ (pin db 'utf8 (holds? db (all ? "00-database-utf8" "00databaseutf8")))
+       ; what the key changes: a character but a lower case letter, a digit or a space, and the
+       ; four title case letters lower takes for one; every character keeping, an upper case
+       ; letter or a byte past ascii
+       _ (pin db 'dirty (reere (all ? (string [91 94 1 45 64 91 45 127 93]) "[^[:lower:][:digit:] ]|[ǅǈǋǲ]")
+                         @ [1 m _] m _ ()))
        ; lev's letters: the database's alphabet, else a to z and the digits
        al (rstrip (meta db (all ? "00-database-alphabet" "00databasealphabet")))
        (pins db 'short (strip (meta db (all ? "00-database-short" "00databaseshort")))

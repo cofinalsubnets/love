@@ -58,6 +58,10 @@
       (ms "^A.*N$" "re" = ["Abaddon" "abandon"]) (ms "ba\\(d\\|t\\)" "regexp" = ["Abaddon" "bath"])
       (ms "abadon" "soundex" = ["Abaddon"]) (ms "abandn" "lev" = ["abandon"]) (ms "cappella" "word" = ["a cappella"])
       (ms "a" "first" = ["a cappella"]) (ms "cappella" "last" = ["a cappella"]) (ms "a" "last" = ())
+      ; the keys' search refuses a hit in an offset's digits, and a word with a space in it
+      (all (c \ ms c "substring" = uniq (filter (h \ 0 <= fsub (dict-key pl h) c 0) (map cap es)))
+           (map (i \ string [i]) (cats [(map (+ 97) ^26) (map (+ 48) ^10)])))
+      (ms "a cappella" "word" = ()) (ms "a cappella" "first" = ()) (ms " abadon" "soundex" = ["Abaddon"])
       ; nprefix skips and counts the index's lines, not its headwords
       (ms "1#2#ab" "nprefix" = ["abandon"]) (ms "ab" "nprefix" = ms "ab" "prefix") (ms "x#ab" "nprefix" = ())
       (dict-soundex "Robert" = "R163") (dict-soundex "Pfister" = "P236") (dict-soundex "  bath" = "B300")
