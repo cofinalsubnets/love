@@ -947,8 +947,8 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
-# random IR via holo against objdump and llvm-mc; a missing disassembler skips its lane.
-# peaks ~120 MB, rvc ~310 MB and ~13 min; the disassemblers are not love and take no budget
+# random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
+# (x64enc); a missing disassembler skips its lane. peaks ~120 MB, rvc ~310 MB and ~13 min; the disassemblers are not love and take no budget
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+a64+riscv encoder differential fuzz)"
 	@FUZZ_N=8 FUZZ_SEED=20250717 LOVE_BUDGET_MB=400 timeout 300 $m test/holo/fuzz/fuzz.l \
@@ -959,6 +959,12 @@ test_holofuzz: host
 	 else . test/gate/skip.sh; gate_partly "  (sysdiff skipped: no llvm-mc)"; fi
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
+	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
+	@for p in order targets cached keyed; do \
+	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
+	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
+	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \
+	 done
 # generated uu corpora: a design's code as uu terms for its *law.l. `make <stem>` refreshes,
 # test_<stem> diffs
 # $1 the stem, $2 its generator under src/tools/, $3 the source it reads
