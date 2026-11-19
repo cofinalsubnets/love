@@ -7,6 +7,7 @@
 #include "love.h"
 #include "archive/srctree.h"   // the carried tree, under /love (lovefs.c)
 #include "vfs.h"
+#include "quay/quay.h"  // cleat and the cp437 map, for vtfont
 #include <unistd.h>     // fork execvp _exit read close getuid/getgid symlink readlink chown
 #include <stdio.h>      // fflush, rename
 #include <stdlib.h>     // setenv/unsetenv, posix_openpt grantpt unlockpt ptsname
@@ -17,8 +18,9 @@
 #include <sys/stat.h>   // mkdir, stat, chmod, umask, utimensat UTIME_NOW
 #include <sys/wait.h>   // waitpid, WIF* (proc_status)
 #include <spawn.h>      // posix_spawnp: a kernel with no fork
-#include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ struct winsize
+#include <sys/ioctl.h>  // ioctl TIOCSCTTY TIOC[GS]WINSZ TIOCM* struct winsize
 #include <termios.h>    // tcgetattr tcsetattr ECHO TCSANOW (ptyecho, raw)
+#include <grp.h>        // setgroups (setids)
 #include <dirent.h>     // opendir/readdir/closedir
 #include <fnmatch.h>    // fnmatch (glob's pattern law)
 #include <regex.h>      // regcomp regexec (re's engine)
@@ -59,6 +61,10 @@
 #if defined(LvHaveMount)
 #include <sys/mount.h>      // mount(2), in linux's argument shape
 #include <sys/reboot.h>     // reboot(2), linux's commands
+#include <sys/swap.h>       // swapon(2), swapoff(2)
+#if !defined(__moonlibc__)
+#include <sys/syscall.h>    // SYS_reboot, for restart2's argument
+#endif
 #endif
 #if defined(LvHaveNamespaces)
 #include <sched.h>          // unshare, CLONE_NEWUSER/NEWNS (newns)
@@ -67,10 +73,10 @@
 #include <sys/vfs.h>        // statfs(2), the block and inode counts df reports
 #endif
 // CLOCK_REALTIME in ms: the one scale for deadlines, (clock t) and every mtime
-love_noinline uintptr_t love_clock(void) {
+love_noinline uint64_t love_clock(void) {
  struct timespec ts;
- return clock_gettime(CLOCK_REALTIME, &ts) ? (uintptr_t) -1 :
-  (uintptr_t) (ts.tv_sec * 1000 + ts.tv_nsec / 1000000); }
+ return clock_gettime(CLOCK_REALTIME, &ts) ? (uint64_t) -1 :
+  (uint64_t) ts.tv_sec * 1000 + (uint64_t) ts.tv_nsec / 1000000; }
 
 // the strings at g->sp[0] -> a char** laid in the heap gap at hp, which host_spawn_guard keeps
 // mapped across a fork; consumed before any further allocation. *cavp NULL with g ok is a
@@ -218,13 +224,15 @@ static int fd_up(int fd) {
  int h = fcntl(fd, F_DUPFD_CLOEXEC, 10);
  return h < 0 ? fd : (close(fd), h); }
 
-// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe
+// openfd's modes: 0 read, 1 truncate, 2 append, 3 exclusive, 4 write, 5 a tty probe,
+// 6 read and write (a login's terminal)
 static int openfd_mode(char const *path, intptr_t m) {
  int flags = m == 1 ? (O_WRONLY | O_CREAT | O_TRUNC)
            : m == 2 ? (O_WRONLY | O_CREAT | O_APPEND)
            : m == 3 ? (O_WRONLY | O_CREAT | O_EXCL)
            : m == 4 ? O_WRONLY
            : m == 5 ? (O_RDWR | O_NOCTTY | O_NONBLOCK)
+           : m == 6 ? O_RDWR
            : O_RDONLY;
  return fd_up(open(path, flags | O_CLOEXEC, m == 3 ? 0600 : 0644)); }
 
@@ -293,6 +301,10 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
          closes = closeat >= 0 ? g->sp[closeat] : ZeroPoint;
  fflush(NULL);                                               // not twice in the child
  stdin_exact(g);
+ // a child on our stdin reads it blocking, as found: the bit is the shared description's,
+ // so held it would answer the child EAGAIN. our own reads then take it per read (fd.c)
+ if (love_inflag && (in < 0 || in == STDIN_FILENO))
+  fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
  pid_t pid = fork();
  if (pid < 0 && errno == ENOSYS) return host_spawnk(g, cav, (int[3]) { in, out, err }, fdmap, closes, pg);
  if (pid < 0) return push(g, 1, love_err(g, errno));
@@ -451,7 +463,7 @@ love_noinline static word host_waitpid(struct g *g, word arg) {
 // parks, polling each ms, so a peer task runs under a foreground job; the op re-runs whole
 static lvm(lvm_waitpid) {
  word r = host_waitpid(g, Sp[0]);
- if (r == ZeroPoint) { g->next_wake_at = love_clock() + 1; love_musttail return Ap(lvm_yield_sw, g); }
+ if (r == ZeroPoint) { g->next_wake_at = tick_add(love_tick(), 1); love_musttail return Ap(lvm_yield_sw, g); }
  Sp[0] = r; love_musttail return Next(1); }
 
 love_noinline static word host_posix_signal(struct g *g, word sigw, word dw) {
@@ -662,17 +674,45 @@ static lvm(lvm_umount) {
   char const *t = str_c(Sp[0]);
   Sp[0] = !t ? badarg(g) : (umount(t) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
-// (reboot how): 0 restarts, 1 powers off, 2 halts; the caller syncs first
+// (swapon path) (swapoff path): a file or part mkswap's rule laid, flags 0
+static lvm(lvm_swapon) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapon(p, 0) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+static lvm(lvm_swapoff) {
+  char const *p = str_c(Sp[0]);
+  Sp[0] = !p ? badarg(g) : (swapoff(p) ? love_err(g, errno) : ZeroPoint);
+  love_musttail return Next(1); }
+// (ioctl fd req n): linux's ioctl handed one 64-bit word holding n, BLKRRPART's and
+// EXT4_IOC_RESIZE_FS's shape; answers the word after. fd a raw fd or a port
+static lvm(lvm_ioctl) {
+  uint64_t w = charmp(Sp[2]) ? (uint64_t) getcharm(Sp[2]) : 0;
+  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : port_fd(Sp[0]);
+  Sp[2] = fd < 0 || !charmp(Sp[1]) ? badarg(g)
+        : ioctl((int) fd, (unsigned long) getcharm(Sp[1]), &w) < 0 ? love_err(g, errno)
+        : putcharm((intptr_t) w);
+  Sp += 2; love_musttail return Next(1); }
+#if defined(__moonlibc__)
+static int restart2(char const *a) { return reboot2(a); }
+#else
+static int restart2(char const *a) { return (int) syscall(SYS_reboot, 0xfee1dead, 672274793, 0xa1b2c3d4u, a); }
+#endif
+// (reboot how): 0 restarts, 1 powers off, 2 halts, a text restarts with it as linux's
+// argument (a pi's "0 tryboot" trial); the caller syncs first
 static lvm(lvm_reboot) {
+  char const *a = str_c(Sp[0]);
   intptr_t h = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
   int cmd = h == 0 ? (int) RB_AUTOBOOT : h == 1 ? (int) RB_POWER_OFF : h == 2 ? (int) RB_HALT_SYSTEM : 0;
-  Sp[0] = !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
+  Sp[0] = a ? (restart2(a), love_err(g, errno)) : !cmd ? badarg(g) : (reboot(cmd), love_err(g, errno));
   love_musttail return Next(1); }
 #else
 static lvm(lvm_reboot) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_mount) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 static lvm(lvm_mountf) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
 static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapon) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_swapoff) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
+static lvm(lvm_ioctl) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
 #endif
 
 static lvm(lvm_chroot) {
@@ -743,27 +783,20 @@ love_noinline static struct g *host_stat_tuple(struct g *g, int follow) {
   if (lovefs_stat(p, &st)) {
    if (st.st_mode == 0) return g->sp[0] = love_err(g, ENOENT), g; }
   else if (follow ? stat(p, &st) : lstat(p, &st)) return g->sp[0] = love_err(g, errno), g; }
- intptr_t ms = (intptr_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000,
-          ns = (intptr_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec,
-          as = (intptr_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec,
-          cs = (intptr_t) st.st_ctim.tv_sec * 1000000000 + st.st_ctim.tv_nsec;
- if (!ok(g = have(g, 14 * Width(struct chain)))) return g;
+ // in 64 bits, as the times and sizes pass a 32-bit word's charms
+ int64_t const f[14] = {
+  (int64_t) st.st_size, (int64_t) st.st_mtim.tv_sec * 1000 + st.st_mtim.tv_nsec / 1000000, (int64_t) st.st_mode,
+  (int64_t) st.st_mtim.tv_sec * 1000000000 + st.st_mtim.tv_nsec, (int64_t) st.st_uid, (int64_t) st.st_gid,
+  (int64_t) st.st_nlink, (int64_t) st.st_blocks, (int64_t) st.st_ino,
+  (int64_t) st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec, (int64_t) st.st_ctim.tv_sec * 1000000000 + st.st_ctim.tv_nsec,
+  (int64_t) st.st_dev, (int64_t) st.st_rdev, (int64_t) st.st_blksize };
  size_t const C = Width(struct chain);
- struct chain *c = ini_chain(bump(g, C), putcharm(st.st_blksize), ZeroPoint);
- c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_rdev), word(c));
- c = ini_chain(bump(g, C), putcharm((intptr_t) st.st_dev), word(c));
- c = ini_chain(bump(g, C), putcharm(cs), word(c));
- c = ini_chain(bump(g, C), putcharm(as), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_ino), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_blocks), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_nlink), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_gid), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_uid), word(c));
- c = ini_chain(bump(g, C), putcharm(ns), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_mode), word(c));
- c = ini_chain(bump(g, C), putcharm(ms), word(c));
- c = ini_chain(bump(g, C), putcharm(st.st_size), word(c));
- return g->sp[0] = word(c), g; }
+ if (!ok(g = have(g, 14 * (C + i64_req)))) return g;
+ word v[14];
+ for (int i = 0; i < 14; i++) v[i] = mk_i64(&g->hp, f[i]);   // boxed first: bump moves the same hp
+ word c = ZeroPoint;
+ for (int i = 13; i >= 0; i--) c = word(ini_chain(bump(g, C), v[i], c));
+ return g->sp[0] = c, g; }
 
 love_inline static struct g *host_posix_stat(struct g *g) {
  return host_stat_tuple(g, 1); }
@@ -924,14 +957,24 @@ static love_inline struct g *host_regexec(struct g *g) {
  if (!strp(b) || !len(b) || !strp(s) || !charmp(i) || !charmp(e) || getcharm(i) < 0 || getcharm(i) > (intptr_t) len(s))
   return g->sp[0] = badarg(g), g;
  regmatch_t m[10] = {{(regoff_t) getcharm(i), (regoff_t) len(s)}};
- int ef = (int) getcharm(e) | REG_STARTEND, rc, k = 10;
+ int ef = (int) getcharm(e), rc, k = 10;
 #ifdef REG_UTF8
  regex_t re = {0, txt(b), len(b)};
- rc = regexec(&re, txt(s), 10, m, ef);
-#else
+ rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND);
+#elif defined REG_STARTEND
  regex_t re;
  rc = regcomp(&re, txt(b) + 1, (unsigned char) txt(b)[0]);
- if (!rc) rc = regexec(&re, txt(s), 10, m, ef), regfree(&re);
+ if (!rc) rc = regexec(&re, txt(s), 10, m, ef | REG_STARTEND), regfree(&re);
+#else
+ // no REG_STARTEND: match from txt(s) + i, a ^ there only after a newline under REG_NEWLINE
+ regex_t re;
+ intptr_t o = getcharm(i);
+ int cf = (unsigned char) txt(b)[0];
+ if (o && !(cf & REG_NEWLINE && txt(s)[o - 1] == '\n')) ef |= REG_NOTBOL;
+ rc = regcomp(&re, txt(b) + 1, cf);
+ if (!rc) rc = regexec(&re, txt(s) + o, 10, m, ef), regfree(&re);
+ for (int j = 0; !rc && j < 10; j++)
+  if (m[j].rm_so >= 0) m[j].rm_so += (regoff_t) o, m[j].rm_eo += (regoff_t) o;
 #endif
  if (rc) return g->sp[0] = rc == REG_NOMATCH ? ZeroPoint : putcharm(-rc), g;
  while (k > 1 && m[k - 1].rm_so < 0) k--;
@@ -1007,10 +1050,63 @@ static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word 
 
 LvmWord3(posix_lseek)
 
+// (fdpull fd cask at off n): n bytes of the fd from off into the cask at at; (fdpush fd cask
+// at off n) the cask's into the fd. the count moved, short at the file's end. raw fds only:
+// a shared frame between love and a helper, a tmpfs file both hold, moved whole
+love_noinline static word host_fdmove(struct g *g, word *a, bool in) {
+ word c = a[1];
+ struct str *s = cask_str(c);
+ if (!s || !charmp(a[0]) || !charmp(a[2]) || !charmp(a[3]) || !charmp(a[4])) return badarg(g);
+ intptr_t at = getcharm(a[2]), off = getcharm(a[3]), n = getcharm(a[4]);
+ if (at < 0 || off < 0 || n < 0 || (uintptr_t) at > s->len || (uintptr_t) n > s->len - (uintptr_t) at)
+  return badarg(g);
+ int fd = (int) getcharm(a[0]);
+ if (lseek(fd, (off_t) off, SEEK_SET) < 0) return love_err(g, errno);
+ char *p = (char*) s->bytes + at;
+ intptr_t done = 0;
+ while (done < n) {
+  ssize_t r = in ? read(fd, p + done, (size_t) (n - done)) : write(fd, p + done, (size_t) (n - done));
+  if (r < 0 && errno == EINTR) continue;
+  if (r < 0) return love_err(g, errno);
+  if (r == 0) break;
+  done += r; }
+ return putcharm(done); }
+
+static lvm(lvm_fdpull) { Sp[4] = host_fdmove(g, Sp, true); love_musttail return Nextp(1, 4); }
+static lvm(lvm_fdpush) { Sp[4] = host_fdmove(g, Sp, false); love_musttail return Nextp(1, 4); }
+
+// (fdtray fd off n): n 8-byte words of the fd from off, little-endian and signed, read straight
+// into a fresh int tray, short at the file's end: a helper's frame with no cask between
+static lvm(lvm_fdtray) {
+ if (!charmp(Sp[0]) || !charmp(Sp[1]) || !charmp(Sp[2]) || getcharm(Sp[1]) < 0 || getcharm(Sp[2]) < 0
+     || (uintptr_t) getcharm(Sp[2]) >= words_max / 8) {
+  Sp[2] = badarg(g); love_musttail return Nextp(1, 2); }
+ uintptr_t const n = (uintptr_t) getcharm(Sp[2]), tw = b2w(tray_bytes(love_Z, 1, n));
+ int const wide = love_T[love_Z] == 8;   // ..else a 4-byte word: read past the tray, then narrowed
+ Have(tw + (wide ? 0 : b2w(8 * n)));
+ int const fd = (int) getcharm(Sp[0]);
+ if (lseek(fd, (off_t) getcharm(Sp[1]), SEEK_SET) < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+ struct tray *v = ini_tray((struct tray*) Hp, love_Z, 1);
+ char *p = wide ? (char*) tray_data(v) : (char*) (Hp + tw);
+ uintptr_t done = 0;
+ while (done < 8 * n) {
+  ssize_t k = read(fd, p + done, 8 * n - done);
+  if (k < 0 && errno == EINTR) continue;
+  if (k < 0) { Sp[2] = love_err(g, errno); love_musttail return Nextp(1, 2); }
+  if (k == 0) break;
+  done += (uintptr_t) k; }
+ uintptr_t const m = done / 8;
+ for (uintptr_t i = 0; !wide && i < m; i++) {
+  int64_t x; memcpy(&x, p + 8 * i, 8); ((intptr_t*) tray_data(v))[i] = (intptr_t) x; }
+ v->shape[0] = m;
+ Hp += b2w(tray_bytes(love_Z, 1, m));
+ Sp[2] = word(v);
+ love_musttail return Nextp(1, 2); }
+
 // a NULL row stays on the book: a seat shadows it with a global (src/inle/kmain.c, main.c's
 // seat-doors), reached through the live book, which a module splice would hide for good
 LvDef("spawn", spawn, 1, NULL);
-LvDef("glean", reapany, 1, NULL);
+LvDef("glean", reapany, 1, "posix");
 LvDef("sigfd", sigfd, 1, "posix");
 LvDef("sigtake", sigtake, 1, "posix");
 LvDef("sigclear", sigclear, 1, "posix");
@@ -1026,16 +1122,16 @@ LvDef("cwd", cwd, 1, "posix");
 LvDef("selfpath", selfpath, 1, "posix");
 LvDef("uname", posix_uname, 1, "posix");
 LvDef("sysconf", posix_sysconf, 1, "posix");
-LvDef("pipe", pipe, 1, NULL);
+LvDef("pipe", pipe, 1, "posix");
 LvDef("openfd", openfd, 2, "posix");
 LvDef("spawnio", spawnio, 7, NULL);
-LvDef("fdopen", fdopen, 1, NULL);
+LvDef("fdopen", fdopen, 1, "posix");
 LvDef("spawnmap", spawnmap, 5, NULL);
-LvDef("getuid", getuid, 1, NULL);
+LvDef("getuid", getuid, 1, "posix");
 LvDef("getgid", getgid, 1, "posix");
-LvDef("fork", fork, 1, NULL);
-LvDef("dup2", dup2, 2, NULL);
-LvDef("dup", dup, 1, NULL);
+LvDef("fork", fork, 1, "posix");
+LvDef("dup2", dup2, 2, "posix");
+LvDef("dup", dup, 1, "posix");
 LvDef("mkdir", mkdir, 2, "posix");
 LvDef("mount", mount, 3, "posix");
 LvDef("mountf", mountf, 4, "posix");
@@ -1043,6 +1139,9 @@ LvDef("umount", umount, 1, "posix");
 LvDef("chroot", chroot, 1, "posix");
 LvDef("sync", sync, 1, "posix");
 LvDef("reboot", reboot, 1, "posix");
+LvDef("swapon", swapon, 1, "posix");
+LvDef("swapoff", swapoff, 1, "posix");
+LvDef("ioctl", ioctl, 3, "posix");
 LvDef("mknod", mknod, 3, "posix");
 LvDef("newns", newns, 1, "posix");
 LvDef("stat", posix_stat, 1, "posix");
@@ -1053,10 +1152,13 @@ LvDef("birth", posix_birth, 2, "posix");
 LvDef("readdir", posix_readdir, 1, "posix");
 LvDef("unlink", posix_unlink, 1, "posix");
 LvDef("lseek", posix_lseek, 3, "posix");
+LvDef("fdpull", fdpull, 5, "posix");
+LvDef("fdpush", fdpush, 5, "posix");
+LvDef("fdtray", fdtray, 3, "posix");
 LvDef("signal", posix_signal, 2, NULL);
 LvDef("ttyfg", posix_ttyfg, 1, NULL);
 LvDef("ttypg", posix_ttypg, 1, NULL);
-LvDef("setpg", posix_setpg, 2, NULL);
+LvDef("setpg", posix_setpg, 2, "posix");
 LvDef("setenv", posix_setenv, 2, NULL);
 LvDef("environ", posix_environ, 1, NULL);
 // the fs tools' effect ops. (utime path ms): a non-charm ms is now. hardlink is link(2),
@@ -1101,8 +1203,8 @@ love_noinline static word host_posix_utime(struct g *g, word pw, word msw) {
  char const *p = str_c(pw);
  if (!p) return badarg(g);
  struct timespec ts[2];
- if charmp(msw) {
-  intptr_t ms = getcharm(msw);
+ if (intp(msw)) {
+  int64_t ms = toi64(msw);
   ts[0].tv_sec = ts[1].tv_sec = (time_t) (ms / 1000);
   ts[0].tv_nsec = ts[1].tv_nsec = (long) (ms % 1000) * 1000000;
  } else
@@ -1202,6 +1304,55 @@ static love_noinline word host_posix_setsid(struct g *g, word cw) {
  return putcharm(s); }
 LvmWord1(posix_setsid)
 
+// (setids uid gid groups): a login's drop, groups then gid then uid, and the drop checked:
+// the ids read back, and a uid past 0 cannot take 0 again. groups a list of up to 256 gids
+static love_noinline word host_posix_setids(struct g *g, word uw, word gw, word lw) {
+ gid_t gs[256];
+ size_t n = 0;
+ if (!charmp(uw) || !charmp(gw) || getcharm(uw) < 0 || getcharm(gw) < 0) return badarg(g);
+ for (word p = lw; chainp(p); p = B(p)) {
+  if (n == 256 || !charmp(A(p)) || getcharm(A(p)) < 0) return badarg(g);
+  gs[n++] = (gid_t) getcharm(A(p)); }
+ uid_t u = (uid_t) getcharm(uw);
+ gid_t d = (gid_t) getcharm(gw);
+ if (setgroups(n, gs) || setgid(d) || setuid(u)) return love_err(g, errno);
+ if (getgid() != d || getegid() != d || getuid() != u || geteuid() != u) return love_err(g, EPERM);
+ if (u && !setuid(0)) return love_err(g, EPERM);
+ return ZeroPoint; }
+LvmWord3(posix_setids)
+
+// (vtfont fd): fd's linux console draws quay's cleat, its unicode map cp437's page and fold,
+// that console alone. the kernel's structs, as linux/kd.h lays them
+struct lv_fontop { unsigned op, flags, width, height, charcount; unsigned char *data; };
+struct lv_unipair { unsigned short unicode, fontpos; };
+struct lv_unimapdesc { unsigned short entry_ct; struct lv_unipair *entries; };
+struct lv_unimapinit { unsigned short size, step, level; };
+static love_noinline word host_posix_vtfont(struct g *g, word fw) {
+#if defined(LvHaveMount)
+ unsigned char rows[256 * 32] = {0};          // a glyph's rows at a stride of 32
+ struct lv_unipair map[640];
+ unsigned short n = 0;
+ if (!charmp(fw) || getcharm(fw) < 0) return badarg(g);
+ for (int c = 0; c < 256; c++) {
+  memcpy(rows + 32 * c, cleat_8x16[c], 16);
+  map[n++] = (struct lv_unipair) { (unsigned short) cb_unfold((uint8_t) c), (unsigned short) c }; }
+ for (uint32_t cp = 0x7f; cp < 0x10000 && n < 639; cp++) {
+  int k = cb_437x(cp);
+  if (k >= 0) map[n++] = (struct lv_unipair) { (unsigned short) cp, (unsigned short) k }; }
+ map[n++] = (struct lv_unipair) { 0xfffd, 0xfe };   // the rest wear the ■
+ struct lv_fontop op = { 0, 0, 8, 16, 256, rows };   // KD_FONT_OP_SET
+ struct lv_unimapinit ui = { 0, 0, 0 };
+ struct lv_unimapdesc ud = { n, map };
+ int fd = (int) getcharm(fw);
+ if (ioctl(fd, 0x4B72, &op) || ioctl(fd, 0x4B68, &ui) || ioctl(fd, 0x4B67, &ud)) return love_err(g, errno);
+ return ZeroPoint;
+#else
+ (void) fw;
+ return love_err(g, ENOSYS);
+#endif
+}
+LvmWord1(posix_vtfont)
+
 // (fsync path data): fdatasync when data is truthy
 love_noinline static word host_posix_fsync(struct g *g, word pw, word dw) {
  char const *p = str_c(pw);
@@ -1232,9 +1383,11 @@ LvDef("prio", posix_prio, 2, "posix");
 LvDef("setprio", posix_setprio, 3, "posix");
 LvDef("truncate", posix_truncate, 3, "posix");
 LvDef("setsid", posix_setsid, 1, "posix");
+LvDef("setids", posix_setids, 3, "posix");
+LvDef("vtfont", posix_vtfont, 1, "posix");
 LvDef("fsync", posix_fsync, 2, "posix");
 LvDef("rmdir", posix_rmdir, 1, "posix");
-LvDef("hardlink", posix_hardlink, 2, NULL);
+LvDef("hardlink", posix_hardlink, 2, "posix");
 LvDef("copyfile", posix_copyfile, 2, "posix");
 // the pty wrapper. (tether argv) -> (pid . master-port): hark (main.c) with a pty pair for
 // the stdout pipe; the child's 0/1/2 are the slave. tetherenv sets env's K=V in the child
@@ -1425,6 +1578,19 @@ love_noinline static word host_settermios(struct g *g, word x, word l) {
  return tcsetattr((int) fd, TCSADRAIN, &t) ? love_err(g, errno) : ZeroPoint; }
 LvmWord2(settermios)
 
+// (modem fd set clear): raise the modem lines in set and drop those in clear (TIOCM_DTR 2,
+// TIOCM_RTS 4 ..) in one write, so a board's reset and boot straps never pass through a
+// state between; answers the lines as they stand
+love_noinline static word host_modem(struct g *g, word x, word s, word c) {
+ intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);
+ int on = charmp(s) ? (int) getcharm(s) : 0, off = charmp(c) ? (int) getcharm(c) : 0, now = 0;
+ if (fd < 0) return badarg(g);
+ if (ioctl((int) fd, TIOCMGET, &now)) return love_err(g, errno);
+ now = (now | on) & ~off;
+ if (ioctl((int) fd, TIOCMSET, &now)) return love_err(g, errno);
+ return putcharm(now); }
+LvmWord3(modem)
+
 // (raw on): off restores the cooked termios from the first raw-on. one baseline and one
 // atexit, shared with main.c's repl, or two owners would ride atexit's LIFO
 static struct termios raw_cooked;
@@ -1517,8 +1683,9 @@ static lvm(lvm_close) {
   if (cell(Sp[0])->ap == lvm_port_io) {
     struct io *io = (struct io*) Sp[0];
     intptr_t fd = io_fd(io);
-    bool horn = io->vt == &love_horn_vt;       // its device shuts its own way, after the run lands
-    if (fd >= 0 || horn) {
+    bool horn = io->vt == &love_horn_vt,       // its device shuts its own way, after the run lands
+         duct = io_duct(io);                   // a duct marks both halves shut, for its pump
+    if (fd >= 0 || horn || duct) {
       g->io = io;
       Pack(g);
       g = io_wflush(g, io);
@@ -1526,11 +1693,13 @@ static lvm(lvm_close) {
       // a short write parks; nothing is mutated yet, so the re-run is this close whole
       if (io_wpending(g, (struct io*) g->sp[0])) {
         Unpack(g);
-        g->next_wake_at = love_clock() + 1;
+        g->next_wake_at = tick_add(love_tick(), 1);
         love_musttail return Ap(lvm_yield_sw, g); }
       Unpack(g);
-      if (horn) love_horn_shut((struct io*) Sp[0]); else close(fd);
-      ((struct io*) Sp[0])->vt = &closed_vt; } }   // re-read: wflush may collect
+      if (duct) duct_shut((struct io*) Sp[0], 2);   // its vt stays, for the pump's take
+      else {
+        if (horn) love_horn_shut((struct io*) Sp[0]); else close(fd);
+        ((struct io*) Sp[0])->vt = &closed_vt; } } }   // re-read: wflush may collect
   Sp[0] = ZeroPoint;
   love_musttail return Next(1); }
 
@@ -1543,6 +1712,7 @@ LvDef("settty", settty, 3, NULL);
 LvDef("ptyecho", ptyecho, 2, "posix");
 LvDef("termios", termios, 1, "posix");
 LvDef("settermios", settermios, 2, "posix");
+LvDef("modem", modem, 3, "posix");
 LvDef("raw", raw, 1, NULL);
 LvDef("swig", swig, 2, "posix");
 LvDef("open", open, 2, "posix");

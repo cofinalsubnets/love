@@ -2,3 +2,5 @@
 ; stones reach on this seat calls them
 (module 'posix 0)
 (module 'window 0)
+(module 'gpu 0)
+(module 'quay 0)                        ; cb.c's, where a board links it

@@ -1,4 +1,5 @@
 ; helpers shared by the host tests: test_hostnif cats this between test/00-init.l and each test
+(borrow 'quay)                          ; the screens the laws scribe and read
 (: (h-waitfor pid) (gather pid @ s (? (two? s) s (nom? s) s (rest 2, h-waitfor pid)))   ; a child's status, polled
    (h-wf p) (gather p @ g (two? g ? g (rest 2, h-wf p)))
    (h-mkscr r c) (screen (cask (screen () r c)) r c)                                      ; a quay screen, r by c

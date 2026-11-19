@@ -18,8 +18,8 @@ include ../port.mk
 
 te_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
 
-objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) \
-  $(R)/$(o)/teensy41.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
+objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(libc_o) \
+  $(R)/$(o)/teensy41.o $(R)/$(o)/usb.o $(R)/$(o)/sd.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
   $(R)/$(o)/love-img.o
 
 .PHONY: teensy41 flash psramtest flashpsram
@@ -32,11 +32,13 @@ $(eval $(call p_heap,$(te_cc),))
 $(foreach m,$(libc_m),$(eval $(call p_obj,$m,src/apps/moon/lib/moonlibc/string/$m.c,\
   $(S)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Isrc/apps/moon/include)))
 $(eval $(call p_obj,teensy41,src/inle/teensy41/teensy41.c,teensy41.c teensy41.h $(S)/inle/bput.h $(S)/love/love.h $(mc),$(te_cc)))
+$(eval $(call p_obj,sd,src/inle/teensy41/sd.c,sd.c teensy41.h $(mc),$(te_cc)))
+$(eval $(call p_obj,usb,src/inle/teensy41/usb.c,usb.c teensy41.h $(S)/inle/usbcdc.h $(mc),$(te_cc)))
 $(eval $(call p_obj,main,src/inle/teensy41/main.c,main.c teensy41.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(S)/love/love.h $(lib_hR) $(mc),$(te_cc)))
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. src/inle/mps2/mkstart.l is the same shape with one section,
-# src/inle/rp2040/mkboot2.l the named-section one.
+# test/boards/rp2040/mkboot2.l the named-section one.
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
 # the baked heap image: src/inle/mps2's qemu baker dumps it (a build-time bake), and mkimg.l
@@ -68,6 +70,46 @@ $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	  ok = fcfb==0x42464346 and ivt==0x432000D1 and (entry&1)==1 and 0x60000000<entry<0x60800000; \
 	  print('boot image: FCFB@0 %08x IVT@1000 %08x entry %08x --'%(fcfb,ivt,entry), 'ok' if ok else 'BAD'); \
 	  sys.exit(0 if ok else 1)" || { echo "FAIL boot image layout"; exit 1; }
+
+# the kernel face: kmain over these drivers, linked from the arm love's own objects (the root's
+# xa=arm lane), so the image that love bakes is the one this wakes. `make kernel`
+kd = $(o)/k
+k_cc = $(MOONCC) -t arm -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
+k_hdr = $(addprefix $(R)/out/lib/,baked.h distlist.h korelist.h crewlist.h seat.h tasks.h)
+k_inle = kmain sys hda
+k_brd = kern teensy41 usb sd psram
+k_objs = $(k_inle:%=$(R)/$(kd)/%.o) $(k_brd:%=$(R)/$(kd)/%.o) $(R)/$(o)/boot.o $(R)/$(kd)/love-img.o
+$(foreach u,$(k_inle),$(eval $(call p_obj,k/$u,src/inle/$u.c,$(S)/inle/$u.c $(S)/inle/k.h $(mc) $(k_hdr),$(k_cc))))
+$(foreach u,$(k_brd),$(eval $(call p_obj,k/$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(S)/inle/k.h $(mc),$(k_cc))))
+$(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/.kore-cat.l: FORCE
+	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
+# the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
+# agree; it bakes a cat under qemu-arm. the lib alone by default: kore's heap and a major's
+# copy of it pass the 16 MB (k_cat=out/.kore-cat.l takes it anyway)
+k_cat = $(kd)/lib-cat.l
+$(R)/$(kd)/lib-cat.l:
+	@mkdir -p $(dir $@)
+	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(cite (quote glaze) (quote srcdrop) ())\n' > $@
+k_xo = $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o
+$(R)/$(kd)/baker: $(k_xo) $(lv)
+	@echo MOON	$@
+	@mkdir -p $(dir $@)
+	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/noblob.o -o $(kd)/baker
+$(R)/$(kd)/love.img: $(R)/$(kd)/baker $(R)/$(k_cat)
+	@echo BAKE	$@ "(qemu-arm)"
+	@cd $(R) && LOVE_NO_IMAGE=1 qemu-arm $(kd)/baker bake -l $(k_cat) $(kd)/love.img > $(kd)/bake.log 2>&1 \
+	   && test -s $(kd)/love.img || { tail -20 $(R)/$(kd)/bake.log; exit 1; }
+$(eval $(call p_lay,k/love-img,mkimg,"$(kd)/love.img" "$(kd)/love-img.o"))
+$(R)/$(kd)/love-img.o: $(R)/$(kd)/love.img
+.PHONY: kernel
+kernel: $(R)/$(kd)/love.hex
+$(R)/$(kd)/love.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/tlink.l $(kd)/love.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
+	   out/x-arm/o/love/noblob.o $$(cat out/rt/arm.list) $$(cat out/rt/arm.list)
+$(R)/$(kd)/love.hex: $(R)/$(kd)/love.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(kd)/love.elf $(kd)/love.hex
 
 # Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
 flash: $(R)/$(o)/love.hex

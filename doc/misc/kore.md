@@ -94,7 +94,7 @@ carried and not baked).
 | proc.l, the /proc family | ps free uptime pidof pgrep pkill killall pwdx |
 | proc.l, the one-liners | cal hostname hostid dnsdomainname tty clear reset which timeout watch |
 | top.l | top (the process table, repainted; `-b` batch) |
-| proc.l, the privileged three | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount |
+| proc.l, the privileged verbs | chroot (the root moved, then exec), mount (bare = /proc/self/mounts; `-t TYPE`, and the FLAG half of `-o` -- `size=`-style filesystem text is refused by name, not dropped), umount, mkswap (linux's version 1 header), swapon (bare = /proc/swaps), swapoff |
 | fs.l, what fills a /dev | sync mkfifo mknod (`p b c u`, `-m MODE`, linux's wide device encoding) |
 | src/apps/vi/ | vi |
 | ed.l | ed (the line editor), ex (the same buffer by word; its `vi` hands the buffer to vi) |
@@ -625,7 +625,7 @@ keys over less's:
   other text shows as it is. A request for input (1x) is a field whose answer goes back as
   the query, a redirect (3x) is followed, and the rest of the statuses are said. The server's
   key is pinned the first time it is seen, host:port and the SHA-256 of its
-  SubjectPublicKeyInfo a line in `~/.love/gemini_hosts`, and held to after: gemini's own trust
+  SubjectPublicKeyInfo a line in the nest's `etc/gemini_hosts`, and held to after: gemini's own trust
   on first use. A changed one
   is refused with the line to delete to accept it. When a server asks for a client
   certificate, an empty one goes back.
@@ -633,7 +633,7 @@ keys over less's:
 Absent: forms that POST, scripts, cookies, pictures other than PNG, JPEG and GIF, charsets other than
 utf-8, latin-1 and windows-1252, and gemini's client certificates. An https server is
 verified as wget's is: its certificate to a root in the host's bundle, or its key to a pin in
-`~/.love/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
+the nest's `etc/tls_pins`; a refusal says which check failed on which certificate. The TLS client speaks chacha20-poly1305 and aes-128-gcm, the
 second what RFC 8446 has every server speak.
 
 ## im (src/apps/kore/im.l)
@@ -958,14 +958,14 @@ over the packages above; util-linux's column added 2026-09-27.
 
 | | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
 | --- | :-: | :-: | :-: | :-: | :-: | :-: | :-: |
-| names | 208 | 389 | 239 | 191 | 107 | 260 | 136 |
-| shared with kore | | 170 | 142 | 136 | 101 | 50 | 12 |
+| names | 211 | 389 | 239 | 191 | 107 | 260 | 136 |
+| shared with kore | | 173 | 145 | 136 | 101 | 50 | 15 |
 | carried by no one else | 12 | 136 | 25 | 47 | 0 | 200 | 75 |
 
 What at least three of the other six carry and kore does not: `blkdiscard`, `blkid`,
 `blockdev`, `chrt`, `dmesg`, `eject`, `fallocate`, `flock`, `fmt`, `fsfreeze`, `hwclock`,
-`ionice`, `linux32`, `logger`, `login`, `losetup`, `mkswap`, `nsenter`, `pivot_root`, `pr`,
-`rfkill`, `rtcwake`, `su`, `swapoff`, `swapon`, `switch_root`, `taskset`, `uncompress`,
+`ionice`, `linux32`, `logger`, `login`, `losetup`, `nsenter`, `pivot_root`, `pr`,
+`rfkill`, `rtcwake`, `su`, `switch_root`, `taskset`, `uncompress`,
 `unshare`.
 
 | tool | kore | busybox | toybox | GNU | uutils | plan9port | util-linux |
@@ -1122,7 +1122,7 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `mkfs.vfat` | ✓ | ✓ |  |  |  |  |  |
 | `mknod` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `mkpasswd` |  | ✓ | ✓ |  |  |  |  |
-| `mkswap` |  | ✓ | ✓ |  |  |  | ✓ |
+| `mkswap` | ✓ | ✓ | ✓ |  |  |  | ✓ |
 | `mktemp` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `modinfo` |  | ✓ | ✓ |  |  |  |  |
 | `more` | ✓ | ✓ |  |  | ✓ |  | ✓ |
@@ -1215,8 +1215,8 @@ What at least three of the other six carry and kore does not: `blkdiscard`, `blk
 | `su` |  | ✓ | ✓ |  |  |  | ✓ |
 | `sulogin` |  | ✓ |  |  |  |  | ✓ |
 | `sum` | ✓ | ✓ |  | ✓ | ✓ | ✓ |  |
-| `swapoff` |  | ✓ | ✓ |  |  |  | ✓ |
-| `swapon` |  | ✓ | ✓ |  |  |  | ✓ |
+| `swapoff` | ✓ | ✓ | ✓ |  |  |  | ✓ |
+| `swapon` | ✓ | ✓ | ✓ |  |  |  | ✓ |
 | `switch_root` |  | ✓ | ✓ |  |  |  | ✓ |
 | `sync` | ✓ | ✓ | ✓ | ✓ | ✓ |  |  |
 | `sysctl` |  | ✓ | ✓ |  |  |  |  |

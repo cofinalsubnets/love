@@ -2,14 +2,13 @@
 ; the pure StackSet (src/apps/lux/core.l) + the layout geometry (src/apps/lux/layout.l).
 ; The vocabulary as dies: a window is not a tag is not a rect -- nominal kinds
 ; over values that are all innocent charms/lists at runtime, so the classic
-; slip (a tag handed to zins, a window handed to wsview) is flagged at compile
-; time and nothing changes at run time (the overlay law: erasable). Gradual:
+; slip (a tag handed to zins, a window handed to wsview) is flagged by the check
+; and nothing changes at run time (the overlay law: erasable). Gradual:
 ; an unknown (a cap/cup harvest, a local) rides through; only a known kind in
-; the wrong seat clashes. Install with (overlay-set lux-dom lux-sigs), or check
-; a form pure with ((overlay 'ov-check1) lux-dom lux-sigs form) -- boot/post.l
-; gates core.l + layout.l clean against this table, and the deliberate wound
-; flagged. This is rung 1 of typing lux; the uu-proved StackSet laws ride
-; on top of it (memory: the verified-xmonad ladder).
+; the wrong seat clashes. Check a form with ((cite 'overlay 'ov-check) lux-dom
+; lux-sigs form) -- src/apps/kanren.l; test/host/overlay.l gates core.l +
+; layout.l clean against this table, and the deliberate wound flagged. This is
+; rung 1 of typing lux; the uu-proved StackSet laws ride on top of it.
 ;
 ; a body-less `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
 (borrow 'xwire)   ; the X wire, src/apps/lux/wire.l

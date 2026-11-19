@@ -1,69 +1,30 @@
 #!/bin/sh
-# test/gate/thumb.sh -- 32-bit arm codegen on cortex-m under qemu-system-arm:
-#   thumb1    cortex-m0  (v6-m, no fpu)     -M microbit
-#   thumb2    cortex-m7  (v7e-m, fpv5-d16)  -M mps2-an500
-#   thumb2sp  cortex-m4  (v7e-m, fpv4-sp)   -M mps2-an386
+# test/gate/thumb.sh -- 32-bit arm codegen on cortex-m under qemu-system-arm (thumbrt.sh's boards).
 # each lane: mooncc builds a library, arm-none-eabi-gcc a harness calling it, and the
 # semihosted exit must be the harness's want; 100+n names the first check missed.
-# every qemu reads </dev/null, or -nographic blocks on stdin without a tty
 # usage: thumb.sh TARGET OUTDIR
 . test/gate/skip.sh
 . test/gate/cclib.sh
+. test/gate/thumbrt.sh
 set -u
 
 tgt=$1
 ho=$2
 
 case $tgt in
-  thumb1)   banner=THUMB1   ; cpu="-mcpu=cortex-m0 -mthumb"
-            acpu="cortex-m0"; afpu=""            ; mach=microbit   ; prefix=t1 ; vfp=0 ;;
-  thumb2)   banner=THUMB2   ; cpu="-mcpu=cortex-m7 -mthumb -mfloat-abi=hard -mfpu=fpv5-d16"
-            acpu="cortex-m7"; afpu="fpv5-d16"    ; mach=mps2-an500 ; prefix=t2 ; vfp=1 ;;
-  thumb2sp) banner=THUMB2SP ; cpu="-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16"
-            acpu="cortex-m4"; afpu="fpv4-sp-d16" ; mach=mps2-an386 ; prefix=ts ; vfp=1 ;;
+  thumb1)   banner=THUMB1   ; prefix=t1 ;;
+  thumb2)   banner=THUMB2   ; prefix=t2 ;;
+  thumb2sp) banner=THUMB2SP ; prefix=ts ;;
   *) echo "thumb.sh: unknown target $tgt" >&2; exit 1 ;;
 esac
 
 name=test_$tgt
 
-for tool in arm-none-eabi-gcc arm-none-eabi-ld qemu-system-arm; do
-  command -v $tool > /dev/null 2>&1 || {
-    gate_skip "$name: no arm-none-eabi toolchain / qemu-system-arm, skipped"; }
-done
-
 echo "$banner $ho/$tgt"
 d=$ho/$tgt
 mkdir -p "$d"
 rm -f "$d"/*.o
-
-# the startup: vectors, bl run, semihosting SYS_EXIT_EXTENDED with run()'s answer.
-# a vfp target enables CP10/CP11 in CPACR first
-{ echo '.syntax unified'
-  echo ".cpu $acpu"
-  [ -n "$afpu" ] && echo ".fpu $afpu"
-  echo '.thumb'
-  echo '.section .vectors,"a"'; echo '.word 0x20004000'; echo '.word _start+1'
-  echo '.text'; echo '.thumb_func'; echo '.global _start'; echo '_start:'
-  if [ "$vfp" = 1 ]; then
-    echo '  ldr r0, =0xE000ED88'; echo '  ldr r1, [r0]'; echo '  orr r1, r1, #0xF00000'
-    echo '  str r1, [r0]'; echo '  dsb'; echo '  isb'
-  fi
-  echo '  bl run'; echo '  ldr r1, =0x20026'; echo '  push {r0}'; echo '  push {r1}'
-  echo '  mov r1, sp'; echo '  movs r0, #0x20'; echo '  bkpt 0xAB'; echo '  b .'
-} > "$d/start.S"
-
-{ echo 'MEMORY'; echo '{'
-  echo '  FLASH (rx) : ORIGIN = 0, LENGTH = 256K'
-  echo '  RAM  (rwx) : ORIGIN = 0x20000000, LENGTH = 16K'; echo '}'
-  echo 'SECTIONS'; echo '{'
-  echo '  .text : { KEEP(*(.vectors)) *(.text*) *(.rodata*) } > FLASH'
-  echo '  .data : { *(.data*) } > RAM'
-  echo '  .bss : { *(.bss*) } > RAM'; echo '}'
-} > "$d/link.ld"
-
-# shellcheck disable=SC2086  # $cpu is a deliberate word list
-arm-none-eabi-gcc $cpu -c "$d/start.S" -o "$d/start.o" || fail "as start.S"
-lg=$(arm-none-eabi-gcc $cpu -print-libgcc-file-name)
+thumb_board $tgt "$d"
 
 # one differential lane; libgcc rides every link for its __aeabi helpers
 lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
@@ -189,8 +150,21 @@ thumb2sp)
     ""
   lane r  test/thumb2/libr.c  test/thumb2/harnessr.c "" 13 30 "thumb2sp memory returns" \
     " = every composite past 4 bytes that is no HFA returns through the hidden pointer in r0; 100+n names the first miss -- see test/thumb2/harnessr.c"
+  # a single's negate stays in the float file
+  printf 'float ng(float x) { return -x; }\n' > "$d/ng.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/ng.c" -o "$d/ng.o" || fail "mooncc ng.c"
+  arm-none-eabi-objdump -d "$d/ng.o" > "$d/ng.s"
+  grep -q 'vneg.f32' "$d/ng.s" && ! grep -qE 'vmov[^.]*r[0-9]' "$d/ng.s" || fail "a float negate leaves the float file"
+  # a braced local struct read through an inlined pointer lives in registers, its unnamed array too
+  printf 'struct va { float x, y, z, w, a[11]; };\nstatic float sd(struct va const *v, int k) { return k ? v->w - v->x : v->z + v->w; }\nint in(float x, float y, float z, float w) { struct va const v = { .x = x, .y = y, .z = z, .w = w }; int a = 1; for (int k = 0; k < 2; k++) a &= sd(&v, k) >= 0; return a; }\n' > "$d/sv.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/sv.c" -o "$d/sv.o" || fail "mooncc sv.c"
+  [ "$(arm-none-eabi-objdump -d "$d/sv.o" | grep -c '\[sp')" = 0 ] || fail "a braced local struct stays in memory"
+  # with every other callee-saved register taken, r4 holds a value too
+  printf 'int g(int);\nint f(int *p) { int a = p[0], b = p[1], c = p[2], d = p[3], e = p[4], h = p[5], i = p[6], j = p[7], k = p[8], l = p[9];\n int s = g(a); s += g(s); s += g(s); s += g(s);\n return s + a * b + c * d + e * h + i * j + k * l; }\n' > "$d/r4.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/r4.c" -o "$d/r4.o" || fail "mooncc r4.c"
+  arm-none-eabi-objdump -d "$d/r4.o" | grep -qE 'stmdb.*\{r4,' || fail "thumb2 leaves r4 idle under pressure"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
-  for f in raster lamp poly swatch; do
+  for f in raster lamp poly swatch audio/tones; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
     arm-none-eabi-nm -u "$d/nosoft.o" | grep -E '__aeabi_(dadd|dsub|dmul|ddiv|dcmp|i2d|ui2d|fadd|fsub|fmul|fdiv|fcmp|i2f|ui2f|f2iz|f2uiz)' && fail "$f.c calls a soft float or double"
   done

@@ -1,13 +1,12 @@
-; test/law/moonlo.l -- the new backend's invariants (lo.l, ra.l): each check bites a planted break,
-; then holds over every fn a corpus lowers by the new path. run by test_moon, before moon.l's laws.
+; test/law/moonlo.l -- the backend's invariants (lo.l, ra.l): each check bites a planted break,
+; then holds over every fn a corpus lowers. run by test_moon, before moon.l's laws.
 
-; a source by the new path for tgt with the checks on -> [fns checked, what broke] | 'bad
+; a source for tgt with the checks on -> [fns checked, what broke] | 'bad
 (: (lolaw src tgt)
-    (getenv "MOON_BACKEND" @ b0
-     (setenv "MOON_BACKEND" "new", setenv "MOON_LOLAW" "1",
-      (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () tgt))) @ v
-        (setenv "MOON_BACKEND" b0, setenv "MOON_LOLAW" (),
-         v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad)))
+    (setenv "MOON_LOLAW" "1",
+     (cparse <>(clex src) @ r (okv? r ? (cgen-core <>r <>>r <>>>r <>>>>r () tgt))) @ v
+       (setenv "MOON_LOLAW" (),
+        v @ (g . _) [(g 'lolawn) (g 'lolaw)] _ 'bad))
    ; a source through the default backend refused, or griped at
    (lnay src) (cparse <>(clex src) @ r (okv? r ? (cgen <>r <>>r <>>>r <>>>>r () 'x64) @ () 1 x (gripe? x)))
    ; a planted fn's vregs spelt n0 n1 ..
@@ -64,8 +63,19 @@
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 2] ['li 'n2 4] ['imul 'n3 'n1 'n2] ['add 'n4 'n0 'n3] ['ld 'n5 'n4 0]
                     ['mov 'r0 'n5] ['ret]])
          = lv [['mov 'n0 'r6] ['ld 'n5 'n0 8] ['mov 'r0 'n5] ['ret]])
+      ; a frame slot read again is a copy of the vreg still holding it, when that vreg is read again
+      ; anyway; a dead holder or a label keeps the load, and forms past the slots stay as they are
+      (nmsf g (lv [['li 'n0 1] ['st 'r4 -8 'n0] ['ld 'n1 'r4 -8] ['add 'n2 'n1 'n0] ['ld 'n3 'r4 -8] ['label 'L] ['ld 'n4 'r4 -8] ['ret]])
+         = lv [['li 'n0 1] ['st 'r4 -8 'n0] ['mov 'n1 'n0] ['add 'n2 'n1 'n0] ['ld 'n3 'r4 -8] ['label 'L] ['ld 'n4 'r4 -8] ['ret]])
+      (nmsf g '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)) = '((li n0 1) (mov r0 n0) (ret) (li r0 0) (ret)))
       ; a literal under not is one literal; an unsigned divide by 16 shifts its own copy, not its source
-      (nmlit (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
+      (nmlit g (lv [['li 'n0 3] ['not 'n0]]) = lv [['li 'n0 -4]])
+      ; ..and under a literal shift as the word lays it; a shl past the word stays, a known count rides the immediate
+      (nmlit g (lv [['li 'n0 -1] ['shr 'n0 4]]) = lv [['li 'n0 1152921504606846975]])
+      (nmlit g (lv [['li 'n0 -9] ['sar 'n0 1]]) = lv [['li 'n0 -5]])
+      (nmlit g (lv [['li 'n0 1] ['shl 'n0 40]]) = lv [['li 'n0 1099511627776]])
+      (nmlit g (lv [['li 'n0 3] ['shl 'n0 63]]) = lv [['li 'n0 3] ['shl 'n0 63]])
+      (nmlit g (lv [['li 'r1 63] ['shrv 'n0 'r1]]) = lv [['shr 'n0 63]])
       (nmall g (lv [['mov 'n0 'r6] ['li 'n1 16] ['udiv 'n2 'n0 'n1] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
          = lv [['mov 'n0 'r6] ['mov 'n2 'n0] ['shr 'n2 4] ['add 'n3 'n2 'n0] ['mov 'r0 'n3] ['ret]])
       ; a loop's head keeps the bounds its ways in agree on: the or of two 32-bit values needs no extension
@@ -76,7 +86,25 @@
       ; the entry's fast region falling into a call copies its twin back ahead of the argument setup
       (raentry g (lv [['mov 'n0 'r6] ['li 'n1 1] ['mov 'r6 'n1] ['cuse 'r6] ['call 'f] ['mov 'r0 'n0] ['ret]])
          @ [_ _ ['mov a _] ['mov 'r6 _] ['cuse 'r6] ['call 'f] _ _] (a = name "%n0") _ 0)
-      ; what the old path diagnoses, the new one hands it
+      ; x64's park in r3 and its unpark to r10 fold to one mov only when r3 is dead past them
+      (: hd ['(label f) '(push r4) '(mov r4 sp) '(sub sp sp 24) '(st r4 -8 r3) '(call g)]
+         tl ['(ld r3 r4 -8) '(mov sp r4) '(pop r4)]
+         (elem '(mov r3 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3) '(cmp r3 0) '(br eq L) '(mov r0 r3) '(label L)] + tl + ['(ret)])) &&
+          elem '(mov r10 r0) (unframe g (hd + ['(mov r3 r0) '(mov r10 r3)] + tl + ['(jmpr r10)]))))
+      ; a spill slot its register still holds: the reload past a call that keeps it goes, and the store back
+      ; of it, until a label
+      (rakeep (pin g 'rasls '(-16)) [['st 'r4 -16 'r3] ['call 'f] ['ld 'r3 'r4 -16] ['add 'r0 'r0 'r3] ['st 'r4 -16 'r3]
+                                     ['label 'L] ['st 'r4 -16 'r3]])
+         = [['st 'r4 -16 'r3] ['call 'f] ['add 'r0 'r0 'r3] ['label 'L] ['st 'r4 -16 'r3]]
+      ; a spill slot's reload the next call takes unread goes; one the call reads, a runtime helper's
+      ; call with no cuse, or past a label, stays. a store back of what the slot holds goes first
+      (: g2 (pin g 'rasls '(-16)) tl [['li 'r0 1] ['cuse 'r0] ['call 'f] ['ret]]
+         (radrl g2 (['ld 'r1 'r4 -16] . tl) = tl &&
+          radrl g2 [['ld 'r1 'r4 -16] ['cuse 'r0 'r1] ['call 'f] ['ret]] = [['ld 'r1 'r4 -16] ['cuse 'r0 'r1] ['call 'f] ['ret]] &&
+          radrl g2 (['ld 'r1 'r4 -16] . ['label 'L] . tl) = (['ld 'r1 'r4 -16] . ['label 'L] . tl) &&
+          radrl g2 [['ld 'r1 'r4 -16] ['call 'f] ['ret]] = [['ld 'r1 'r4 -16] ['call 'f] ['ret]] &&
+          radrl g2 (rakeep g2 [['ld 'r1 'r4 -16] ['st 'r4 -16 'r1] ['cuse 'r0] ['call 'f] ['ret]]) = [['cuse 'r0] ['call 'f] ['ret]]))
+      ; what a diagnosis refuses
       (all lnay ["int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"
                  "int f(int a, int b, ...); int f(int a,int b,...){return a;} int main() { return f(1); }"
                  "int main() { switch (1) { default: return 2; default: return 3; } }"

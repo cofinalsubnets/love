@@ -104,7 +104,7 @@ void k_idle(void) {
   if (!k_scan_armed()) k_scan_sync();
   k_tick_sync(); }
 
-// a sleep under the tick, exact: kmain's k_sleep asks before it rounds to ticks
+// a sleep under the tick, exact: kmain's love_sleep asks before it rounds to ticks
 bool k_nap(uintptr_t ms) {
   long ts[2] = { 0, (long) ms * 1000000 };
   serial_drain();
@@ -205,5 +205,13 @@ const unsigned char rtzst_rv64[1] = {0};
 const uintptr_t rtzst_rv64_len = 0;
 const unsigned char rtzst_i386[1] = {0};
 const uintptr_t rtzst_i386_len = 0;
+const unsigned char rtzst_arm[1] = {0};
+const uintptr_t rtzst_arm_len = 0;
+const unsigned char rtzst_rv32[1] = {0};
+const uintptr_t rtzst_rv32_len = 0;
+const unsigned char rtzst_wasm[1] = {0};
+const uintptr_t rtzst_wasm_len = 0;
+const unsigned char rtzst_base[1] = {0};
+const uintptr_t rtzst_base_len = 0;
 const unsigned char rtzst_id[1] = {0};
 const uintptr_t rtzst_id_len = 0;

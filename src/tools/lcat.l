@@ -23,14 +23,9 @@
                 (c = 40) 1 (c = 41) 1 (c = 91) 1 (c = 93) 1 (c = 123) 1 (c = 125) 1
                 (c = 34) 1 (c = 59) 1 (c = 39) 1 (c = 96) 1 (c = 44) 1
                 0)
-   ; an operator-run byte: punct neither hard nor a name char. a run glued to a datum is
-   ; monadic mid-list but the probe reads in head position, so that space is kept.
-   (opb? c) (? (hardb c) 0
-               (48 <= c <= 57) 0
-               (65 <= c <= 90) 0
-               (97 <= c <= 122) 0
-               (c = 95) 0
-               1)
+   ; an operator-run byte: the table's, or one past printable ascii, neither hard. a run glued
+   ; to a datum is monadic mid-list but the probe reads in head position, so that space is kept.
+   (opb? c) (? (hardb c) 0 (op-byte? c) 1 (c < 32 || 126 < c))
    (dstart? b) (? (b = 41) 0 (b = 93) 0 (b = 125) 0 (b = 59) 0
                   (b = 32) 0 (b = 10) 0 (b = 9) 0
                   1)
@@ -83,36 +78,40 @@
    home {'holo "src/love/holo/" 'x64 "src/love/holo/" 'a64 "src/love/holo/" 'rv64 "src/love/holo/" 'thumb2 "src/love/holo/"}
    (path n) (peep home n "src/love/boot/" + show n + ".l")
    (slurp-file p) (: q (open p "r") _ (!q ? (die ("cannot open " + p))) s (slurp q) (close q, s))
-   ; a file's minified text, once: holo rides four blobs
+   ; a file's minified text, once: post and holo ride five blobs
    cache {}
    (file n) (cache n @ s
                (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
 
    ; the baked source (cats.c): a string lays as is (arch guards); a list is [symbol items],
-   ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is ONE
-   ; text: evals_ reads it whole before its first form runs, so grouping is meaning.
+   ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is one
+   ; text, which evals_ reads and runs form by form.
    rows
     [['cat_egg_z ['egg]]
      ['cat_prel_z ['prel " " 'ev]]                     ; prel carries ev's half spliced after its own
-     ['cat_post_z ['post]]
-     ; holo, one blob per arch; an arch with no backend leaves LvCatModsH unset. every other
-     ; module is post's.
-     "#if defined(__x86_64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'x64]]
-     "#elif defined(__aarch64__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'a64]]
-     "#elif defined(__riscv)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64]]
+     ; post, then the arch's holo, scan riding it: one text, the egg's last
+     "#if defined(__x86_64__)"
+     ['cat_post_z ['post " " 'holo " " 'x64]]
+     "#elif defined(__aarch64__)"
+     ['cat_post_z ['post " " 'holo " " 'a64]]
+     "#elif defined(__riscv)"
+     ['cat_post_z ['post " " 'holo " " 'rv64]]
+     "#elif defined(__arm__) && defined(__unix__)"
+     ['cat_post_z ['post " " 'holo " " 'thumb2 " " 'scan]]
      ; wasm is gen's rv64 lane under another writer, so its holo machine is rv64's
-     "#elif defined(__arm__) && defined(__linux__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'thumb2 'scan]]
-     "#elif defined(__wasm__)" "#define LvCatModsH 1"
-     ['cat_lib_h_z ['holo 'rv64]]
+     "#elif defined(__wasm__)"
+     ['cat_post_z ['post " " 'holo " " 'rv64]]
+     "#else"
+     ['cat_post_z ['post]]
      "#endif"
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.
      "#ifdef LvGlazed"
+     "#if defined(__arm__)"
+     ['src_glaze_z ['glaze 'holo 'x64 'a64 'thumb2]]   ; holo again, so arm's backend rides it
+     "#else"
      ['src_glaze_z ['glaze 'holo 'x64 'a64]]
+     "#endif"
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)

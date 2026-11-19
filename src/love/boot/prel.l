@@ -208,24 +208,31 @@
 
 ; jot's counted twins: ev's fold calls one in a walker's place when its list operand is (jot x),
 ; the same calls in the same order, the range never built. x as jot reads it, a list by jot itself.
-; jotfuse maps a walker, by value and by name, to [k arity twin], k the list operand's place;
+; jotfuse maps a walker, by value and by name, to [k arity twin ntwin], k the list operand's place,
+; ntwin the twin for an x that is a whole number for certain, with no list lane and no saturate;
 ; 'jot -> jot, which a walker's value never is. the glaze keys the walkers it re-declares
 (: jotfuse (tablet 0)
    _ (: (foldn f z x) (? (two? x) (foldl f z (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z)))
         (foldrn f z x) (? (two? x) (foldr f z (jot x)) (: n (saturate x) (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0)))
         (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
         (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
-        (fuse w nm k ar t) (: e (. k (. ar (. t ()))) _ (pin jotfuse nm e) (pin jotfuse w e))
+        (foldnn f z n) (: (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z))
+        (foldrnn f z n) (: (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0))
+        (eachnn n f) (: (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0))
+        (mapnn f n) (: (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ()))
+        (allnn f n) (: (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0))
+        (anynn f n) (: (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0))
+        (fuse w nm k ar t nt) (: e (. k (. ar (. t (. nt ())))) _ (pin jotfuse nm e) (pin jotfuse w e))
         (alln f x) (? (two? x) (all f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0)))
         (anyn f x) (? (two? x) (any f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0)))
         _ (pin jotfuse 'jot jot)
         _ (pin jotfuse 'filter filter)                   ; no twin: fusion's stage, by value
-        _ (fuse foldl 'foldl 2 3 foldn)
-        _ (fuse foldr 'foldr 2 3 foldrn)
-        _ (fuse each 'each 0 2 eachn)
-        _ (fuse all 'all 1 2 alln)
-        _ (fuse any 'any 1 2 anyn)
-        (fuse map 'map 1 2 mapn)))
+        _ (fuse foldl 'foldl 2 3 foldn foldnn)
+        _ (fuse foldr 'foldr 2 3 foldrn foldrnn)
+        _ (fuse each 'each 0 2 eachn eachnn)
+        _ (fuse all 'all 1 2 alln allnn)
+        _ (fuse any 'any 1 2 anyn anynn)
+        (fuse map 'map 1 2 mapn mapnn)))
 
 (: l (foldr (\ a l (. (.) (. a (. l ())))) ()) (:: 'list l))
 ; connectives answer one of their operands: && the first falsy one, || the first truthy one,
@@ -238,7 +245,8 @@
 (:: '?- (\ a (. '? (cat (cup a) (. (cap a) ())))))
 ; @ carries a subject the other two lack, so @- moves the second argument, not the
 ; first: (x @- dflt p v ..) is (x @ p v .. dflt), and the subject stays where it reads.
-(:: '@- (\ a (. '@ (. (cap a) (cat (cuup a) (. (caup a) ()))))))
+; named by nom: read before the operator bytes are sealed, '@- is @ around -
+(:: (nom "@-") (\ a (. '@ (. (cap a) (cat (cuup a) (. (caup a) ()))))))
 
 ; (pins t k v ..): pin each pair onto an existing tablet; an odd trailing operand is dropped
 (:: 'pins (\ l (: (go t r) (? (two? (cup r)) (go (list pin t (cap r) (caup r)) (cuup r)) t)
@@ -290,8 +298,7 @@
  0 (pins (tablet 0)                                 ; --- arity 0: glued. takes nothing from the form
  '< cap '> cup '+ net '* prod '| abs '- negate '/ reciprocal
  '% fraction '? bit '$ sat '! nil? '^ jot
- '# tally '~ conj
- '0? nil? '1? atom? '2? two?)                   ; a row may spell digits: 2?<>x is (two? (cap (cup x)))
+ '# tally '~ conj)
  1 (tablet 0)                                       ; --- arity 1: a right operand and no left. no walk yet
  2 (pins (tablet 0)                                 ; --- arity 2: spaced. a left operand and a right
  '~ '(twin 99)                                      ; tightest, so a complex literal binds before any operator
@@ -306,7 +313,8 @@
  '$ 5 '\ 5)                                         ; weak apply and the lambda, one band: at equal band the
                                                     ; right hand yields, (map $ a \ f a) is (map (\ a (f a)))
  -1 (pins (tablet 0)                                ; --- arity -1: spaced, no bound. a left, then all of them
- '? 10 '@ 10 '@- 10                                 ; every arm stays an operand; :- and ?- are prefix-only
+ '? 10 '@ 10 (nom "@-") 10                          ; every arm stays an operand; :- and ?- are prefix-only
+                                                    ; @- by nom, as at its macro: read before the seal
  ': 3 ':= ':)                                       ; := is a bare nom, an alias of `:` and its band
  -2 (pins (tablet 0)                                ; --- arity -2: spaced, and it chains. a left and a right, but
  '= 40 '!= 40 '< 40 '<= 40 '> 40 '>= 40 '== 40 '!== 40)))          ; a same-band neighbour joins the run instead of nesting
@@ -350,6 +358,18 @@
                    0))
              0)) ;;; FIXME dangling 0 clauses like these are bad end-weight coding and
        0) ;;; they may not even be semantically needed since ? fall-through returns ()
+
+   ; the reader's operator bytes, as hook 10's 256-byte text: each byte of a name in any lane
+   ; that is punct whole. sealed below and again on every grip, so the reader is the table's
+   opb (tablet 0)
+   (op-bytes _) (: m (tablet 0)
+                   (row nm) (? (op-puncp nm)
+                               (: s (string nm) ((: (go i) (? (< i (tally s)) (: _ (pin m (s i) 1) (go (+ 1 i))) 0)) 0))
+                               0)
+                   _ (each (list 0 1 2 -1 -2) (\ ar (each (keys (operators ar)) row)))
+                   (string (map (\ c (peep m c 0)) (jot 256))))
+   (op-seal _) (: t (op-bytes ()) _ (pin opb 0 t) (seal-hook 10 t))
+   (op-byte? c) (? (charm? c) (? (< -1 c) (? (< c 256) ((opb 0) c) 0) 0) 0)
 
    ; a band is a signed charm: the magnitude is the level (higher binds tighter), the sign the
    ; hand, negative left. never 0: a tablet miss answers 0.
@@ -603,7 +623,8 @@
    ; restores; () clears a row. a shape the lane refuses rolls back and scares; a lane with no
    ; key is refused. the glued lane accepts anything: a value there is the emitted head.
    (op-lane-ok? t ar nm) (? (= ar 0) 1 (two? (op-lane nm t ar)))
-   (grip ar nm v)
+   (grip ar nm v) (: old (grip-row ar nm v) _ (op-seal ()) old)
+   (grip-row ar nm v)
     (: t (operators ar)
        (? (nil? (nom? nm)) (scare 'bad-grip nm)
           (nil? (tablet? t)) (scare 'bad-grip ar)
@@ -616,6 +637,8 @@
                          (scare 'bad-grip nm))))))))
 
    ; --- this `:` has a body, so the helpers above are local ------------------
+   _ (op-seal ())
+   _ (pin book 'op-byte? op-byte?)
    _ (pin book 'grip grip)
    _ (pin book 'opfix-past opfix-past)
    (pin book 'opfix opfix))
@@ -691,8 +714,9 @@
     (atom? >bs) (w v <bs bnd u dm)
     (: nd (dsug <bs <>bs) (w v >nd bnd u dm ? 1 (wl v >>bs bnd u dm))))
    ; a name wants a cell when something that runs before its slot is filled can read it: a read
-   ; from a binding at or before it (for a lambda name only one under no \), or, for a value
-   ; name, a read from anywhere the earlier bindings reach through the let's own names
+   ; from a binding at or before it (for a lambda name, one under no \ or in a value, which no
+   ; sibling's frame holds), or, for a value name, a read from anywhere the earlier bindings
+   ; reach through the let's own names
    (boxset prs es) (: nm (map cap prs)
      ; the first of each, as assoc and lidx find them: a name's position and def, a def's reads
      (firsts l i t) (atom? l ? t (firsts >l (i + 1) (peep t <l -1 < 0 ? (pin t <l i) t)))
@@ -703,15 +727,15 @@
      (reads m) >(peep rd m ())
      (anyname m) (map cap (reads m))
      (lam? v) (lambp >(peep df v ()))
-     ; the earliest binding reading each name: any read, and a read under no lambda
+     ; the earliest binding reading each name: any read, and a read under no lambda or in a value
      (mark t x i) (peep t x -1 < 0 ? (pin t x i) t)
      (seen l i ma mb) (atom? l ? [ma mb]
-                        (: rs (reads <l)
+                        (: rs (reads <l) lv !(lam? <l)
                            (seen >l (i + 1) (foldl (\ t r (mark t <r i)) ma rs)
-                                            (foldl (\ t r (!>r ? (mark t <r i) t)) mb rs))))
+                                            (foldl (\ t r (!>r || lv ? (mark t <r i) t)) mb rs))))
      mm (seen nm 0 (tablet 0) (tablet 0))
-     ; near: a read from a binding at or before v; a lambda name counts only the bare ones,
-     ; since a call comes after the pin
+     ; near: a read from a binding at or before v; a lambda name counts a sibling lambda's only
+     ; bare, since its call comes after the pin
      (near v) (: k (peep at v 0) (0 <= peep (mm (lam? v ? 1 0)) v -1 <= k))
      ; reach: capture, not evaluation order. an earlier closure inherits a later sibling's
      ; captures, so it wants v's slot at construction, before that slot exists. the reached

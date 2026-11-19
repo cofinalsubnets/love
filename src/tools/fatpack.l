@@ -4,7 +4,7 @@
 ;
 ; arch is uname -m's spelling (x86_64, aarch64, ..). the members land at page-aligned block
 ; offsets behind a one-block #!/bin/sh prefix that picks the machine's member, lays it under
-; ~/.love/fat once (named by the members' sha), and execs it. deterministic: same members in,
+; the nest's fat/ once (named by the members' sha), and execs it. deterministic: same members in,
 ; same bytes out. the distributed bytes stay immutable; a bake belongs to the extraction.
 
 (borrow '(posix hashes))
@@ -30,7 +30,9 @@
      + "# love -- one file, every text\n"
      + "m=$(uname -m)\ncase \"$m\" in\n\(arms)"
      + "*) echo \"love: no text aboard for $m\" >&2; exit 2;;\nesac\n"
-     + "d=\"${LOVE_NEST:-$HOME/.love}/fat\"\n"
+     ; the nest by post.l's rule, spelled here: this runs before any love does
+     + "d=$LOVE_NEST\n[ -n \"$d\" ] || d=${XDG_DATA_HOME:+$XDG_DATA_HOME/love}\n"
+     + "d=\"${d:-$HOME/.love}/fat\"\n"
      + "mkdir -p \"$d\" 2>/dev/null || d=\"${TMPDIR:-/tmp}\"\n"
      + "c=\"$d/love-\(id)-$m\"\n"
      + "if [ ! -x \"$c\" ]; then\n"

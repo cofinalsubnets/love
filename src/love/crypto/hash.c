@@ -307,6 +307,13 @@ static void blk_done(uint32_t *h, const uint8_t *buf, unsigned r, uint64_t len,
  d->f(h, tail);
  if (pad == 2 * bs) d->f(h, tail + bs); }
 
+void sha256s_init(struct sha256s *s) { dig_h0(s->h, &dig_sha), s->n = 0, s->r = 0; }
+void sha256s_feed(struct sha256s *s, void const *p, uintptr_t n) {
+ s->r = blk_feed(s->h, s->b, s->r, &dig_sha, (uint8_t const *) p, n), s->n += n; }
+void sha256s_done(struct sha256s *s, uint8_t out[32]) {
+ blk_done(s->h, s->b, s->r, s->n, &dig_sha);
+ for (int k = 0; k < 8; k++) st32be(out + 4 * k, s->h[k]); }
+
 static const char hexd[] = "0123456789abcdef";
 
 // n words of hex in the digest's own order
@@ -544,17 +551,18 @@ static uint32_t adler_run(const uint8_t *p, uintptr_t n) {
 static love_inline struct g *host_sum(struct g *g, uint32_t (*sum)(const uint8_t*, uintptr_t)) {
  if (!strp(g->sp[0])) return g->sp[0] = ZeroPoint, g;
  struct str *s = (struct str*) g->sp[0];
- return g->sp[0] = putcharm(sum((const uint8_t*) s->bytes, (uintptr_t) s->len)), g; }
-static lvm(lvm_crc32) { LvmCall(g, host_sum, crc32) }
-static lvm(lvm_crc32c) { LvmCall(g, host_sum, crc32c_of) }
-static lvm(lvm_adler32) { LvmCall(g, host_sum, adler_run) }
+ return g->sp[0] = mk_uword(&g->hp, sum((const uint8_t*) s->bytes, (uintptr_t) s->len)), g; }
+// a sum may pass the charm range on a 32-bit word, so each reserves its bignum
+static lvm(lvm_crc32) { Have(wbig_req); LvmCall(g, host_sum, crc32) }
+static lvm(lvm_crc32c) { Have(wbig_req); LvmCall(g, host_sum, crc32c_of) }
+static lvm(lvm_adler32) { Have(wbig_req); LvmCall(g, host_sum, adler_run) }
 
-static love_inline word crc_on(word c, word x, uint32_t (*run)(uint32_t, const uint8_t*, uintptr_t)) {
- if (!charmp(c) || !strp(x)) return ZeroPoint;
+static love_inline word crc_on(word **hp, word c, word x, uint32_t (*run)(uint32_t, const uint8_t*, uintptr_t)) {
+ if (!intp(c) || !strp(x)) return ZeroPoint;
  struct str *s = (struct str*) x;
- return putcharm(~run(~(uint32_t) getcharm(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
-static lvm(lvm_crc32_on) { Sp[1] = crc_on(Sp[0], Sp[1], crc32_run); love_musttail return Nextp(1, 1); }
-static lvm(lvm_crc32c_on) { Sp[1] = crc_on(Sp[0], Sp[1], crc32c_run); love_musttail return Nextp(1, 1); }
+ return mk_uword(hp, ~run(~(uint32_t) toint(c), (const uint8_t*) s->bytes, (uintptr_t) s->len)); }
+static lvm(lvm_crc32_on) { Have(wbig_req); Sp[1] = crc_on(&Hp, Sp[0], Sp[1], crc32_run); love_musttail return Nextp(1, 1); }
+static lvm(lvm_crc32c_on) { Have(wbig_req); Sp[1] = crc_on(&Hp, Sp[0], Sp[1], crc32c_run); love_musttail return Nextp(1, 1); }
 
 // cksum (POSIX, unreflected 0x04c11db7, seed 0): the byte count goes through the walk after
 // the message, low byte first, so the empty file is 4294967295. ck_bit is the tables' only source
@@ -596,10 +604,11 @@ static uint32_t cksum_of(const uint8_t *p, uintptr_t n) {
  return ~ck_len(ck_run(0, p, n), (uint64_t) n); }
 
 static lvm(lvm_cksum) {
+ Have(wbig_req);
  if (!strp(Sp[0])) Sp[0] = ZeroPoint;
  else {
   struct str *s = str(Sp[0]);
-  Sp[0] = putcharm(cksum_of((unsigned char const*)s->bytes, s->len)); }
+  Sp[0] = mk_uword(&Hp, cksum_of((unsigned char const*)s->bytes, s->len)); }
  love_musttail return Next(1); }
 
 // cksum's register, nothing folded after, no complement; the crc field (bytes 22..25) as zeros
@@ -610,9 +619,9 @@ static love_inline struct g *host_ogg_crc(struct g *g) {
   intptr_t o = getcharm(g->sp[1]), n = getcharm(g->sp[2]);
   if (o >= 0 && n >= 27 && (uintptr_t) (o + n) <= s->len) {
    const uint8_t *p = (const uint8_t*) s->bytes + o, z[4] = {0};
-   r = putcharm(ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
+   r = mk_uword(&g->hp, ck_run(ck_run(ck_run(0, p, 22), z, 4), p + 26, (uintptr_t) n - 26)); } }
  return g->sp[2] = r, g->sp += 2, g; }
-static lvm(lvm_ogg_crc) LvmCall(g, host_ogg_crc)
+static lvm(lvm_ogg_crc) { Have(wbig_req); LvmCall(g, host_ogg_crc) }
 
 // the streams: the one-shots' compression functions, the state in a cask love never reads.
 // big-endian throughout, so an image carrying one wakes on any box. the block digests' is
@@ -798,14 +807,14 @@ love_noinline static word host_ck_feed(word x, word a) {
  dig_st(st, &c, 1, len);
  return x; }
 
-love_noinline static word host_ck_done(word x) {
+love_noinline static word host_ck_done(word **hp, word x) {
  struct str *cs = dig_cask(x, CkSt);
  if (!cs) return ZeroPoint;
  uint8_t *st = (uint8_t*) cs->bytes;
  uint32_t c;
  uint64_t len;
  dig_ld(st, &c, 1, &len);
- return putcharm(~ck_len(c, len)); }
+ return mk_uword(hp, ~ck_len(c, len)); }
 
 // cksum's state is the register and the count, no block
 static lvm(lvm_ck_init) {                      // (cksum-init b) -> b zeroed | (): the cask, never a pointer into it
@@ -818,7 +827,8 @@ static lvm(lvm_ck_feed) {
  love_musttail return Nextp(1, 1); }
 
 static lvm(lvm_ck_done) {
- Sp[0] = host_ck_done(Sp[0]);
+ Have(wbig_req);
+ Sp[0] = host_ck_done(&Hp, Sp[0]);
  love_musttail return Next(1); }
 
 #define H(nm, x, n) LvDef(nm, x, n, "hashes");

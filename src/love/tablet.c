@@ -23,10 +23,6 @@ static love_inline intptr_t tray_off(struct tray *v, word k) {
 #define map_hint_max (1u << 24)        // where (tablet n)'s hint saturates
 static love_noinline struct g *map_grow(struct g *g);
 static love_noinline word mapdel(struct g *g, word m, word k, word dflt);
-// a backing's ap, reached only from a header, never applied: answers () if it ever is
-lvm(lvm_map_data) { // FIXME this just returns const (); can we delete it?
- Ip = cell(*++Sp); *Sp = ZeroPoint; love_musttail return Continue(); }
-
 // k's slot, or the first empty one on its chain: load < 3/4 keeps an empty slot to stop at.
 // a walk that spent the gap answers not found with g->walk set
 uintptr_t map_probe(struct g *g, word m, word k, bool *found) {
@@ -63,10 +59,8 @@ word stacklook_macro(struct g *g, word k) {
 
 // an empty backing of cap slots (a power of two) at b, reserved by the caller
 union u *map_fill_back(union u *b, uintptr_t cap) {
- struct tablet_back *t = tablet_back(b);
- t->ap = lvm_map_data, t->len = putcharm(0), t->cap = putcharm(cap);
- for (uintptr_t i = 0; i < cap; i++) t->slot[2 * i] = map_gap, t->slot[2 * i + 1] = zero;
- return tagthread(b, map_back_words(cap) - 1); }
+ for (uintptr_t i = 0; i < cap; i++) b[2 * i].x = map_gap, b[2 * i + 1].x = zero;
+ return tagthread(b, 2 * cap); }
 
 // double the backing of the map at sp[2]; the header never moves, so aliases hold
 static love_noinline struct g *map_grow(struct g *g) {
@@ -75,7 +69,7 @@ static love_noinline struct g *map_grow(struct g *g) {
  word m = g->sp[2];                                 // after GC
  union u *nb = map_fill_back((union u*) g->hp, ncap);
  g->hp += map_back_words(ncap);
- word *os = map_slots(m), *ns = tablet_back(nb)->slot;
+ word *os = map_slots(m), *ns = ptr(nb);
  uintptr_t ocap = map_cap(m), nlen = 0, nmask = ncap - 1;
  for (uintptr_t j = 0; j < ocap; j++) {
   word k = os[2 * j];
@@ -84,8 +78,7 @@ static love_noinline struct g *map_grow(struct g *g) {
   if (g->walk) return g;                          // a key's walk spent the gap: the old backing stands
   while (ns[2 * i] != map_gap) i = (i + 1) & nmask;
   ns[2 * i] = k, ns[2 * i + 1] = os[2 * j + 1], nlen++; }
- tablet_back(nb)->len = putcharm(nlen);
- tablet(m)->back = (word) nb;
+ tablet(m)->back = (word) nb, tablet(m)->len = nlen, tablet(m)->cap = ncap;
  gen_wb(g, m, (word) nb);
  return g; }
 
@@ -140,10 +133,10 @@ static love_noinline word mapdel(struct g *g, word m, word k, word dflt) {
 // a fresh empty map onto sp[0], lvm_tablet's shape
 struct g *map_new(struct g *g) {
  uintptr_t cap = map_min_cap, nb = map_back_words(cap);
- if (!ok(g = have(g, nb + map_head))) return g;
+ if (!ok(g = have(g, nb + tab_req))) return g;
  union u *b = map_fill_back(cell(g->hp), cap);
- word h = ini_tablet(cell(g->hp + nb), (word) b, putcharm(++g->next_serial));
- g->hp += nb + map_head;
+ word h = ini_tablet(cell(g->hp + nb), (word) b, ++g->next_serial, 0, cap);
+ g->hp += nb + tab_req;
  return push(g, 1, h); }
 
 // (tablet n): a fresh map presized so n keys never rehash
@@ -153,13 +146,13 @@ lvm(lvm_tablet) {
            cap = map_min_cap;
  while (cap * 3 <= hint * 4) cap *= 2;
  uintptr_t nb = map_back_words(cap);
- Have(nb + map_head);
+ Have(nb + tab_req);
  union u *b = map_fill_back(cell(Hp), cap);
- Sp[0] = ini_tablet(cell(Hp + nb), (word) b, putcharm(++g->next_serial));
- Hp += nb + map_head; love_musttail return Next(1); }
+ Sp[0] = ini_tablet(cell(Hp + nb), (word) b, ++g->next_serial, 0, cap);
+ Hp += nb + tab_req; love_musttail return Next(1); }
 
 // (m k): lookup, () if absent
-lvm(lvm_map_lookup) {
+lvm(data_tab_apply) {
  Pack(g);                                            // packed: the probe's walks take the nursery's free room
  word v = mapget(g, ZeroPoint, Sp[0], (word) Ip);   // a miss is (), not 0
  WalkAgain();
@@ -447,7 +440,8 @@ int hash_leaf(struct g *g, word x, uintptr_t *out, word *src) {
  if (!datp(x)) return *out = fn_hash(g, x), 0;
  switch (typ(x)) {
    case DChain: break;                            // hash_at spines a chain: a bug here
-   case DMint: return *out = sym(x)->serial, 0;
+   case DMint: { uint64_t s = mint_serial(x); return *out = (uintptr_t) (sizeof(uintptr_t) < 8 ? s ^ s >> 32 : s), 0; }
+   case DTab: { uint64_t s = map_serial(x); return *out = (uintptr_t) (sizeof(uintptr_t) < 8 ? s ^ s >> 32 : s), 0; }
    case DNom: return *out = nom(x)->dig, 0;        // the spelling's: a serial keys order to intern history
    case DTray: {
     // an object tray's header only: answer 3 and hash_at folds the cells, as = reads through
@@ -491,8 +485,6 @@ lvm(lvm_nifx) {                               // Sp[0]=code Sp[1]=interp Sp[2]=a
 #endif
  char *code;
 #if __STDC_HOSTED__
- // inle declines: its heap rides the NX hhdm window
- if (__love_osv < 0) love_musttail return Answerp(nsp, Sp[1]);
  Have(10 + Width(struct fz));              // 10 covers every cell (5..8 words) + tag + fz
  code = code_install(g, txt(bytes_of(Sp[0])), n);   // reloaded: Have may move it
  if (!code) love_musttail return Answerp(nsp, Sp[1]);
@@ -580,30 +572,37 @@ static lvm(lvm_firstcall_land) {                    // [ans ip]
  Ip = cell(Sp[1]); Sp += 2; love_musttail return Continue(); }
 static union u const firstcall_land[] = {{.ap = lvm_firstcall_land}};
 lvm(lvm_firstcall) {
+ intptr_t n = getcharm(Ip[4].x);
+ if (n > 0) {                                       // calls left before the compile: the twin's
+  Ip[4].x = putcharm(n - 1);
+  union u *e = cell(Ip[1].x);
+  Ip = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? e + 2 : e;
+  love_musttail return Continue(); }
  Have(4);
  union u *v = Ip[-2].ap == lvm_cur && oddp(Ip[-1].x) ? Ip - 2 : Ip;
  word t = Ip[5].x, *dst = Sp - 4;
  Ip->ap = v[-1].ap = lvm_deferfwd, Ip[5].x = putcharm(0);
  dst[0] = word(v), dst[1] = t, dst[2] = word(firstcall_land), dst[3] = word(Ip);
  Sp = dst; Ip = (union u*) callout_drive; love_musttail return Continue(); }
-// (firstcell interp arity thunk): defercell's cell, compiled by (thunk cell) at its first call
-static lvm(lvm_firstcell) {
+// (hotcell interp arity thunk n): defercell's cell, compiled by (thunk cell) at its call past n;
+// the calls before it are the twin's
+static lvm(lvm_hotcell) {
  word f = Sp[0];
- intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0;
- if (ar < 1 || oddp(f) || datp(f)
+ intptr_t ar = oddp(Sp[1]) ? getcharm(Sp[1]) : 0, n = oddp(Sp[3]) ? getcharm(Sp[3]) : 0;
+ if (ar < 1 || oddp(f) || datp(f) || n < 0
      || (ar > 1 && (cell(f)->ap != lvm_cur || cell(f)[1].x != putcharm(ar))))
-  love_musttail return Answerp(2, ZeroPoint);
+  love_musttail return Answerp(3, ZeroPoint);
  Have(10);
  union u *k = (union u*) Hp;
  uintptr_t w = 0;
  k[w++].ap = lvm_firstcall;
  if (ar > 1) k[w++].ap = lvm_cur, k[w++].x = putcharm(ar);
  k[w++].ap = lvm_firstcall, k[w++].x = Sp[0], k[w++].ap = lvm_ret, k[w++].x = putcharm(ar - 1);
- k[w++].x = putcharm(0), k[w++].x = Sp[2];
+ k[w++].x = putcharm(n), k[w++].x = Sp[2];
  Hp += w + 1;
  tagthread(k, w);
- love_musttail return Answerp(2, word(k + 1)); }
-LvDef("firstcell", firstcell, 3, "guts");
+ love_musttail return Answerp(3, word(k + 1)); }
+LvDef("hotcell", hotcell, 4, "guts");
 // a profiling bake's counting cell: deferfwd's, its E the call count; at each power of two N, the
 // closure's place in the bake, and the count append to LOVE_BAKE_COUNT (src/tools/hotbake.sh)
 lvm(lvm_countfwd) {

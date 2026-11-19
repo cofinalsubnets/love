@@ -13,10 +13,9 @@
 # file. the lanes arrive in the environment because the object list already has the
 # variadic tail -- gate_love_c / gate_host_c, the Makefile's own.
 #
-# gate_seat_c is src/love/noblob.c and nokern.c: this pair lays no out/src.o and no
-# out/moonlibc.o -- it rebuilds every TU itself and carries no archives -- so it answers
-# the carried-archive symbols itself. it rides the OBJ list too, or love1 has a body
-# love2's link cannot find.
+# gate_seat_c is src/love/noblob.c: this pair lays no out/src.o and no out/moonlibc.o --
+# it rebuilds every TU itself and carries no archives -- so it answers the carried-archive
+# symbols itself. it rides the OBJ list too, or love1 has a body love2's link cannot find.
 #
 # usage: gate_love_c=.. gate_host_c=.. gate_seat_c=..
 #        fixpoint.sh OUTDIR LOVE0 HOSTA ODIR OBJ...
@@ -68,7 +67,7 @@ moon0 -pie "$@" -o "$d/love1" || fail "love1 relink"
 echo "FIX  $d/love1 rebuilds itself"
 
 # love1 bakes its own compiler image (fingerprinted to love1)...
-LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
+LOVE_NO_IMAGE=1 "$d/love1" -l "$cat" -e "(? ((cite 'image 'bake \"$d/mooncc1.image\") = 1) (quit 0) (quit 1))" \
   || fail "love1 bakes mooncc1.image"
 
 # ...and rebuilds every TU with it, in the exact order make links them

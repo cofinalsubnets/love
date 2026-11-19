@@ -24,11 +24,11 @@ endif
 .DELETE_ON_ERROR:
 
 # love0's boot text: one header, one src0_<name>[] literal per file, laid by sed alone --
-# love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides;
-# src/love/main.c names the ones love0 evaluates.
+# love0 is what runs lcat, so nothing love-made can sit under it. every boot file rides, and
+# the carried provers its corpus borrows; src/love/user/main0.c names the ones love0 evaluates.
 sed_lit = sed \
   -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/^/"/' -e 's/$$/\\n"/'
-boot0_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l
+boot0_l = $(wildcard src/love/boot/*.l) src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/apps/kanren.l src/apps/uu.l
 out/lib/boot0.h: $(boot0_l)
 	@echo '$(t_sed)	'$@
 	@mkdir -p out/lib
@@ -62,10 +62,12 @@ $(holo_h): out/lib/%.h: src/love/holo/%.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
 	@$(lcat_love) src/tools/lcat.l $< > $@
-out/lib/rune.h: src/apps/rune.l src/tools/lcat.l $(love0)
+# the boards carry module 'fat alone: 'fatcmd borrows posix
+out/lib/fat.h: src/apps/fat.l src/tools/lcat.l $(love0)
 	@echo 'LOVE	'$@
 	@mkdir -p out/lib
-	@$(lcat_love) src/tools/lcat.l $< > $@
+	@sed -n "1,/^) ; module 'fat/p" $< > out/lib/fatcore.l
+	@$(lcat_love) src/tools/lcat.l out/lib/fatcore.l > $@
 .PHONY: force_corpus_list
 force_corpus_list: ;
 # love0 reads this at runtime to find the corpus. $t is a glob, so it is written
@@ -98,19 +100,17 @@ macho_o = $(ho)/moon/love/macho.o
 endif
 h_o = $(love_c:$(S)/%.c=$(ho)/o/%.o)
 host_o = $(host_c:$(S)/%.c=$(ho)/o/%.o)
-# the three a LINK names rather than the directory, one per thing it does without:
-# src/love/user/nokern.c the kernel's doors where no kmain.c stands under them, src/love/noblob.c the
-# carried archives where no laid object brings them. the OS word is src/love/love.c's
-# weak one wherever moonlibc's os.c is not in the link.
-# wants none of them; the HCC flavour is gcc and glibc alone, so it takes all three.
-seat_o = $(ho)/o/love/user/nokern.o $(ho)/o/love/noblob.o
-hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(tco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
+# what a LINK names rather than the directory: src/love/noblob.c the carried archives where no
+# laid object brings them. the OS word is src/love/love.c's weak one wherever moonlibc's os.c
+# is not in the link. the HCC flavour is gcc and glibc alone, so it takes both.
+seat_o = $(ho)/o/love/noblob.o
+hcc = LOVE_NO_IMAGE= $(CC) $(cflags) $(GCDBG) -Dtco=$(htco) -fpic -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags) tco=$(htco)' > $$tf; \
 	 $(note)
 # macho.o for its compile alone: no link here takes it
 host: $(macho_o) $(ho)/love $(ho)/love.1 $(ho)/cook.1
@@ -142,7 +142,7 @@ $(ho)/liblove.a: $(h_o)
 # pinned to out/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
-love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/user/nokern.c $(S)/love/noblob.c $(love_c))
+love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/noblob.c $(love_c))
 out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
 out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 # love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
@@ -256,7 +256,7 @@ $$($(1)_love_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -D LvHaveVersionH -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
 $$($(2))/love/love.o: out/lib/love_version.h   # only this TU carries the version id
-$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o $$($(2))/love/user/nokern.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
+$$($(1)_host_o) $$($(1)_seat_o) $$($(2))/love/macho.o: $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
 	@$$($(3)) -D tco=$$(tco) -I$$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -c $$< $$@
@@ -299,12 +299,12 @@ else
 moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonlibc/*.h \
                         src/apps/moon/lib/moonlibc/*/*.c src/apps/moon/lib/moonlibc/*/*.h)
 # out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
-# pole (three ISAs' runtime members, ~80 s of cpu cold) -- behind the TU list they start as
+# pole (six ISAs' runtime members, ~200 s of cpu cold) -- behind the TU list they start as
 # they finish and run alone. ahead of them they ride beside them, and -j loses that time.
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(love_door_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 # love for macos: the same objects but its bake's, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), unbaked -- the image is its own binary's, so the bake runs on the box
 # (test_macos_love)
@@ -312,12 +312,12 @@ mac_o = $(filter-out %/love/elfbake.o,$(moon_o)) $(moon_d)/love/macho.o
 $(ho)/love-macos.raw: out/moonlibc.o $(mac_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos -pie $(mac_o) $(kart_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -os macos -pie $(mac_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(love_door_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -337,7 +337,8 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
   src/apps/kore/find.l src/apps/cook.l src/apps/kore/asbook.l src/apps/kore/man.l src/apps/kore/lens.l
 # the backends: one file per ISA, then the text faces they share
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
-  src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/text.l src/love/holo/dialect.l
+  src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/xtensa.l \
+  src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/lds.l src/love/holo/link.l src/love/holo/macho.l
 # the kernel's link: kore's alone, mooncc never reads it
@@ -359,12 +360,12 @@ kore_net = src/apps/tls/bytes.l src/apps/tls/verify.l src/apps/tls/client.l src/
 crewfiles = src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/sb.l src/apps/kiosko/kiosko.l \
   src/apps/fat.l \
   src/apps/source.l src/apps/lapiz.l \
-  src/apps/libra/salt.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
+  src/apps/libra/salt.l src/apps/libra/spans.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l src/apps/harp/horn.l \
-  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/hexedit.l src/apps/mc.l src/apps/help.l \
-  src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/lore/saver.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
+  src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/crypt.l src/apps/login.l src/apps/lore/saver.l src/apps/greet.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -400,7 +401,7 @@ $(ho)/sb $(ho)/lush $(ho)/helm:
 # plain tree's moon objects
 $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(love0)
 	@echo 'BAKE	'$@
-	@$(love0) -l $< -e '(? ((bake "$@") = 1) (quit 0) (quit 1))'
+	@$(love0) -l $< -e '(? ((cite (quote image) (quote bake) "$@") = 1) (quit 0) (quit 1))'
 
 distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(holo_ld) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
@@ -415,7 +416,8 @@ picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/
 # caja, TeX's engine, and the font metrics under it. the engine proper (mouth, build,
 # exec) is the -ini tests', borrowed by path, never carried as a unit
 cajafiles = src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l
-carryfiles = $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+# kanren and uu: the provers, which only tests, tools and the bench borrow
+carryfiles = src/apps/kanren.l src/apps/uu.l $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
@@ -429,6 +431,13 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@mkdir -p $(dir $@)
 	@for f in $(distfiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
 	@for f in $(carryfiles); do printf '\n(cite (quote verbs) (quote carry) "%s")\n' $$f; done >> $@
+	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
+	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
+# the kore set alone, the cat a small kernel bakes (src/inle/teensy41's): what kmain's own egg
+# lane loads, the crew left to /love
+out/.kore-cat.l: $(korefiles) out/lib/korelist.h
+	@echo '$(t_cat)	'$@
+	@for f in $(korefiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 out/lib/distlist.h: Makefile
@@ -500,7 +509,7 @@ rt_slice = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h \
 # in roster order, whichever object arch it is for.
 rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
-rt_isas = x64 a64 rv64 i386
+rt_isas = x64 a64 rv64 i386 arm rv32 wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
 rt_src_sys-af = $(call rt_sysrange,a b c d e f)
@@ -509,18 +518,25 @@ rt_src_sys-mr = $(call rt_sysrange,m n o p q r)
 rt_src_sys-sz = $(call rt_sysrange,s t u v w x y z)
 rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
-# i386 has no 64-bit divide: its roster carries rt.c's helpers too
+# i386, arm and rv32 have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
 rt_groups_i386 = $(rt_groups) rt
+rt_groups_arm = $(rt_groups) rt
+rt_groups_rv32 = $(rt_groups) rt
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
 out/rt/$(1)/$(2).a: $$(call rt_src,$(2)) $$(rt_h) src/tools/mkrt.l $$(rtlove_dep) $$(love0)
 	@echo 'MOON	'$$@
 	@mkdir -p $$(dir $$@)
-	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,mksys,$$(call rt_src,$(2)))
+	@$$(rtlove) src/tools/mkrt.l -m $$@ $(1) $$(patsubst %/mksys.l,$(if $(filter wasm,$(1)),,mksys),$$(call rt_src,$(2)))
 endef
 $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call rtgroup,$i,$g))))
+# arm's, for a port whose own linker pulls members (teensy41's kernel)
+rt_arm_a = $(foreach g,$(rt_groups_arm),out/rt/arm/$g.a)
+out/rt/arm.list: force_dist_list $(rt_arm_a)
+	@mkdir -p out/rt; tf=$@.$$$$.tmp; echo '$(rt_arm_a)' > $$tf; \
+	 $(note)
 out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(hosta) $(rt_a)
@@ -528,7 +544,9 @@ out/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
-xa ?= $(if $(filter a64,$a),x64,a64)
+# a kernel built for another arch on the roster is that arch's lane: its love is the one
+# projected. wasm is no lane's
+xa ?= $(if $(filter x64 a64 rv64 arm,$(filter-out $(hosta),$a)),$a,$(if $(filter a64,$a),x64,a64))
 xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64 arm),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x64 a64 rv64 arm)
@@ -555,7 +573,15 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
-	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xod)/love/user/nokern.o $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+# baked where it runs, so a kernel projected from it wakes as the host lane's does
+$(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
+	@echo 'BAKE	'$@
+	@sh src/tools/xbake.sh $(ho)/love $(xa) $(xqemu) $< $(ho)/.dist-cat.l $@
+# the lane's objects by name, for a port that links them (src/inle/teensy41's kernel face)
+$(xd)/o.list: force_dist_list $(x_o)
+	@tf=$@.$$$$.tmp; echo '$(x_o)' > $$tf; \
+	 $(note)
 fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love $(xd)/love src/tools/fatpack.l
@@ -661,9 +687,14 @@ ko = out$(hsuf)
 mooncc = LOVE_NO_IMAGE= $m mooncc
 mooncc_dep = $(mdep)
 
+# a board under the arch: kb=pi takes $a/pi/*.c over the same-named $a/*.c, defines k_pi,
+# and names the odir, the elf and the boot stub $a$(kb)
+ka = $a$(kb)
+kb_c = $(if $(kb),$(wildcard $(S)/inle/$a/$(kb)/*.c),)
+kcppflags += $(if $(kb),-Dk_$(kb),)
 # this machine's metal files, and the three TUs only a kernel has a frontend for.
-k_arch_c = $(wildcard $(S)/inle/$a/*.c)
-k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c
+k_arch_c = $(filter-out $(addprefix $(S)/inle/$a/,$(notdir $(kb_c))),$(wildcard $(S)/inle/$a/*.c)) $(kb_c)
+k_free_c = $S/inle/kmain.c $S/inle/blk.c $S/inle/hda.c $S/inle/sys.c $S/inle/efi.c
 # ..and doom, named here and not in its lane below: a rule's targets and prerequisites
 # are fixed where the rule is read, and every rule that links these is above that lane
 ifdef DOOM
@@ -684,8 +715,8 @@ k_c = $(love_c) \
   $(k_libc_c) $(k_arch_c) $(k_free_c) $(host_c)
 k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard $(S)/inle/*.h) $(wildcard $(S)/inle/$a/*.h)
 
-k_odir = $(ko)/$a
-k_elf = $(ko)/love-$a.elf
+k_odir = $(ko)/$(ka)
+k_elf = $(ko)/love-$(ka).elf
 k_pie = $(k_odir)/love.pie
 # ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
 # and one name -- wasm is nobody's arch, so the seat's letter is not in it
@@ -758,22 +789,35 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(kproject_l)); } > $@
 
 # at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
-# past its data and bound to its doors, and it WAKES the image the binary carries. $(k_pie)
-# is the other lane -- a machine this one cannot run, built from source, which carries no
-# image and WARMS the egg instead. one gate apiece: test_disk rides the projection,
-# test_kernel_a64 the pie.
+# past its data and bound to its doors, and it WAKES the image the binary carries. an arch
+# whose processes run love (a src/inle/<arch>/proc.c) projects the cross lane's love the
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
+# board (kb=) has metal files of its own, so it takes the pie.
+# $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
+# link, the kernel's bodies bound in. test_disk rides the projection, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
 k_pie_o =
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
-k_pie_o = $(if $(DOOM),,$(kart_o))
+k_pie_o = $(kart_ko)
+else
+ifneq ($(and $(if $(kb),,1),$(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+# rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
+k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
+k_pie_o = $(xkart_o)
+endif
 endif
 $(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $a $(k_pie_o) && test -s $@
+	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $(ka) $(k_pie_o) && test -s $@
+
+# the pi's firmware and qemu's raspi load a flat image, not an elf
+$(ko)/love-$(ka).img: $(k_elf) $S/tools/kflat.l $(mdep)
+	@echo 'HOLO	'$@
+	@$m $S/tools/kflat.l $(k_elf) $@ && test -s $@
 
 out/lib/korelist.h: Makefile
 	@mkdir -p out/lib
@@ -808,7 +852,7 @@ $(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h 
 # `a=` says; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
-# THE SEAT: the metal objects a projection lays beside the one binary; `love kernel` compiles
+# THE SEAT: the metal objects a projection lays beside the one binary; `love seed kernel` compiles
 # them from the source it carries and projects a bootable elf out of itself. one shape,
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
@@ -846,7 +890,7 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 endef
 $(eval $(call kart,kart,moon_d,moon0,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
-# the objects alone, for the `love kernel` verb: it drives this from the carried tree
+# the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
 	@echo '$(kart_o)' > out/kart.list
 
@@ -864,9 +908,8 @@ $(k_odir)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(mdep)
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
 kart_inc += -I$(doom_d) -I$S/inle/doom -DFEATURE_SOUND
-kart_doom_o = $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) \
-  $(moon_d)/doom/wad.o
-kart_o += $(kart_doom_o)
+kart_doom_o = $(moon_d)/inle/doom.o $(moon_d)/inle/doomsnd.o \
+  $(patsubst $(doom_d)/%.c,$(moon_d)/doom/%.o,$(doom_c)) $(moon_d)/doom/wad.o
 $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
@@ -877,10 +920,9 @@ $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-# love links its kernel's doors bare; doom's nifs want the kernel under them, so that lane links it
-love_door_o = $(if $(DOOM),$(kart_o),$(moon_d)/love/user/nokern.o)
-$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(love_door_o)
-$(ho)/love-macos.raw: $(kart_o)
+# doom's nifs ride the hosted link, their kernel names doors; the projection lays the rest
+kart_ko = $(filter-out $(kart_doom_o),$(kart_o))
+$(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(kart_doom_o)
 $(k_elf): $(k_pie_o)
 
 $(k_odir)/love/love.o: out/lib/love_version.h
@@ -894,14 +936,17 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $S/inle/%.l $(klay_l)
 	@{ echo "(borrow 'holo)"; cat $S/apps/kore/text.l $S/apps/kore/u.l; \
 	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(klay_l)) $<; } > $@
 
-$(xd)/love: $(xod)/love/user/nokern.o
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
 # kernel boots into nothing.
-$(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+$(k_lay_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
 	@$m -l $< -q -e '(lay-$* "$@" "$a")' && test -s $@
+$(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $(mdep)
+	@echo 'HOLO	'$@
+	@mkdir -p "$(dir $@)"
+	@$m -l $< -q -e '(lay-$* "$@" "$(ka)")' && test -s $@
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
@@ -981,6 +1026,34 @@ $(k_espd)/love.cmd:
 	@echo '$(t_sh)	'$@
 	@mkdir -p $(dir $@)
 	@echo 'test/kernel/all.l' > $@
+# test_uefi_stay's ESP: love.stay keeps the firmware, love.cmd runs test/kernel/stay.l, and
+# boot.l names efihello.efi for the menu to start
+k_stayd = $(ko)/esp-stay-$a
+k_stay = $(k_stayd)/EFI/BOOT/$(k_efiname) $(k_stayd)/love.elf $(k_stayd)/love.stay $(k_stayd)/love.cmd \
+  $(k_stayd)/boot.l $(k_stayd)/efihello.efi
+$(k_uefid)/efihello.o: test/kernel/c/efihello.c $(ho)/love
+	@echo 'MOON	'$@
+	@mkdir -p $(dir $@)
+	@$(mooncc) -t $a -c $< $@
+$(k_uefid)/efihello.efi: $(k_uefid)/efihello.o $(uefi_l) $(mdep)
+	@echo 'LOVE	'$@
+	@{ echo "(borrow 'holo)"; cat $(uefi_l); echo '(mkboot "$@" "$a" (list "$<"))'; } | $m
+$(k_stayd)/EFI/BOOT/$(k_efiname): $(k_uefid)/$(k_efiname)
+$(k_stayd)/love.elf: $(ko)/love-$a.elf
+$(k_stayd)/boot.l: test/kernel/boot.l
+$(k_stayd)/efihello.efi: $(k_uefid)/efihello.efi
+$(k_stayd)/EFI/BOOT/$(k_efiname) $(k_stayd)/love.elf $(k_stayd)/boot.l $(k_stayd)/efihello.efi:
+	@echo '$(t_cp)	'$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
+$(k_stayd)/love.stay:
+	@echo '$(t_sh)	'$@
+	@mkdir -p $(dir $@)
+	@echo stay > $@
+$(k_stayd)/love.cmd:
+	@echo '$(t_sh)	'$@
+	@mkdir -p $(dir $@)
+	@echo 'test/kernel/stay.l' > $@
 uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$(uname_$a) -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
@@ -993,7 +1066,7 @@ $(dl)/doom1.wad:
 
 include $(R)/test/test.mk
 #
-# THE NEST: the default install is ~/.love, a self-implying home, and what lands in it
+# THE NEST: the default install is the nest (src/tools/nest.sh, post.l's rule), and what lands in it
 # is the BINARY and the things a person reads -- man pages and the vim files. nothing
 # else needs to: the loader resolves modules out of the baked image (the modules arc,
 # rung 3) and mooncc carries its own headers and runtime (the bare cc door), so a nest
@@ -1001,7 +1074,8 @@ include $(R)/test/test.mk
 # ~/.local/bin gets a compat SYMLINK per bin, since PATH already knows it.
 
 # --- install / uninstall --------------------------------------------
-PREFIX ?= .love/
+# PREFIX unset is the nest; a distro names one, under DESTDIR
+PREFIX ?=
 VIMPREFIX ?= .vim/
 DESTDIR ?= $(HOME)/
 # BIN -- the name the interpreter installs under, and the ONE knob for the LÖVE collision
@@ -1011,7 +1085,7 @@ DESTDIR ?= $(HOME)/
 # src/love/love.h and src/love/boot/*.l keep the name -- data paths, not PATH entries.
 BIN ?= love
 BINUP = $(shell echo '$(BIN)' | tr '[:lower:]' '[:upper:]')
-d = $(DESTDIR)/$(PREFIX)
+d = $(if $(PREFIX),$(DESTDIR)/$(PREFIX),$(shell sh $(S)/tools/nest.sh))
 v = $(DESTDIR)/$(VIMPREFIX)
 
 # A shebang-carrying source tool installs as a SYMLINK to the source under the default
@@ -1042,7 +1116,7 @@ mannames = $(BIN) cook lush
 # in and links lush, which runs every other verb by name. a real PREFIX,
 # DESTDIR or BIN keeps the whole roster as files
 nestnames = $(BIN) lush
-ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love|.love/|$(HOME)/)
+ifeq ($(BIN)|$(PREFIX)|$(DESTDIR),love||$(HOME)/)
 nested = 1
 endif
 rulenames = $(if $(nested),,$(binnames))
@@ -1055,7 +1129,7 @@ inst644 = @echo '$(t_cp)	'$(abspath $@); install -D -m 644 $< $@
 
 # the PATH door, nest-only: each bin and man page gets a ~/.local compat symlink, since
 # those are already on PATH and manpath. A real PREFIX (a distro) skips them.
-ifeq ($(PREFIX),.love/)
+ifeq ($(PREFIX),)
 compat = $(DESTDIR)/.local
 installs += $(patsubst %,$(compat)/bin/%,$(rulenames)) \
   $(patsubst %,$(compat)/share/man/man1/%.1,$(mannames))
@@ -1089,7 +1163,7 @@ $d/bin/$(BIN): $(ho)/love
 # the installed interpreter, and each file's own SEAT fires on its name. libra borrows
 # its siblings by name rather than being -l'd beside them -- two tool files cannot both be
 # -l'd, since each one's seat would fire on the other's command line -- ((borrow 'lint),
-# (borrow 'salt), and (borrow 'lapiz) on the doc verb alone), and they ride the baked image.
+# (borrow 'spans), (borrow 'salt), and (borrow 'lapiz) on the doc verb alone), and they ride the baked image.
 # each source sits FIRST on its own line: instool reads $<, and a prerequisite added on
 # the grouped line below lands ahead of it -- which installs the kore shim as `cook`.
 $d/bin/cook:    src/apps/cook.l    $(ho)/love
@@ -1123,7 +1197,7 @@ $d/bin/mooncc: $(MAKEFILE_LIST)
 	@chmod 755 $@
 
 # lux, the window manager: its modules catted into one shebang script. Settings ride salt
-# (~/.love/etc/lux.l then ./.lux.l), which also names the display and the cookie when
+# (the nest's etc/lux.l then ./.lux.l), which also names the display and the cookie when
 # DISPLAY/XAUTHORITY will not do; mod+q restarts in place by exec'ing this script.
 luxfiles = src/apps/lux/core.l src/apps/lux/layout.l src/apps/lux/wire.l src/apps/lux/ewmh.l src/apps/lux/manage.l src/apps/lux/keys.l src/apps/lux/config.l src/apps/lux/lux.l
 $d/bin/lux: $(luxfiles)

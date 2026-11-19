@@ -15,13 +15,14 @@
 #include "d_event.h"
 #include "i_system.h"
 
-bool k_fb(volatile uint32_t **p, int *w, int *h, int *pitch);
-void k_scan_arm(int on);
-int k_scan_pop(void);
-uintptr_t k_clock_ms(void);
-void k_sleep(uintptr_t ms);
-void k_fb_touch(void), k_mouse_arm(int);
-int k_mouse_take(int*);
+// kmain.c's, under inle; refusals where no kernel stands under the binary
+love_door(bool, k_fb, (volatile uint32_t **p, int *w, int *h, int *pitch), (p, w, h, pitch)) { return (void) p, (void) w, (void) h, (void) pitch, false; }
+love_doorv(k_scan_arm, (int on), (on)) { (void) on; }
+love_door(int, k_scan_pop, (void), ()) { return -1; }
+love_door(uintptr_t, k_clock_ms, (void), ()) { return 0; }
+love_doorv(k_fb_touch, (void), ()) { }
+love_doorv(k_mouse_arm, (int on), (on)) { (void) on; }
+love_door(int, k_mouse_take, (int *b), (b)) { return (void) b, 0; }
 
 // laid by src/tools/mkblob.l
 extern unsigned char const doom_wad[];
@@ -69,7 +70,7 @@ void DG_DrawFrame(void) {
   for (int x = 0; x < cw; x++) d[x] = s[x]; }
  k_fb_touch(); }
 
-void DG_SleepMs(uint32_t ms) { if (hosted()) love_sleep(ms); else k_sleep(ms); }
+void DG_SleepMs(uint32_t ms) { love_sleep(ms); }
 
 uint32_t DG_GetTicksMs(void) {
  return (uint32_t) ((hosted() ? love_clock() : k_clock_ms()) - dh.epoch); }
@@ -181,8 +182,8 @@ static lvm(lvm_doom_key) {
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
-LvDef("doom", doom, 1, NULL);
-LvDef("doom-start", doom_start, 1, NULL);
-LvDef("doom-tick", doom_tick, 1, NULL);
-LvDef("doom-frame", doom_frame, 1, NULL);
-LvDef("doom-key", doom_key, 2, NULL);
+LvDef("doom", doom, 1, "doom");
+LvDef("doom-start", doom_start, 1, "doom");
+LvDef("doom-tick", doom_tick, 1, "doom");
+LvDef("doom-frame", doom_frame, 1, "doom");
+LvDef("doom-key", doom_key, 2, "doom");

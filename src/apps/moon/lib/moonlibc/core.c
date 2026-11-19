@@ -1,11 +1,8 @@
-/* moonlibc's floor: the entry, auxv, -pie relocation, errno, stdio handles */
+/* moonlibc's floor: the entry, auxv, -pie relocation, stdio handles */
 #include "impl.h"
 
 char **environ;
 static long *__auxv;
-
-int __errno_v;   /* one int: love is single-threaded */
-int *__errno_location(void) { return &__errno_v; }
 
 typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in 16-byte units */
 
@@ -111,6 +108,9 @@ int dl_iterate_phdr(int (*cb)(struct dl_phdr_info *, unsigned long, void *), voi
 
 /* overrides crt0's weak call-main tail. sp is the arg vector (argc at [0]);
  * osv is crt0's kernel guess, 0 where it has none */
+#ifndef __wasm__   /* wasm refuses constructors, and its link lays no array */
+extern __exitfn __init_array_start[], __init_array_end[];
+#endif
 void __love_start(long *sp, long osv) {
   __love_osv = osv ? osv : __love_osdetect();
   long argc = sp[0];
@@ -134,5 +134,8 @@ void __love_start(long *sp, long osv) {
   stderr->wr = 1;
   stdin->rb = __ibuf;
   stdin->rcap = sizeof __ibuf;
+#ifndef __wasm__
+  for (__exitfn *f = __init_array_start; f < __init_array_end; f++) (*f)();   /* the constructors */
+#endif
   exit(main((int) argc, argv)); }
 

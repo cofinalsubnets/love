@@ -220,7 +220,7 @@
 ; out, or the finished flipped, the dial fails and the server reads the client's alert --
 ; decrypt_error (51) -- under the client's handshake key. those dial with no trust check
 ; ('none); then the trust: its self-signed certificate is refused against a root that did not
-; sign it (unknown_ca, 48), taken by a pin in ~/.love/tls_pins, and refused under another
+; sign it (unknown_ca, 48), taken by a pin in the nest's etc/tls_pins, and refused under another
 ; pin (bad_certificate, 42). after the handshake, the stream's end: a close_notify alone ends
 ; it, and wget holds a body to its Content-Length
 (: hs-seed (unhex "893a665eebf62b9c0caf1f1de33129ee339d748b1e5f38327c4ad24e2052683d")
@@ -350,13 +350,13 @@
    ; the aead's tag compare
    _ (test (ct-same? "abc" "abc") (ct-same? "" "") !(ct-same? "abc" "abd") !(ct-same? "xbc" "abc")
            !(ct-same? "ab" "abc"))
-   ; the trust, with HOME and SSL_CERT_FILE the test's own
-   home0 (getenv "HOME") cf0 (getenv "SSL_CERT_FILE")
+   ; the trust, with the nest and SSL_CERT_FILE the test's own
+   nest0 (getenv "LOVE_NEST") cf0 (getenv "SSL_CERT_FILE")
    hdir ((cwd 0) + "/out/.tlsp-" + show (getpid 0))
-   _ (hark ["mkdir" "-p" (hdir + "/.love")])
-   _ (setenv "HOME" hdir)
+   _ (hark ["mkdir" "-p" (hdir + "/.love/etc")])
+   _ (setenv "LOVE_NEST" (hdir + "/.love"))
    _ (setenv "SSL_CERT_FILE" ((cwd 0) + "/test/host/tlschain/roote.pem"))
-   (pinfile l) (: q (open (hdir + "/.love/tls_pins") "w") _ (say q l) (close q))
+   (pinfile l) (: q (open (hdir + "/.love/etc/tls_pins") "w") _ (say q l) (close q))
    pu (hs-seat 0)
    un (hs-run pu 'honest 'verify)
    pp (hs-seat 0)
@@ -365,13 +365,19 @@
    pw (hs-seat 0)
    _ (pinfile ("127.0.0.1:" + show <pw + " spki:" + sha256 "another key" + "\n"))
    wp (hs-run pw 'honest 'verify)
-   _ (setenv "HOME" (? (string? home0) home0 ""))
+   ; a pin file at the nest's top, where it lived before etc/, moves under etc/ when asked for
+   _ (unlink (hdir + "/.love/etc/tls_pins"))
+   _ (: q (open (hdir + "/.love/tls_pins") "w") _ (say q "old\n") (close q))
+   mv (pin-path "tls_pins")
+   mvd [(uread (hdir + "/.love/etc/tls_pins")) (stat (hdir + "/.love/tls_pins"))]
+   _ (setenv "LOVE_NEST" nest0)
    _ (setenv "SSL_CERT_FILE" (? (string? cf0) cf0 ""))
    _ (hark ["rm" "-rf" hdir])
    _ (test !(<un) ((un 1) = [21 (u8 2 + u8 48)])
            (0 <= fsub (un 2) "not trusted" 0) (0 <= fsub (un 2) ("127.0.0.1:" + show <pu + " spki:") 0)
            (<pn = "the stub says hi")
-           !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= fsub (wp 2) "not the one pinned" 0))
+           !(<wp) ((wp 1) = [21 (u8 2 + u8 42)]) (0 <= fsub (wp 2) "not the one pinned" 0)
+           (mv = hdir + "/.love/etc/tls_pins") (<mvd = [1 "old\n"]) (mvd 1 = 'enoent))
    0)
 
 ;; --- a real server: openssl's s_server over each kind of key, where openssl is here ----

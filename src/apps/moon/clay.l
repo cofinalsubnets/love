@@ -6,7 +6,8 @@
 ;   (proto name PARAMS RET ATTRS)      the same on a forward declaration
 ;   (ret e PRE)                        a prefix spelling: `love_musttail return ..`
 ;   (gdecl decls STOR)                 (static) / (extern) / ()
-;   (restrict t) (named "lvm_t") (const t)   type forms
+;   (restrict t) (named "lvm_t") (const t) (volatile t)   type forms; cparse's pointer mask,
+;   (ptr t a q), shows as these over its pointee, and an entry's seventh slot over its type
 ;   (sassert e "msg") (tdef NAME TY) (sdef TAG FIELDS)   what cparse reduces to (tdef)
 ;   (arr t EXPR) (didx EXPR val)       symbolic bounds and indices
 ;   (chr 92) (note "text")             a char literal, a comment
@@ -19,7 +20,6 @@
    ; --- the small vocabulary, here so clay loads without moon ---
    join (foldl (+) "")
    (sepby s l) (l @ (a . u) (foldl (a \ x \ a + s + x) a u) "")
-   nl (string 10)
    (gripe msg) ['gripe () () () msg]
    (gripe? ('gripe . _)) 1
    ; look answers a row's first value; lookr the whole tail, for an arity range
@@ -43,8 +43,8 @@
       (clit 2 2) (land 2 2) (lor 2 2) (vastart 1 2) (vaarg 2 2) (vaend 1 1)
       ; ('sexpr items value ty): gcc's ({ .. })
       (sexpr 3 3)
-      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown
-      (ptr 1 1) (arr 2 2) (varr 2 3) (struct 1 1) (named 1 1) (const 1 1) (restrict 1 1))
+      ; type forms. ('varr elt dim [idx]): idx is gen's VLA slot, unshown; ('struct tag [align])
+      (ptr 1 3) (arr 2 2) (varr 2 3) (struct 1 2) (named 1 1) (const 1 1) (volatile 1 1) (restrict 1 1))
 
    ; --- clay-ok?: 1 or a gripe naming the first offender. a shape check, not a type check
    (clay-ok? c)
@@ -75,27 +75,34 @@
               (ulong "unsigned long") (ullong "unsigned long long") (llong "long long")
               (i128 "__int128") (u128 "unsigned __int128") (bool "_Bool"))
    (cptr? ('ptr . _)) 1
+   ; a mask, 1 const 2 volatile 4 restrict, as wrappers: restrict next to the pointer it qualifies
+   (cqw q t) (: t1 (q & 4 ? ['restrict t] t) t2 (q & 2 ? ['volatile t1] t1) (q & 1 ? ['const t2] t2))
+   (cpq t) (3 < #t ? (t 3) 0)                       ; a pointer's pointee mask
+   ; an entry's type under its object's mask, which an array's elements wear
+   (cdty d) (cqe (6 < #d ? (d 6) 0) <>d)
+   (cqe q t) (t @ (('arr || 'varr) . e . u) (<t . cqe q e . u) _ (cqw q t))
+   ; a run of wrappers -> (words base)
+   (cqrun t) (t @ (('const || 'volatile || 'restrict) . a . _) (cqrun a @ [w b] [(show <t . w) b]) _ [() t])
    ; cident? checks the first char only: parse's synthetic tags all lead with a dot
    ctag string
    (cident? a) (: c (ctag a @ "" 0 s (s 0)) (96 < c < 123 || 64 < c < 91 || c = 95))
    (cty-base t)
     (name? t ? (look spelling t (string t))
      (t @ (h . a . _)
-      (h @ 'ptr (cty-base a)
+      (h @ 'ptr (cty-base (cqw (cpq t) a))
            'arr (cty-base a)
            'fn (cty-base a)
            'named a
            'struct "struct \(ctag a)"
-           ; const on a pointer goes in the declarator (`*const`), else on the base
-           'const (cptr? a ? (cty-base a) "\(cty-base a) const")
-           'restrict (cty-base a)
+           ; a qualifier on a pointer goes in the declarator (`*const`), else on the base
+           ('const || 'volatile || 'restrict) (cqrun t @ [w b] (cptr? b ? (cty-base b) "\(cty-base b) \(sepby " " w)"))
            "int")
       "int"))
    (cty-dtor t s p)
     (t @- s (h . a . u)
-     (h @- s 'ptr (cty-dtor a "*\(s)" 1)
-          'const (cptr? a ? (cty-dtor <>a "*const \(s)" 1) (cty-dtor a s p))
-          'restrict (cptr? a ? (cty-dtor <>a "*restrict \(s)" 1) (cty-dtor a s p))
+     (h @- s 'ptr (cty-dtor (cqw (cpq t) a) "*\(s)" 1)
+          ('const || 'volatile || 'restrict)
+           (cqrun t @ [w b] (cptr? b ? (cty-dtor (cqw (cpq b) <>b) "*\(sepby " " w) \(s)" 1) (cty-dtor b s p)))
           'arr (cty-dtor a "\(p ? "(\(s))" s)[\(cdim <u)]" 0)
           'varr (cty-dtor a "\(p ? "(\(s))" s)[\(ce <u 0)]" 0)
           'fn (cty-dtor a "\(p ? "(\(s))" s)\(cptys <u)" 0)))
@@ -196,7 +203,7 @@
         "/*?*/"))
    ; sizeof's operand: a type or an expression, by the head
    (ctype? t) (name? t ? (elem t '(char short int long uint void double float))
-                 (two? t && elem <t '(ptr arr struct named const restrict fn)))
+                 (two? t && elem <t '(ptr arr struct named const volatile restrict fn)))
    ; a nested initializer breaks the line, a flat one does not
    (cinitv x) (two? x && elem <x '(dfield didx) ? <>>x x)
    ; a function, not a point-free value: the recursive group compiles before a value
@@ -216,11 +223,11 @@
    (cstor st) (atom? st ? "" "\(sepby " " (map string st)) ")
    ; a 4th element is a register variable's asm("reg") pin; a 5th the alignment ask
    (pin? d) (two? >>>d && <>>>d)
-   (cdtor1 d) (: nm <d t <>d v <>>d
+   (cdtor1 d) (: nm <d t (cdty d) v <>>d
                  (cty-dtor t nm 0 + (pin? d ? " asm(\(cstrlit <>>>d))" "")
-                  + (4 < #d ? " __attribute__((aligned(\(d 4))))" "")
+                  + (4 < #d && 0 < d 4 ? " __attribute__((aligned(\(d 4))))" "")
                   + (atom? v ? "" " = \(cinit v 0)")))
-   (cdecls ds) (cty-base <><ds @ b
+   (cdecls ds) (cty-base (cdty <ds) @ b
                   "\(foldl (a \ d \ a || pin? d) () ds ? "register " "")\(b) \(sepby ", " (map cdtor1 ds))")
 
    ; --- statements: one space per level
@@ -234,20 +241,38 @@
            (<l @ c (c = 10 ? (go "\(acc)\(line n (one1 cur))" "" >l)
                       (go acc "\(cur)\(string c)" >l))))
        (go "" "" (map txt (jot #txt))))
-   ; --- K&R braces: copen lays header and body; cclose the closer, with a tail
-   ; (` while (c);`) that falls to its own line under a non-block body
+   ; --- the tree's braces: the opener ends its header, the closer its block's last line, an else
+   ;     starts its own, and a bare body joins its header's line if it fits
    (blk? s) (two? s && <s = 'blk)
-   (copen n pre hdr s)
-    (blk? s ? (line n "\(pre)\(hdr) {" + join (map (x \ cstmt x (n + 1)) <>s))
-       (line n "\(pre)\(hdr)" + cstmt s (n + 1)))
-   (cclose n s tail)
-    (? (blk? s) (line n "}\(tail)") #tail (line n tail) "")
+   (lastnl t k) (k < 0 || t k = 10 ? k (lastnl t (k - 1)))
+   (lead t k) (sits? t k " " ? (lead t (k + 1)) k)
+   (one-line? t) (#t <= 120 && lastnl t (#t - 2) < 0)
+   ; t laid at n + 1 and a closer; it ends the last line unless that line is a note, label or directive
+   (cclose n t tail)
+    (: k (lastnl t (#t - 2) + 1) b (snip t (lead t k) (#t - 1))
+     (#b && !(starts? b "//") && !(starts? b "#") && !(sits? b (#b - 1) ":")
+      ? (snip t 0 (#t - 1) + " }\(tail)\n") (t + line n "}\(tail)")))
+   (cblk n hdr items tail) (cclose n (line n "\(hdr) {" + join (map (x \ cstmt x (n + 1)) items)) tail)
+   ; an if a bare body would leave open to a following else
+   (open-if? s)
+    (two? s && (s @ ('if _ _ e) (atom? e || open-if? e)
+                    ('if _ _) 1
+                    ['while _ b] (open-if? b)
+                    ['for _ _ _ b] (open-if? b)
+                    ['blk [x]] (open-if? x)
+                    0))
+   ; a header and its body; shut braces an open if, for an else to come
+   (cbody n hdr s shut)
+    (: (joined t) (one-line? t && !(elem 123 t) ? (pad n + hdr + " " + snip t (n + 1) #t @ j (#j <= 111 ? j ())) ())
+       (? (blk? s) (cblk n hdr <>s "")
+          (shut && open-if? s) (cblk n hdr [s] "")
+          (cstmt s (n + 1) @ t (joined t || line n hdr + t))))
 
    ; a label or case outdents by one against the statements it labels
    (cstmt s n)
     (atom? s ? ""
        (s @
-        ['blk items] (line n "{" + join (map (x \ cstmt x (n + 1)) items) + line n "}")
+        ['blk items] (cclose n (line n "{" + join (map (x \ cstmt x (n + 1)) items)) "")
         ['note x] (cnote n x)
         ['decl d] (line n "\(cdecls d);")
         ['sdecl d] (line n "static \(cdecls d);")
@@ -264,24 +289,23 @@
         ['case v w] (line (n < 1 ? 0 (n - 1)) "case \(v) ... \(w):")
         ['dflt] (line (n < 1 ? 0 (n - 1)) "default:")
         ('if . _ . _ . _) (cif s n "")     ; lax: `if 2 3`, and cif reads the else itself
-        ['while c b] (copen n "" "while (\(ce c 0))" b + cclose n b "")
-        ['do b c] (copen n "" "do" b + cclose n b " while (\(ce c 0));")
+        ['while c b] (cbody n "while (\(ce c 0))" b 0)
+        ['do b c] (blk? b ? (cblk n "do" <>b " while (\(ce c 0));") (line n "do" + cstmt b (n + 1) + line n "while (\(ce c 0));"))
         ['for i0 c0 p0 b]
          (: i (cfor i0) c (two? c0 ? (ce c0 0) "") p (two? p0 ? (ce p0 0) "")
             hdr (!#(i + c + p) ? "for (;;)"
                    "for (\(i); \(c); \(p))")
-            (copen n "" hdr b + cclose n b ""))
-        ['switch c items] (line n "switch (\(ce c 0)) {"
-                           + join (map (x \ cstmt x (n + 1)) items) + line n "}")
+            (cbody n hdr b 0))
+        ['switch c items] (cblk n "switch (\(ce c 0))" items "")
         ['asm t o1 o2 cl lb _] (casm n "__attribute__((holo)) " t o1 o2 cl lb)   ; the holo mark
         ['asm t o1 o2 cl lb] (casm n "" t o1 o2 cl lb)
         (line n "\(ce s 0);")))
-   ; the else-if chain kept flat
+   ; the else-if chain kept flat, each else on its own line
    (cif s n pre)
     (: c <>s th <>>s e <>>>s hdr "\(pre)if (\(ce c 0))"
-       (? (atom? e) (copen n "" hdr th + cclose n th "")
-          (<e == 'if) (copen n "" hdr th + cif e n (blk? th ? "} else " "else "))
-          (copen n "" hdr th + copen n (blk? th ? "} " "") "else" e + cclose n e "")))
+       (? (atom? e) (cbody n hdr th 0)
+          (<e == 'if) (cbody n hdr th 1 + cif e n "else ")
+          (cbody n hdr th 1 + cbody n "else" e 0)))
    ; a for's first clause, (decl ..) or (expr ..) unwrapped; () empty
    (cfor a) (? (atom? a) ""
                (<a = 'decl) (cdecls <>a)
@@ -295,8 +319,8 @@
                  " : \(sepby ", " (map (o \ "\(cstrlit <o)(\(ce <>o 0))") l))")
 
    ; --- top level ----------------------------------------------------------------
-   (cparam p) (cty-dtor <>p <p 0)
-   (cparams ps) (map (p \ "\(cty-base <>p) \(cparam p)") ps @ b
+   (cparam p) (cty-dtor (cdty p) <p 0)
+   (cparams ps) (map (p \ "\(cty-base (cdty p)) \(cparam p)") ps @ b
                    (two? ps ? (sepby ", " b) "void"))
    ; a signature, shared by cfn and proto so they cannot drift
    (csig nm at r ps)
@@ -362,6 +386,8 @@
             (gripe "(vastart ap) lost va_start's last named parameter at parse")
            (<x = 'struct && !(cident? <>x))
             (gripe "(struct \(show <>x)) -- an anonymous tag is not a C identifier")
+           (<x = 'struct && two? >>x)
+            (gripe "(struct \(show <>x) \(show <>>x)) -- a typedef's ask has no spelling on the type")
            (<x = 'flo && !(cfinite? <>x))
             (gripe "(flo \(<>x)) -- C has no literal for an infinity or a nan")
            (<x = 'edef && atom? <>>x)
@@ -387,7 +413,7 @@
           (<c = 'prog) (citems <>c)
           (ctop1 c)))
    ; (fn name params body [ret [attrs]]); an absent ret prints `int`
-   (cfnl nm ps b r at) (copen 0 "" (csig (ctag nm) at r ps) b + cclose 0 b "")
+   (cfnl nm ps b r at) (blk? b ? (cblk 0 (csig (ctag nm) at r ps) <>b "") (line 0 (csig (ctag nm) at r ps) + cstmt b 1))
    (cfn t)
     (t @ ['fn nm ps b r at] (cfnl nm ps b r at)
          ['fn nm ps b r] (cfnl nm ps b r ())

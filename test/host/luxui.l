@@ -29,10 +29,10 @@
  _ (listen ['unix (rdir + "/" + stale)] @ p (hot? p ? (close p)))
  _ (must 'stale-planted (any (= stale) (readdir rdir)))
 
- ; a scratch HOME per pid: the box's ~/.love/etc/lux.l stays out, two runs keep apart
+ ; a scratch nest per pid: the box's etc/lux.l stays out, two runs keep apart
  luxhome ("out/.luxui-home-" + show (getpid 0))
  _ (mkdir luxhome 493)
- ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome)
+ ph (tether ["env" ("DISPLAY=:" + show dn) ("HOME=" + luxhome) ("LOVE_NEST=" + luxhome + "/.love")
            "out/love" "lux"])                                       ; the carried unit, raised by name
  _ (must 'lux-up (two? ph))
  _ (enlist 'ph <ph)

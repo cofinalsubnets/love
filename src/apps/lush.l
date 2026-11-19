@@ -11,7 +11,7 @@
 (module 'lush
 (borrow 'hashes)
 ; posix doors taken by value: lush's entries run from a foreign chain, where a global
-; name reads the live book. spawn, wait, fork, pipe, dup .. stay global: inle shadows them.
+; name reads the live book. spawn, wait .. stay global: inle shadows them.
 (: chdir (cite 'posix 'chdir)      chmod (cite 'posix 'chmod)
    close (cite 'posix 'close)      cwd (cite 'posix 'cwd)
    fchdir (cite 'posix 'fchdir)
@@ -22,6 +22,10 @@
    sigclear (cite 'posix 'sigclear) sigfd (cite 'posix 'sigfd)
    childign (cite 'posix 'childign)
    umask (cite 'posix 'umask)     rusage (cite 'posix 'rusage)
+   pipe (cite 'posix 'pipe)       fdopen (cite 'posix 'fdopen)
+   dup (cite 'posix 'dup)         dup2 (cite 'posix 'dup2)
+   fork (cite 'posix 'fork)       glean (cite 'posix 'glean)
+   getuid (cite 'posix 'getuid)   setpg (cite 'posix 'setpg)
    rlimit (cite 'posix 'rlimit)   setrlimit (cite 'posix 'setrlimit)
    sigign? (cite 'posix 'sigign?)  sigtake (cite 'posix 'sigtake)
 
@@ -1395,8 +1399,8 @@
            0))
    (sh-imgfn S w) (sh-pathfresh S 0, peep (S 'sh-imgc) w 'no @ 'no (sh-imgask S w @ f (pin (S 'sh-imgc) w f, f)) v v)
    (sh-dotl? w) (: n #w (2 < n && snip w (n - 2) n = ".l"))
-   ; inle and wasm have no fork: a process there is a task
-   (sh-forkseat? _) (? (elem 'love-os (names ())) !(elem (ev 'love-os) '(inle wasm)) 1)
+   ; inle and wasm fork only in a process whose kernel copies it (posix's forks); elsewhere a stage is a task
+   (sh-forkseat? _) (? (elem 'love-os (names ())) (!(elem (ev 'love-os) '(inle wasm)) || ?(cite 'posix 'forks)) 1)
    ; a .l script's #! line -> the argv it starts under, or () when that is not this
    ; binary (env's love by PATH, a spelled path by stat)
    (sh-shebang S p)
@@ -2460,7 +2464,7 @@
 
 ; --- lush 🐚 the line -- prompt, history, completion, the repl loops ---
 ;
-; line editing is bao's edlnc. ~/.lush_history appends on Enter, so a crash loses nothing.
+; line editing is bao's edlnc. the nest's run/lush_history appends on Enter, so a crash loses nothing.
 
 (module 'lush
 (borrow 'cli)
@@ -2510,12 +2514,12 @@
         (pst + sh-pen-cwd + sh-vis (sh-homely ("" + sh-pwd S)) + sh-pen-off + pbr
              + (getuid 0 @ 0 " # " " $ ")))
 
-   ; --- history: ~/.lush_history, oldest first on disk, newest first in hand
+   ; --- history: the nest's run/lush_history, oldest first on disk, newest first in hand
    (sh-expl s)                                  ; string -> charlist
      (: n #s
         (go i) (i @ ^n () (s i . go (i + 1)))
         (go 0))
-   (sh-histpath _) (("" + (getenv "HOME")) + "/.lush_history")
+   (sh-histpath _) (cite 'path 'nest 0 + "/run/lush_history")
    (sh-histload S _)
      (: p (sh-histpath 0)
         (? (two? (stat p))
@@ -2531,7 +2535,10 @@
            ()))
    (sh-histput S ln)                              ; a new history is laid 0600: it holds secrets
      (: hp (sh-histpath 0)
-        _ (? (atom? (stat hp)) (: fd (openfd hp 3) (? (charm? fd) (close fd) 0)) 0)
+        _ (? (atom? (stat hp))
+             (: _ (each (cite 'path 'pprefixes hp) (d \ mkdir d 448))
+                fd (openfd hp 3) (? (charm? fd) (close fd) 0))
+             0)
         o (open hp "a")
         (? (hot? o) (say o (ln + "\n"), flush o, close o) 0))
 
@@ -2697,7 +2704,7 @@ no file and no -c is a shell: a repl on a tty, cooked script off stdin otherwise
                 (: _ (heard () ? () (hear lush-help))
                    _ (pin S 'sh-tty 1)
                    erc ("" + getenv "ENV")
-                   rc (erc || "" + getenv "HOME" + "/.lushrc")
+                   rc (erc || cite 'path 'nest 0 + "/etc/lushrc")
                    _ (raw 0) _ (sh-profiles S 0) _ (sh-src S rc) _ (raw 1)
                    (sh-loop S "" (sh-histload S 0)))
                 (sh-profiles S 0, (sh-cooked S) ""))))

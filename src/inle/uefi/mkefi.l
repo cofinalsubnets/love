@@ -1,9 +1,10 @@
 ; src/inle/uefi/mkefi.l -- the firmware seam in holo IR, linked with mooncc's loader objects
 ; into the PE32+ for the ESP (BOOTX64.EFI / BOOTAA64.EFI). runs after holo/{elf,obj,link,pe}.l.
 ; the thunks are laid first so the PE entry is the first text byte. x86-64 UEFI is ms_abi
-; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go carries weight.
+; against sysv C, so both directions shuffle; a64 is AAPCS64, so only efi_go and efi_stay
+; carry weight.
 ;   efiboot -- firmware enters here.
-;   efi_call -- every UEFI service goes back OUT through this.
+;   efi_call -- every UEFI service goes back OUT through this; efi_back, a protocol of ours IN.
 ;   efi_go(tables, entry) -- the instructions C cannot spell: interrupts off,
 ;     our tables in, jump to the kernel. never returns.
 
@@ -33,11 +34,43 @@
       (callr r0)
       (add sp sp 56)
       (ret)
+      ;; efi_call6: a sixth (LoadImage's out handle) rides the sysv stack at entry+8
+      (label efi_call6)
+      (ld r0 sp 8)                ; f
+      (sub sp sp 56)
+      (st sp 40 r0)
+      (st sp 32 r8)               ; e
+      (mov r0 r6)                 ; fn
+      (mov r8 r7)
+      (mov r7 r1)
+      (mov r1 r5)
+      (callr r0)
+      (add sp sp 56)
+      (ret)
+      ;; efi_back: a protocol we install, called by firmware or a child image. `this` (rcx)
+      ;; leads with the ms entry, then the sysv C it lands in: fn(this, rdx, r8, r9, arg5)
+      (label efi_back)
+      (push r5)
+      (push r6)
+      (sub sp sp 8)
+      (ld r0 r1 8)                ; this->fn
+      (mov r6 r1)                 ; rdi = this
+      (mov r5 r2)                 ; rsi = ms rdx
+      (mov r2 r7)                 ; rdx = ms r8
+      (mov r1 r8)                 ; rcx = ms r9
+      (ld r7 sp 64)               ; r8 = the ms stack arg, past the shadow, the two pushes and the pad
+      (callr r0)
+      (add sp sp 8)
+      (pop r6)
+      (pop r5)
+      (ret)
       ;; efi_go(pml4, entry): the new tables identity-map the low 4G, so the loader and its
       ;; stack ride through. EFER.NXE first: the tables NX the hhdm, and bit 63 is reserved
       ;; while NXE is clear. rdmsr/wrmsr spare rdi and rsi.
       (label efi_go)
       (raw (250))                 ; cli
+      ;; efi_stay(pml4, entry): the same with interrupts left on, the firmware's to field
+      (label efi_stay)
       (raw (185 128 0 0 192))     ; mov $0xC0000080, %ecx -- EFER
       (raw (15 50))               ; rdmsr
       (raw (13 0 8 0 0))          ; or $0x800, %eax -- NXE
@@ -60,6 +93,21 @@
       (mov r7 r0)
       (mov r0 r1) (mov r1 r2) (mov r2 r3) (mov r3 r4) (mov r4 r5) (mov r5 r6)
       (jmpr r7)
+      ;; efi_back: a protocol we install. `this` leads with this entry, then the C it lands in,
+      ;; which takes the arguments as they came
+      (label efi_back)
+      (ld r9 r0 8)
+      (jmpr r9)
+      ;; efi_stay(ttbr1, entry, tcr): love.stay's switch. TTBR0, MAIR and VBAR stay the
+      ;; firmware's, interrupts on; TTBR1 walked from here
+      (label efi_stay)
+      (msr ttbr1_el1 r0)
+      (msr tcr_el1 r2)
+      (dsb ish)
+      (tlbi vmalle1 zr)
+      (dsb ish)
+      (isb)
+      (jmpr r1)
       ;; efi_go(tables, entry): x0 is TTBR0's root, TTBR1's the page after (loader.c lays them
       ;; adjacent). the MMU is on and both maps identity this code: a switch, made by TLBI + ISB.
       (label efi_go)
@@ -72,13 +120,14 @@
       (msr ttbr0_el1 r0)
       (add r2 r0 4096)
       (msr ttbr1_el1 r2)
+      (isb)                       ; the new regime in force first, so no walk refills from the old
       (dsb ish)
       (tlbi vmalle1 zr)
       (dsb ish)
       (isb)
       (jmpr r1))                  ; the kernel's entry, never back
 
-   (efi-exports arch) (arch @ "a64" '("efi_call" "efi_call6" "efi_go") '("efi_call" "efi_go"))
+   efi-exports '("efi_back" "efi_call" "efi_call6" "efi_go" "efi_stay")
    (efi-tgt arch) (arch @ "a64" 'a64 'x64)
    (efi-ir arch)  (arch @ "a64" efi-ir-a64 efi-ir-x64)
    (mkboot out arch objs)
@@ -86,5 +135,5 @@
                        (two? r ? [f <>r] (say err ("mkefi: cannot open " + f), quit 1)))
                  objs)
        (pelink (efi-tgt arch)
-               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () (efi-exports arch) () () () () () () ()))] .  srcs)
+               (["efi0" (string (objelf (efi-tgt arch) (efi-ir arch) () efi-exports () () () () () () ()))] .  srcs)
                out)))

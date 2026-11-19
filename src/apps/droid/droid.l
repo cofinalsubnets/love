@@ -6,7 +6,7 @@
 ; the window, input and logcat and starts LOVE (an a64 love, already baked: its library
 ; directory is read-only) from lib/ABI/liblove.so. MAIN.l and the FILEs ride as assets
 ; in the app's data directory, love's cwd and HOME. the apk is signed (scheme v2) by a p-256
-; key in ~/.love/etc/apk.pem, made on first use: android takes an update only under the same
+; key in the nest's etc/apk.pem, made on first use: android takes an update only under the same
 ; certificate, so keep that file.
 ;
 ; the face (the wire is bridge.c's header):
@@ -14,7 +14,7 @@
 ;   (face-next s)        -> [kind a b c], () when the bridge is gone
 ;   (face-frame s w h fb) a frame of w*h words 0x00rrggbb, scaled onto the window
 (module 'droid
-(borrow '(posix bytes hashes gz tar tls cli))
+(borrow '(posix bytes hashes gz tar tls tree cli))
 (:
    ap-net "android.permission.INTERNET"           ; a normal permission: granted at install, never asked
    ; --- the face ---
@@ -335,7 +335,7 @@
       (android.permission. unless named in full).
       -s keeps the app's loves through a swipe or back: a foreground service and its notification.
       -V the version code, -v its name, -T the sdk it targets, -R not debuggable.
-      the key signing it lives in ~/.love/etc/apk.pem
+      the key signing it lives in the nest's etc/apk.pem
     """)
    (aab-usage _) (puts """
     usage: love aab [-o OUT.aab] [-p PACKAGE] [-n LABEL] [-L LOVE].. [-b LINE] [-s] [-P PERM].. [-V CODE] [-v NAME] [-T SDK] MAIN.l [FILE..]
@@ -373,7 +373,7 @@
                (udie 1 "apk: name an a64 love with -L (`love seed a64 DIR`, baked once on an a64 machine)"))
        libs (map (lov \ uread lov @ r (? (two? r) (: lb <>r [(ap-abi lb lov) lb]) (udie 1 ("apk: cannot read " + lov)))) lovs)
        ks (aab ? () (apk-keys 0))
-       _ (aab || two? ks ? 0 (udie 1 "apk: no key in ~/.love/etc/apk.pem, and none could be made"))
+       _ (aab || two? ks ? 0 (udie 1 "apk: no key in \(cite 'path 'nest 0)/etc/apk.pem, and none could be made"))
        tmp ((ap-or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
        _ (mkdir tmp 448)
        abis (map (l \ (: abi <l [[("lib/" + abi + "/libbridge.so") (bridge-so tmp abi)] [("lib/" + abi + "/liblove.so") <>l]])) libs)

@@ -73,7 +73,7 @@
        data-rva (d0 - pe-ibase)
        data-vsz (bend - d0)
        reloc-rva (aup (data-rva + data-vsz) 4096)
-       reloc (pe-relocs (rev (peep relbox 0 ())))
+       reloc (pe-relocs (rev (relbox 0)))
        rsz #reloc
        rraw (aup rsz pe-falign)
        img-sz (reloc-rva + aup rsz 4096)

@@ -8,11 +8,13 @@
 ; past the data copy; the `love kernel` verb projects the running binary.
 
 (: (kparams arch)                       ; target, kernel base, entry symbol, image window
-    ; x64's image runs in the upper half, leaving the lower half to a process; boot stays physical
+    ; the images run in the upper half, leaving the lower half to a process; boot stays physical
     (arch @ "x64"  ['x64   0x200000   "kmain" 0xffffff8000000000]
-            "a64"  ['a64 0x40200000 "a64boot" 0]
+            "a64"  ['a64 0x40200000 "a64boot" 0xffffff8000000000]
+            ; the pi's firmware enters at the start of the flat image, so boot leads
+            "a64pi" ['a64 0x80000 "a64boot" 0xffffff8000000000]
             ; entered at the lowest load, not the entry symbol -- kproject lays boot first
-            "rv64" ['rv64  0x80200000 "rvboot" 0]
+            "rv64" ['rv64  0x80200000 "rvboot" 0xffffffe000000000]
             (scare 'kproject-arch arch))
    (kread p) (uread p @ r (two? r ? [p <>r] (scare 'kproject-open p)))
 
@@ -39,10 +41,10 @@
       dl ((: (go l) (? (atom? l) (scare 'kproject-data) (0 < <l 4 & 2) <l (go >l))) pls)
       pend ((: (go l m) (? (atom? l) m (go >l (: e (<l 0 + <l 3) (m < e ? e m))))) pls 0)
       dcopy [(ld-align 4096 pend) (dl 1) (dl 2) (dl 2) 4]
-      loads (pls + [dcopy])
       (sho i) (shoff + i * 64)
       shstro (rle64 pie (sho shstrx + 24))
       (sname i) (ld-cstr pie (shstro + rle32 pie (sho i)))
+      loads (pls + [dcopy])
       (shfind nm) ((: (go i) (? (shnum <= i) (scare 'kproject-section nm)
                                 (sname i = nm) i (go (i + 1)))) 1)
       relo (: x (shfind ".love.rela") (rle64 pie (sho x + 24)))
@@ -76,9 +78,7 @@
       bias (xw + ld-align 4096 bootend)
       ; --- the kernel's objects, laid past the image's data copy and linked against its symbols
       (gapz a b) (a < b ? [(ld-zeros (b - a))] ())
-      ; a pie with a kernel inside (the doom lane) takes none
-      own? ((: (go e) (symo + symz <= e ? 0 (ld-cstr pie (stro + rle32 pie e)) = "kmain" ? 1 (go (e + 24)))) symo)
-      kobjs (own? ? () (map (kb \ ld-read <kb <>kb mach) kobs))
+      kobjs (map (kb \ ld-read <kb <>kb mach) kobs)
       kv (ld-align 4096 (dcopy 0 + dcopy 3))
       k0 (bias + kv)
       kt1 (ldlayn 'text (ldlay1 'text k0 kobjs) kobjs)
@@ -88,63 +88,63 @@
       kd1 (ldlayn 'data (ldlay1 'data kd0 kobjs) kobjs)
       kend (ldlayn 'bss (ldlay1 'bss kd1 kobjs) kobjs)
       kload [kv #pie (kd1 - k0) (kend - k0) 7]
-      loads2 (loads + [kload])
-      top ((: (go l m) (? (atom? l) m
-                          (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
-           loads2 0)
       glo (ldsyms (objs + kobjs))
       kglo (ldsyms kobjs)
       doors {}
-      ; the pie's globals join the book (boot's own stand), so a boot reloc can name a kernel symbol
+      ; the pie's globals join the book (boot's own stand), so a boot reloc can name a kernel symbol;
+      ; one the kernel defines too is a door, but a strong one stands over the kernel's weak
       _ ((: (go e)
              (? (symo + symz <= e) 0
                 (: sx (rle16 pie (e + 6)) bind (pie (e + 4) >> 4)
                    _ (? (0 < sx < 0xff00 && elem bind '(1 2))
                         (: nm (ld-cstr pie (stro + rle32 pie e))
-                           (? (two? (kglo nm)) (pin doors nm (rle64 pie (e + 8)))
+                           (? (two? (kglo nm) && (bind = 2 || !(kglo nm 1))) (pin doors nm (rle64 pie (e + 8)))
+                              (two? (kglo nm)) (pin glo nm [(bias + rle64 pie (e + 8)) 0])
                               (two? (glo nm)) 0
                               (pin glo nm [(bias + rle64 pie (e + 8)) 0])))
                         0)
                    (go (e + 24))))) symo)
+      ; each door's slot (love.h's love_door), a word of the image's data: the kernel's body, where
+      ; the copy a process lays from keeps the hosted one
+      slots ({} @ t ((each (keys doors) (\ nm (pie-sym (nm + "__slot") @ v
+                                                (charm? v ? (pin t v <(glo nm)) (scare 'kproject-slot nm))))),
+                     t))
+      loads2 (loads + [kload])
+      top ((: (go l m) (? (atom? l) m
+                          (go >l (: e (bias + <l 0 + <l 3) (m < e ? e m)))))
+           loads2 0)
       eaddr (: r (glo entnm) (two? r ? <r (scare 'kproject-entry entnm)))
       ; riscv keeps its own reloc numbers, so the machine says which namespace ldpatch reads
       nifx (shfind ".love.nifs")
       nifa (bias + rle64 pie (sho nifx + 16))
       nifz (rle64 pie (sho nifx + 32))
+      ; the bracket is whole rows from the first: a skewed one binds every nif to its neighbour
+      _ (nifa % 8 = 0 && nifz % 24 = 0 ? 0 (scare 'kproject-nifs [nifa nifz]))
       cx [glo nifa (nifa + nifz) b0 b0 () (mach = 243) () (backends tgt) (ld-extents (objs + kobjs)) ()]
       (ksym nm) (: r (glo nm) (two? r ? (<r - bias) (scare 'kproject-ksym nm)))
       kt (ldemitn cx 'text kobjs (ldemit cx 'text k0 kobjs ()))
       ko (ldemitn cx 'rodata kobjs (ldemit cx 'rodata ko0 kobjs (>kt + (gapz <kt ko0))))
       kd (ldemitn cx 'data kobjs (ldemit cx 'data kd0 kobjs (>ko + (gapz <ko kd0))))
       kbytes (foldl (\ a p (a + (string? p ? p (string (cask p))))) "" >kd)
-      ; each door's refusing body takes a jump to the kernel's own; the rest of its word is kept
-      (door-site nm)
-       (: v (doors nm)
-          f (va2off v)
-          rel (<(glo nm) - (bias + v))
-          [v (arch @
-              "x64" (0xe9 + (rel - 5 & 0xffffffff) * 256 + (rle32 pie (f + 5) & 0xffffff) * 1099511627776)
-              "a64" (0x14000000 + (rel // 4 & 0x3ffffff) + rle32 pie (f + 4) * 4294967296)
-              ; rv64: auipc t0, then jalr through it
-              (: lo ((rel + 0x800 & 0xfff) - 0x800)
-                 (0x297 + (rel - lo & 0xfffff000) + (lo & 0xfff) * 1048576 * 4294967296 + 0x28067 * 4294967296)))])
-
-      ; --- the patch list: love_rela sites slide by bias; k_image_top, k_pie_base and k_pie_data
-      ; take the image's far edge (physical), the pie's base and the data copy. ascending, for
-      ; the one-pass splice below
+      ; --- the patch list: love_rela sites slide by bias, but a door's slot takes the kernel's
+      ; body; k_image_top, k_pie_base and k_pie_data take the image's far edge (physical), the
+      ; pie's base and the data copy. ascending, for the one-pass splice below
       (ins s l) (? (atom? l) [s]
                    (<l 0 < s 0) (<l . ins s >l)
                    (s . l))
-      sites (foldl (\ a nm (ins (door-site nm) a))
+      sites (foldl (\ a v (ins [v (slots v)] a))
             (ins [(ksym "k_image_top") (top - xw)]
             (ins [(ksym "k_pie_base") bias]
             (ins [(ksym "k_pie_data") (bias + dcopy 0)]
-                 (rev ((: (go k acc)
-                           (? (relz <= k) acc
-                              (: v (rle64 pie (relo + k))
-                                 (go (k + 8) ([v (bias + rle64 pie (va2off v))] . acc)))))
-                      0 ())))))
-            (sort (keys doors)))
+            (rev ((: (go k acc)
+                      (? (relz <= k) acc
+                         (: v (rle64 pie (relo + k))
+                            (go (k + 8) (!(nil? (peep slots v ())) ? acc
+                                           ([v (bias + rle64 pie (va2off v))] . acc))))))
+                 0 ())))))
+            (sort (keys slots)))
+      ; a site within a word of the one before would splice its bytes twice
+      _ ((: (go l) (? (atom? >l) 0 (<>l 0 < <l 0 + 8) (scare 'kproject-sites [<l <>l]) (go >l))) sites)
       ; one load's bytes with its patches spliced in
       (spliced go0 va fsz ss)
        (: src (go0 < #pie ? pie kbytes)

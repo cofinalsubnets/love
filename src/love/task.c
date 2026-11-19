@@ -10,6 +10,9 @@ op11(lvm_worn, (intptr_t) *task_io(g))
 // checks it before it jumps: a child inherits its parent's help, continuation and all
 op11(lvm_myself, (intptr_t) g->tasks[2].x)
 
+// a park's poll bits: negated events mean the fd or the clock, whichever comes first, wakes it
+static love_inline int wev(int e) { return e < 0 ? -e : e; }
+
 // lvm_yield_sw_mono can't call wait_fds directly with a stack record
 static love_noinline void wait_one(int fd, int events, uintptr_t ms) {
   struct wait_fd w = { .fd = fd, .events = (short) events };
@@ -26,8 +29,10 @@ static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = g->next_wake_at;
  g->next_wait_fd = -1;
  g->next_wait_events = wait_in;
  g->yield_ctr = 0;
- if (my_wake) for (uintptr_t now; my_wake > (now = love_clock());)
-  my_wait_fd >= 0 ? wait_one(my_wait_fd, my_events, my_wake - now) : love_sleep(my_wake - now);
+ if (my_wake) for (intptr_t dt; (dt = tick_cmp(my_wake, love_tick())) > 0;) {
+  if (my_wait_fd < 0) love_sleep((uintptr_t) dt);
+  else if (my_events < 0 && ready(my_wait_fd, -my_events)) break;
+  else wait_one(my_wait_fd, wev(my_events), (uintptr_t) dt); }
  else if (my_wait_fd >= 0)
   while (!ready(my_wait_fd, my_events)) wait_one(my_wait_fd, my_events, 0);
  love_musttail return Continue(); }
@@ -61,6 +66,10 @@ static love_inline union u *run_splice_at(struct g *g, union u *tail, union u *n
 
 // a held task (pause) keeps its deadline negated: never due, and back whole at resume
 static love_inline int held(union u const *n) { return getcharm(n[3].x) < 0; }
+// wake_at come: 0 always, a held one never, a tick by its difference from now
+static love_inline int due(union u const *n, uintptr_t now) {
+ intptr_t wa = getcharm(n[3].x);
+ return wa == 0 || (wa > 0 && tick_cmp((uintptr_t) wa, now) <= 0); }
 
 // the head's saved ip is stale, so me_live answers for it; a pid with no node is gone
 static love_inline int task_live(struct g *g, union u *head, intptr_t pid, int me_live) {
@@ -84,18 +93,21 @@ static love_inline int polled_ready(struct wait_fd const *fds, int nfds, int *cu
 // runnable and the wait is never reached; the wait_fd arm is a floor, not a path
 static union u *find_runnable(struct g *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
-  if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
+  if (n[1].m->ap != lvm_task_exit && due(n, now)) {
    if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[8].x), me_live)) continue;
    int wf = (int) getcharm(n[4].x);
    if (wf < 0 || wait_buffered(g, n[1].m->ap, n[8].x, wf)
-       || ready(wf, (int) getcharm(n[5].x))) return n; }
+       || ready(wf, wev((int) getcharm(n[5].x)))) return n; }
  return NULL; }
 
 // deadline come, port holding bytes, or fd ready; with ask clear, only syscall-free terms
 static love_inline int parked_ready(struct g *g, union u *n, uintptr_t now,
                                   struct wait_fd const *fds, int nfds, int *cur, int ask) {
- if (n[1].m->ap == lvm_task_exit || (uintptr_t) getcharm(n[3].x) > now) return 0;
  int wf = (int) getcharm(n[4].x), ev = (int) getcharm(n[5].x);
+ if (n[1].m->ap == lvm_task_exit || held(n)) return 0;
+ if (!due(n, now)) { if (ev >= 0) return 0; }
+ else if (ev < 0) return 1;                                    // the clock came first
+ ev = wev(ev);
  if (wf < 0 || wait_buffered(g, n[1].m->ap, n[8].x, wf)) return 1;
  int pr = polled_ready(fds, nfds, cur, wf, ev);
  return pr < 0 ? (ask && ready(wf, ev)) : pr; }
@@ -112,6 +124,7 @@ static love_noinline int wake_parked(struct g *g, uintptr_t now,
   union u *t = prev->m;
   if (!parked_ready(g, t, now, fds, nfds, &cur, ask)) { prev = t; continue; }
   if (!tail) for (tail = g->tasks; tail->m != g->tasks; tail = tail->m);   // once, on the first wake
+  if (getcharm(t[5].x) < 0) t[3].x = putcharm(0), t[5].x = putcharm(wait_in);   // either woke it: the run ring waits on neither
   parked_drop(g, prev, t);
   tail = run_splice_at(g, tail, t);
   woke++; }
@@ -128,7 +141,7 @@ static love_noinline int poll_parked(struct g *g, uintptr_t now) {
  int k = 0;
  union u *q = g->parked;
  do { int wf = (int) getcharm(q[4].x);
-      if (wf >= 0) fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+      if (wf >= 0) fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) wev((int) getcharm(q[5].x));
       q = q->m; } while (q != g->parked);
  ready_fds(fds, k);
  return wake_parked(g, now, fds, k, 0); }
@@ -138,27 +151,29 @@ static love_noinline int poll_parked(struct g *g, uintptr_t now) {
 static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live, int *stuck) {
  // syscall-free wakes first: a port holding bytes over a quiet fd would wait forever
  // (test/host/parked.l, law 2)
- if (wake_parked(g, love_clock(), NULL, 0, 0)) {
-  union u *n = find_runnable(g, g->tasks, love_clock(), me_live);
+ if (wake_parked(g, love_tick(), NULL, 0, 0)) {
+  union u *n = find_runnable(g, g->tasks, love_tick(), me_live);
   if (n) return n; }
  uintptr_t min_wake = my_wake;
  int nfds = my_wait_fd >= 0;
  for (union u *n = g->tasks->m; n != g->tasks; n = n->m)
   if (n[1].m->ap != lvm_task_exit && !held(n)) {
    uintptr_t wa = (uintptr_t) getcharm(n[3].x);
-   if (wa && (!min_wake || wa < min_wake)) min_wake = wa; }
+   if (wa && (!min_wake || tick_cmp(wa, min_wake) < 0)) min_wake = wa; }
  if (g->parked) {
   union u *q = g->parked;
   do { uintptr_t wa = (uintptr_t) getcharm(q[3].x);
-       if (!held(q) && wa && (!min_wake || wa < min_wake)) min_wake = wa;
+       if (!held(q) && wa && (!min_wake || tick_cmp(wa, min_wake) < 0)) min_wake = wa;
        if (!held(q) && getcharm(q[4].x) >= 0) nfds++;
        q = q->m; } while (q != g->parked); }
  if (!min_wake && !nfds) return *stuck = 1, NULL;   // no clock and no fd: nothing can wake
- uintptr_t now = love_clock(), ticks = min_wake ? min_wake - now : 0;
+ uintptr_t now = love_tick();
+ intptr_t dt = min_wake ? tick_cmp(min_wake, now) : 0;
+ uintptr_t ticks = dt > 0 ? (uintptr_t) dt : 0;
  // the filled block, NULL unless an entry came back nonzero: a frontend may fill nothing
  struct wait_fd const *pol = NULL;
  int npol = 0;
- if (!min_wake || min_wake > now) {
+ if (!min_wake || dt > 0) {
   struct wait_fd *fds = (struct wait_fd*) g->hp;
   // no gap for the block: wait on the clock alone, never on a short set
   if (avail(g) < b2w((uintptr_t) nfds * sizeof *fds)) wait_fds(NULL, 0, ticks ? ticks : 1);
@@ -166,19 +181,20 @@ static love_noinline union u *yield_sw_wait(struct g *g, uintptr_t my_wake, int 
    int k = 0;
    // revents zeroed here alone: the block is raw heap gap
    if (my_wait_fd >= 0)
-    fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) my_events;
+    fds[k].fd = my_wait_fd, fds[k].revents = 0, fds[k++].events = (short) wev(my_events);
    if (g->parked) {
     union u *q = g->parked;
     do { int wf = (int) getcharm(q[4].x);
          if (wf >= 0 && !held(q))
-          fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) getcharm(q[5].x);
+          fds[k].fd = wf, fds[k].revents = 0, fds[k++].events = (short) wev((int) getcharm(q[5].x));
          q = q->m; } while (q != g->parked); }
    wait_fds(fds, k, ticks);
    for (int i = 0; i < k; i++) if (fds[i].revents) { pol = fds, npol = k; break; } }
-  now = love_clock(); }
+  now = love_tick(); }
  if (my_wait_fd >= 0) {
-  int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, my_events);
-  if (pr < 0 ? ready(my_wait_fd, my_events) : pr) return NULL; }
+  int cur = 0, pr = polled_ready(pol, npol, &cur, my_wait_fd, wev(my_events));
+  if (pr < 0 ? ready(my_wait_fd, wev(my_events)) : pr) return NULL;
+  if (my_events < 0 && tick_cmp(my_wake, now) <= 0) return NULL; }
  wake_parked(g, now, pol, npol, 1);   // the wait answered the whole parked ring: collect it
  return find_runnable(g, g->tasks, now, me_live); }
 
@@ -196,7 +212,7 @@ lvm(lvm_yield_sw) {
  // the clock rides the same tick (on wasm a read is a host trip)
  uintptr_t now = g->clock_at;
  if (!fair || ++g->sweep_ctr >= sweep_interval) {
-  now = g->clock_at = love_clock();
+  now = g->clock_at = love_tick();
   if (fair && (g->sweep_ctr = 0, g->parked)) {
    Pack(g);                    // the fd block goes in the [hp, sp) gap
    poll_parked(g, now);
@@ -256,7 +272,9 @@ lvm(lvm_yield_sw) {
   if (g->parked) { g->parked->m = N; gen_wb(g, (word) g->parked, (word) g->parked->m); }
   else g->parked = N; }
  g->yield_ctr = 0;
+ union u *me = g->tasks;
  g->tasks = next;
+ me->m = me;   // the spent node links nowhere: a remembered one would hold every later node
  Sp = memmove(topof(g) - restore_h, next_stack, restore_h * sizeof(word));
  Ip = next[1].m;
  love_musttail return Continue(); }
@@ -409,8 +427,8 @@ static lvm(lvm_resume) {
  Sp[0] = ok ? putcharm(1) : ZeroPoint;
  love_musttail return Next(1); }
 
-LvDef("pause", pause, 1, NULL);
-LvDef("resume", resume, 1, NULL);
+LvDef("pause", pause, 1, "task");
+LvDef("resume", resume, 1, "task");
 
 lvm(lvm_sleep) {
  word n = Sp[0];
@@ -419,5 +437,5 @@ lvm(lvm_sleep) {
  // the clock alone: a lingering next_wait_fd would gate the timer on that fd
  g->next_wait_fd = -1;
  if (!charmp(n) || getcharm(n) <= 0) { g->next_wake_at = 0; love_musttail return Ap(lvm_yield_sw, g); }
- g->next_wake_at = (uintptr_t) love_clock() + getcharm(n);
+ g->next_wake_at = tick_add(love_tick(), (uintptr_t) getcharm(n));
  love_musttail return Ap(lvm_yield_sw, g); }

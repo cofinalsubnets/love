@@ -9,7 +9,22 @@
        (s (i + j) = t j ? (sub-at s i t (j + 1)) 0))
    (bol s i)  (? (i < 1) 0 (10 = peep s (i - 1) 0) i (bol s (i - 1)))
    (eol s i)  (? (i >= #s) i (10 = peep s i 0) i (eol s (i + 1)))
-   (lineof s t) (findsub s t @ i (i < 0 ? "" (snip s (bol s i) (eol s i)))))
+   (lineof s t) (findsub s t @ i (i < 0 ? "" (snip s (bol s i) (eol s i))))
+   ; the pi's door wants a dtb and qemu's raspi makes none: the least tree, root cells 1/1,
+   ; memory and chosen. qemu lays the memory's reg and the bootargs over it
+   (be32 n) [(n >> 24 & 255) (n >> 16 & 255) (n >> 8 & 255) (n & 255)]
+   (pad l) (l + map (x \ 0) ^((4 - #l % 4) % 4))
+   (node t) (be32 1 + pad (map t ^#t + [0]))
+   (prop off v) (be32 3 + be32 #v + be32 off + pad v)
+   (fdt mem)
+    (: strs (map "#address-cells\0#size-cells\0device_type\0reg\0bootargs\0" ^52)
+       st (node "" + prop 0 (be32 1) + prop 15 (be32 1)
+           + node "memory" + prop 27 (map "memory\0" ^7) + prop 39 (be32 0 + be32 mem) + be32 2
+           + node "chosen" + prop 43 [0] + be32 2
+           + be32 2 + be32 9)
+       (cask (be32 0xd00dfeed + be32 (56 + #st + #strs) + be32 56 + be32 (56 + #st) + be32 40
+              + be32 17 + be32 16 + be32 0 + be32 #strs + be32 #st
+              + map (x \ 0) ^16 + st + strs))))
 
 (: a    >argv
    iso  <a
@@ -19,24 +34,29 @@
    need (>>>a @ x (two? x ? <x ""))
    ; a .elf: qemu's loader reads the PVH note and enters mkboot.l's stub
    elf? (#iso @ n (n > 4 && sub-at iso (n - 4) ".elf" 0))
+   ; a .img: the pi's flat kernel (kflat.l), at 0x80000 with a dtb in x0 as the firmware hands it
+   img? (#iso @ n (n > 4 && sub-at iso (n - 4) ".img" 0))
+   pi?  (arch = "a64pi")
    ; a directory is an esp: qemu fakes a FAT volume, the firmware runs our bootx64.efi.
    ; s_ifdir 0040000 under the 0170000 mask
    dir? (: st (stat iso)                          ; (size mtime mode ..)
            m (two? st ? (st 2) 0)
            (16384 = m & 61440))
    ; x64 quits through isa-debug-exit; the virts reset through PSCI/SBI and -no-reboot
-   ; makes that the exit. an elf lane boots under kvm on a bee host with the lane's cap
+   ; makes that the exit. a lane boots under kvm on a bee host with the lane's cap
    ; (kvm-a64 for a64, or KTEST_CAP); a slot is the host's lock, so lanes never crowd a
    ; box past its memory. no host: it boots here
    (env-of k) (getenv k @ v (string? v && 0 < #v ? v ()))
    cap  (env-of "KTEST_CAP" @ c (string? c ? c (arch = "a64" ? "kvm-a64" ())))
-   hosts (? (elf? && string? cap) ((cite 'hosts 'hosts-live) ((cite 'hosts 'hosts-with) cap ())) ())
+   hosts (? (string? cap) ((cite 'hosts 'hosts-live) ((cite 'hosts 'hosts-with) cap ())) ())
    slot (two? hosts ? ((cite 'hosts 'hosts-take) hosts (getpid 0) ("ktest " + iso)) ())
    far  (two? slot)
    mach (arch @ "a64"
            ["-M" "virt,gic-version=2" "-cpu" (far ? "host" "cortex-a72") "-semihosting"]
            "rv64"
            ["-M" "virt"]
+           "a64pi"
+           ["-M" "raspi3b"]
            ["-M" "q35" "-device" "isa-debug-exit,iobase=0xf4,iosize=0x04"
             ; the sound card, silent: test/horn.l drives hda.c against it
             "-device" "intel-hda" "-device" "hda-output,audiodev=snd" "-audiodev" "none,id=snd"])
@@ -52,9 +72,17 @@
    ; only the esp door gets a framebuffer. ramfb, not virtio-gpu: edk2's gop over that
    ; answers a mode with no address. ramfb's lands in ordinary ram.
    gfx  (arch = "a64" ? ["-device" "ramfb"] ())
-   ; KTEST_CORPUS: a lane's own roster; KTEST_INITRD: a file the kernel shows at /proc/initrd
-   media (? elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
-                  + (env-of "KTEST_INITRD" @ f (string? f ? ["-initrd" f] ())))
+   ; KTEST_CORPUS: a lane's own roster; KTEST_INITRD: a file the kernel shows at /proc/initrd.
+   ; qemu loads -initrd only for a linux kernel: the virts' elf takes it over fw_cfg
+   media (? img? (: d (iso + ".dtb")
+                    _ (uwrite d (fdt 0x20000000))
+                    ["-kernel" iso "-dtb" d "-append"
+                     (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))])
+            elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
+                  + (env-of "KTEST_INITRD" @ f
+                      (!(string? f) ? ()
+                       mmio? ["-fw_cfg" ("name=opt/love/initrd,file=" + f)]
+                       ["-initrd" f])))
             dir? (fw + below4g + gfx + ["-drive" ("format=raw,file=fat:rw:" + iso)])
             (scare 'ktest-media iso))
    ; kvm where the host backs it (~7x); x64-on-x64 only, since an arm host whose gic
@@ -63,8 +91,9 @@
    kvm  (? far (arch = "x64" ? ["-enable-kvm" "-cpu" "host"] ["-enable-kvm"])   ; -cpu host hands the guest VT-x
            (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
            ())
-   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg nears 900s loaded
-   ceil (two? kvm ? "420" (arch = "rv64" ? "1200" "900"))
+   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg nears 900s loaded, the
+   ; pi's raspi3b ~800s quiet. KTEST_CEIL: a lane's own, for one that bakes inside the boot
+   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" (arch = "rv64" ? "1200" (pi? ? "1800" "900")))))
    ; the scratch disk: truncate leaves an existing image's bytes alone, so the
    ; persistence gate's two boots share it (test/kernel/disk.l). force-legacy=false
    ; makes virtio-mmio speak version 2, the one blk.c drives.
@@ -75,19 +104,24 @@
                (d + ["-device" "virtio-blk-device,drive=d0"
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
-   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern arch)) "-m" "1536M"]
-         + mach + kvm + dargs
-         + ["-serial" "stdio" "-display" "none" "-no-reboot"] + media)
-   ; far: the elf goes over in a dir of its own, the disk made beside it, paths as
-   ; basenames, and the dir removed after
+   ; raspi3b: the zero 2 w's bcm2837 with 1G, since the corpus outgrows 512M. its console is
+   ; the mini uart, serial1
+   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" (pi? ? "1G" "1536M")]
+         + mach + kvm + (pi? ? () dargs)               ; the pi has no virtio: its card is rung 6's
+         + (pi? ? ["-serial" "null" "-serial" "stdio"] ["-serial" "stdio"])
+         + ["-display" "none" "-no-reboot"] + media)
+   ; far: the elf or the esp and its firmware go over in a dir of their own, the disk
+   ; made beside them, paths as basenames, and the dir removed after
    r    (far ?
            (: d ("/tmp/ktest-" + show (getpid 0))
-              b (foldl (\ a i (iso i = 47 ? (i + 1) a)) 0 (jot #iso) @ k (snip iso k #iso))
-              rel (map (x \ (? (x = iso) b
-                                (sub-at x 0 "file=" 0) ("file=" + b + ".disk" + snip x (5 + #disk) #x)
-                                x))
-                       qemu)
-              _ (hark ["mkdir" "-p" d]) _ (hark ["cp" iso (d + "/" + b)])
+              (base p) (foldl (\ a i (p i = 47 ? (i + 1) a)) 0 (jot #p) @ k (snip p k #p))
+              b (base iso)
+              rd (env-of "KTEST_INITRD")
+              rel (map (x \ (: y (replace x iso b) z (dir? ? (replace y ovmf (base ovmf)) y)
+                               (string? rd ? (replace z rd (base rd)) z))) qemu)
+              _ (hark ["mkdir" "-p" d]) _ (hark ["cp" "-R" iso (d + "/" + b)])
+              _ (dir? ? (hark ["cp" ovmf (d + "/" + base ovmf)]) 0)
+              _ (string? rd ? (hark ["cp" rd (d + "/" + base rd)]) 0)
               x (hark ["sh" "-c" ((cite 'hosts 'hosts-line) <slot d
                                     ["sh" "-c" ("truncate -s 35840000 " + b + ".disk && exec"
                                                 + foldl (\ a w (a + " '" + w + "'")) "" rel)])])

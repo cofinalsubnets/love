@@ -375,6 +375,7 @@
  (stones-pens st) (: lt (stones-light st) k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) b (mesh-sway st (gesture-body st) fov w)
    e [(st 'px + b 1 * cos (st 'th)) (st 'py + b 0) (st 'pz - b 1 * sin (st 'th))]
    v (mesh-eye w h e (st 'th) (st 'ph + b 2) (peep st 'ro 0.0 + b 3) fov 0.05 900.0)
+   _ (? (tablet? (mesh-gpu st)) (pin v 'gpu (st 'gpu)) 0)
    hs (peep st 'keep-sky 0 ? (kept-by st 'sky-kept (sky-key st lt) (_ \ stones-sky st v e lt k w h)) ())
    hz (two? hs ? <hs (mesh-haze v lt (st 'wx) (st 'sim)))
    sc0 (scene st) db (drop-batch st lt)
@@ -486,7 +487,7 @@
  ; ..the feet asked for since the last frame, voices of the song from here on
  (stones-steps s st) (: fx (st 'sfx) at (s 'fpos)
    (foot f) (: q (step-sound "sand" (f 0 (#(f 0) - 1) - 48)) a (q 0) r (1.0 * q 1 / song-rate)
-     [(at + int (#a / r) + 2) (ix \ peep a (int ((ix - at) * r)) 0.0) 1.15 1.15])
+     [at [(at + int (#a / r) + 2) (ix \ peep a (int ((ix - at) * r)) 0.0) 1.15 1.15]])
    (two? fx ? (pin st 'sfx (), pin s 'vs (s 'vs + map foot fx)) s))
  ; a frame's motion: the clock at its own pace; the eye on a move of its own, or easing to
  ; the ground's height; and done once out on the plain

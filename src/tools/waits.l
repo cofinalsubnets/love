@@ -41,10 +41,8 @@
      "a raw fd carries no write run of love's to park behind, so the busy device is waited on -- bounded by its drain"]
     ["test/front/main.c" "love_fd_say" "love_sleep"
      "the test frontend's copy of that row, over a synthetic device whose stall arm counts down per call"]
-    ["src/inle/teensy41/main.c" "main" "love_sleep"
-     "the panic blink after a fatal shell exit -- nothing runs after it"]
     ["src/inle/doom.c" "DG_SleepMs" "love_sleep"
-     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, and the freestanding half waits the same way through k_sleep"]]
+     "doom's frame pacer: the game loop owns the frame and names the gap itself, with no love task behind it to park -- bounded by the frame, on inle as hosted"]]
 
    ; --- character classes ---
    (idc? c) (97 <= c <= 122 || 65 <= c <= 90 || 48 <= c <= 57 || c = 95)
@@ -98,12 +96,22 @@
    (find s p) (: n #s
                  (go i) (? (n <= i) () (at? s i p) i (go (i + 1)))
                  (go 0))
-   ; the first call-shaped identifier not a qualifier -- except `lvm(name)`, love.h's
-   ; definition macro, where the name is inside the parens.
+   (past-blanks s i) (i < #s && blank? (s i) ? (past-blanks s (i + 1)) i)
+   ; the first call-shaped identifier not a qualifier -- except love.h's definition
+   ; macros, where the name is inside the parens: `lvm(name)` (and `love_doorlvm(name)`),
+   ; `love_kdoorv(name, ..)` and `love_doorv(name, ..)`, `love_kdoor(T, name, ..)` and
+   ; `love_door(T, name, ..)`.
    (hdr-name s)
     (: j (find s "lvm(")
+       v (find s "love_kdoorv(")
+       w (find s "love_doorv(")
+       d (find s "love_kdoor(")
+       e (find s "love_door(")
        cs (filter (x \ !(any (= x) nonfn)) (calls s))
        (? (j != ()) (ident-from s (j + 4))
+          (v != ()) (ident-from s (past-blanks s (v + 12)))
+          (w != ()) (ident-from s (past-blanks s (w + 11)))
+          (d != () || e != ()) (ident-from s (past-blanks s (find s "," + 1)))
           (two? cs) <cs
           (rtrim s)))
 

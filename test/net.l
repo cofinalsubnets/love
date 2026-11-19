@@ -137,6 +137,8 @@
    e (recv b)
    (close a, close b,
     (test (<>d = "ping") (<(<d) = "127.0.0.1") (<d 1 = pb) (e = [["127.0.0.1" pa] "pong"]))))
+  ; a udp port has one socket: a second bind is refused
+  (: ua (test-bind 0) r (bind ['udp <ua]) (close (ua 1), test ('eaddrinuse = r)))
   ; an icmp echo to loopback with its ttl; unprivileged it may be refused
   (bind ['icmp 'ttl] @ p
    (nom? p ? (test ('eacces = p || 'eperm = p || 'eprotonosupport = p))

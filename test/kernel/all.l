@@ -2,8 +2,9 @@
 ; ordering: 00-init, spec and uu first as common.mk's `t` has them, each kernel file after what
 ; it depends on (kore0.l pins `quit`)
 
-; layers only the corpus asserts on: borrowed here, not spliced at boot
-(borrow 'kanren)
+; layers only the corpus asserts on: borrowed here, not spliced at boot. kanren is carried: an
+; image lifts it off /love, a bare egg reads the tree's
+(borrow ((cite 'kanren) @ m (m ? m "/love/src/apps/kanren.l")))
 
 ; the driver reads the roster before it feeds 00-init.l, so the corpus's splice is not standing yet
 (borrow 'posix)
@@ -26,7 +27,7 @@
             "test/kernel/sh0.l"
             "src/apps/lush.l"
             "test/kernel/sh.l"
-            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l"])
+            "test/kernel/disk.l" "test/kernel/svm.l" "test/kernel/vmx.l" "test/kernel/vecirq.l" "test/kernel/glaze.l"])
    ; the free list after the busiest run: ffalloc's walk is linear, so its length matters
    (frees p) (open p "r" @ q (port? q ? (slurp q @ s (close q,
      each (filter (l \ "free-" = snip l 0 5) (split "\n" s)) (l \ puts (l + "\n"))))))

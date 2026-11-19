@@ -3,6 +3,7 @@
 //   (pinw c i v)       -> lay v zero-extended into 8-byte slot i -> c | () misuse
 //   (peepv c o w s n)  -> n elements of w bytes, stride s from byte o, as a Z tray
 //   (pinv c o w s v)   -> the elements of tray v laid that way -> c | () misuse
+//   (pinf c o s v)     -> the elements of tray v as 4-byte floats, stride s from byte o -> c | () misuse
 // a stride past the width interleaves (harp/play.l's channels). little-endian, unsigned; a
 // float element truncates toward zero, as `int` does. flat.l binds getw/putw to the word pair
 #include "love.h"
@@ -63,6 +64,24 @@ static lvm(lvm_pinv) {
  Sp[4] = out;
  love_musttail return Nextp(1, 4); }
 
+static lvm(lvm_pinf) {
+ word c = Sp[0], out = ZeroPoint;
+ if (caskp(c) && charmp(Sp[1]) && charmp(Sp[2]) && numtray(Sp[3])) {
+  intptr_t o = getcharm(Sp[1]), s = getcharm(Sp[2]);
+  struct tray *v = tray(Sp[3]);
+  uintptr_t n = tray_nelem(v);
+  struct str *st = cask(c)->str;
+  if (slot_fit(st->len, o, 4, s, n)) {
+   unsigned char *p = (unsigned char*) st->bytes + o;
+   for (uintptr_t i = 0; i < n; i++, p += s) {
+    float x = (float) tray_get_flo(v, i);
+    memcpy(p, &x, 4); }
+   out = c; } }
+ Sp[3] = out;
+ love_musttail return Nextp(1, 3); }
+
+_Static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "peepv loads an element as the cask lays it");
+
 static lvm(lvm_peepv) {
  word c = Sp[0];
  if (!caskp(c) || !charmp(Sp[1]) || !charmp(Sp[2])
@@ -81,21 +100,23 @@ static lvm(lvm_peepv) {
  Hp += b2w(bytes);
  v->shape[0] = (uintptr_t) n;
  unsigned char const *p = (unsigned char const*) cask(c)->str->bytes + o;
- for (intptr_t i = 0; i < n; i++, p += s) {
+ intptr_t *d = (intptr_t*) tray_data(v);
+ // ..a width at a time, each element one load (memcpy: o and s leave it unaligned); a packed
+ // run already the tray's own intptr_t elements needs no widening, so one copy
+ if (w == (intptr_t) sizeof(intptr_t) && s == w) memcpy(d, p, sizeof(intptr_t) * (size_t) n);
+ else if (w == 1) for (intptr_t i = 0; i < n; i++, p += s) d[i] = *p;
+ else if (w == 2) for (intptr_t i = 0; i < n; i++, p += s) { uint16_t x; memcpy(&x, p, 2); d[i] = x; }
+ else if (w == 4) for (intptr_t i = 0; i < n; i++, p += s) { uint32_t x; memcpy(&x, p, 4); d[i] = (intptr_t) x; }
+ else if (w == 8) for (intptr_t i = 0; i < n; i++, p += s) { uint64_t x; memcpy(&x, p, 8); d[i] = (intptr_t) x; }
+ else for (intptr_t i = 0; i < n; i++, p += s) {
   uint64_t x = 0;
   for (intptr_t b = 0; b < w; b++) x |= (uint64_t) p[b] << (8 * b);
-  tray_put_int(v, (uintptr_t) i, (intptr_t) x); }
+  d[i] = (intptr_t) x; }
  Sp[4] = word(v);
  love_musttail return Nextp(1, 4); }
 
-// (push-gc n) -> n: the nth push from here collects, wherever it falls (0 none) -- a law's way
-// to put a collection under a push, the may-collect a raw local held across goes stale at
-static lvm(lvm_pushgc) {
- g->push_gc = charmp(Sp[0]) && getcharm(Sp[0]) > 0 ? (uintptr_t) getcharm(Sp[0]) : 0;
- love_musttail return Next(1); }
-
-LvDef("push-gc", pushgc, 1, "guts");
 LvDef("peepw", peepw, 2, "guts");
 LvDef("pinw", pinw, 3, "guts");
 LvDef("peepv", peepv, 5, "guts");
 LvDef("pinv", pinv, 5, "guts");
+LvDef("pinf", pinf, 4, "guts");

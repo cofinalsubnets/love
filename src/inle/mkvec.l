@@ -4,8 +4,9 @@
 ;   (lay-vec dst "x64")   the IDT, the ISR tables, exc_stub_0..31, the three IRQ handlers,
 ;                         archinit (IDT + PIC + PIT), k_reset/k_halt
 ;   (lay-vec dst "a64")   the 2 KiB-aligned 16 x 0x80 vector table, the IRQ save/restore path,
-;                         the fault report path
-;   (lay-vec dst "rv64")  the one direct-mode trap entry: save, k_trap, restore, sret
+;                         the fault report path, a process's calls, ticks and faults, k_kswap
+;   (lay-vec dst "rv64")  the kernel's direct-mode trap entry: save, k_trap, restore, sret; a
+;                         process's own (r_user, to k_utrap), r_uret, k_kswap
 ;
 ; runs after src/love/holo/{elf,obj}.l in a (borrow 'holo) cat. registers are holo's -- x86: r0=rax r1=rcx r2=rdx r3=rbx r4=rbp r5=rsi r6=rdi r7..r14=r8..r15; a64:
 ; rN = xN; riscv: r0..r7 = a0..a7, r8..r12 = t0..t4, lr = ra. x86 port i/o is register-contracted
@@ -137,11 +138,13 @@
      + '((iretq))
      ;; a process's `syscall` (LSTAR): rcx its pc, r11 its flags, IF masked. its stack goes
      ;; aside through gs; the frame is struct k_sysf (x64/proc.c), and every register but rax
-     ;; comes back as it was, as linux keeps them
+     ;; comes back as it was, as linux keeps them. the callee-saved six ride under it, unpopped,
+     ;; for a fork's child to start from
      + [['align 8] ['label 'k_syscall_entry]]
      + [['swapgs]
         ['raw [0x65 0x48 0x89 0x24 0x25 8 0 0 0]]      ; mov %rsp, %gs:8
         ['raw [0x65 0x48 0x8b 0x24 0x25 0 0 0 0]]      ; mov %gs:0, %rsp
+        '(push r3) '(push r4) '(push r11) '(push r12) '(push r13) '(push r14)
         ['raw [0x65 0xff 0x34 0x25 8 0 0 0]]]          ; push %gs:8
      + '((push r10) (push r1) (push r8) (push r7) (push r9) (push r2) (push r5) (push r6) (push r0))
      + x-fsave
@@ -174,11 +177,23 @@
          (xor r12 r12 r12) (xor r13 r13 r13) (xor r14 r14 r14)
          (swapgs))
      + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
+     ;; a fork's child: r12 its struct k_uctx, [24] the frame its parent's call laid. every
+     ;; register as that call found it, and rax 0, the call's answer here
+     + [['align 8] ['label 'k_uforked]]
+     + '((lea r6 r11 24)
+         (ld r1 r6 56) (ld r10 r6 64)
+         (ld r5 r6 16) (ld r2 r6 24) (ld r9 r6 32) (ld r7 r6 40) (ld r8 r6 48)
+         (ld r14 r6 80) (ld r13 r6 88) (ld r12 r6 96) (ld r11 r6 104) (ld r4 r6 112) (ld r3 r6 120)
+         (ld r0 r6 72) (mov sp r0)
+         (ld r6 r6 8) (xor r0 r0 r0)
+         (swapgs))
+     + [['raw [0x48 0x0f 0x07]]]                         ; sysretq
      ;; archinit: the GDT and TSS (so the gates name its code selector), the syscall MSRs,
      ;; then each (handler, type) pair into a 16-byte IDT descriptor, LIDT, the PIT and the PIC.
      ;; x87/SSE is on from kmain's top
      + [['align 8] ['label 'archinit]]
-     + '((la r0 k_tss)           ; the TSS descriptor's base, split as the CPU reads it
+     + '((push r3)               ; rbx is the caller's (sysv), and the IDT walk spends it
+         (la r0 k_tss)           ; the TSS descriptor's base, split as the CPU reads it
          (la r6 gdt64)
          (st2 r6 42 r0)
          (mov r3 r0) (shr r3 16) (st1 r6 44 r3)
@@ -233,6 +248,7 @@
          ;; ICW4 (8086 mode) on both, then an all-zero mask: everything unmasked
          (li r0 1) (li r2 0x21) (outb) (li r2 0xa1) (outb)
          (li r0 0) (li r2 0x21) (outb) (li r2 0xa1) (outb)
+         (pop r3)
          (sti)
          (ret))
      ;; reset by triple fault: LIDT a zero-size IDT, then int 0
@@ -244,11 +260,12 @@
          (cli) (hlt) (jmp k_halt)))
 
    ;; -- a64 -----------------------------------------------------------
-   ;; 16 entries of 0x80 bytes, 2 KiB-aligned. at EL1 on SP_EL1 only the "current EL with
-   ;; SP_ELx" group fires; IRQ goes to k_irq, all else to a_fault, so a surprise reports
+   ;; 16 entries of 0x80 bytes, 2 KiB-aligned. at EL1 on SP_EL1 the "current EL with SP_ELx"
+   ;; group fires, and a process (EL0, src/inle/a64/proc.c) the "lower EL, a64" one; all else
+   ;; goes to a_fault, so a surprise reports
    a-slots '(a_fault a_fault a_fault a_fault      ; current EL, SP_EL0: sync IRQ FIQ SError
              a_fault a_irq   a_fault a_fault      ; current EL, SP_ELx
-             a_fault a_fault a_fault a_fault      ; lower EL, a64
+             a_usync a_uirq  a_fault a_fault      ; lower EL, a64
              a_fault a_fault a_fault a_fault)     ; lower EL, aarch32
    ;; the IRQ path saves the caller-saved x0..x18 plus x29/x30 (k_irq is AAPCS); 176 keeps sp
    ;; 16-aligned. single str/ldr keeps every offset in the scaled imm12, so nothing borrows x16
@@ -262,6 +279,26 @@
            + [['raw (le32 0xD53B4420)] ['st 'sp 688 'r0] ['raw (le32 0xD53B4400)] ['st 'sp 696 'r0]])    ; mrs x0, fpsr / fpcr
    a-pop  ([['ld 'r0 'sp 696] ['raw (le32 0xD51B4400)] ['ld 'r0 'sp 688] ['raw (le32 0xD51B4420)]]       ; msr fpcr / fpsr, x0
            + map (a-q 0x3DC00000) (v-upto 32) + v-mapi (\ i r ['ld r 'sp (a-slot-off i)]) a-save)
+   ;; a process's frame, struct k_aframe (a64/proc.c): x0..x30 at 0, sp_el0 248, elr 256, spsr
+   ;; 264, tpidr_el0 272, q0..q31 at 288, fpsr 800, fpcr 808
+   u-frame 816
+   (u-q base i) ['raw (le32 (base | (18 + i) << 10 | 31 << 5 | i))]
+   u-save (map (i \ name ("r" + show i)) (v-upto 29) + '(fp lr))
+   u-push ([['sub 'sp 'sp u-frame]]
+           + v-mapi (\ i r ['st 'sp (8 * i) r]) u-save
+           + '((mrs r0 sp_el0) (st sp 248 r0) (mrs r0 elr_el1) (st sp 256 r0)
+               (mrs r0 spsr_el1) (st sp 264 r0) (mrs r0 tpidr_el0) (st sp 272 r0))
+           + map (u-q 0x3D800000) (v-upto 32)
+           + [['raw (le32 0xD53B4420)] ['st 'sp 800 'r0] ['raw (le32 0xD53B4400)] ['st 'sp 808 'r0]])    ; mrs x0, fpsr / fpcr
+   u-pop  ([['ld 'r0 'sp 808] ['raw (le32 0xD51B4400)] ['ld 'r0 'sp 800] ['raw (le32 0xD51B4420)]]       ; msr fpcr / fpsr, x0
+           + map (u-q 0x3DC00000) (v-upto 32)
+           + '((ld r0 sp 272) (msr tpidr_el0 r0) (ld r0 sp 264) (msr spsr_el1 r0)
+               (ld r0 sp 256) (msr elr_el1 r0) (ld r0 sp 248) (msr sp_el0 r0))
+           + v-mapi (\ i r ['ld r 'sp (8 * i)]) u-save
+           + [['add 'sp 'sp u-frame] ['eret]])
+   ;; k_kswap's save: x19..x28, fp, lr, d8..d15, daif -- 176 keeps sp 16-aligned
+   (u-d base i) ['raw (le32 (base | (12 + i) << 10 | 31 << 5 | (8 + i)))]
+   s-save '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28 fp lr)
    ;; the align rides after each slot, the last included, so the handlers start past the table
    a-text
     (foldl (a \ s \ a + [['jmp s] ['align 128]]) [['label 'vectors]] a-slots
@@ -271,6 +308,30 @@
      + '((call k_irq))
      + a-pop
      + [['add 'sp 'sp a-frame] ['eret]]
+     ;; a process's exception, its frame on the kernel stack its last eret left in SP_EL1: an
+     ;; svc is a call, k_syscall's answer in its x0; any other is a fault, which k_proc_fault
+     ;; answers (an ID register's read) or ends the process at
+     + [['label 'a_usync]] + u-push
+     + '((mrs r0 esr_el1) (shr r0 26) (cmp r0 0x15) (br ne a_ufault)
+         (lea r0 sp 0) (call k_syscall) (st sp 0 r0))
+     ;; ..and every way back to a process: a call's answer, a tick's, a first turn, a fork's child
+     + [['label 'a_uret]] + u-pop
+     + '((label a_ufault) (mrs r0 esr_el1) (lea r1 sp 0) (call k_proc_fault) (jmp a_uret))
+     ;; a tick in a process: k_irq's, then its turn spent, the machine goes back
+     + [['label 'a_uirq]] + u-push
+     + '((call k_irq) (call k_proc_tick) (jmp a_uret))
+     ;; k_kswap(save, load): one kernel stack to another, interrupts masked across it. a turn
+     ;; that starts returns into a_uret, its frame laid above
+     + [['label 'k_kswap] ['sub 'sp 'sp 176]]
+     + v-mapi (\ i r ['st 'sp (8 * i) r]) s-save
+     + map (u-d 0xFD000000) (v-upto 8)
+     + [['raw (le32 0xD53B4229)] ['st 'sp 160 'r9]           ; mrs x9, daif
+        ['raw (le32 0xD5034FDF)]                            ; msr daifset, #0xf
+        '(lea r9 sp 0) '(st r0 0 r9) '(lea sp r1 0)
+        '(ld r9 sp 160) ['raw (le32 0xD51B4229)]]           ; msr daif, x9
+     + map (u-d 0xFD400000) (v-upto 8)
+     + v-mapi (\ i r ['ld r 'sp (8 * i)]) s-save
+     + '((add sp sp 176) (ret))
      ;; the fault path: ESR/ELR/FAR to k_fault, which reports and halts
      + '((label a_fault)
          (mrs r0 esr_el1)
@@ -301,6 +362,27 @@
            + v-mapi (\ i r ['ld r 'sp (8 * i)]) r-save
            + [['raw (r-ld 30 112)] ['raw (r-ld 31 120)]]
            + v-mapi (\ i r ['ldsd r 'sp (128 + 8 * i)]) r-fregs)
+   ;; a process's frame, struct k_rframe (rv64/proc.c): x0..x31 by number at 0, f0..f31 at
+   ;; 256, fcsr 512, sepc 520, sstatus 528; 560 with the machine's word past it. every
+   ;; register by number, gp, tp and x30 among them, before any is touched
+   (r-fsd rs2 off) (le32 (off >> 5 << 25 | rs2 << 20 | 2 << 15 | 3 << 12 | (off & 31) << 7 | 0x27))
+   (r-fld rd off)  (le32 (off << 20 | 2 << 15 | 3 << 12 | rd << 7 | 0x07))
+   u-xs (filter (i \ i != 2) >^32)                 ; x1, x3..x31: sp rides sscratch
+   u-push ([['sub 'sp 'sp 560]]
+           + map (i \ ['raw (r-sd i (8 * i))]) u-xs
+           + map (i \ ['raw (r-fsd i (256 + 8 * i))]) ^32
+           + '((csrr r8 sscratch) (st sp 16 r8)
+               (csrr r8 sepc) (st sp 520 r8) (csrr r8 sstatus) (st sp 528 r8)
+               (la r8 vectors) (csrw stvec r8))                  ; the kernel's traps its own again
+           + [['raw (le32 0x00302573)] ['st 'sp 512 'r0]])               ; frcsr a0
+   u-pop  ([['ld 'r0 'sp 512] ['raw (le32 0x00351073)]]                 ; fscsr a0
+           + '((ld r8 sp 520) (csrw sepc r8) (ld r8 sp 528) (csrw sstatus r8)
+               (add r8 sp 560) (csrw sscratch r8) (la r8 r_user) (csrw stvec r8))
+           + map (i \ ['raw (r-fld i (256 + 8 * i))]) ^32
+           + map (i \ ['raw (r-ld i (8 * i))]) u-xs
+           + [['raw (r-ld 2 16)] ['sret]])
+   ;; k_kswap's save: ra, s0..s11, sstatus -- 112 keeps sp 16-aligned. mooncc lays no fs0..fs11
+   s-save '(lr fp r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
    r-text
     ([['label 'vectors] ['sub 'sp 'sp r-frame]]
      + r-push
@@ -309,7 +391,22 @@
          (csrr r2 stval)
          (call k_trap))
      + r-pop
-     + [['add 'sp 'sp r-frame] ['sret]])
+     + [['add 'sp 'sp r-frame] ['sret]]
+     ;; a process's trap: stvec names this while it runs, sscratch its kernel stack, where
+     ;; the frame goes. k_utrap answers it
+     + [['align 4] ['label 'r_user] '(csrrw sp sscratch sp)] + u-push
+     + '((csrr r0 scause) (mov r1 sp) (call k_utrap))
+     ;; ..and every way back to a process: a call's answer, a tick's, a first turn, a fork's child
+     + [['label 'r_uret]] + u-pop
+     ;; k_kswap(save, load): one kernel stack to another, interrupts masked across it, each
+     ;; stack's SIE its own. a turn that starts returns into r_uret, its frame laid above
+     + [['label 'k_kswap] ['sub 'sp 'sp 112]]
+     + v-mapi (\ i r ['st 'sp (8 * i) r]) s-save
+     + '((csrr r8 sstatus) (st sp 104 r8) (csrci sstatus 2)
+         (st r0 0 sp) (mov sp r1)
+         (ld r8 sp 104) (and r8 r8 2) (csrs sstatus r8))
+     + v-mapi (\ i r ['ld r 'sp (8 * i)]) s-save
+     + '((add sp sp 112) (ret)))
 
    ;; -- the two objects ---------------------------------------------------
    ;; SHF flags: 2 ALLOC, 3 ALLOC|WRITE, 6 ALLOC|EXEC. types: 1 PROGBITS, 8 NOBITS.
@@ -322,7 +419,7 @@
                  [".data"   1 3 8  x-rodata]
                  [".bss"    8 3 16 x-bss]]
                 '("archinit" "k_reset" "k_halt" "timer_isr" "keyboard_isr" "uart_isr"
-                  "k_kswap" "k_ufirst")
+                  "k_kswap" "k_ufirst" "k_uforked")
                 '("k_tss" "k_cpu")       ; x64/proc.c's; idt/isrs/idtreg/gdt64 are ours alone
                 ()
                 ;; local function symbols, so nm, gdb and a backtrace name them
@@ -330,12 +427,12 @@
        "a64"
        (objsecs 'a64
                 [[".text.vectors" 1 6 2048 a-text]]
-                '("vectors")             ; arch.c: extern uint8_t vectors[] -> VBAR_EL1
+                '("vectors" "k_kswap" "a_uret")    ; arch.c's VBAR_EL1; a64/proc.c's turns
                 () ()
-                '("a_irq" "a_fault"))
+                '("a_irq" "a_fault" "a_usync" "a_uirq" "a_ufault"))
        "rv64"
        (objsecs 'rv64
                 [[".text" 1 6 16 r-text]]
-                '("vectors")             ; arch.c: extern uint8_t vectors[] -> stvec
-                () () ())
+                '("vectors" "k_kswap" "r_uret")   ; arch.c's stvec; rv64/proc.c's turns
+                () () '("r_user"))
        (scare 'mkvec-arch arch)))

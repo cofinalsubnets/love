@@ -1,5 +1,5 @@
-; test/host/bee.l -- bee as a child in a scratch dir with HOME there too, so no one's
-; ~/.love/etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
+; test/host/bee.l -- bee as a child in a scratch dir with HOME and the nest there too, so no
+; one's own etc/bee.l speaks; a session is driven as claude code drives it, through --mcp
 ; run: cat test/00-init.l test/host/bee.l | out/love
 (borrow 'json)
 
@@ -12,7 +12,7 @@
    cr-root (cr-home + "/out/.bee-" + show (getpid 0))
    _ (mkdir cr-root 493)
    ; a session running these passes its hive down (BEE_HIVE, BEE_NAME, BEE_AS); a world would
-   ; write its cells among the live sessions: HOME alone says here
+   ; write its cells among the live sessions: HOME and LOVE_NEST say here
    _ (map (\ k (setenv k ())) ["BEE_HIVE" "BEE_NAME" "BEE_AS"])
    (cr-put d nm s) (: p (open (d + "/" + nm) "w") _ (say p s) (close p))
    (cr-get p) (: f (open p "r") (hot? f ? (: s (slurp f) _ (close f) s) ()))
@@ -37,7 +37,7 @@
        o (go "")
        _ (close q)
        [(cr-reap p) o])
-   (cr-bee d env) ("env HOME='" + d + "' " + env + " '" + cr-love + "' '" + cr-app + "'")
+   (cr-bee d env) ("env HOME='" + d + "' LOVE_NEST='" + d + "/.love' " + env + " '" + cr-love + "' '" + cr-app + "'")
    (cr-run d env args) (cr-sh d ("exec " + cr-bee d env + " " + args))
 
    ; json-rpc for --mcp: a tools/call, messages a line each, the answers by id
@@ -241,7 +241,7 @@
    _ (cr-put cr-b2 "in" (msgs [{"jsonrpc" "2.0" "id" 0 "method" "initialize" "params" {}}
                                {"jsonrpc" "2.0" "method" "notifications/initialized"}]))
    _ (cr-put cr-b2 "in2" (msgs [{"jsonrpc" "2.0" "id" 1 "method" "tools/call" "params" {"name" "inbox" "arguments" {}}}]))
-   bee ("env HOME='" + cr-b2 + "' '" + cr-love + "' '" + cr-app + "'")
+   bee ("env HOME='" + cr-b2 + "' LOVE_NEST='" + cr-b2 + "/.love' '" + cr-love + "' '" + cr-app + "'")
    _ (cr-put cr-b2 "feed" ("cat in; sleep 2; BEE_NAME=pal " + bee + " --send ringer 'hello from pal' >/dev/null; "
                            + "sleep 4; cat in2; sleep 1\n"))
    r (: pp (pipe 0) nul (openfd "/dev/null" 0)
@@ -312,7 +312,7 @@
                                (call 5 "lock_release" {"name" "out-x"})]))
    (run-with args)
     (: pp (pipe 0) nul (openfd "/dev/null" 0)
-       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
+       cmd ("cd '" + cr-l2 + "' && exec env HOME='" + cr-l2 + "' LOVE_NEST='" + cr-l2 + "/.love' BEE_AS=locker BEE_LOCKS='" + lroot + "' '"
             + cr-love + "' '" + cr-app + "' " + args)
        p (spawnio ["sh" "-c" cmd] nul >pp >pp [<pp] -1 0)
        _ (close >pp) _ (close nul)
@@ -356,6 +356,171 @@
            !(two? (readdir (d + "/.love/run/hive"))))
    0)
 
+; cards from another host: live by their beat within the lease, never by a pid here; a stale
+; one is hidden, swept only at ten leases. a local card with a dead pid goes at once
+(: d (cr-dir "hosts" "")
+   hv (d + "/.love/run/hive")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
+   now (clock 0 // 1000)
+   (cell nm card beat) (: c (hv + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")])
+                          _ (cr-put c "card" card) _ (? (charm? beat) (cr-put c "beat" (show beat + "\n")) 0) c)
+   (rc h) ("pid 1\nhost " + h + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n")
+   _ (cell "far" (rc "elsewhere") (now - 5))
+   _ (cell "late" (rc "elsewhere") (now - 120))
+   _ (cell "gone" (rc "elsewhere") (now - 3600))
+   _ (cell "dead" "pid 999999999\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n" ())
+   r (cr-run d "BEE_HOST=here BEE_LEASE=60" "--list")
+   s (cr-run d "BEE_HOST=here BEE_NAME=pal" "--send far 'over the wire'")
+   t (cr-run d "BEE_HOST=here BEE_NAME=pal" "--send late 'too late'")
+   ib (readdir (hv + "/far/inbox"))
+   _ (test (cr-in (r 1) "far  idle") !(cr-in (r 1) "late") !(cr-in (r 1) "gone") !(cr-in (r 1) "dead")
+           (two? (readdir (hv + "/late"))) !(two? (readdir (hv + "/gone"))) !(two? (readdir (hv + "/dead")))
+           (0 = <s) (1 = #ib) (0 != <t))
+   0)
+
+; the relay: a peer's cards laid here by a fake ssh that runs the peer's line under its HOME,
+; a name held here laid as NAME@HOST, mail carried there with its sender as that host names it,
+; and mail to a session that left bounced
+(: a (cr-dir "rla" "") b (cr-dir "rlb" "")
+   me (show (getpid 0))
+   (hv d) (d + "/.love/run/hive")
+   _ (map (\ d (map (\ p (mkdir p 448)) [(d + "/.love/run") (hv d)])) [a b])
+   (cell d nm card) (: c (hv d + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")])
+                       _ (cr-put c "card" card) c)
+   (lc h) ("pid " + me + "\nhost " + h + "\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n")
+   _ (cell b "ann" (lc "hb")) _ (cell b "g" (lc "hb"))
+   _ (cell a "g" (lc "ha")) _ (cell a "pal" (lc "ha"))
+   _ (cr-put a "fakessh" ("for x; do l=$x; done\nHOME='" + b + "' LOVE_NEST='" + b + "/.love' BEE_HOST=hb exec sh -c \"$l\"\n"))
+   _ (mkdir (a + "/.love/etc/bee") 448)
+   _ (cr-put (a + "/.love/etc/bee") "hosts" ("name hb\nreach sh " + a + "/fakessh hb\ncaps hive\nlove " + cr-love + "\n"))
+   env "BEE_HOST=ha"
+   r1 (cr-run a env "--relay --once")
+   l1 (cr-run a env "--list")
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send ann 'across'")
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send g@hb 'to their g'")
+   r2 (cr-run a env "--relay --once")
+   ib (\ d nm (: fs (readdir (hv d + "/" + nm + "/inbox")) (two? fs ? fs ())))
+   got (: fs (ib b "ann") (two? fs ? (cr-get (hv b + "/ann/inbox/" + <fs)) ""))
+   _ (hark ["rm" "-rf" (hv b + "/ann")])
+   _ (cr-run a "BEE_HOST=ha BEE_NAME=pal" "--send ann 'too late'")
+   r3 (cr-run a env "--relay --once")
+   back (: fs (ib a "pal") (two? fs ? (cr-get (hv a + "/pal/inbox/" + <fs)) ""))
+   _ (test (0 = <r1) (cr-in (l1 1) "ann  idle on hb") (cr-in (l1 1) "g@hb  idle on hb")
+           (cr-in (cr-get (hv a + "/g@hb/card")) "of g")
+           (0 = <r2) (cr-in got "from pal@ha") (cr-in got "across") (1 = #(ib b "g"))
+           (0 = #(ib a "ann")) !(two? (readdir (hv a + "/ann")))
+           (cr-in back "from bee-relay") (cr-in back "too late"))
+   0)
+
+; a queue at home: two clones of one bare repo are two hosts. a row joined in one is read in the
+; other, its head fetched with it; a write on a stale read is refused by the lease; a session whose
+; name is live on another host is refused every queue tool
+(: hd (cr-dir "qhome" "")
+   (g d as) (hark (["git" "-C" d "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   (out r) (: s >r (snip s 0 (#s - 1)))
+   home (hd + "/home.git") ca (hd + "/ca") cb (hd + "/cb")
+   _ (hark ["git" "init" "-q" "--bare" "-b" "main" home])
+   _ (map (\ d (: _ (hark ["sh" "-c" ("git clone -q '" + home + "' '" + d + "' 2>/dev/null")]) _ (cr-put d "f" (d + "\n"))
+                  _ (g d ["checkout" "-q" "-b" "main"]) 0)) [ca cb])
+   _ (g ca ["add" "f"]) _ (g ca ["commit" "-q" "-m" "base"]) _ (g ca ["push" "-q" "origin" "main"])
+   _ (g cb ["fetch" "-q" "origin"]) _ (g cb ["reset" "-q" "--hard" "origin/main"])
+   base (out (g ca ["rev-parse" "HEAD"]))
+   _ (g ca ["checkout" "-q" "-b" "ant"]) _ (cr-put ca "f" "ant\n") _ (g ca ["commit" "-q" "-am" "ant"])
+   ah (out (g ca ["rev-parse" "HEAD"]))
+   (row id a) (cr-call id "queue_row" (pin a "queue" "refs/queue/main"))
+   env "BEE_QUEUE_HOME=origin BEE_HOST=hx"
+   _ (cr-put ca "in" (cr-msgs [(row 1 {"state" "waiting" "branch" "ant" "gated_on" base "gated_head" ah "leader" "ant"})]))
+   ra (cr-run ca ("BEE_NAME=ant " + env) ("--mcp < '" + ca + "/in'"))
+   onhome (hark ["git" "--git-dir" home "cat-file" "-p" "refs/queue/main"])
+   _ (cr-put cb "in" (cr-msgs [(cr-call 2 "queue_read" {"queue" "refs/queue/main"})]))
+   rb (cr-run cb ("BEE_NAME=bob " + env) ("--mcp < '" + cb + "/in'"))
+   hasah (hark ["git" "-C" cb "cat-file" "-t" ah])
+   ; a stale lease: cb's mirror is behind once ca writes again, and a push leased on it is refused
+   stale (out (g cb ["rev-parse" "refs/queue/main"]))
+   _ (cr-put ca "in" (cr-msgs [(row 3 {"state" "waiting" "note" "again"})]))
+   _ (cr-run ca ("BEE_NAME=ant " + env) ("--mcp < '" + ca + "/in'"))
+   lease (hark ["sh" "-c" ("git -C '" + cb + "' push -q --force-with-lease=refs/queue/main:" + stale + " origin " + stale + ":refs/queue/main 2>/dev/null")])
+   ; bob's name live on another host
+   hv (cb + "/.love/run/hive")                                  ; cr-run's HOME is the dir it runs in
+   _ (map (\ p (mkdir p 448)) [(cb + "/.love") (cb + "/.love/run") hv (hv + "/bob@hy") (hv + "/bob@hy/inbox")])
+   _ (cr-put (hv + "/bob@hy") "card" "pid 1\nhost hy\ncwd /x\nmodel claude-code\nstate idle\nsince 0\nof bob\nvia hy\n")
+   _ (cr-put (hv + "/bob@hy") "beat" (show (clock 0 // 1000) + "\n"))
+   _ (cr-put cb "in" (cr-msgs [(cr-call 4 "queue_read" {"queue" "refs/queue/main"})]))
+   rc (cr-run cb ("BEE_NAME=bob " + env) ("--mcp < '" + cb + "/in'"))
+   _ (test (0 = <ra) (0 = <onhome) (cr-in >onhome ("1 ant ant " + base + " " + ah + " waiting"))
+           (cr-in (cr-text (cr-byid (rb 1)) "2") ("1 ant ant " + base + " " + ah)) (cr-in >hasah "commit")
+           (0 != <lease)
+           (cr-in (cr-text (cr-byid (rc 1)) "4") "the name bob is also a live session on hy"))
+   0)
+
+; draining: --drain marks this host, tells its sessions, and its cards say drain; a session on a
+; draining host still takes mail but the queue counts it gone, so the watchdog rings past it
+(: d (cr-repo (cr-dir "drain" ""))
+   hv (d + "/.love/run/hive")
+   _ (map (\ p (mkdir p 448)) [(d + "/.love/run") hv])
+   me (show (getpid 0))
+   (cell nm card) (: c (hv + "/" + nm) _ (map (\ p (mkdir p 448)) [c (c + "/inbox") (c + "/read")]) _ (cr-put c "card" card) c)
+   _ (cell "cook" ("pid " + me + "\nhost hd\ncwd /x\nmodel claude-code\nstate idle\nsince 0\n"))
+   r1 (cr-run d "BEE_HOST=hd" "--drain")
+   l1 (cr-run d "BEE_HOST=hd" "--list")
+   c1 (cr-run d "BEE_HOST=hd" "--cards")
+   told (readdir (hv + "/cook/inbox"))
+   r2 (cr-run d "BEE_HOST=hd" "--drain --off")
+   c2 (cr-run d "BEE_HOST=hd" "--cards")
+   _ (test (0 = <r1) (cr-in (r1 1) "hd is draining; told 1 session") (cr-in (l1 1) "cook  idle draining")
+           (cr-in (c1 1) "drain 1") (1 = #told) (0 = <r2) !(cr-in (c2 1) "drain 1"))
+   ; a row whose owner is live on a draining host: the watchdog rings its leader
+   _ (cr-put d ".bee.l" "(queue-watch 1)\n(gone-minutes 0)\n")
+   _ (cell "far" "pid 1\nhost hy\ncwd /x\nmodel claude-code\nstate idle\nsince 0\nof far\nvia hy\ndrain 1\n")
+   _ (cr-put (hv + "/far") "beat" (show (clock 0 // 1000 + 60) + "\n"))
+   _ (hark ["git" "-C" d "update-ref" "refs/queue/main"
+            (cr-blob d (cr-qtext ["leader alice" "1 far b1 aaa h1 gating" "2 alice b2 h1 h2 waiting"]))])
+   r (cr-feed d "BEE_NAME=alice BEE_HOST=hd" [["in" cr-init] ["in2" [(cr-call 1 "inbox" {})]]]
+              ["cat in" "sleep 5" "cat in2" "sleep 1"])
+   said (cr-text (cr-byid (r 1)) "1")
+   _ (test (0 = <r) (1 = cr-count said "from=\"watchdog\"") (cr-in said "row 1's owner far has no live session"))
+   0)
+
+; the mirror: srv-mirror hosts over a fake ssh, each its own root. git and files come from the freshest
+; stamp, never one older than this mirror's own; sb comes from every source; --stamp lays a cut's stamp
+(: d (cr-dir "mirror" "")
+   (g dir as) (hark (["git" "-C" dir "-c" "user.name=t" "-c" "user.email=t@t"] + as))
+   (out r) (: s >r (snip s 0 (#s - 1)))
+   (src nm txt)
+    (: r (d + "/" + nm) w (r + "/w")
+       _ (map (\ p (mkdir p 493)) [r w (r + "/notes") (r + "/tools") (r + "/bin")])
+       _ (cr-put (r + "/notes") "n" txt) _ (cr-put (r + "/tools") "t" txt) _ (cr-put r "manifest" txt)
+       _ (hark ["ln" "-s" cr-love (r + "/bin/love")])
+       _ (hark ["git" "init" "-q" "-b" "gwen" w]) _ (cr-put w "f" txt) _ (g w ["add" "f"]) _ (g w ["commit" "-q" "-m" txt])
+       _ (hark ["git" "clone" "-q" "--bare" w (r + "/g.git")])
+       _ (mkdir (r + "/g.sb") 493) _ (cr-put (r + "/g.sb") nm txt)
+       _ (cr-sh (r + "/g.sb") ("'" + cr-love + "' sb record " + nm + " >/dev/null 2>&1"))
+       [r (out (g w ["rev-parse" "HEAD"]))])
+   hb (src "hb" "from b\n") hc (src "hc" "from c\n")
+   _ (cr-sh <hb ("BEE_SRV='" + <hb + "' BEE_HOST=hb '" + cr-love + "' bee --mirror --stamp >/dev/null"))
+   _ (cr-put <hc "stamp" "cut 100\nhead x\nfrom hc\n")
+   _ (cr-put d "fakessh" ("while [ $# -gt 0 ]; do case $1 in -o) shift 2;; -T) shift;; *) break;; esac; done\n"
+                          + "h=$1; shift; [ -e '" + d + "'/down-$h ] && exit 255; exec sh -c \"$*\"\n"))
+   _ (mkdir (d + "/.love/etc/bee") 448)
+   _ (cr-put (d + "/.love/etc/bee") "hosts"
+             ("name hb\nreach sh " + d + "/fakessh hb\ncaps srv-mirror\nsrv " + <hb + "\n\n"
+              + "name hc\nreach sh " + d + "/fakessh hc\ncaps srv-mirror\nsrv " + <hc + "\n"))
+   dst (d + "/dst")
+   env ("BEE_SRV='" + dst + "' BEE_HOST=ha")
+   r1 (cr-run d env "--mirror")
+   g1 (out (hark ["git" "-C" (dst + "/g.git") "rev-parse" "gwen"]))
+   n1 (cr-get (dst + "/notes/n"))
+   sb1 [(cr-get (dst + "/g.sb/hb")) (cr-get (dst + "/g.sb/hc"))]
+   ; hb goes down: hc is older than this mirror now, so git and files stay
+   _ (cr-put d "down-hb" "")
+   r2 (cr-run d env "--mirror")
+   g2 (out (hark ["git" "-C" (dst + "/g.git") "rev-parse" "gwen"]))
+   n2 (cr-get (dst + "/notes/n"))
+   _ (test (0 = <r1) (cr-in (r1 1) "git and files from hb") (g1 = hb 1) (n1 = "from b\n")
+           (cr-in (cr-get (dst + "/stamp")) "from hb") (sb1 = ["from b\n" "from c\n"])
+           (0 = <r2) (cr-in (r2 1) "every source is older than this mirror") (g2 = hb 1) (n2 = "from b\n"))
+   0)
+
 ; the user's card: --state moves a session's card; the hud holds a card at the login's name, kind
 ; user. kind="user" reaches a model only from a user's card
 (: d (cr-dir "user" "")
@@ -375,7 +540,7 @@
            (cr-in nap "state busy") (cr-in idle "state idle") !(cr-in idle "state busy"))
    ; the hud on a pty, as tess
    ; no git discovery above the scratch dir: the hud would show the tree's own queues
-   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
+   md (tether ["sh" "-c" ("cd '" + d + "' && HOME='" + d + "' LOVE_NEST='" + d + "/.love' USER=tess PWD='" + d + "' GIT_CEILING_DIRECTORIES='" + cr-root
                          + "' exec '" + cr-love + "' '" + cr-app + "'")])
    m >md
    _ (settty m 24 100)
@@ -434,7 +599,10 @@
       (lm-agents = lm-doc)
       (<lm-map = 0)
       (cr-in >lm-map "chain test_extract,test_big,test_encver\n")
-      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress"))
+      (cr-in >lm-map "alone test_hdiff test_ccwarn test_gcheck test_tco0 test_gcstress test_gcstress_full")
+      (cr-in >lm-map "\nearly test_gcstress_bake\n")
+      (cr-in >lm-map "\nplace test_roster source\n")
+      !(cr-in >lm-map "\nplace test source\n"))
    0)
 
 ; lanes.sh runs a group's members as lanes, and the group answers for them: green when every
@@ -469,16 +637,35 @@
       (cr-in (cr-get (ls-d + "/out/l/summary")) "test_slow exit=0 "))
    0)
 
+; an early lane starts beside the parallel phase, not after it: test_p waits for it to start. owing
+; the stress bake, test_gcstress is not run beside it, the bake running its shards
+(: le-d (cr-root + "/lanes-early")
+   _ (hark ["mkdir" "-p" (le-d + "/test/gate") (le-d + "/out")])
+   _ (hark ["cp" (cr-home + "/test/gate/lanes.sh") (le-d + "/test/gate/")])
+   _ (hark ["ln" "-s" cr-love (le-d + "/out/love")])
+   _ (cr-put le-d "Makefile" ("test_gcstress_bake:\n\t@touch started; sleep 1\ntest_gcstress:\n\t@false\n"
+                              + "test_p:\n\t@i=0; until [ -f started ]; do i=$$((i + 1)); [ $$i -lt 40 ] || exit 1; sleep 0.5; done\n"))
+   le-r (cr-sh le-d "MAKEFLAGS= LANES_MEM_GB=0 sh test/gate/lanes.sh -d out/l test_p test_gcstress test_gcstress_bake")
+   le-s (cr-get (le-d + "/out/l/summary"))
+   _ (test
+      (<le-r = 0) (cr-in le-s "test_p exit=0 ") (cr-in le-s "test_gcstress_bake exit=0 ")
+      (cr-in le-s "test_gcstress exit=0 ") (cr-in (cr-get (le-d + "/out/l/test_gcstress.log")) "covered by test_gcstress_bake"))
+   0)
+
 ; gcshard.sh leaves the normal build to its caller: a make of host mid-gate moves out/love under
-; the other lanes. its makes take only what cook takes too (no -o)
+; the other lanes. its makes take only what cook takes too (no -o), and it writes corpus.list,
+; which test_love0 reads beside it, only when there is none
 (: gb-d (cr-root + "/gcshard")
    _ (mkdir gb-d 493)
    _ (cr-put gb-d "mk" "echo \"$*\" >> made\n")
    gb-r (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
    gb-made (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
+   _ (hark ["mkdir" "-p" (gb-d + "/out/lib")]) _ (cr-put gb-d "out/lib/corpus.list" "x\n") _ (cr-put gb-d "made" "")
+   _ (cr-sh gb-d ("MAKE='sh " + gb-d + "/mk' sh '" + cr-home + "/test/gate/gcshard.sh' ."))
+   gb-kept (filter (\ l (0 < #l)) (lines (cr-get (gb-d + "/made"))))
    _ (test
       (<gb-r = 1) (cr-in (gb-r 1) "FAIL gcshard: no out/love")
-      (#gb-made = 2)
+      (#gb-made = 3) (#gb-kept = 2) !(two? (filter (\ l (cr-in l "corpus.list")) gb-kept))
       !(two? (filter (\ l (cr-in l " -o ")) gb-made))
       !(two? (filter (\ l (cr-in (l + " ") " host " || cr-in (l + " ") " out/love.raw ")) gb-made)))
    0)

@@ -103,9 +103,19 @@
    cont (dead """(: t {} p (twirl (\ _ (call-cc (c \ (pin t 0 c)))) 0) _ (catch p) ((t 0) 1))""")
    pair (dead """(: t {} a (twirl (\ _ (catch (t (quote b)))) 0) b (twirl (\ _ (catch a)) 0) _ (pin t (quote b) b) (putx (catch a)))""")
    frz (dead """(: m (myself 0) p (twirl (\ _ (putx (freeze m))) 0) _ (catch p) (putx (quote back)))""")
-   pse (dead """(: m (myself 0) p (twirl (\ _ (putx (pause m))) 0) _ (catch p) (putx (quote back)))""")
+   pse (dead """(: m (myself 0) p (twirl (\ _ (putx (cite (quote task) (quote pause) m))) 0) _ (catch p) (putx (quote back)))""")
    ; a catch whose task sleeps is no deadlock: the clock wakes it
    slept (dead """(: p (twirl (\ _ (rest 50, 7)) 0) (putx (catch p)))""")
    _ (test (scared? cont) (scared? pair) (scared? frz) (scared? pse)
            (<slept = 0) (>slept = "77\n"))
    (puts "run deadlock: ok\n"))
+
+; a child spawned on love's stdin reads it blocking: love's own pipe stdin holds O_NONBLOCK,
+; and on the shared description a child reading before its writer answers EAGAIN
+(: f "out/hostnif-stdinblk.fl"
+   p (spawn ["sh" "-c" """[ -r /proc/self/fdinfo/0 ] || { echo 0 >$0; exit; }; fl=$(sed -n 's/^flags:[[:space:]]*//p' /proc/self/fdinfo/0); echo $(( 0$fl & 04000 )) >$0""" f])
+   _ (wait p)
+   r (hark ["cat" f])
+   _ (hark ["rm" "-f" f])
+   _ (test (>r = "0\n"))
+   (puts "run stdin to a child: ok\n"))

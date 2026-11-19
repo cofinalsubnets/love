@@ -1,7 +1,7 @@
 ; test/host/doomx.l -- `love doom -frames 300` on an Xvfb, an arrow held through xtest; held to
 ; exit 0 and its frame count. no Xvfb skips. wants a DOOM=1 love and the iwad: without doom the
 ; verb takes its nest path, which no gate may start. run: cat test/00-init.l test/host/doomx.l | out/love
-(: _ (elem 'doom-start (names ()) ? 0 (puts "doomx: FAIL -- this love carries no doom (build with DOOM=1)", putc 10, quit 1))
+(: _ (cite 'doom 'doom-start ? 0 (puts "doomx: FAIL -- this love carries no doom (build with DOOM=1)", putc 10, quit 1))
    xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "800x600x24" "-nolisten" "tcp"])
    (wfx p) (gather p @ g2 (two? g2 ? g2 (rest 2, wfx p)))
    _ (!(two? xv) ? (gate-skip "doomx: ok (no Xvfb, skipped)") 0)

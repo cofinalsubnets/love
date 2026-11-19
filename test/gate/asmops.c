@@ -43,7 +43,7 @@ uint64_t k_asmops_probe(uint16_t port, uint8_t v) {
   k_wr_cr3(k_rd_cr3());
   k_wr_cr4(k_rd_cr4());
   return k_rd_cr2() + k_inb(port) + k_inl(port) + k_rdmsr(0xc0000080u) + b + c + d
-       + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax; }
+       + k_rd_cr0() + k_rd_cr3() + k_vmread(0x4402) + (uint64_t) k_vmlaunch(&grax) + grax + k_rdtsc(); }
 
 // AND EACH OP MUST EXIST AS ITS OWN FUNCTION for the differential to have
 // anything to compare. It is not enough to CALL them: a `static inline` whose
@@ -66,6 +66,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_cr0,
   (void const*) k_rd_cr3,
   (void const*) k_rd_cr4,
+  (void const*) k_rdtsc,
   (void const*) k_wr_cr0,
   (void const*) k_wr_cr3,
   (void const*) k_wr_cr4,
@@ -101,17 +102,23 @@ uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_wr_vbar_el1(p);
   k_daif_mask_all();
   k_daif_unmask_irq();
+  k_irq_restore(k_irq_save());
   k_tlbi_all();
   k_dc_cvau(p);
+  k_dc_civac(p);
   k_ic_ivau(p);
+  k_ic_iallu();
+  k_wr_ttbr0_el1(p);
+  k_wr_tpidr_el1(p);
+  k_el0_open();
   k_sp_to_el1h();
   k_fpen_enable();
   k_brk0();
   k_udf0();
   k_semihost_exit(block);
   k_psci_system_reset();
-  return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1()
-       + k_rd_cntfrq_el0() + k_at_s1e1w_par(va); }
+  return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1() + k_rd_ttbr0_el1() + k_rd_tpidr_el1()
+       + k_rd_cntfrq_el0() + k_rd_cntpct_el0() + k_at_s1e1w_par(va); }
 void const *const k_asmops_keep[] = {
   (void const*) k_isb,
   (void const*) k_dsb_ish,
@@ -121,9 +128,16 @@ void const *const k_asmops_keep[] = {
   (void const*) k_wr_vbar_el1,
   (void const*) k_daif_mask_all,
   (void const*) k_daif_unmask_irq,
+  (void const*) k_irq_save,
+  (void const*) k_irq_restore,
   (void const*) k_tlbi_all,
   (void const*) k_dc_cvau,
+  (void const*) k_dc_civac,
   (void const*) k_ic_ivau,
+  (void const*) k_ic_iallu,
+  (void const*) k_wr_ttbr0_el1,
+  (void const*) k_wr_tpidr_el1,
+  (void const*) k_el0_open,
   (void const*) k_sp_to_el1h,
   (void const*) k_fpen_enable,
   (void const*) k_brk0,
@@ -133,7 +147,10 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_ctr_el0,
   (void const*) k_rd_mair_el1,
   (void const*) k_rd_ttbr1_el1,
+  (void const*) k_rd_ttbr0_el1,
+  (void const*) k_rd_tpidr_el1,
   (void const*) k_rd_cntfrq_el0,
+  (void const*) k_rd_cntpct_el0,
   (void const*) k_at_s1e1w_par
 };
 
@@ -142,6 +159,10 @@ uint64_t k_asmops_probe(uintptr_t p, uint64_t bits) {
   k_wait();
   k_fence();
   k_wr_stvec(p);
+  k_wr_satp(k_rd_satp());
+  k_sfence();
+  k_fence_i();
+  k_wr_scounteren(bits);
   k_sie_set(bits);
   k_sie_on();
   k_sie_off();
@@ -152,6 +173,11 @@ void const *const k_asmops_keep[] = {
   (void const*) k_wait,
   (void const*) k_fence,
   (void const*) k_wr_stvec,
+  (void const*) k_rd_satp,
+  (void const*) k_wr_satp,
+  (void const*) k_sfence,
+  (void const*) k_fence_i,
+  (void const*) k_wr_scounteren,
   (void const*) k_sie_set,
   (void const*) k_sie_on,
   (void const*) k_sie_off,

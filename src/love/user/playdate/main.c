@@ -1,6 +1,6 @@
-// the playdate frontend: the rune cas workbench on the crank, or with PD_STONES lore's stones.
-// the console is a 50x30 quay cb blitted to the lcd each frame, stdout and stderr both; each
-// update fires (cas ()), or (pd-frame ()) whose picture (lcd ..) dithers under the console
+// the playdate frontend: lore's stones. the console is a 50x30 quay cb blitted over the lcd
+// each frame, stdout and stderr both; each update fires (pd-frame ()), whose picture (lcd ..)
+// dithers under the console
 // mooncc -t thumb2sp on device (f64 softens to __aeabi_*); the SDK is behind pdglue.c
 #include "../../love.h"
 #include "quay.h"
@@ -8,9 +8,6 @@
 
 #ifndef EOF
 #define EOF (-1)
-#endif
-#ifndef PD_STONES
-#define PD_STONES 0
 #endif
 
 #define NROWS 30
@@ -24,7 +21,7 @@ static struct k {
     uint8_t cb_bytes[sizeof(struct cb) + sizeof(struct cb_cell) * NROWS * NCOLS]; };
 } K;
 
-uintptr_t love_clock(void) { return pdg_ms(); }
+uint64_t love_clock(void) { return pdg_ms(); }
 void love_sleep(uintptr_t ms) {
   uintptr_t start = love_clock();
   if (ms) while (love_clock() - start < ms) ;
@@ -66,7 +63,6 @@ static lvm(cur_set) {
   Ip += 1;
   return Continue(); }
 
-#if PD_STONES
 // (held ())      -- the buttons down now, the same bits as pushed
 // (lcd f w h)    -- f's w by h 0xrrggbb pixels, the screen's 400 by 240 stretched over them,
 //                   its luma ordered-dithered one bit a screen pixel; 1 drawn, 0 refused
@@ -84,22 +80,30 @@ static lvm(lcd) {
   intptr_t w = getcharm(Sp[1]), h = getcharm(Sp[2]);
   int okf = galaxyp(f) && tray(f)->type == love_Z && w > 0 && h > 0 && tray_nelem(tray(f)) >= (uintptr_t) (w * h);
   if (okf) {
-    uint8_t *fr = pdg_frame();
+    // a source row's luma once, and each screen column's source column once
+    uint8_t *fr = pdg_frame(), lr[400];
+    uint16_t sx[400];
+    intptr_t sw = w < 400 ? w : 400, last = -1;
+    for (intptr_t x = 0; x < 400; x++) sx[x] = (uint16_t) (x * sw / 400);
     for (intptr_t y = 0; y < PDG_ROWS; y++) {
       intptr_t sy = y * h / PDG_ROWS;
+      uint8_t const *d = bayer8 + (y & 7) * 8;
+      if (sy != last)
+        for (intptr_t i = 0; i < sw; i++) {
+          uint32_t c = (uint32_t) tray_get_int(tray(f), (uintptr_t) (sy * w + i * w / sw));
+          uint32_t l = (77 * (c >> 16 & 255) + 150 * (c >> 8 & 255) + 29 * (c & 255)) >> 8;
+          lr[i] = (uint8_t) l; }
+      last = sy;
       for (intptr_t xb = 0; xb < 400 / 8; xb++) {
         uint8_t byte = 0;
         for (intptr_t b = 0; b < 8; b++) {
           intptr_t x = 8 * xb + b;
-          uint32_t c = (uint32_t) tray_get_int(tray(f), (uintptr_t) (sy * w + x * w / 400));
-          uint32_t l = (77 * (c >> 16 & 255) + 150 * (c >> 8 & 255) + 29 * (c & 255)) >> 8;
-          byte |= (uint8_t) ((l > 4u * bayer8[(y & 7) * 8 + (x & 7)] + 2u) << (7 - b)); }
+          byte |= (uint8_t) ((lr[sx[x]] > 4u * d[b] + 2u) << (7 - b)); }
         fr[PDG_ROWSIZE * y + xb] = byte; } } }
   Sp += 2;
   Sp[0] = okf ? putcharm(1) : zero;
   Ip += 1;
   return Continue(); }
-#endif
 
 // love_horn_seat: horn.c asks these, as inle's hda.c; always stereo (horn_land doubles mono)
 int k_horn_open(int rate) { return pdg_horn_open(rate); }
@@ -111,32 +115,27 @@ void k_horn_close(void) { pdg_horn_close(); }
 static union u const
   nif_crank[]   = {{crank}, {lvm_ret0}},
   nif_pushed[]  = {{pushed}, {lvm_ret0}},
-  nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {cur_set}, {lvm_ret0}}
-#if PD_STONES
-  , nif_held[]  = {{held}, {lvm_ret0}},
-  nif_lcd[]     = {{lvm_cur}, {.x = putcharm(3)}, {lcd}, {lvm_ret0}}
-#endif
-  ;
+  nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {cur_set}, {lvm_ret0}},
+  nif_held[]    = {{held}, {lvm_ret0}},
+  nif_lcd[]     = {{lvm_cur}, {.x = putcharm(3)}, {lcd}, {lvm_ret0}};
 static struct def defs[] = {
   {"crank",   {.k = nif_crank}},
   {"pushed",  {.k = nif_pushed}},
   {"cur_set", {.k = nif_cur_set}},
-#if PD_STONES
   {"held",    {.k = nif_held}},
   {"lcd",     {.k = nif_lcd}},
-#endif
   };
 
-// the console over the frame: every cell, or with PD_STONES only the written ones, white on black
+// the console over the frame: the written cells, white on black; a dead session's every cell
 static void blit(void) {
   uint8_t *frame = pdg_frame();
   for (uint32_t i = 0; i < NROWS; i++)
     for (uint32_t j = 0; j < NCOLS; j++) {
       uint8_t ch = cb_437(cb_base(kcb, K.cb.cb[i * NCOLS + j].g));
       uint8_t const *bmp = cga_8x8[ch];
-      if (PD_STONES && (ch == 0 || ch == ' ') && !K.dead) continue;
+      if ((ch == 0 || ch == ' ') && !K.dead) continue;
       for (uint32_t b = 0; b < 8; b++)
-        frame[PDG_ROWSIZE * (8 * i + b) + j] = PD_STONES ? (uint8_t) ~bmp[b] : bmp[b]; }
+        frame[PDG_ROWSIZE * (8 * i + b) + j] = (uint8_t) ~bmp[b]; }
   pdg_mark_updated(); }
 
 static int k_update(void *_) {
@@ -144,7 +143,7 @@ static int k_update(void *_) {
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
     cb_fill(kcb, 0);
-    K.g = evals_(K.g, PD_STONES ? "(pd-frame ())" : "(cas ())");
+    K.g = evals_(K.g, "(pd-frame ())");
     if (!ok(K.g)) {
       // the screen freezes on the condition until a reset
       if (code_of(K.g) == status_scare) scare_face(K.g);
@@ -178,17 +177,6 @@ int _read(int fd, void *b, size_t n) { return 0; }
 void *_sbrk(intptr_t n) { return (void *) -1; }
 #endif
 
-// rune does not declare itself, so the wrapper is here; q and kanren ride post
-static char const src_mods[] =
-#if PD_STONES
-""
-#else
-"(module 'rune "
-#include "rune.h"
-")"
-#endif
-;
-
 void love_init(void) {
   pdg_log("love: init");
   cb_open(kcb, NROWS, NCOLS, 0);
@@ -216,18 +204,14 @@ void love_init(void) {
     g = defv(g, "born");
     if (ok(g)) g->sp++; }
   pdg_log(ok(g) ? "love: core up" : "love: core FAILED");
-  // a quarter of the device's 16 MB: a major holds old and new pools, so the peak is twice this
-  if (ok(g)) g->budget = (4u << 20) / sizeof(word);
-#if PD_STONES
-  // ..but the stones live at 3 MB: most of the device, and a major at once so the woken pool
-  // is sized under that rather than as the image left it
-  // counted in device words, so the 64-bit simulator holds what the device does
+  // the stones live at 3 MB: most of the device, and a major at once so the woken pool is
+  // sized under that rather than as the image left it. counted in device words, so the
+  // 64-bit simulator holds what the device does
   if (ok(g)) g->budget = (6u << 20) / sizeof(uint32_t);
   if (woke && ok(g) && ok(g = gen_major(g, 0, NULL))) g->major_live0 = (uintptr_t) (g->major_hp - g->major_base);
-#endif
   if (woke) {
     K.g = love_open(g);           // the waker opens its own session (the bake carries none)
-    pdg_log("love: woke -- workbench up");
+    pdg_log("love: woke -- stones up");
     if (ok(K.g)) pdg_set_update(k_update);
     return; }
   K.g = egg(g,
@@ -239,17 +223,8 @@ void love_init(void) {
     ,
 #include "post.h"
     );
-  K.g = evals_(K.g, src_mods);
   K.g = evals_(K.g,
-#if PD_STONES
 #include "stones.h"
-#else
-    "(borrow 'kanren)"
-    " "
-    "(borrow 'rune)"
-    " "
-#include "cas.h"
-#endif
     " 0");
   // the crank's evals defglob in the session, never in the base
   K.g = love_open(K.g);

@@ -27,10 +27,23 @@ int main(int argc, char **argv) {
  uintptr_t n = fread(s, 1, sizeof s, stdin), on;
  if (argv[1][0] == 'c') {
   uintptr_t cap = ze_cap(n); uint8_t *o = malloc(cap);
-  uintptr_t k = ze_frame(s, n, 19, o, cap);
+  uintptr_t k = ze_frame(s, n, 0, 19, o, cap, NULL);
   if (!k) return 2;
   fwrite(o, 1, k, stdout); return 0; }
- uint8_t *u = zs_whole(s, n, &on);
+ uint8_t *u = zs_whole(s, n, NULL, 0, NULL, &on);
+ if (!u && n >= 6) {                             // no size said, as a stream writes it: walked into one window
+  unsigned d = s[4], ss = d >> 5 & 1;
+  uintptr_t i = 5 + !ss + zs_dn[d & 3] + (d >> 6 ? zs_fz[d >> 6] : ss);
+  struct zs_st *S = calloc(1, sizeof *S);
+  u = malloc(sizeof s + ZS_BMAX + ZS_SLACK);
+  S->cap = sizeof s + ZS_BMAX, S->win = sizeof s, S->ck = d >> 2 & 1, S->rep[0] = 1, S->rep[1] = 4, S->rep[2] = 8, xx_init(&S->x);
+  for (int last = 0; !last; ) {
+   if (n < i + 3) return 3;
+   uintptr_t bh = (uintptr_t) xx_rd(s + i, 3), k = (bh >> 1 & 3) == 1 ? 1 : bh >> 3;
+   if (n - i - 3 < k || zs_block(S, u, s + i, 3 + k) < 0) return 3;
+   i += 3 + k, last = (int) (bh & 1); }
+  if (d & 4 && (n < i + 4 || xx_rd(s + i, 4) != (xx_done(&S->x) & 0xffffffffu))) return 3;
+  on = S->n; }
  if (!u) return 3;
  fwrite(u, 1, on, stdout); return 0; }
 EOF

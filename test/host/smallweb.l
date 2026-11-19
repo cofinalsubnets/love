@@ -7,7 +7,8 @@
    dir ((cwd 0) + "/out/.smallweb-" + show (getpid 0))
    _ (hark ["rm" "-rf" dir]) _ (mkdir dir 448)
    home0 (getenv "HOME")
-   _ (setenv "HOME" dir)
+   n0 (getenv "LOVE_NEST")
+   _ (setenv "HOME" dir) _ (setenv "LOVE_NEST" (dir + "/.love"))
    (put p s) (: q (open p "w") _ (say q s) (close q))
    ; on a pipe www pours the page and its references; stderr rides along
    (www u) (: r (hark ["sh" "-c" (love + " www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
@@ -92,12 +93,12 @@ for _ in range(int(sys.argv[3])):
            r (www (base + "/go"))
            e (www (base + "/gone"))
            _ (still <s1 15) _ (h-waitfor <s1)
-           pins (: q (open (dir + "/.love/gemini_hosts") "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
+           pins (: q (open (dir + "/.love/etc/gemini_hosts") "r") (? (hot? q) (: s (slurp q) _ (close q) s) ""))
            ; another certificate: refused until its line is gone
            s2 (serve "two" 2)
            _ (test-until (\ s !(two? s)) (\ _ (stat (dir + "/two.up"))))
            c (www (base + "/doc"))
-           _ (hark ["rm" "-f" (dir + "/.love/gemini_hosts")])
+           _ (hark ["rm" "-f" (dir + "/.love/etc/gemini_hosts")])
            c2 (www (base + "/doc"))
            _ (still <s2 15) _ (h-waitfor <s2)
            (test (has? <g "Title") (has? <g "Sub") (has? <g "one") (has? <g "two") (has? <g "quoted")
@@ -108,7 +109,7 @@ for _ in range(int(sys.argv[3])):
                  (has? pins ("127.0.0.1:" + ms + " "))
                  (has? <c "has changed") !(c 1 = 0) (has? <c2 "plain doc")))
         0)
-   _ (setenv "HOME" home0)
+   _ (setenv "HOME" home0) _ (setenv "LOVE_NEST" n0)
    _ (hark ["rm" "-rf" dir])
    0)
 

@@ -116,11 +116,11 @@
 #define LED_BIT 3u                     // GPIO2_IO03 = Teensy pin 13
 
 void clocks_init(void);
-void serial_init(void);
-void serial_putc(int c);
-int  serial_getc(void);
-int  serial_rx_ready(void);
-uint32_t serial_rx_lost(void);   // inbound bytes the soft ring could not hold, and clears
+void uart_init(void);
+void uart_putc(int c);
+int  uart_getc(void);
+int  uart_rx_ready(void);
+uint32_t uart_rx_lost(void);   // inbound bytes the soft ring could not hold, and clears
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);
@@ -130,4 +130,12 @@ int  gpio_get(unsigned pin);
 void arm_dsb_isb(void);
 void arm_dsb(void);
 void arm_wfi(void);
+
+// usb.c: the board's own USB as a CDC-ACM console beside the UART
+void usb_init(void);
+void usb_putc(int c);
+void usb_flush(void);
+int usb_rx_ready(void);
+int usb_up(void);
+int usb_getc(void);
 void arm_bkpt(void);

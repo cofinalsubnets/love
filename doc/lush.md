@@ -19,7 +19,7 @@ lush - the love shell, a POSIX command shell 🐚
 
 **lush** is a POSIX-compatible command shell written in **love**(1). It is the project's daily-driver shell, the shell its build and gate scripts run under, and the console shell of the love distro (where `/bin/sh` is a kore symlink that lands here).
 
-Interactively it offers an editable line with Tab completion (commands from PATH and the builtins at command position, pathnames after; `~` folds and unfolds), persistent history (*~/.lush_history*, appended on Enter), a prompt carrying the current directory, the last nonzero exit status, and the git branch when inside a repository (in an sb nest, `sb` and its head's psid), and real job control: `^Z` stops the foreground job, **jobs**/**fg**/**bg** manage it, a trailing `&` backgrounds a pipeline, `$!` names it. An error at the prompt re-prompts; the terminal is never left raw.
+Interactively it offers an editable line with Tab completion (commands from PATH and the builtins at command position, pathnames after; `~` folds and unfolds), persistent history (the nest's *run/lush_history*, appended on Enter), a prompt carrying the current directory, the last nonzero exit status, and the git branch when inside a repository (in an sb nest, `sb` and its head's psid), and real job control: `^Z` stops the foreground job, **jobs**/**fg**/**bg** manage it, a trailing `&` backgrounds a pipeline, `$!` names it. An error at the prompt re-prompts; the terminal is never left raw.
 
 The script subset covers pipelines and lists (`| && || ; !`), redirects including io-numbers and `2>&1`, here-documents (`<<`, `<<-`), command substitution (`$( )` and backticks), globbing (`* ? [..]`, quoting-aware), tilde expansion, `if`/`while`/`until`/`for`/`case`, `{ }` groups and `( )` subshells, functions with `return`, shell variables over the environment (`export` promotes), positional parameters with the quoted-`"$@"` law, the `${x:-y}` parameter-expansion family including `${#x}` and `${x#pat}`/`${x%pat}`, `${(`*form*`)}` love interpolation (below), and `set -e -u -x`.
 
@@ -52,7 +52,7 @@ With no operands lush is interactive when stdin is a terminal, and reads command
 
 # INVOCATION FILES
 
-A login shell reads */etc/profile* then *~/.profile* first, whatever mode it runs in. An interactive shell then reads `$ENV` when set, else *~/.lushrc*. A broken line in an rc file scares back to the prompt; it cannot take the shell down.
+A login shell reads */etc/profile* then *~/.profile* first, whatever mode it runs in. An interactive shell then reads `$ENV` when set, else the nest's *etc/lushrc* (**love**(1), LOVE_NEST). A broken line in an rc file scares back to the prompt; it cannot take the shell down.
 
 # BUILTINS
 
@@ -68,7 +68,7 @@ It is deliberately **not** spelled `love`. A builtin shadows its PATH twin, and 
 
 # MAKING IT YOUR SHELL
 
-Point a terminal emulator at `lush` -- terminal shells are interactive non-login, so *~/.lushrc* is the file to season. **love nest** (and `make install`, which runs it) is the one install: `love` and `lush` on PATH and nothing else, since every other verb is a word lush runs by name: gregarious by default, a verb PATH has is PATH's and one it lacks is ours -- `lush -c 'mooncc -o t t.c'` with no mooncc installed. `lush -ac lux` from an *~/.xinitrc* asks for ours whatever PATH holds. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; **login**(1) or a display manager then spawns it with a dash `argv[0]`, `-lush`, and that alone makes it a login shell that reads the profiles, through the nest's links and with no wrapper.
+Point a terminal emulator at `lush` -- terminal shells are interactive non-login, so the nest's *etc/lushrc* is the file to season. **love nest** (and `make install`, which runs it) is the one install: `love` and `lush` on PATH and nothing else, since every other verb is a word lush runs by name: gregarious by default, a verb PATH has is PATH's and one it lacks is ours -- `lush -c 'mooncc -o t t.c'` with no mooncc installed. `lush -ac lux` from an *~/.xinitrc* asks for ours whatever PATH holds. For **chsh**(1), add the absolute path (`~/.local/bin/lush` resolves to the nest) to */etc/shells* and `chsh -s` it; **login**(1) or a display manager then spawns it with a dash `argv[0]`, `-lush`, and that alone makes it a login shell that reads the profiles, through the nest's links and with no wrapper.
 
 # EXIT STATUS
 

@@ -1,6 +1,6 @@
 ; test/uuzbvc.l -- laid by src/love/compress/bz.l, `make mx`. edit that file.
 ; the ledger: what the theorems leave open, each with who answers for it
-; pointers: bz_dblock's d, r and w -- bz2.c hands them over whole, d from alloc, r over the string, w from its caller
+; pointers: bz_dblock's d and r, bz_dwalk's d and w -- bz2.c hands them over whole, d from alloc or its state, r over the string, w from its caller
 ; sink: w's p holds oc bytes -- w is all zero, or bz2_into's out and cap (srctree.c)
 ; reader: br_get from bz_dec and bz_step -- n + 9 fits, i <= n + 9, k <= 64: bz2.c's framing; bz_dblock checks them for itself
 ; alloc: NULL or the bytes asked for -- alloc.c, as inflate's ledger has it
@@ -806,149 +806,44 @@
   (inf-le i (add n 9)) f1a
   (inf-le k 64) f1b
  )
- (defcx inf-zbout (Tt (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat)) (Cr (pi x nat nat)) (w nat) (lim nat) (tn nat) (nb nat) (orig nat) (on0 nat) (oc0 nat) (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))) (hq (inf-le on0 oc0)) (hf (inf-lt oc0 (inf-pow w))) )
- (defvcs inf-vc-zbout-r0 1 inf-zbout (g0 (inf-lt tn nb))
-  (inf-le on0 oc0) hq
-  (inf-lt oc0 (inf-pow w)) hf
- )
- (defvcs inf-vc-zbout-r1 1 inf-zbout (g0 (inf-le nb tn) g1 (inf-le nb orig))
-  (inf-le on0 oc0) hq
-  (inf-lt oc0 (inf-pow w)) hf
- )
- (defcx inf-zbout-f0 inf-zbout (g0 (inf-le nb tn)) (g1 (inf-lt orig nb)) (sh0 nat) (c nat) (s nat) )
- (defvcs inf-vc-zbout-p0 1 inf-zbout-f0 (f0 (inf-lt c 256))
+ (defcx inf-zblink (Tt (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat)) (w nat) (lim nat) (tn nat) (nb nat) (orig nat) (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))) )
+ (defcx inf-zblink-f0 inf-zblink (g0 (inf-le nb tn)) (g1 (inf-lt orig nb)) (sh0 nat) (c nat) (s nat) )
+ (defvcs inf-vc-zblink-p0 1 inf-zblink-f0 (f0 (inf-lt c 256))
   (inf-lt c 256) f0
  )
- (defvcs inf-vc-zbout-h1 1 inf-zbout-f0 (f0 (inf-lt c 256))
+ (defvcs inf-vc-zblink-h1 1 inf-zblink-f0 (f0 (inf-lt c 256))
   (inf-lt c 256) f0
  )
- (defvcs inf-vc-zbout-f0b 1 inf-zbout-f0 (f0 (inf-lt c 256) sh1 nat)
+ (defvcs inf-vc-zblink-f0b 1 inf-zblink-f0 (f0 (inf-lt c 256) sh1 nat)
   (inf-lt (succ c) (inf-pow w)) (inf-lelt (succ c) 1024 (inf-pow w) (inf-letrans (succ c) 256 1024 (inf-ltsu c 256 f0) (idpath false)) (bz-w1k w gw))
   (inf-lt (natminus 256 (succ c)) (natminus 256 c)) (inf-subfall 256 c f0)
  )
- (defcx inf-zbout-f0-f1 inf-zbout-f0 (f0 (inf-le 256 c)) (u nat) )
- (defvcs inf-vc-zbout-h2 1 inf-zbout-f0-f1 (f1 (inf-lt u nb))
+ (defcx inf-zblink-f0-f1 inf-zblink-f0 (f0 (inf-le 256 c)) (u nat) )
+ (defvcs inf-vc-zblink-h2 1 inf-zblink-f0-f1 (f1 (inf-lt u nb))
   (inf-lt u tn) (inf-lttrans u nb tn f1 g0)
  )
- (defvcs inf-vc-zbout-h3 1 inf-zbout-f0-f1 (f1 (inf-lt u nb) xh2 nat)
+ (defvcs inf-vc-zblink-h3 1 inf-zblink-f0-f1 (f1 (inf-lt u nb) xh2 nat)
   (inf-lt (inf-mod 256 xh2) 256) (inf-lelts (inf-mod 256 xh2) 255 (inf-letrans (inf-mod 256 xh2) 255 255 (inf-ltsle (inf-mod 256 xh2) 255 (inf-modlt 255 xh2)) (inf-refl 255)))
  )
- (defvcs inf-vc-zbout-r2 1 inf-zbout-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-le nb jh3))
-  (inf-le on0 oc0) hq
-  (inf-lt oc0 (inf-pow w)) hf
- )
- (defvcs inf-vc-zbout-p1 1 inf-zbout-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
+ (defvcs inf-vc-zblink-p1 1 inf-zblink-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
   (inf-lt jh3 tn) (inf-lttrans jh3 nb tn g2 g0)
   (inf-lt 8 64) (idpath true)
  )
- (defvcs inf-vc-zbout-p2 1 inf-zbout-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
+ (defvcs inf-vc-zblink-p2 1 inf-zblink-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
   (inf-lt (inf-mod 256 xh2) 256) (inf-lelts (inf-mod 256 xh2) 255 (inf-letrans (inf-mod 256 xh2) 255 255 (inf-ltsle (inf-mod 256 xh2) 255 (inf-modlt 255 xh2)) (inf-refl 255)))
  )
- (defvcs inf-vc-zbout-f1b 1 inf-zbout-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
+ (defvcs inf-vc-zblink-f1b 1 inf-zblink-f0-f1 (f1 (inf-lt u nb) xh2 nat jh3 nat g2 (inf-lt jh3 nb))
   (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nb (inf-pow lim) (inf-ltsu u nb f1) (inf-letrans nb tn (inf-pow lim) g0 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
   (inf-lt (natminus nb (succ u)) (natminus nb u)) (inf-subfall nb u f1)
  )
- (defvcs inf-vc-zbout-h4 1 inf-zbout-f0-f1 (f1 (inf-le nb u))
-  (inf-lt orig tn) (inf-lttrans orig nb tn g1 g0)
-  (inf-lt 8 64) (idpath true)
- )
- (defvcs inf-vc-zbout-f2e 1 inf-zbout-f0-f1 (f1 (inf-le nb u) ph4 nat crch5 nat lasth6 nat sameh7 nat)
-  (inf-le on0 oc0) hq
-  (inf-lt oc0 (inf-pow w)) hf
- )
- (defcx inf-zbout-f0-f1-f2 inf-zbout-f0-f1 (f1 (inf-le nb u)) (ph4 nat) (crch5 nat) (lasth6 nat) (sameh7 nat) (u nat) (same nat) (last nat) (crc nat) (p nat) (c nat) (on nat) (oc nat) (f2a (inf-le on oc)) (f2b (inf-lt oc (inf-pow w))) )
- (defvcs inf-vc-zbout-r3 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-le nb p))
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defvcs inf-vc-zbout-h8 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb))
-  (inf-lt p tn) (inf-lttrans p nb tn g3 g0)
- )
- (defvcs inf-vc-zbout-s0 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat)
-  (inf-lt (inf-mod 256 xh8) (inf-pow w)) (inf-lelt (inf-mod 256 xh8) 1024 (inf-pow w) (inf-letrans (inf-mod 256 xh8) 255 1024 (inf-ltsle (inf-mod 256 xh8) 255 (inf-modlt 255 xh8)) (idpath false)) (bz-w1k w gw))
- )
- (defvcs inf-vc-zbout-h9 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat)
-  (inf-lt 8 64) (idpath true)
- )
- (defvcs inf-vc-zbout-f3e 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat ph9 nat g4 unit)
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defcx inf-zbout-f0-f1-f2-f3 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb)) (g3 (inf-lt p nb)) (xh8 nat) (ph9 nat) (g4 unit) (j nat) (crc nat) (on nat) (oc nat) (f3a (inf-le on oc)) (f3b (inf-lt oc (inf-pow w))) )
- (defvcs inf-vc-zbout-h10 1 inf-zbout-f0-f1-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)))
-  (inf-lt 24 64) (idpath true)
- )
- (defvcs inf-vc-zbout-h11 1 inf-zbout-f0-f1-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)) yh10 nat)
-  (inf-lt 8 64) (idpath true)
-  (inf-lt (inf-mod 256 yh10) 256) (inf-lelts (inf-mod 256 yh10) 255 (inf-letrans (inf-mod 256 yh10) 255 255 (inf-ltsle (inf-mod 256 yh10) 255 (inf-modlt 255 yh10)) (inf-refl 255)))
- )
- (defvcs inf-vc-zbout-c0 1 inf-zbout-f0-f1-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)) yh10 nat crch11 nat)
-  (inf-le 32 w) gw
-  (inf-le 19 lim) hl
-  (inf-lt lim 31) hm
-  (inf-le on oc) f3a
-  (inf-lt oc (inf-pow w)) f3b
- )
- (defcx inf-zbout-c2 inf-zbout-f0-f1-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8))) (yh10 nat) (crch11 nat) (onc0 nat) (occ0 nat) (c0e1 (inf-le onc0 occ0)) (c0e2 (inf-lt occ0 (inf-pow w))) )
- (defvcs inf-vc-zbout-f3b 1 inf-zbout-c2 ()
-  (inf-lt (succ j) (inf-pow w)) (inf-lelt (succ j) 1024 (inf-pow w) (inf-letrans (succ j) (inf-mod 256 xh8) 1024 (inf-ltsu j (inf-mod 256 xh8) f3) (inf-letrans (inf-mod 256 xh8) 255 1024 (inf-ltsle (inf-mod 256 xh8) 255 (inf-modlt 255 xh8)) (idpath false))) (bz-w1k w gw))
-  (inf-le onc0 occ0) c0e1
-  (inf-lt occ0 (inf-pow w)) c0e2
-  (inf-lt (natminus (inf-mod 256 xh8) (succ j)) (natminus (inf-mod 256 xh8) j)) (inf-subfall (inf-mod 256 xh8) j f3)
- )
- (defvcs inf-vc-zbout-f2b 1 inf-zbout-f0-f1-f2-f3 (f3 (inf-le (inf-mod 256 xh8) j) sameh12 nat lasth13 nat)
-  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nb (inf-pow lim) (inf-ltsu u nb f2) (inf-letrans nb tn (inf-pow lim) g0 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
-  (inf-le on oc) f3a
-  (inf-lt oc (inf-pow w)) f3b
-  (inf-lt (natminus nb (succ u)) (natminus nb u)) (inf-subfall nb u f2)
- )
- (defvcs inf-vc-zbout-h14 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat ph9 nat g4 unit)
-  (inf-lt 24 64) (idpath true)
- )
- (defvcs inf-vc-zbout-h15 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat ph9 nat g4 unit yh14 nat)
-  (inf-lt 8 64) (idpath true)
-  (inf-lt (inf-mod 256 yh14) 256) (inf-lelts (inf-mod 256 yh14) 255 (inf-letrans (inf-mod 256 yh14) 255 255 (inf-ltsle (inf-mod 256 yh14) 255 (inf-modlt 255 yh14)) (inf-refl 255)))
- )
- (defvcs inf-vc-zbout-c1 1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb) g3 (inf-lt p nb) xh8 nat ph9 nat g4 unit yh14 nat crch15 nat)
-  (inf-le 32 w) gw
-  (inf-le 19 lim) hl
-  (inf-lt lim 31) hm
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defcx inf-zbout-c1 inf-zbout-f0-f1-f2 (f2 (inf-lt u nb)) (g3 (inf-lt p nb)) (xh8 nat) (ph9 nat) (g4 unit) (yh14 nat) (crch15 nat) (onc1 nat) (occ1 nat) (c1e1 (inf-le onc1 occ1)) (c1e2 (inf-lt occ1 (inf-pow w))) )
- (defvcs inf-vc-zbout-f2b 5 inf-zbout-c1 (g5 unit sameh16 nat lasth18 nat)
-  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nb (inf-pow lim) (inf-ltsu u nb f2) (inf-letrans nb tn (inf-pow lim) g0 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
-  (inf-le onc1 occ1) c1e1
-  (inf-lt occ1 (inf-pow w)) c1e2
-  (inf-lt (natminus nb (succ u)) (natminus nb u)) (inf-subfall nb u f2)
- )
- (defvcs inf-vc-zbout-f2b 9 inf-zbout-c1 (g5 unit sameh17 nat lasth18 nat)
-  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nb (inf-pow lim) (inf-ltsu u nb f2) (inf-letrans nb tn (inf-pow lim) g0 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
-  (inf-le onc1 occ1) c1e1
-  (inf-lt occ1 (inf-pow w)) c1e2
-  (inf-lt (natminus nb (succ u)) (natminus nb u)) (inf-subfall nb u f2)
- )
- (defvcs inf-vc-zbout-r4 1 inf-zbout-f0-f1-f2 (f2 (inf-le nb u) g6 unit)
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defvcs inf-vc-zbout-r5 1 inf-zbout-f0-f1-f2 (f2 (inf-le nb u) g6 unit g7 unit)
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defvcs inf-vc-zbout-r6 1 inf-zbout-f0-f1-f2 (f2 (inf-le nb u) g6 unit g7 unit)
-  (inf-le on oc) f2a
-  (inf-lt oc (inf-pow w)) f2b
- )
- (defcx inf-zbblock (In (pi x nat nat)) (Ps (pi x nat nat)) (Ln (pi x nat nat)) (Sq (pi x nat nat)) (Sl (pi x nat nat)) (Yy (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat)) (Tt (pi x nat nat)) (Cr (pi x nat nat)) (Zt (pi x nat nat)) (n nat) (w nat) (i0 nat) (k0 nat) (on0 nat) (oc0 nat) (ms nat) (tn nat) (lim nat) (tl nat) (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))) (hms (inf-lt ms (inf-pow w))) (h20 (inf-le 20 tl)) (hq (inf-lt tl 30)) (hf (inf-lt oc0 (inf-pow w))) )
+ (defcx inf-zbblock (In (pi x nat nat)) (Ps (pi x nat nat)) (Ln (pi x nat nat)) (Sq (pi x nat nat)) (Sl (pi x nat nat)) (Yy (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat)) (Tt (pi x nat nat)) (Cr (pi x nat nat)) (Zt (pi x nat nat)) (n nat) (w nat) (i0 nat) (k0 nat) (ms nat) (tn nat) (lim nat) (tl nat) (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))) (hms (inf-lt ms (inf-pow w))) (h20 (inf-le 20 tl)) (hq (inf-lt tl 30)) )
  (defvcs inf-vc-zbblock-i1 1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w)))
   (inf-lt (add n 9) (inf-pow w)) g0
  )
  (defvcs inf-vc-zbblock-i2 1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w)) g1 (inf-lt (inf-by16 (add n 9)) (inf-pow w)))
   (inf-lt (add n 9) (inf-pow w)) g0
  )
- (defvcs inf-vc-zbblock-c0 1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w)) g1 (inf-lt (inf-by16 (add n 9)) (inf-pow w)) g2 (inf-le i0 (add n 9)) g3 (inf-le k0 64) g4 (inf-le on0 oc0))
+ (defvcs inf-vc-zbblock-c0 1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w)) g1 (inf-lt (inf-by16 (add n 9)) (inf-pow w)) g2 (inf-le i0 (add n 9)) g3 (inf-le k0 64))
   (inf-le 32 w) gw
   (inf-lt (add n 9) (inf-pow w)) g0
   (inf-le i0 (add n 9)) g2
@@ -956,7 +851,7 @@
   (inf-lt 0 32) (idpath true)
   (inf-le 32 32) (idpath false)
  )
- (defcx inf-zbblock-c1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w))) (g1 (inf-lt (inf-by16 (add n 9)) (inf-pow w))) (g2 (inf-le i0 (add n 9))) (g3 (inf-le k0 64)) (g4 (inf-le on0 oc0)) (ic0 nat) (kc0 nat) (wantc0 nat) (c0e1 (inf-le ic0 (add n 9))) (c0e2 (inf-le kc0 64)) (c0e3 (inf-lt wantc0 (inf-pow w))) )
+ (defcx inf-zbblock-c1 inf-zbblock (g0 (inf-lt (add n 9) (inf-pow w))) (g1 (inf-lt (inf-by16 (add n 9)) (inf-pow w))) (g2 (inf-le i0 (add n 9))) (g3 (inf-le k0 64)) (ic0 nat) (kc0 nat) (wantc0 nat) (c0e1 (inf-le ic0 (add n 9))) (c0e2 (inf-le kc0 64)) (c0e3 (inf-lt wantc0 (inf-pow w))) )
  (defvcs inf-vc-zbblock-c1 1 inf-zbblock-c1 ()
   (inf-le 32 w) gw
   (inf-lt (add n 9) (inf-pow w)) g0
@@ -1003,8 +898,80 @@
   (inf-le 19 lim) hl
   (inf-lt lim 31) hm
   (inf-le tn (inf-pow lim)) hts
-  (inf-le on0 oc0) g4
+ )
+ (defcx inf-zbblock-c7 inf-zbblock-c6 (g8 (paths nat xc5 0)) (nbh0 nat) (xc6 nat) )
+ (defcx inf-zbwalk (Tt (pi x nat nat)) (Cr (pi x nat nat)) (w nat) (lim nat) (tn nat) (room nat) (on0 nat) (oc0 nat) (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))) (hf (inf-lt oc0 (inf-pow w))) )
+ (defvcs inf-vc-zbwalk-f2e 1 inf-zbwalk (g0 (inf-le on0 oc0) nbh0 nat g1 (inf-le nbh0 tn) ph1 nat crch2 nat lasth3 nat sameh4 nat u0h5 nat)
+  (inf-le on0 oc0) g0
   (inf-lt oc0 (inf-pow w)) hf
  )
- (defcx inf-zbblock-c7 inf-zbblock-c6 (g8 (paths nat xc5 0)) (nbh0 nat) (onc6 nat) (occ6 nat) (xc6 nat) (c6e1 (inf-le onc6 occ6)) (c6e2 (inf-lt occ6 (inf-pow w))) )
+ (defcx inf-zbwalk-f2 inf-zbwalk (g0 (inf-le on0 oc0)) (nbh0 nat) (g1 (inf-le nbh0 tn)) (ph1 nat) (crch2 nat) (lasth3 nat) (sameh4 nat) (u0h5 nat) (u nat) (same nat) (last nat) (crc nat) (p nat) (on nat) (oc nat) (f2a (inf-le on oc)) (f2b (inf-lt oc (inf-pow w))) )
+ (defvcs inf-vc-zbwalk-h8 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0))
+  (inf-lt p tn) (inf-lttrans p nbh0 tn g3 g1)
+ )
+ (defvcs inf-vc-zbwalk-s0 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat)
+  (inf-lt (inf-mod 256 xh8) (inf-pow w)) (inf-lelt (inf-mod 256 xh8) 1024 (inf-pow w) (inf-letrans (inf-mod 256 xh8) 255 1024 (inf-ltsle (inf-mod 256 xh8) 255 (inf-modlt 255 xh8)) (idpath false)) (bz-w1k w gw))
+ )
+ (defvcs inf-vc-zbwalk-h9 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat)
+  (inf-lt 8 64) (idpath true)
+ )
+ (defvcs inf-vc-zbwalk-f3e 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat ph9 nat g4 unit)
+  (inf-le on oc) f2a
+  (inf-lt oc (inf-pow w)) f2b
+ )
+ (defcx inf-zbwalk-f2-f3 inf-zbwalk-f2 (f2 (inf-lt u nbh0)) (g2 (inf-lt on room)) (g3 (inf-lt p nbh0)) (xh8 nat) (ph9 nat) (g4 unit) (j nat) (crc nat) (on nat) (oc nat) (f3a (inf-le on oc)) (f3b (inf-lt oc (inf-pow w))) )
+ (defvcs inf-vc-zbwalk-h10 1 inf-zbwalk-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)))
+  (inf-lt 24 64) (idpath true)
+ )
+ (defvcs inf-vc-zbwalk-h11 1 inf-zbwalk-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)) yh10 nat)
+  (inf-lt 8 64) (idpath true)
+  (inf-lt (inf-mod 256 yh10) 256) (inf-lelts (inf-mod 256 yh10) 255 (inf-letrans (inf-mod 256 yh10) 255 255 (inf-ltsle (inf-mod 256 yh10) 255 (inf-modlt 255 yh10)) (inf-refl 255)))
+ )
+ (defvcs inf-vc-zbwalk-c0 1 inf-zbwalk-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8)) yh10 nat crch11 nat)
+  (inf-le 32 w) gw
+  (inf-le 19 lim) hl
+  (inf-lt lim 31) hm
+  (inf-le on oc) f3a
+  (inf-lt oc (inf-pow w)) f3b
+ )
+ (defcx inf-zbwalk-c2 inf-zbwalk-f2-f3 (f3 (inf-lt j (inf-mod 256 xh8))) (yh10 nat) (crch11 nat) (onc0 nat) (occ0 nat) (c0e1 (inf-le onc0 occ0)) (c0e2 (inf-lt occ0 (inf-pow w))) )
+ (defvcs inf-vc-zbwalk-f3b 1 inf-zbwalk-c2 ()
+  (inf-lt (succ j) (inf-pow w)) (inf-lelt (succ j) 1024 (inf-pow w) (inf-letrans (succ j) (inf-mod 256 xh8) 1024 (inf-ltsu j (inf-mod 256 xh8) f3) (inf-letrans (inf-mod 256 xh8) 255 1024 (inf-ltsle (inf-mod 256 xh8) 255 (inf-modlt 255 xh8)) (idpath false))) (bz-w1k w gw))
+  (inf-le onc0 occ0) c0e1
+  (inf-lt occ0 (inf-pow w)) c0e2
+  (inf-lt (natminus (inf-mod 256 xh8) (succ j)) (natminus (inf-mod 256 xh8) j)) (inf-subfall (inf-mod 256 xh8) j f3)
+ )
+ (defvcs inf-vc-zbwalk-f2b 1 inf-zbwalk-f2-f3 (f3 (inf-le (inf-mod 256 xh8) j) sameh12 nat lasth13 nat)
+  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nbh0 (inf-pow lim) (inf-ltsu u nbh0 f2) (inf-letrans nbh0 tn (inf-pow lim) g1 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
+  (inf-le on oc) f3a
+  (inf-lt oc (inf-pow w)) f3b
+  (inf-lt (natminus nbh0 (succ u)) (natminus nbh0 u)) (inf-subfall nbh0 u f2)
+ )
+ (defvcs inf-vc-zbwalk-h14 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat ph9 nat g4 unit)
+  (inf-lt 24 64) (idpath true)
+ )
+ (defvcs inf-vc-zbwalk-h15 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat ph9 nat g4 unit yh14 nat)
+  (inf-lt 8 64) (idpath true)
+  (inf-lt (inf-mod 256 yh14) 256) (inf-lelts (inf-mod 256 yh14) 255 (inf-letrans (inf-mod 256 yh14) 255 255 (inf-ltsle (inf-mod 256 yh14) 255 (inf-modlt 255 yh14)) (inf-refl 255)))
+ )
+ (defvcs inf-vc-zbwalk-c1 1 inf-zbwalk-f2 (f2 (inf-lt u nbh0) g2 (inf-lt on room) g3 (inf-lt p nbh0) xh8 nat ph9 nat g4 unit yh14 nat crch15 nat)
+  (inf-le 32 w) gw
+  (inf-le 19 lim) hl
+  (inf-lt lim 31) hm
+  (inf-le on oc) f2a
+  (inf-lt oc (inf-pow w)) f2b
+ )
+ (defcx inf-zbwalk-c1 inf-zbwalk-f2 (f2 (inf-lt u nbh0)) (g2 (inf-lt on room)) (g3 (inf-lt p nbh0)) (xh8 nat) (ph9 nat) (g4 unit) (yh14 nat) (crch15 nat) (onc1 nat) (occ1 nat) (c1e1 (inf-le onc1 occ1)) (c1e2 (inf-lt occ1 (inf-pow w))) )
+ (defvcs inf-vc-zbwalk-f2b 5 inf-zbwalk-c1 (g5 unit sameh16 nat lasth18 nat)
+  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nbh0 (inf-pow lim) (inf-ltsu u nbh0 f2) (inf-letrans nbh0 tn (inf-pow lim) g1 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
+  (inf-le onc1 occ1) c1e1
+  (inf-lt occ1 (inf-pow w)) c1e2
+  (inf-lt (natminus nbh0 (succ u)) (natminus nbh0 u)) (inf-subfall nbh0 u f2)
+ )
+ (defvcs inf-vc-zbwalk-f2b 9 inf-zbwalk-c1 (g5 unit sameh17 nat lasth18 nat)
+  (inf-lt (succ u) (inf-pow w)) (inf-lelt (succ u) (inf-pow lim) (inf-pow w) (inf-letrans (succ u) nbh0 (inf-pow lim) (inf-ltsu u nbh0 f2) (inf-letrans nbh0 tn (inf-pow lim) g1 hts)) (inf-wpow w lim gw (inf-lttrans lim 31 32 hm (idpath false))))
+  (inf-le onc1 occ1) c1e1
+  (inf-lt occ1 (inf-pow w)) c1e2
+  (inf-lt (natminus nbh0 (succ u)) (natminus nbh0 u)) (inf-subfall nbh0 u f2)
+ )
  )

@@ -100,6 +100,12 @@ void k_uart(void) {
   while (k_inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
     kq(k_inb(COM1)); }
 
+// a guest of the firmware runs no timer of its own: the ticks follow the tsc
+extern uint64_t kticks;
+void k_tick_sync(void) {
+  if (kboot.efi_st && kboot.tsc_khz)
+    kticks = (k_rdtsc() - kboot.tsc0) / (kboot.tsc_khz * 10); }   // k_tick_ms
+
 // (fault n): raise exception vector n; k_exception reports and halts
 void k_fault_trigger(intptr_t n) {
   switch (n) {

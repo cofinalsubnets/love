@@ -8,10 +8,12 @@
 // darkened by the second, 11 a polygon of its nums' corners, 12 cracks: a grid [dx dy w] its
 // lines wandering by noise up to the fourth num either side, 13 grain: rows [every w warp size]
 // wandering by noise, 14 cells: borders [size w] between the points thrown one to a cell, 15 an
-// oval [x y rx ry cos sin], 16 that oval shaded as a globe by light [lx ly lz] and shine, no paint.
-// a paint [tag a b c d]: 0 a hole,
+// oval [x y rx ry cos sin], 16 that oval shaded as a globe by light [lx ly lz] and shine, no paint,
+// 17 relief [size octaves depth 0], no paint, 18 stain [size octaves cover soft]: fbm, octaves
+// of noise wrapped at the picture's edges. a paint [tag a b c d]: 0 a hole,
 // 1 the colour a b c, 2 shade by a, 3 tint by a b c, 4 mix toward a b c by d, 5 noise of size
-// a b, amount c, seed d. () where an argument is not as it says
+// a b, amount c, seed d, 6 fbm of size a, octaves b, amount c, seed d. () where an argument is
+// not as it says
 #include "love.h"
 
 enum { sw_band = 8, sw_side = 4096 };   // rows a share; the widest side
@@ -35,6 +37,24 @@ static flo_t sw_vn(flo_t x, flo_t z, int64_t s) {
              r = (flo_t) sw_throw(ix, iz + 1, s) / (flo_t) 1023.0, t = (flo_t) sw_throw(ix + 1, iz + 1, s) / (flo_t) 1023.0,
              lo = p + ex * (q - p), hi = r + ex * (t - r);
  return lo + ez * (hi - lo); }
+// value noise wrapped every pu by pv cells; and its octaves over a picture w by h
+static int64_t sw_wrap(int64_t i, int64_t p) { return (i % p + p) % p; }
+static flo_t sw_vnw(flo_t x, flo_t y, int64_t pu, int64_t pv, int64_t s) {
+ flo_t const fx = sw_ffloor(x), fy = sw_ffloor(y);
+ int64_t const ix = flo_i64(fx), iy = flo_i64(fy), i0 = sw_wrap(ix, pu), i1 = sw_wrap(ix + 1, pu), k0 = sw_wrap(iy, pv), k1 = sw_wrap(iy + 1, pv);
+ flo_t const ux = x - fx, uy = y - fy, ex = ux * ux * ((flo_t) 3.0 - (flo_t) 2.0 * ux), ey = uy * uy * ((flo_t) 3.0 - (flo_t) 2.0 * uy),
+             p = (flo_t) sw_throw(i0, k0, s) / (flo_t) 1023.0, q = (flo_t) sw_throw(i1, k0, s) / (flo_t) 1023.0,
+             r = (flo_t) sw_throw(i0, k1, s) / (flo_t) 1023.0, t = (flo_t) sw_throw(i1, k1, s) / (flo_t) 1023.0,
+             lo = p + ex * (q - p), hi = r + ex * (t - r);
+ return lo + ey * (hi - lo); }
+static int64_t sw_cells(intptr_t n, flo_t size) { int64_t const c = flo_i64(love_trunc((flo_t) n / size + (flo_t) 0.5)); return c > 1 ? c : 1; }
+static flo_t sw_fbm(flo_t x, flo_t y, flo_t size, flo_t oct, intptr_t w, intptr_t h, int64_t s) {
+ int64_t pu = sw_cells(w, size), pv = sw_cells(h, size), n = flo_i64(love_trunc(oct));
+ flo_t a = (flo_t) 1.0, sum = (flo_t) 0.0, wt = (flo_t) 0.0;
+ for (int64_t k = 0; k < n; k++, pu *= 2, pv *= 2, a = (flo_t) 0.5 * a)
+  sum = sum + a * sw_vnw(x * (flo_t) pu / (flo_t) w, y * (flo_t) pv / (flo_t) h, pu, pv, s + k), wt = wt + a;
+ return sum / wt; }
+static bool sw_octs(flo_t const *n) { return n[0] > 0 && n[1] >= 1 && n[1] <= 12; }
 static flo_t sw_sq(flo_t v) { return v * v; }
 #if Bits == 64
 double lm_sqrt(double);
@@ -96,7 +116,7 @@ static bool sw_in(struct sw_layer const *l, flo_t x, flo_t y) {
    return m1 - m0 < n[1]; }
   case 15: return sw_sq(sw_u(n, x, y)) + sw_sq(sw_v(n, x, y)) < (flo_t) 1.0;
   default: return 0; } }
-static void sw_paint(struct sw_paint const *p, flo_t c[3], uint8_t *hole, flo_t x, flo_t y) {
+static void sw_paint(struct sw_paint const *p, flo_t c[3], uint8_t *hole, flo_t x, flo_t y, intptr_t w, intptr_t h) {
  if (p->tag == 0) { *hole = 1; return; }
  if (p->tag == 1) { c[0] = p->a[0], c[1] = p->a[1], c[2] = p->a[2], *hole = 0; return; }
  if (*hole) return;
@@ -105,6 +125,9 @@ static void sw_paint(struct sw_paint const *p, flo_t c[3], uint8_t *hole, flo_t 
  else if (p->tag == 4) for (int k = 0; k < 3; k++) c[k] = c[k] + p->a[3] * (p->a[k] - c[k]);
  else if (p->tag == 5) {
   flo_t const m = (flo_t) 1.0 - p->a[2] + p->a[2] * sw_vn(x / p->a[0], y / p->a[1], flo_i64(p->a[3]));
+  for (int k = 0; k < 3; k++) c[k] = m * c[k]; }
+ else if (p->tag == 6) {
+  flo_t const m = (flo_t) 1.0 - p->a[2] + p->a[2] * sw_fbm(x, y, p->a[0], p->a[1], w, h, flo_i64(p->a[3]));
   for (int k = 0; k < 3; k++) c[k] = m * c[k]; } }
 
 // a band of rows of the picture
@@ -125,10 +148,24 @@ static void sw_rows(void *ctx, intptr_t b) {
     if (!on) continue;
     if (l->kind == 10) {
      flo_t const dx = l->num[0], dy = l->num[1], w = l->num[2], u = sw_fmod(fx, dx), v = sw_fmod(fy, dy);
-     if (u >= dx - w || v >= dy - w) sw_paint(&l->d, c, hole, fx, fy);
-     else if (u < w || v < w) sw_paint(&l->p, c, hole, fx, fy); }
+     if (u >= dx - w || v >= dy - w) sw_paint(&l->d, c, hole, fx, fy, s->w, s->h);
+     else if (u < w || v < w) sw_paint(&l->p, c, hole, fx, fy, s->w, s->h); }
     else if (l->kind == 16) { if (!*hole) sw_ball(l->num, c, fx, fy); }
-    else if (sw_in(l, fx, fy)) sw_paint(&l->p, c, hole, fx, fy); } } }
+    else if (l->kind == 17) {   // a slope toward the top left lighter
+     if (*hole) continue;
+     flo_t const *n = l->num, sz = n[0], one = (flo_t) 1.0;
+     flo_t const k = one + n[2] * sz * (flo_t) 0.5 * ((sw_fbm(fx + one, fy, sz, n[1], s->w, s->h, l->seed) - sw_fbm(fx - one, fy, sz, n[1], s->w, s->h, l->seed))
+                                                    + (sw_fbm(fx, fy + one, sz, n[1], s->w, s->h, l->seed) - sw_fbm(fx, fy - one, sz, n[1], s->w, s->h, l->seed)));
+     for (int j = 0; j < 3; j++) c[j] = k * c[j]; }
+    else if (l->kind == 18) {   // the paint mixed in by how far past its edge; a hole all or nothing
+     flo_t const *n = l->num, t = sw_fbm(fx, fy, n[0], n[1], s->w, s->h, l->seed), e = (t - ((flo_t) 1.0 - n[2])) / n[3],
+                 m = e < (flo_t) 0.0 ? (flo_t) 0.0 : e > (flo_t) 1.0 ? (flo_t) 1.0 : e;
+     flo_t d[3] = {c[0], c[1], c[2]};
+     uint8_t dh = *hole;
+     sw_paint(&l->p, d, &dh, fx, fy, s->w, s->h);
+     if (*hole || dh) { if (m >= (flo_t) 0.5) c[0] = d[0], c[1] = d[1], c[2] = d[2], *hole = dh; }
+     else for (int j = 0; j < 3; j++) c[j] = c[j] + m * (d[j] - c[j]); }
+    else if (sw_in(l, fx, fy)) sw_paint(&l->p, c, hole, fx, fy, s->w, s->h); } } }
 
 static bool sw_nums(word l, flo_t *o, uintptr_t n) {
  for (uintptr_t k = 0; k < n; k++, l = B(l)) {
@@ -138,7 +175,7 @@ static bool sw_nums(word l, flo_t *o, uintptr_t n) {
 static bool sw_paint_of(word q, struct sw_paint *p) {
  if (!chainp(q) || !charmp(A(q))) return 0;
  p->tag = (int) getcharm(A(q));
- return p->tag >= 0 && p->tag <= 5 && sw_nums(B(q), p->a, 4) && (p->tag != 5 || (p->a[0] != 0 && p->a[1] != 0)); }
+ return p->tag >= 0 && p->tag <= 6 && sw_nums(B(q), p->a, 4) && (p->tag != 5 || (p->a[0] != 0 && p->a[1] != 0)) && (p->tag != 6 || sw_octs(p->a)); }
 // the plan's layers into l, their numbers into f; 0 where one is not as it says
 static bool sw_read(word pl, struct sw_layer *l, flo_t *f) {
  uintptr_t i = 0, used = 0;
@@ -152,7 +189,7 @@ static bool sw_read(word pl, struct sw_layer *l, flo_t *f) {
   y->num = f + used, used += y->nnum;
   y->kind = (int) getcharm(part[1]), y->seed = getcharm(part[3]);
   if (!sw_nums(part[0], (flo_t*) y->box, 4 * y->nbox) || !sw_nums(part[2], (flo_t*) y->num, y->nnum) || !sw_paint_of(part[4], &y->p)) return 0;
-  if (y->kind < 0 || y->kind > 16 || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 :
+  if (y->kind < 0 || y->kind > 18 || ((y->kind == 17 || y->kind == 18) && (y->nnum != 4 || !sw_octs(y->num) || (y->kind == 18 && y->num[3] <= 0))) || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 :
       y->kind == 15 ? y->nnum != 6 || y->num[2] == 0 || y->num[3] == 0 : y->kind == 16 ? y->nnum != 10 || y->num[2] == 0 || y->num[3] == 0 : y->nnum != 4)) return 0; }
  return 1; }
 
@@ -213,4 +250,4 @@ love_noinline static struct g *host_swatch_pic(struct g *g) {
  if (hole) alloc(hole, 0);
  return g; }
 static lvm(lvm_swatch_pic) { LvmCallp(g, 2, host_swatch_pic) }
-LvDef("swatch-pic", swatch_pic, 3, NULL);
+LvDef("swatch-pic", swatch_pic, 3, "lore");

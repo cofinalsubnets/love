@@ -10,8 +10,7 @@ static bool
  bio_wpending(struct bio *b),
  is_dec_int(char const *s, uintptr_t n),
  is_hex_int(char const *s, uintptr_t n),
- is_oct_int(char const *s, uintptr_t n),
- lam_head(struct g *g, word a);
+ is_oct_int(char const *s, uintptr_t n);
 static intptr_t
  ci_readn(struct g *g, unsigned char *dst, uintptr_t n);
 static struct g
@@ -47,7 +46,7 @@ word io_route(struct g *g, word x) {
  else return x;
  return iop(s) ? s : x; }
 static love_inline bool bio_vt(struct port_vt const *vt) {
- return vt == &love_fd_port_vt || vt == &love_horn_vt; }
+ return vt == &love_fd_port_vt || vt == &love_horn_vt || vt == &love_duct_vt; }
 
 // -1 for a port whose door is not a device
 intptr_t io_fd(struct io const *i) {
@@ -65,10 +64,10 @@ bool bio_rpending(struct bio *b) {
 static love_inline bool bio_wpending(struct bio *b) {
  return b && b->wbuf && !charmp(b->wbuf) && getcharm(b->wlen) > 0; }
 
-// the scheduler's half of the park law. only these two ops park with a port at Sp[0], so
+// the scheduler's half of the park law. only these ops park with a port at Sp[0], so
 // the ap guard is what makes reading x legal
 bool wait_buffered(struct g *g, lvm_t *ap, word x, int fd) {
- return (ap == lvm_fgetc || ap == lvm_await) && iop(x)
+ return (ap == lvm_fgetc || ap == lvm_await || ap == lvm_heed) && iop(x)
      && io_fd((struct io*) x) == fd
      && bio_rpending(rbio_of(g, (struct io*) x)); }
 
@@ -277,13 +276,141 @@ love_noinline static struct g *io_snug(struct g *g) {
  gen_wb(g, (word) b, b->rbuf);
  return g->sp[0] = putcharm(1), g; }
 static lvm(lvm_snug) { LvmCallp(g, 2, io_snug) }
-LvDef("snug", snug, 2, NULL);
+LvDef("snug", snug, 2, "lush");
 
 struct g *io_wflush(struct g *g, struct io *i) { return io_wdrain(g, i); }
 
 uintptr_t io_wpending(struct g *g, struct io *i) {
  struct bio *b = bio_of(g, i);
  return bio_wpending(b) ? (uintptr_t) getcharm(b->wlen) : 0; }
+
+// the duct: a buffered port whose far side is love's, a pump moving the bytes (sock.l's
+// sock-port). in is what the pump fed for the program, out what the program wrote, both
+// fixed: a full out answers writen 0, so the run parks as on a busy fd. st's bits below
+struct duct { struct bio b; word in, ipos, ilen, out, olen, st; };
+#define DuctEnd  1   // the pump fed the end
+#define DuctRd   2   // the program shut its read half
+#define DuctWr   4   // ..its write half, the run landed first
+#define DuctGone 8   // the far side is gone: writes fail
+#define DuctCap  (16 * iobuf)
+bool io_duct(struct io const *i) { return i->vt == &love_duct_vt; }
+static struct duct *duct_of(word x) {
+ return iop(x) && io_duct((struct io*) x) ? (struct duct*) x : NULL; }
+bool duct_ready(struct io const *i) {
+ struct duct const *d = (struct duct const*) i;
+ return getcharm(d->st) & (DuctEnd | DuctRd) || getcharm(d->ipos) < getcharm(d->ilen); }
+void duct_shut(struct io *i, int how) {
+ struct duct *d = (struct duct*) i;
+ d->st = putcharm(getcharm(d->st) | (how != 1 ? DuctRd : 0) | (how != 0 ? DuctWr : 0)); }
+
+static intptr_t duct_readn(struct g *g, unsigned char *dst, uintptr_t n) {
+ struct duct *d = (struct duct*) g->io;
+ intptr_t st = getcharm(d->st);
+ uintptr_t p = getcharm(d->ipos), l = getcharm(d->ilen);
+ if (st & DuctRd) return -1;
+ if (p == l) return st & DuctEnd ? -1 : 0;
+ uintptr_t k = l - p < n ? l - p : n;
+ memcpy(dst, txt(d->in) + p, k);
+ p += k;
+ if (p == l) p = l = 0;
+ d->ipos = putcharm(p), d->ilen = putcharm(l);
+ return (intptr_t) k; }
+
+static struct g *duct_writen(struct g *g, unsigned char const *src, uintptr_t n) {
+ struct duct *d = (struct duct*) g->io;
+ if (getcharm(d->st) & (DuctWr | DuctGone)) return g->b = -1, g;
+ uintptr_t o = getcharm(d->olen), room = len(d->out) - o, k = room < n ? room : n;
+ memcpy(txt(d->out) + o, src, k);
+ d->olen = putcharm(o + k);
+ return g->b = (intptr_t) k, g; }
+
+// (duct n): a new duct, n bytes each way, 0 the default
+love_noinline static struct g *duct_mk(struct g *g) {
+ if (!charmp(g->sp[0])) return g->sp[0] = badarg(g), g;
+ intptr_t n = getcharm(g->sp[0]);
+ n = n <= 0 ? DuctCap : n > (1 << 20) ? (1 << 20) : n;
+ if (!ok(g = str0(g, (uintptr_t) n)) || !ok(g = str0(g, (uintptr_t) n))) return g;
+ uintptr_t const w = Width(struct duct);
+ if (!ok(g = have(g, w + Width(struct tag)))) return g;
+ union u *k = bump(g, w + Width(struct tag));
+ struct duct *d = (struct duct*) k;
+ d->b.f.io.ap = lvm_port_io;
+ d->b.f.io.vt = &love_duct_vt;
+ d->b.f.io.ungetc_buf = putcharm(EOF);
+ d->b.f.fd = putcharm(-1);
+ d->b.rbuf = d->b.wbuf = 0;
+ d->b.rpos = d->b.rlen = d->b.wlen = putcharm(0);
+ d->in = g->sp[1], d->out = g->sp[0];
+ d->ipos = d->ilen = d->olen = d->st = putcharm(0);
+ g->sp[2] = word(tagthread(k, w));
+ return g->sp += 2, g; }
+static lvm(lvm_duct) LvmCall(g, duct_mk)
+
+// (duct-feed d s): bytes for the program, answering how many it took; () feeds the end, a nom
+// the end and the far side gone; -1 once the program shut its read half
+static lvm(lvm_duct_feed) {
+ struct duct *d = duct_of(Sp[0]);
+ word s = Sp[1], r;
+ intptr_t st = d ? getcharm(d->st) : 0;
+ if (!d) r = badarg(g);
+ else if (st & DuctRd) r = putcharm(-1);
+ else if (s == ZeroPoint) d->st = putcharm(st | DuctEnd), r = putcharm(0);
+ else if (!strp(s)) d->st = putcharm(st | DuctEnd | DuctGone), r = putcharm(0);
+ else {
+  uintptr_t p = getcharm(d->ipos), l = getcharm(d->ilen), cap = len(d->in);
+  if (p) memmove(txt(d->in), txt(d->in) + p, l - p), l -= p, p = 0;
+  uintptr_t k = cap - l < len(s) ? cap - l : len(s);
+  memcpy(txt(d->in) + l, txt(s), k);
+  d->ipos = putcharm(0), d->ilen = putcharm(l + k);
+  r = putcharm((intptr_t) k); }
+ Sp[1] = r;
+ love_musttail return Nextp(1, 1); }
+
+// (duct-room d): what a feed would take now, -1 once the program reads no more
+static lvm(lvm_duct_room) {
+ struct duct *d = duct_of(Sp[0]);
+ Sp[0] = !d ? badarg(g) : getcharm(d->st) & DuctRd ? putcharm(-1)
+       : putcharm((intptr_t) (len(d->in) - (getcharm(d->ilen) - getcharm(d->ipos))));
+ love_musttail return Next(1); }
+
+// (duct-take d): what the program wrote, "" for none, () once its write half is shut and spent
+love_noinline static struct g *duct_take(struct g *g) {
+ struct duct *d = duct_of(g->sp[0]);
+ if (!d) return g->sp[0] = badarg(g), g;
+ uintptr_t n = getcharm(d->olen);
+ if (!n && getcharm(d->st) & DuctWr) return g->sp[0] = ZeroPoint, g;
+ if (!ok(g = str0(g, n))) return g;
+ d = (struct duct*) g->sp[1];                    // str0 collects: re-derive
+ memcpy(txt(g->sp[0]), txt(d->out), n);
+ d->olen = putcharm(0);
+ return g->sp[1] = g->sp[0], g->sp += 1, g; }
+static lvm(lvm_duct_take) LvmCall(g, duct_take)
+
+// (duct-seal d how): seal's half-close, how as shutdown(2)'s; a write half lands its run first
+lvm(lvm_duct_seal) {
+ intptr_t how = oddp(Sp[1]) ? getcharm(Sp[1]) : -1;
+ if (!duct_of(Sp[0]) || how < 0 || how > 2) {
+  Sp[1] = badarg(g);
+  love_musttail return Nextp(1, 1); }
+ if (how) {
+  g->io = (struct io*) Sp[0];
+  Pack(g);
+  g = io_wflush(g, g->io);
+  if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
+  if (io_wpending(g, (struct io*) g->sp[0])) {   // park; nothing shut yet
+   Unpack(g);
+   g->next_wake_at = tick_add(love_tick(), 1);
+   love_musttail return Ap(lvm_yield_sw, g); }
+  Unpack(g); }
+ duct_shut((struct io*) Sp[0], (int) how);
+ Sp[1] = Sp[0];
+ love_musttail return Nextp(1, 1); }
+
+LvDef("duct", duct, 1, NULL);
+LvDef("duct-feed", duct_feed, 2, NULL);
+LvDef("duct-room", duct_room, 1, NULL);
+LvDef("duct-take", duct_take, 1, NULL);
+LvDef("duct-seal", duct_seal, 2, NULL);
 
 struct ci { struct io io; word head; }; // charlist input
 struct to { struct io io; struct str *buf; word i; }; // lisp string output
@@ -326,7 +453,8 @@ struct port_vt const
  closed_vt = { noop_flush, NULL,      NULL,     NULL },       // what `close` leaves behind
  state_vt  = { noop_flush, NULL,      NULL,     NULL },       // a nif's state: no door, and no word opens it
  ci_vt     = { noop_flush, NULL,      ci_readn, ci_athand },  // a charlist: prel's `tap`
- love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL };   // PCM out and in: the horn
+ love_horn_vt   = { noop_flush, love_horn_writen, love_horn_readn, NULL },   // PCM out and in: the horn
+ love_duct_vt   = { noop_flush, duct_writen, duct_readn, NULL };              // love at the far side
 
 // (fputc port byte) -> byte. a charm is a raw fd, written unbuffered
 lvm(lvm_fputc) {
@@ -345,7 +473,7 @@ lvm(lvm_fputc) {
    if (!ok(g)) love_musttail return Ap(_lvm_raise, g);
    if (io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
     Unpack(g);
-    g->next_wake_at = love_clock() + 1;
+    g->next_wake_at = tick_add(love_tick(), 1);
     love_musttail return Ap(lvm_yield_sw, g); } }
   if (!ok(g = ioputc(g, getcharm(g->sp[1])))) love_musttail return Ap(_lvm_raise, g);
   Unpack(g); }
@@ -361,7 +489,7 @@ lvm(lvm_fflush) {
   if (!ok(g = zflush(g))) love_musttail return Ap(_lvm_raise, g);
   if (io_wpending(g, (struct io*) g->sp[0])) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;      // the write residue's poll
+   g->next_wake_at = tick_add(love_tick(), 1);      // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   Unpack(g); }
  love_musttail return Next(1); }
@@ -384,7 +512,7 @@ lvm(lvm_fputs) {
   // backpressure: the run is a buffer, not a queue
   if (ok(g) && io_wpending(g, (struct io*) g->sp[0]) >= iobuf) {
    Unpack(g);
-   g->next_wake_at = love_clock() + 1;            // the write residue's poll
+   g->next_wake_at = tick_add(love_tick(), 1);            // the write residue's poll
    love_musttail return Ap(lvm_yield_sw, g); }
   while (ok(g) && i < l) {
    intptr_t k = 0;
@@ -496,8 +624,7 @@ word fn_meaning(struct g *c, word x) {
  return x; }
 // threads that are carriers, not code: known by identity, never by their words
 bool fn_carrier(union u *k) {
- return k[0].ap == lvm_map_lookup || k[0].ap == lvm_map_data || k[0].ap == lvm_cask
-     || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
+ return k[0].ap == lvm_cask || k[0].ap == lvm_coin || k[0].ap == lvm_port_io; }
 
 // the pools are independent blocks, in any order
 bool in_heap(struct g *c, word x) {
@@ -514,12 +641,6 @@ lvm(lvm_nifnom) {
  memcpy(txt(s), nm, n);
  love_musttail return Answer(word(s)); }
 
-static love_inline bool lam_head(struct g *g, word a) {        // is a the symbol \ ?
- struct str *nm;
- return (nm = nom_str(g, a)) && len(nm) == 1 && txt(nm)[0] == '\\'; }
-
-bool lam_isp(struct g *g, word x) {         // (\ b.. body): >=2 operands
- return chainp(x) && lam_head(g, A(x)) && chainp(B(x)) && chainp(BB(x)); }
 // (fgetc port): a non-port reads EOF, so a misused loop ends. a charm is a raw fd, no pushback
 lvm(lvm_fgetc) {
  if (*task_io(g) != ZeroPoint) Sp[0] = io_route(g, Sp[0]);
@@ -546,7 +667,7 @@ lvm(lvm_fgetc) {
   Unpack(g);
   if (g->b == IoWouldBlock) {          // the refill raced and lost -- park, don't spin
    intptr_t fd = io_fd((struct io*) Sp[0]);   // re-read: the gc may have moved it
-   if (fd < 0) g->next_wake_at = love_clock() + 1;   // no fd to wait on (the horn): poll
+   if (fd < 0) g->next_wake_at = tick_add(love_tick(), 1);   // no fd to wait on (the horn): poll
    else g->next_wait_fd = (int) fd;
    love_musttail return Ap(lvm_yield_sw, g); }
   Sp[0] = putcharm(g->b); }
@@ -709,19 +830,17 @@ enum { RsStart, RsRead, RsClose, RsDatum, RsAll, RsWeave };
 #define RdGo(s) (g->ip = (union u*) (rd_k + (s)), g)
 #define RdSlack 32   // every state's reserve: a frame, a call, a wrap's conses
 
-// RcEnd ends a name-led token, RcStop a glued run; 12 is form feed
+// RcEnd ends a name-led token, RcStop a glued run; 12 is form feed. RcOp is no byte's here:
+// the operator table's, through rd_opb
 enum { RcWs = 1, RcOp = 2, RcEnd = 4, RcOpen = 8, RcClose = 16, RcSign = 32, RcStop = 64, RcDig = 128 };
 #define RcW (RcWs | RcEnd | RcStop)
 #define RcO (RcEnd | RcOpen)
 #define RcC (RcEnd | RcClose | RcStop)
 static unsigned char const rd_cls[257] = {
  ['\t'] = RcW, ['\n'] = RcW, [12] = RcW, ['\r'] = RcW, [' '] = RcW,
- ['"'] = RcEnd, [','] = RcEnd, [';'] = RcEnd | RcStop, ['#'] = RcOp | RcEnd,
+ ['"'] = RcEnd, [','] = RcEnd, [';'] = RcEnd | RcStop, ['#'] = RcEnd,
  ['('] = RcO, ['['] = RcO, ['{'] = RcO, [')'] = RcC, [']'] = RcC, ['}'] = RcC,
- ['+'] = RcOp | RcSign, ['-'] = RcOp | RcSign,
- ['!'] = RcOp, ['$'] = RcOp, ['%'] = RcOp, ['&'] = RcOp, ['*'] = RcOp, ['.'] = RcOp,
- ['/'] = RcOp, [':'] = RcOp, ['<'] = RcOp, ['='] = RcOp, ['>'] = RcOp, ['?'] = RcOp,
- ['@'] = RcOp, ['\\'] = RcOp, ['^'] = RcOp, ['|'] = RcOp, ['~'] = RcOp,
+ ['+'] = RcSign, ['-'] = RcSign,
  ['0'] = RcDig, ['1'] = RcDig, ['2'] = RcDig, ['3'] = RcDig, ['4'] = RcDig,
  ['5'] = RcDig, ['6'] = RcDig, ['7'] = RcDig, ['8'] = RcDig, ['9'] = RcDig };
 
@@ -740,6 +859,12 @@ static love_inline intptr_t rd_at(word src, word p) {
  word c = A(p);
  return charmp(c) && (uintptr_t) getcharm(c) < 256 ? getcharm(c) : 256; }
 static love_inline unsigned rd_c(word src, word p) { intptr_t c = rd_at(src, p); return c < 0 ? 0 : rd_cls[c]; }
+// an operator byte: one the operator table's names spell, prel's seal of hook_opc, and never
+// one the grammar holds. unsealed, none is
+static love_inline bool rd_opb(struct g *g, intptr_t c) {
+ word const t = g->hook[hook_opc];
+ return c >= 0 && c < 256 && strp(t) && len(str(t)) == 256 && txt(str(t))[c]
+     && !(rd_cls[c] & (RcWs | RcOpen | RcClose | RcStop | RcDig)) && c != '"' && c != ',' && c != '\''; }
 // a cell's value keeps its low byte
 static love_inline intptr_t rd_raw(word src, word p) {
  return charmp(p) ? (unsigned char) txt(str(src))[getcharm(p)] : getcharm(A(p)); }
@@ -1041,11 +1166,7 @@ static bool rd_float(char const *t, uintptr_t n, double *d) {
  if (!(c >= '0' && c <= '9') && c != '.') return false;
  char *e;
  *d = lm_strtod(t, &e);
- return e != t && *e == 0 && *d == *d; }
-static bool rd_numeral(struct str *s) {
- double d;
- return is_dec_int(txt(s), len(s)) || is_hex_int(txt(s), len(s)) || is_oct_int(txt(s), len(s))
-     || rd_float(txt(s), len(s), &d); }
+ return e == t + n && *d == *d; }                       // the whole token: an inner NUL stops the parse short
 static struct g *rd_atom(struct g *g) {
  struct str *s = str(g->sp[0]);
  uintptr_t n = len(s);
@@ -1057,33 +1178,16 @@ static struct g *rd_atom(struct g *g) {
  if (!ok(g = have(g, gem_req))) return g;
  return g->sp[0] = mk_gem(&g->hp, (flo_t) d), g; }
 
-// a digit-led non-numeral with an operator run is cut past the run when a datum is glued
-// there (2?<>x is 2?<> around x); a trailing - before a digit is the next numeral's sign
-static struct g *rd_tok(struct g *g, bool split) {
+// a name or a numeral to its end; a # the table leaves out leads a name
+static struct g *rd_tok(struct g *g) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], n;
  uintptr_t len = 0;
- if (rd_in(src, p)) len = rd_send(str(src), getcharm(p)) - getcharm(p);
- else for (; rd_at(src, p) >= 0 && !(rd_c(src, p) & RcEnd); p = n, len++) RdStepW(n, p, RwTok);
- if (!ok(g = have(g, 2 * str_width(len) + RdSlack))) return g;
+ if (rd_in(src, p)) len = rd_send(str(src), getcharm(p) + 1) - getcharm(p);
+ else for (; rd_at(src, p) >= 0 && (!len || !(rd_c(src, p) & RcEnd)); p = n, len++) RdStepW(n, p, RwTok);
+ if (!ok(g = have(g, str_width(len) + RdSlack))) return g;
  src = g->sp[RdSrc], p = g->sp[RdCur];
  struct str *s = ini_str(bump(g, str_width(len)), len);
- word lop = ZeroPoint, aop = ZeroPoint;                 // the run's last char, and past it
- uintptr_t k = 0;
- for (uintptr_t i = 0; i < len; i++) {
-  txt(s)[i] = rd_byte(src, p), n = rd_next(p);
-  if (rd_c(src, p) & RcOp) k = i + 1, lop = p, aop = n;
-  p = n; }
- if (split && k && !rd_numeral(s)) {
-  bool shed = k > 1 && rd_at(src, lop) == '-' && (rd_c(src, aop) & RcDig);
-  word r = shed ? lop : aop;
-  if (rd_glued(src, r)) {
-   k -= shed;
-   struct str *o = ini_str(bump(g, str_width(k)), k);
-   memcpy(txt(o), txt(s), k);
-   g->sp[RdCur] = r, *--g->sp = word(o);
-   if (!ok(g = have(intern(g), 2))) return g;
-   rd_mono(g, *g->sp++);
-   return RdGo(RsRead); } }
+ for (uintptr_t i = 0; i < len; i++) txt(s)[i] = rd_byte(src, p), p = rd_next(p);
  g->sp[RdCur] = p, *--g->sp = word(s);
  if (!ok(g = rd_atom(g))) return g;
  g->sp[1 + RdVal] = g->sp[0], g->sp++;
@@ -1094,7 +1198,7 @@ static struct g *rd_tok(struct g *g, bool split) {
 static struct g *rd_op(struct g *g) {
  word src = g->sp[RdSrc], p = g->sp[RdCur], last = p, n;
  uintptr_t len = 0;
- for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_cls[c] & RcOp); last = p, p = n, len++)
+ for (intptr_t c; (c = rd_at(src, p)) >= 0 && (c == '@' ? !len : rd_opb(g, c)); last = p, p = n, len++)
   RdStep(n, p);
  len -= len > 1 && rd_at(src, last) == '-' && (rd_c(src, p) & RcDig);
  if (!ok(g = have(g, str_width(len) + RdSlack))) return g;
@@ -1132,7 +1236,7 @@ static struct g *rd_read(struct g *g) {
   g->sp[RdCur] = p;
   word const h = g->sp[RdRegs + getcharm(g->sp[RdCnt])];
   int const k = RdKind(h);
-  unsigned const m = c < 0 ? RcClose : rd_cls[c];
+  unsigned const m = c < 0 ? RcClose : rd_cls[c] | (rd_opb(g, c) ? RcOp : 0);
   if (m & RcClose)                                       // the end of the text or of a list
    return k >= RkParen && k <= RkHole ? (c < 0 ? rd_torn(g) : RdGo(RsClose))
         : k == RkOne ? rd_done(g, ZeroPoint)
@@ -1150,11 +1254,11 @@ static struct g *rd_read(struct g *g) {
    RdStep(n, p);
    if (c == ',') return g->sp[RdVal] = g->nom[RnComma], g->sp[RdCur] = n, RdGo(RsDatum);
    if (c == '@') {                                       // a run, the tuple wrap, or the plain @
-    if (rd_c(src, n) & RcOp) return rd_op(g);
+    if (rd_opb(g, rd_at(src, n))) return rd_op(g);
     if (rd_glued(src, n)) { rd_frame(g, RkLift), g->sp[RdCur] = n; continue; }
     return g->sp[RdVal] = g->nom[RnAt], g->sp[RdCur] = n, RdGo(RsDatum); }
-   return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' ? rd_tok(g, false) : rd_op(g); }   // a numeral's sign
-  return m & RcOp ? rd_op(g) : rd_tok(g, m & RcDig); } }
+   return (rd_c(src, n) & RcDig) || rd_at(src, n) == '.' || !(m & RcOp) ? rd_tok(g) : rd_op(g); }   // a numeral's sign
+  return m & RcOp ? rd_op(g) : rd_tok(g); } }
 
 // a closer ends the open list: its datums, under the wrap its opener named
 static struct g *rd_close(struct g *g) {
@@ -1222,9 +1326,10 @@ static lvm(lvm_rd_all) LvmResume(g, rd_all)
 static lvm(lvm_rd_weave) LvmResume(g, rd_weave)
 static lvm(lvm_rd_called) LvmResume(g, rd_called)
 
-// the boot stitch: the egg's corpus is read whole and handed to the egg expression
+// the boot stitch: a driver's text read whole; the texts it runs, form by form, each read
+// after the one before it has run
 
-// `torn` refused: the egg would fold it as an empty corpus and pin ev to 0
+// `torn` refused: a fold would take it as an empty text
 static struct g *readtext(struct g *g, char const *s) {
  g = gxr(push0(strof(g, s)));                     // ("<text>")
  if (!ok(g = push(g, 1, word(rd_reads_k)))) return g;
@@ -1246,25 +1351,26 @@ static struct g *readonto(struct g *g, char const *s) {
 static struct g *qtop(struct g *g) {                // x on top -> 'x
  return gxl(pushq(gxr(push0(g)))); }                 // (x), then (\ x)
 
-// (<driver> '(list)) of the list on top
+// (<driver> 'x) of the x on top
 static struct g *applyq(struct g *g, char const *driver) {
  g = readonto(gxr(push0(qtop(g))), driver);          // ('(list)), then (driver '(list))
  return eval(g); }
 
 // ev is read late so one text drives both of love0's passes; two?, never truth, or each
-// step nets the rest of the text
-static char const evfold[] = "((: (e a b) (? (two? b) (e (ev 'ev (cap b)) (cup b)) a) e) 0)";
+// step nets the rest of the text. the first sound lays the residue as a charlist
+static char const evfold[] =
+ "((: (e a t) (: r (sound t) (? (two? r) (e (ev 'ev (cap r)) (cup r)) (== r 'torn) (scare 'unfinished-form ()) a)) e) 0)";
 
 // every form of a text in order; evals keeps the last value at sp[0], evals_ drops it
 love_noinline struct g *evals(struct g *g, char const *s) {
- return applyq(readtext(g, s), evfold); }
+ return applyq(strof(g, s), evfold); }
 love_noinline struct g *evals_(struct g *g, char const *s) {
  return pop(evals(g, s), 1); }
 
 // corpus runs twice (ev compiles itself); post once, after the hatch and before the mop
-// takes the internal noms (peek/seek) off the book
+// takes the internal noms (peek/seek) off the book. the egg reads both texts itself
 love_noinline struct g *egg(struct g *g, char const *egg, char const *corpus, char const *post) {
- g = gxr(push0(qtop(readtext(g, post))));            // ('post), parked under the corpus
- g = readtext(g, corpus);                            // prel + ev
- g = readonto(gxl(qtop(g)), egg);                    // (egg 'corpus 'post)
+ g = gxr(push0(qtop(strof(g, post))));               // ('"post")
+ g = gxl(qtop(strof(g, corpus)));                    // ('"corpus" '"post"): prel + ev
+ g = readonto(g, egg);                               // (egg '"corpus" '"post")
  return pop(eval(g), 1); }

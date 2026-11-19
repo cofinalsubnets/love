@@ -2,11 +2,15 @@
 ; stages, faces, the bar, the server. interactive berthing stays a live probe.
 ; not in the corpus: the screen nifs are not in love0. run: cat test/00-init.l test/host/00-host.l test/host/pier.l | out/love
 
+(borrow 'quay)
 (borrow "src/apps/mitty/mooring.l")
 (borrow "src/apps/mitty/pier.l")
 (borrow "src/apps/mitty/wharf.l")
 (borrow "src/apps/mitty/limn.l")
 (borrow 'bytes)
+; a scratch nest for the whole file: no shell a pane runs reads or writes the user's rc or history
+(: pier-nest (cwd 0 + "/out/.pier-nest-" + show (getpid 0)))
+(setenv "LOVE_NEST" pier-nest)
 
 (: (chat s i) (2097151 & glass s i 0)             ; a cell's codepoint
    (rowtx s r) (gaze s 2 @ c
@@ -578,5 +582,6 @@
     (: (wf p) (gather p @ g2 (two? g2 ? g2 (rest 20, wf p))) (wf <md)),
     close >md))
 
+(hark ["rm" "-rf" pier-nest])
 (test_fin ())
 (puts "pier: ok")

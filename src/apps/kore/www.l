@@ -179,7 +179,7 @@
                 [1 ("www: " + url + " is a gopher " + ww-gkind t + " item, not a page")]))))
 
    ; gemini: the url on a line over tls on 1965; the answer a status line, then the body.
-   ; the server's key is pinned on first use in ~/.love/gemini_hosts as "spki:" + sha-256 of
+   ; the server's key is pinned on first use in the nest's etc/gemini_hosts as "spki:" + sha-256 of
    ; its SubjectPublicKeyInfo, so a renewed cert over it holds; a line without the prefix is a
    ; whole certificate's hash
    (ww-pinfile _) (cite 'tls 'pin-path "gemini_hosts")
@@ -189,7 +189,7 @@
        (? (string? old) (? (old = fp || old = cfp) ()
                            ("the key of " + key + " has changed: it was " + old + ", now " + fp
                             + "; delete its line in " + path + " to take the new one"))
-          (: _ (mkdir (snip path 0 (#path - 13)) 448)
+          (: _ (each (cite 'path 'pprefixes path) (d \ mkdir d 448))
              a (open path "a")
              _ (? (hot? a) (say a (key + " " + fp + "\n"), close a) 0)
              ())))
@@ -400,7 +400,7 @@
           (sc = "form:") (ww-field st u)
           !(elem sc '("http:" "https:" "file:" "gopher:" "gemini:")) (pgmsg st ("no door for " + u))
           (pin st 'go [u 1 -1], st)))
-   (ww-link st n)
+   (ww-urln st n)
     (: us (st 'urls) (? (0 < n <= #us) (us (n - 1)) ()))
    ; a form's field: ask for its text, what it holds already typed in. what follows the last
    ; = is the field's own value, and what is sent puts the text there
@@ -437,12 +437,12 @@
     (: cn (st 'cnt) n (pgcnt st 0)
        spend (_ \ (pins st 'cnt "" 'msg ""))
        (? ((c = 13 || c = 10) && 0 < #cn)
-           (: _ (spend ()) u (ww-link st n) (? u (ww-goto st u) (pgmsg st ("no link " + show n))))
+           (: _ (spend ()) u (ww-urln st n) (? u (ww-goto st u) (pgmsg st ("no link " + show n))))
           ((c = 13 || c = 10) && 0 <= ww-seen st (st 'cur))
-           (spend (), ww-goto st (ww-link st (st 'cur)))
+           (spend (), ww-goto st (ww-urln st (st 'cur)))
           (c = 9 || c = 265) (spend (), ww-tab st (? (c = 9) 1 -1))
           (c = 85) (spend (), (? !(#cn) (pgmsg st (st 'url))
-                         (: u (ww-link st n) (pgmsg st (? u (show n + ": " + u) ("no link " + show n))))))
+                         (: u (ww-urln st n) (pgmsg st (? u (show n + ": " + u) ("no link " + show n))))))
           (c = 111) (spend (), pgask st 111)
           (c = 109) (: _ (spend ()) l (ww-main st)
                        (? (0 <= l) (pgline! st l) (pgmsg st "no main content marked on this page")))
@@ -502,16 +502,18 @@
              r (ww-get <g 8)
              (? (<r = 0) (ww-show st r <>g (g 2)) (pgmsg st <>r)))))
    (ww-ride st kq)
-    (: (go pend)
+    (: (frame _) (ww-fit st, ww-pictures st, puts (pgframe st), flush out)
+       (go pend)
         (: _ (ww-do st)
            _ (pgresize st)
-           _ (ww-fit st)
-           _ (ww-pictures st)
-           _ (puts (pgframe st)) _ (flush out)
+           _ (frame 0)
            kr (pgkey kq pend)
            c <kr
            (c < 0 ? 0 (ww-step st c, st 'quit ? 0 (go <>kr))))
-       (ttytake (), mind go -1 (_ \ ttygive ()), 0))
+       (ttytake (),
+        pgwatch (_ \ (pgresize st ? (frame 0) 0)) @ stop
+          (mind go -1 (_ \ (stop 0, ttygive ()))),
+        0))
    (www-main as)
     (: t (tablet 0)
        o (uopt as t '(119) '(101) ())                       ; -w takes a value

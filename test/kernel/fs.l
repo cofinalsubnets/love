@@ -3,6 +3,8 @@
 ; the initrd is flat, so a directory is a prefix some path lies under. kernel corpus only.
 
 (: f "src/apps/json.l" d "src/apps" g "/tmp/l-fs-dns.l"
+   ; a seat with no rtc (the pi) keeps ms since boot until the network says the date
+   dated ((1600000000000 < clock 0) || (puts "clock: no date here, date laws skipped", putc 10, 0))
    (rd p) (: q (open p "r") s (slurp q) (close q, s))
    (wr p s) (open p "w" @ q (say q s, close q))
    st (stat f)
@@ -29,12 +31,12 @@
    (two? st)
    (sz = <st)
    ; the mtime is the source's, off the archive, in milliseconds
-   (1600000000000 < <>st)
+   (!dated || 1600000000000 < <>st)
    (32768 = 61440 & <>>st)                     ; s_ifmt: regular file
    (1000000 * <>st = <>>>st)                   ; ns is that same date
    ; a directory wears the dir bits and the newest date under it
    (16384 = 61440 & <>>(stat d))
-   (1600000000000 < <>(stat d))
+   (!dated || 1600000000000 < <>(stat d))
    ; absence is 'enoent, never a tray of fields
    (stat (d + "/no-such-thing.l") = 'enoent)
    !(charm? (stat (d + "/no-such-thing.l")))
@@ -90,7 +92,7 @@
    !(two? (stat "/tmp/l-fs-none"))
    ; the wall clock: the door's date if it left one, else the machine's rtc,
    ; in milliseconds since the epoch as on the host
-   (1600000000000 < clock 0)))
+   (!dated || 1600000000000 < clock 0)))
 
 ; the tree's tls roots ride the initrd, under /love, for src/apps/tls/verify.l
 (: r (: q (open "src/apps/tls/roots.pem" "r") s (slurp q) (close q, s))

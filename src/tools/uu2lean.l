@@ -19,11 +19,16 @@
    _ (reads (open "test/uuinfvc.l" "r"))
    _ (reads (open "test/uuzb.l" "r"))
    _ (reads (open "test/uuzbvc.l" "r"))
+   _ (reads (open "test/uuzx.l" "r"))
+   _ (reads (open "test/uuzxvc.l" "r"))
+   _ (reads (open "test/uumag.l" "r"))
+   _ (reads (open "test/uumagvc.l" "r"))
    _ (reads (open "test/uusplgen.l" "r"))
    _ (reads (open "test/uuspllaw.l" "r"))
    _ (reads (open "test/uulay.l" "r"))
    _ (reads (open "test/uuel.l" "r"))
    _ (reads (open "test/uugc.l" "r"))
+   _ (reads (open "test/uuind.l" "r"))
    _ (reads (open "test/uupatch.l" "r"))
    _ (reads (open "test/uuwm.l" "r"))
    _ (reads (open "test/uuwmlaw.l" "r"))
@@ -35,12 +40,13 @@
    _ (reads (open "test/uuvallaw.l" "r"))
    _ (reads (open "test/uukindlaw.l" "r"))          ; load + certify uu's corpus (populates GLOB)
    bs (intern "\\")
-   nl "\n"
    b8 "⟨"  b9 "⟩"
    sugar (cite 'uu 'sugar)
    vcs-of (cite 'uu 'vcs-of)
+   indsig (cite 'uu 'indsig)
    (unq x) (two? x && <x = bs ? (x 1) x)   ; strip one ' (reads shows quote as (\ ..))
-   (lines l) (foldl (a \ s \ a + s + nl) "" l)
+   (lines l) (foldl (a \ s \ a + s + "\n") "" l)
+   (cat l) (foldl (+) "" l)
 
    ; a uu name -> a Lean identifier: prefix uu_, kebab '-' -> '_'
    (sanit s) (jug 0 @ j (each ^#s (i \ say j (string (s i @ 45 95 c c))), slurp j))
@@ -50,19 +56,22 @@
    (deq? c) (two? c && (<c = 'defn || <c = 'defq || <c = 'defvc))
    (elq? c) (two? c && <c = 'elq)
    (axq? c) (two? c && <c = 'axm)
+   (inq? c) (two? c && <c = 'defind)
+   ; an ind entry is [ind nm [ps is cs] () names], as written; indsig lays it out at emit
    (entry c) (? (deq? c) ['def (unq (c 1)) (sugar (unq (c 2))) (sugar (unq (c 3)))]
                 (elq? c) ['def (unq (c 1)) (sugar (unq (c 2))) ((ev 'ELT) (unq (c 1)))]
-                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()])
+                (axq? c) ['axm (unq (c 1)) (sugar (unq (c 2))) ()]
+                (inq? c) ['ind (c 1) [(c 2) (c 3) (drop 4 c)] () (c 1 . ((intern "\(c 1)_rect") . map cap (drop 4 c)))])
    (run-q? c) (two? c && <c = 'defvcs)
    (run-of c acc) (foldl (a \ e \ ['def <e (sugar (e 1)) (sugar (e 2))] . a) acc (vcs-of >c))
-   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
+   (kids ks acc) (two? ks ? (kids >ks (? (deq? <ks || elq? <ks || axq? <ks || inq? <ks) (entry <ks . acc) (run-q? <ks) (run-of <ks acc) acc)) acc)
    (gather fs acc) (two? fs ?
                       (gather >fs (<fs @ F
                         (? (two? F && <F = 'test) (kids >F acc)
                            (deq? F || elq? F || axq? F) (entry F . acc) acc)))
                       (rev acc))
    (app2 a b) (two? a ? (<a . app2 >a b) b)   ; not `cat` -- the local cat is the string fold
-   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (forms (open "test/uuzbvc.l" "r"))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r")))))))))))))))))))) ())
+   ents (gather (app2 (forms (open "test/uu.l" "r")) (app2 (forms (open "test/uuind.l" "r")) (app2 (forms (open "test/uuhom.l" "r")) (app2 (forms (open "test/uuhomgen.l" "r")) (app2 (forms (open "test/uuhomlaw.l" "r")) (app2 (app2 (forms (open "test/uuinf.l" "r")) (app2 (forms (open "test/uuinfvc.l" "r")) (app2 (forms (open "test/uuzb.l" "r")) (app2 (forms (open "test/uuzbvc.l" "r")) (app2 (forms (open "test/uuzx.l" "r")) (app2 (forms (open "test/uuzxvc.l" "r")) (app2 (forms (open "test/uumag.l" "r")) (forms (open "test/uumagvc.l" "r"))))))))) (app2 (forms (open "test/uusplgen.l" "r")) (app2 (forms (open "test/uuspllaw.l" "r")) (app2 (forms (open "test/uulay.l" "r")) (app2 (forms (open "test/uugc.l" "r")) (app2 (forms (open "test/uupatch.l" "r")) (app2 (forms (open "test/uuwm.l" "r")) (app2 (forms (open "test/uuwmlaw.l" "r")) (app2 (forms (open "test/uukind.l" "r")) (app2 (forms (open "test/uukindlaw.l" "r")) (app2 (forms (open "test/uumx.l" "r")) (app2 (forms (open "test/uumxlaw.l" "r")) (app2 (forms (open "test/uuval.l" "r")) (app2 (forms (open "test/uuvalband.l" "r")) (forms (open "test/uuvallaw.l" "r"))))))))))))))))))))) ())
 
    ; a def must be whole (a paren slip reads () as its term) and pinned (a partial defn is a
    ; truthy closure that pins nothing). `= ()`, not `!`: a term of 0 is a legal def
@@ -72,7 +81,8 @@
         ents)
 
    ; corpus names, telling a global from a bound var
-   nt {} _ (map (e \ pin nt <>e 1) ents)
+   (provs e) (<e = 'ind ? (e 4) [(e 1)])
+   nt {} _ (map (e \ each (provs e) (x \ pin nt x 1)) ents)
    (corpus? x) (peep nt x 0)
 
    ; the type-in-type laws, which sound MLTT rejects
@@ -153,7 +163,7 @@
    (ment-l l acc) (two? l ? (ment-l >l (ment <l acc)) acc)
 
    ; candidates: a def, in the fragment, not blacklisted, present in glob (uu-certified)
-   (cand? e) (<e = 'def && !(peep bl (e 1) 0) && !(peep np (e 1) 0)
+   (cand? e) ((<e = 'def || <e = 'ind) && !(peep bl (e 1) 0) && !(peep np (e 1) 0)
               && peep GLOB (e 1) 0 && tr? (e 2) && tr? (e 3))
    cands (foldl (\ a e (cand? e ? (e . a) a)) () ents)   ; reversed; restore order at emit
    ; each candidate's mentioned-names list (its global dependencies)
@@ -161,17 +171,35 @@
 
    ; --- dependency closure: keep only defs all of whose mentions also survive ---
    (allin? l ex) (two? l ? (peep ex <l 0 && allin? >l ex) 1)
-   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (pin a (e 1) 1, a) a)) (tablet 0) cs)
+   (pass cs ex) (foldl (\ a e (allin? (mlist e) ex ? (each (provs e) (x \ pin a x 1), a) a)) (tablet 0) cs)
    ; the measure is the key count: pass only shrinks ex. not glued $, which nets a tablet to 1
    (fix ex) (pass cands ex @ ex2 (? (#(keys ex2) = #(keys ex)) ex2 (fix ex2)))
-   ex0 (foldl (\ a e (pin a (e 1) 1, a)) (tablet 0) cands)    ; seed: all candidates
+   ex0 (foldl (\ a e (each (provs e) (x \ pin a x 1), a)) (tablet 0) cands)    ; seed: all candidates
    keep (fix ex0)                                                   ; the closed exportable set
 
    ; --- emit, in source order ---
-   (emit e) (: nm (e 1) mb (peep manual nm 0)
+   ; a family: an inductive over Type, its constructors with their params made explicit, and
+   ; nm_rect in uu's order, each hypothesis after its field, over lean's, fields first
+   (names l) (cat (map (x \ " " + string x) l))
+   (arrows bs) (cat (map (b \ "(" + string <b + " : " + u2l (b 1) + ") -> ") bs))
+   (emit-ind e)
+   (: nm (e 1) g (e 2 @ [ps is cs] (indsig nm ps is cs)) T (leann nm)
+      _ (pin bases 'UU "Type")
+      hd ("inductive " + T + cat (map (b \ " (" + string <b + " : " + u2l (b 1) + ")") (g 'ps)) + " : " + arrows (g 'is) + "Type where\n")
+      cs (cat (map (c \ "  | " + leann <c + " : " + arrows (c 1) + u2l (c 2) + "\n") (g 'cs)))
+      ab (cat (map (c \ "abbrev " + leann <c + " : " + arrows (g 'ps) + arrows (c 1) + u2l (c 2) + " := @" + T + "." + leann <c + "\n") (g 'cs)))
+      ; the recursor's motive lands in any universe, so a family can eliminate into UU
+      _ (pin bases 'UU "(Type _)")
+      (minor m) (two? (m 2) || two? (m 3) ? ("(fun" + names (m 2 + m 3) + " => " + string (m 1) + names (map cap (m 4)) + ")") (string (m 1)))
+      vs (g 'xs + [(g 'Pn)] + map (m \ m 1) (g 'ms) + g 'iv + [(g 'tn)])
+      rc ("def " + leann (g 'rnm) + " : " + u2l (g 'rectT) + " :=\n  fun" + names vs + " => @" + T + ".rec"
+          + names (g 'xs) + " " + string (g 'Pn) + cat (map (m \ " " + minor m) (g 'ms)) + names (g 'iv) + " " + string (g 'tn) + "\n")
+    (hd + cs + ab + rc))
+   (emit e) (<e = 'ind ? (emit-ind e) (emit-def e))
+   (emit-def e) (: nm (e 1) mb (peep manual nm 0)
      _ (pin bases 'UU (peep mono nm 0 ? "Type" "(Type _)"))
      out ((peep red nm 0 ? "@[reducible] " "") + "def " + (leann nm) + " : " + (u2l (e 2)) + " :="
-      + nl + (mb ? mb ("  " + (u2l (e 3)))) + nl)
+      + "\n" + (mb ? mb ("  " + (u2l (e 3)))) + "\n")
      _ (pin bases 'UU "(Type _)")
      out)
    ; foldr keeps ents' order: lean wants every definition before its uses
@@ -240,6 +268,6 @@
       "#print axioms uu_idisweq"
       "#print axioms uu_iscontrcoconustot"
       ""]))
-   _ (dot ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;" + nl
-         + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/" + nl))
+   _ (dot ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;\n"
+         + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/\n"))
    (quit 0))

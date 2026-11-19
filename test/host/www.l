@@ -33,6 +33,9 @@
    _ (test (K 'wg-plain ("a" + string 27 + "]0;x" + string 7 + "b\tc\n" + string 127 + string 0) = "a]0;xb\tc\n"))
    _ (test (K 'ww-arg "example.com/a" = "https://example.com/a")
            (K 'ww-arg "http://x" = "http://x"))
+   ; an anchor laid, and a page's nth link
+   _ (test (K 'ww-link "a?b" "c" = "<a href=\"a?b\">c</a>")
+           (K 'ww-urln {'urls ["u1" "u2"]} 2 = "u2") !(K 'ww-urln {'urls ["u1"]} 2))
 
    ; paths carry the pid, so two runs over one out/ keep apart
    root ("out/.www-" + show (getpid 0))

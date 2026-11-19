@@ -40,6 +40,10 @@
                       (lib () k @ M (M ? M (lib () 'verbs @ V (tablet? V ? (V 'lift k))))))
                  (keys (lib ()))))
 
+; a board that links no posix.c has no tty: () answers as one, (() 1) being (), so the
+; editor and the grid take their no-terminal widths
+(: tty (peep book 'tty ()))
+
 (: putc (put out)
    puts (say out)
    (putn n) (putbn out n 10)
@@ -333,13 +337,15 @@
 (: arch-canon {'x64 'x64  'amd64 'x64  'x86_64 'x64  'x86-64 'x64
                'a64 'a64  'arm64 'a64  'aarch64 'a64
                'rv64 'rv64  'riscv 'rv64  'riscv64 'rv64
+               'rv32 'rv32  'riscv32 'rv32
                'wasm 'wasm  'wasm64 'wasm
                'thumb1 'thumb1  'cortex-m0 'thumb1
                'thumb2 'thumb2  'cortex-m7 'thumb2
                'arm 'arm  'armv7l 'arm  'armv8l 'arm  'armhf 'arm
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
-               'i386m16 'i386m16}
+               'i386m16 'i386m16
+               'xtensa 'xtensa  'esp32 'xtensa}
    ; uname's machine and a gnu triple's head; () for the embedded targets
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; main.c pins `love-os` per run off __love_osv: one binary meets four kernels
@@ -925,7 +931,7 @@
    ; the rest kept -> 1. () where it will not open or seek. the seek is on the raw fd
    (u-at p m off) (cite 'posix 'openfd p m @ fd
                    (charm? fd && 0 <= fd ?
-                      (charm? (cite 'posix 'lseek fd off 0) ? (fdopen fd) (cite 'posix 'close fd, ()))))
+                      (charm? (cite 'posix 'lseek fd off 0) ? (cite 'posix 'fdopen fd) (cite 'posix 'close fd, ()))))
    (uread-at p off n) (u-at p 0 off @ q
      (hot? q ? (: b (cask (n < 65536 ? n 65536))
                   (go k acc) (k < 1 ? acc
@@ -1035,6 +1041,13 @@
                          q))
         (val v) (coin? v && ok? (load v) ? (measure v) v)   ; a rational as its measure, anything else itself
         (num? v) (nstar? v || coin? v && ok? (load v))      ; a number or a rational, never a text or a list
+        ; an exact (n d) against a float, exactly: -1 0 1, () for a nan. the floor q first, then
+        ; the fraction's binary digits against the float's; doubling and less 1.0 never round
+        (rqf x f) (: n <x d <>x t (n // d) q (n < 0 && t * d != n ? (t - 1) t) r (n - q * d)
+                     (bits r g) (? (g = 0) (r > 0 ? 1 0) (r = 0) -1
+                                  (: r2 (2 * r) g2 (2.0 * g) b (d <= r2) c (1.0 <= g2)
+                                     (b != c ? (b ? 1 -1) (bits (b ? (r2 - d) r2) (c ? (g2 - 1.0) g2)))))
+                     (? !(f <= 0 || 0 < f) () (f < q) 1 (q + 1 <= f) -1 (bits r (q = f ? 0.0 (f - q)))))
         (div x y) (ok? x && ok? y && <y != 0 ?              ; invert and multiply; by zero -> ()
                    (q (reduce (<x * <>y) (<>x * <y))))
         ; an inexact operand: the op over the measures, and the inexact answer wins
@@ -1043,10 +1056,14 @@
         c (coin '/// (z \ {'star 1                               ; a rational is a star
          'net measure
          '< (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, exact (d > 0)
-             (ok? x && ok? y ? (<x * <>y < <y * <>x)
+             (? (ok? x && ok? y) (<x * <>y < <y * <>x)
+                (ok? x && gem? b) (-1 = rqf x b)
+                (gem? a && ok? y) (1 = rqf y a)
                 (val a < val b))))                         ; against a non-number: by the measure
          '= (\ a b (: x (arg a) y (arg b)                      ; cross-multiply, so 7/2 = 3.5
-             (ok? x && ok? y ? (<x * <>y = <y * <>x)
+             (? (ok? x && ok? y) (<x * <>y = <y * <>x)
+                (ok? x && gem? b) (0 = rqf x b)
+                (gem? a && ok? y) (0 = rqf y a)
                 (val a = val b))))
          'int (c \ (load c @ p (<p // <>p)))                 ; toward zero
          'ceil (c \ (: p (load c) k (<p // <>p)                ; d > 1, so the quotient is never whole:
@@ -1094,12 +1111,15 @@
 ;   (segs p)      -> the '/'-separated components, empties dropped
 ;   (pclean l lim)-> that list cleaned, lim bounding how far '..' may climb out of it
 ;   (pprefixes p) -> the directory prefixes of p, outermost first
-;   (nest _)      -> the nest: $LOVE_NEST, else $HOME/.love, /.love with no HOME
+;   (nest _)      -> the nest: $LOVE_NEST, else $XDG_DATA_HOME/love, else $HOME/.love,
+;                    /.love with no HOME. cli-line exports it, so a child reads LOVE_NEST alone
 
 (module '(path lastslash lastdot pbase phead segs pclean pprefixes nest)
 (: (lastslash p) ((: (go j) (0 < j ? (p (j - 1) = 47 ? j (go (j - 1))) 0)) #p)
-   (nest _) (getenv "LOVE_NEST" @ e
-              (string? e && 0 < #e ? e (getenv "HOME" @ h ((string? h ? h "") + "/.love"))))
+   (nest _) (: (set? v) (string? v && 0 < #v)
+               (getenv "LOVE_NEST" @ e
+                (set? e ? e (getenv "XDG_DATA_HOME" @ x
+                             (set? x ? (x + "/love") (getenv "HOME" @ h ((string? h ? h "") + "/.love")))))))
    ; the leaf after the last '/', and the head before it with the slash kept ("" for none)
    (pbase p) (snip p (lastslash p) #p)
    (phead p) (snip p 0 (lastslash p))
@@ -1366,569 +1386,6 @@
    (sh-show ws)  ((atom? ws) ? "" (sh-qhead <ws + sh-qrest >ws)))
 
 ) ; module lush
-
-; kanren -- first-order unification + a lazy-colist search monad. overlay below reads it, so
-; it registers first. `unify s u v` is pure -- a substitution or `ufail` -- with no occurs
-; check: a self-referential binding is a rational tree, and reify marks the back-edge. a goal
-; is (\ st stream) over a state (substitution . constraints); est/=== unify, + interleaves,
-; * binds.
-(module '(kanren =/= === absent apt closed? con dif empty_dict est ifte inside mintp naf nay query rel
-   residual rewrite s_app scount slist smap sno sole s_plus s_star st0 stake subst sun
-   sX tie ufail ufail? unify untie var var? walk)
-   ; the scan asks two?, never ?: a key that nets to nothing would end it early
-(: (dict_has d k) (: (loop k ks vs) (two? ks ? (k = <ks ? vs (loop k >ks >vs))) (loop k <d >d))
-   (dict_set d k v) ((k . <d) . v . >d)
-   empty_dict '(())
-   has_s dict_has
-   ext_s dict_set
-   (mintp x) (mint? x)
-   (var x) (x . nom 0)                         ; (label . fresh-nom) -- identity by the nom
-   ; a nom anywhere but a pair's tail is data. `?`, not &&: a predicate owes a bit
-   (var? x) (two? x ? (nom? >x) 0)
-   (walk s u) (!(var? u) ? u (has_s s u @ t (two? t ? (walk s <t) u)))
-   ufail (nom 0)
-   (ufail? x) (x = ufail)
-   ; a binder: the abstraction is a love lambda, so instantiation is application
-   (tie f) ('tie . f)
-   (tie? t) (two? t ? (<t = 'tie) 0)
-   (untie t a) (>t a)                            ; open the binder at a
-   (unify s u v) (: x (walk s u) y (walk s v)       ; pure: a substitution, or ufail
-     (? (x = y) s                                   ; alpha-equal binders land here, for free
-        (var? x) (ext_s s x y)
-        (var? y) (ext_s s y x)
-        (tie? x && tie? y) (nom 0 @ a (unify s (untie x a) (untie y a)))   ; one fresh nom opens both
-        (two? x && two? y) (unify s <x <y @ s1 (ufail? s1 ? ufail (unify s1 >x >y)))
-        ufail))
-   (subst s t) (? (var? t) (walk s t @ w (var? w ? w (subst s w)))   ; instantiate a template under s
-                  (tie? t) (tie (a \ (subst s (untie t a))))             ; under a binder: at its opening
-                  (two? t) (subst s <t . subst s >t)
-                  t)
-   (rewrite pat tpl x) (unify '(()) pat x @ r (ufail? r ? x (subst r tpl)))   ; pattern -> template, or x unchanged
-
-   ; --- the constraint store, beside the substitution: a constraint is (kind . payload),
-   ; re-checked against the store after every successful unification
-   st0 (empty_dict . ())
-   (unify_all s p) (two? p ? (unify s <<p ><p @ r (ufail? r ? ufail (unify_all r >p))) s)
-   ; the bindings r has and s does not, as a (u . v) list -- ext_s prepends, so they lead
-   (residual r s) (: (go k ks vs acc) (k ? (go (k - 1) >ks >vs ((<ks . <vs) . acc)) acc)
-                     (go (#<r - #<s) <r >r ()))
-   ; does x occur in the (walked) term t? a tie opens at a fresh nom, never an outer atom
-   (inside s x t) (? (x = t) 1
-                     (var? t) 0
-                     (tie? t) (inside s x (walk s (untie t (nom 0))))
-                     (two? t) (inside s x (walk s <t) ? 1 (inside s x (walk s >t)))
-                     0)
-   (closed? s t) (? (var? t) 0
-                    (tie? t) (closed? s (walk s (untie t (nom 0))))
-                    (two? t) (closed? s (walk s <t) ? (closed? s (walk s >t)) 0)
-                    1)
-   ; one constraint against s -> 'drop (satisfied for good), ufail (violated), or itself
-   (vet1 s c)
-    (<c @ 'dif (: r (unify_all s >c)                    ; unify the prefix on a copy and read it three ways
-                (ufail? r ? 'drop                   ;   can never hold -> nothing left to watch
-                 (: q (residual r s)                ;   holds with no new binding -> violated
-                  (two? q ? ('dif . q) ufail))))
-          'abs (: x (walk s <>c) t (walk s >>c)         ; absento, and nominal freshness by the same door
-                (? (inside s x t) ufail
-                   (closed? s t) 'drop
-                   ('abs . x . t)))
-          'apt (: w (walk s >>c)                        ; a type constraint over any predicate
-                (? (var? w) ('apt . <>c . w)
-                   (<>c w) 'drop
-                   ufail))
-          c)
-   (vet s)
-    (: (go (a . u)) (vet1 s a @ ^ufail ufail r (go u @ t (t == ufail || r == 'drop ? t (r . t)))) go)
-   (con st c) (vet <st c @ d (ufail? d ? ufail (<st . d)))   ; a state with c added, or ufail
-
-   ; --- streams: () empty, (x . s) mature, a thunk immature, told apart by lit?/two?
-   sno ()
-   (sX x s) (x . s)
-   (sun x) [x]
-   (s_plus s t) (s @ (f && lit? f) (s_plus t * f)       ; interleave (disj): the swap is the fairness
-                     (x . r)       (x . s_plus r t)
-                     t)
-   (s_star s g) (s @ (f && lit? f) (v \ s_star (f v) g)       ; bind (conj)
-                     (x . r)       (s_plus (g x) (s_star r g)))
-   (s_app s t)  (s @ (f && lit? f) (v \ s_app (f v) t)        ; ordered disj: no swap, the left runs
-                     (x . r)       (x . s_app r t)              ; dry first -- incomplete on purpose
-                     t)
-   (sfire s) (lit? s ? (sfire (s ())) s)                ; force to a mature shape: () or a cons
-   (stake i s) (i @ 0 () (sfire s @ (a . u) (a . stake (i - 1) u)))
-   (smap f s) (s @ (g && lit? g) (v \ smap f (g v)) (x . r) (f x . smap f r) ())
-   (sfold f z s) (sfire s @ m (two? m ? (f <m (sfold f z >m)) z))
-   slist (sfold (.) ())
-   (scount s) (: (go a s) (sfire s @ m (two? m ? (go (a + 1) >m) a)) (go 0 s))
-
-   ; --- goals. &&& ||| and the coin's * + are conj2/disj2; `load` takes a bare or rel-wrapped goal
-   (conj2 a b) (: g (load a) h (load b) (st \ (s_star (g st) h)))
-   (disj2 a b) (: g (load a) h (load b) (st \ (s_plus (g st) (h st))))
-   yea sun                               ; the goal that holds, once
-   nay ()                                ; the goal that never does
-   (est u v st) (unify <st u v @ r
-                   (ufail? r ? ()
-                    (vet r >st @ c (ufail? c ? () (sun (r . c))))))
-   ; unify on a copy: ufail -> holds for good; no new binding -> fails; else the residual
-   ; bindings are the constraint
-   (dif u v st) (unify <st u v @ r
-                   (ufail? r ? (sun st)
-                      (residual r <st @ p
-                         (two? p ? (con st (('dif . p) . >st) @ t (ufail? t ? () (sun t)))))))
-   ; absento: x occurs nowhere in t, now or ever; for a nom x, alphaKanren's a # t
-   (absent x t st) (con st (('abs . x . t) . >st) @ r (ufail? r ? () (sun r)))
-   ; a type constraint over any predicate -- symbolo/numbero and their kin in one goal
-   (apt p x st) (con st (('apt . p . x) . >st) @ r (ufail? r ? () (sun r)))
-   ; --- extra-logical. `ifte` is the soft cut: if c holds at all, t runs over its answers and
-   ; e is dropped. `sole` commits to the first answer. `naf` is negation as failure: "not
-   ; proved", which is "false" only for a ground terminating goal.
-   (ifte c t e st) (sfire (c st) @ m (two? m ? (s_star m t) (e st)))
-   (sole g st) (sfire (g st) @ m (two? m ? (sun <m)))
-   (naf g st) (ifte g nay yea st)
-
-   ; --- query: run a goal, reify the answers
-   (query n ks g) (:
-    (walk_star s u path) (?                          ; cycle-safe: (mu label) on a back-edge
-     (var? u) (has_s s u @ t
-                 (? (atom? t) u
-                    (elem u path) ['mu <u]
-                    (walk_star s <t (u . path))))
-     (tie? u) (nom 0 @ a ['tie a (walk_star s (untie u a) path)])
-     (two? u) (walk_star s <u path . walk_star s >u  path)
-     u)
-    ; an answer's mints are renamed a1 a2 .. in first-sight order, so answers compare
-    (noms t acc) (? (var? t) acc
-                    (mint? t) (elem t acc ? acc (t . acc))
-                    (two? t) (noms >t (noms <t acc))
-                    acc)
-    (renom d t) (? (var? t) t
-                   (mint? t) (dict_has d t @ v (two? v ? <v t))
-                   (two? t) (renom d <t . renom d >t)
-                   t)
-    (dename t) (rev (noms t ()) @ ns
-                  (two? ns ?
-                     (renom (foldl (d \ p \ dict_set d <p <>p) empty_dict
-                                   (zip ns (map (i \ nom $ "a" + show (i + 1)) ^#ns)))
-                            t)
-                     t))
-    (keyvar keys k) (atom? keys ? 0 (<keys @ kv (k = <kv ? kv (keyvar >keys k))))
-    (reify1 st) (dename (flip catmap ks (k \ (keyvar <<st k @ kv (two? kv ? [k (walk_star <st kv ())])))))
-    (map reify1 ((n ? (stake n) slist) (g st0))))
-   rel (coin 'goal (z \ {'+ (\ A B (z (disj2 A B)))   ; the goal coin: + = disj = |||, * = conj = &&&
-                         '* (\ A B (z (conj2 A B)))})))
-(: (=== u v) (rel (est u v))                        ; all-punct, so infix at house band; a chain
-   (=/= u v) (rel (dif u v)))                       ; of the two wants parens
-; the goal macros live in kanren's own macro table, so (borrow 'kanren) carries them.
-; &&& and ||| are && and ||, \\\ is \ with its params fresh logic vars.
-(:: 'zz (x \ (: s (nom 0) u (nom 0) x2 <x ['\ s u [x2 s]])))   ; delay a goal: the curried tail is the thunk
-(:: '&&& (xs \ (foldl (\ a b [conj2 a b]) <xs >xs)))   ; conj of goals -- the ring's *
-(:: '||| (xs \ (foldl (\ a b [disj2 a b]) <xs >xs)))   ; disj of goals -- the ring's +
-(:: '\\\ (a \ (('\ . a) . map (a \ [var ['\ a]]) (init a))))                         ; lambda w/ fresh logic vars
-
-) ; module kanren
-
-; overlay -- an optional, observe-only static-type overlay hooked at the ev seam
-(module '(overlay ov-check ov-eng overlay-off overlay-set ov-hook ov-slot)
-(borrow 'kanren)                                         ; subst unify ufail ufail? var, scoped to this compile
-(: ov-both
-    (: (ov-sigof sigs nm) (sigs @ (((aa . ua) @ a) . u) (nm @ ^aa a (ov-sigof u nm)))
-       (ov-look env x) (env @ ((ap . up) . env') (x @ ^ap up (ov-look env' x)) 'bot)
-       (ov2-var? dom d) (nom? d && nelem d (dom 'dice) && nelem d (dom 'ctors))   ; a sig variable: not concrete, not a constructor
-       (ov2-vars dom d acc) (atom? d ?
-        (ov2-var? dom d && (nelem d acc) ? (d . acc) acc)
-        (foldl (flip $ ov2-vars dom) acc d))
-       (ov2-lk vm d) (? (atom? vm) d
-                        (d = <<vm) ><vm
-                        (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
-       (ov2-term vm d)    (atom? d ? (ov2-lk vm d) (map (ov2-term vm) d))
-       (ov2-uall ps as s) (? (atom? ps || atom? as) s
-                             (elem <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing
-                             (unify s <ps <as @ s1 (ufail? s1 ? ufail (ov2-uall >ps >as s1))))
-       (ov2-inst dom sg args)                                          ; sg = (name (param-dies) result): structured caller instantiation
-        (: params <>sg result <>>sg
-           vm (map (nm \ nm . var nm) (ov2-vars dom (params . result) ()))            ; one fresh logic var per sig variable
-           s  (ov2-uall (map (ov2-term vm) params) args '(()))   ; a caller's rigid symbol is a constant here
-           (? (ufail? s) 'clash                                        ; args contradict the params: the one hard verdict
-              (#args != #params) 'top                        ; partial/over-application: a closure/re-application, die unknown
-              (: r (subst s (ov2-term vm result)) nf (dom 'norm) (lit? nf ? (nf r) r))))   ; reify + normalize (dependent index)
-       (ov-kindof dom sigs env e)
-          (? (nom? e) (ov-look env e)
-             (atom? e) (dom 'litdie e)
-             (: h <e as (map (ov-kindof dom sigs env) >e)
-                (? (elem h '(+ *)) (dom 'tr h <as <>as)
-                   (h = '? && #e = 4) (dom 'join <>as <>>as)
-                   (ov-sigof sigs h @ sg (atom? sg ? 'top (ov2-inst dom sg as))))))
-       (ov-zip (ap . up)  (ad . ud))     ((ap . ad) . ov-zip up ud)
-       (ov-clash dom sigs env e) (two? e ? (: d (ov-kindof dom sigs env e) sub (catmap (ov-clash dom sigs env) >e)
-                                            (d @- sub 'clash ((e . map (ov-kindof dom sigs env) >e) . sub))))   ; a clash site = (expr . operand-dies)
-                                                    ; the ternary is parenthesized: bare in a `:`
-                                                    ; element list it does not factor at all
-       (ov-pairs (a . b . c)) ((a . b) . ov-pairs c)
-       (ov2-okr dom bd decl) (dom 'okr @ f (lit? f ? (f bd decl) (dom 'join bd decl = decl)))   ; result acceptable? domain `okr` (dependent = up to conv/norm), else structural join
-       (ov-check1 dom sigs prog)
-          (catmap (p @ ((nm . ps) . body) \                          ; parenthesize the `:`: it is
-                     (: sg (ov-sigof sigs nm)                       ; looser than `?`, so unwrapped it
-                        (two? sg ?                                  ; eats `two? sg` as a second pair
-                         (: env (ov-zip ps <>sg) cl (ov-clash dom sigs env body)
-                            bd (ov-kindof dom sigs env body) decl <>>sg
-                          (two? cl || !(ov2-okr dom bd decl) ? [(nm . (atom? cl ? ['result bd decl] cl))])))))
-                  (filter (two? * cap) (ov-pairs >prog)))
-       (ov-djoin dies) (? (atom? dies) "?" (atom? >dies) (show <dies) (show <dies + " vs " + ov-djoin >dies))
-       (ov-report nm detail) (detail @ ; detail = (result BD DECL) | ((expr . opdies) ..)
-        ['result bd decl]
-         (puts $ ";; overlay: " + string nm + " -- returns " + show bd + ", declared " + show decl + "\n")
-        ((expr . opdies) . _)
-         (puts $ ";; overlay: " + string nm + " -- clash in " + show expr + "  (" + ov-djoin opdies + ")\n"))
-       (ov-reps ((aa . ua) . u)) (ov-report aa ua, ov-reps u)
-       (ov-run dom sigs form)
-        (form @ (': . _) (ov-check1 dom sigs form @ (r @ (_ . _)) (ov-reps r)))
-     [ov-run ov-check1])                           ; the run entry + the pure checker (internals private)
-   ov-eng      <ov-both
-   ov-check    <>ov-both                           ; (ov-check dom sigs form) -> () clean | ((name . detail)..) -- the report as data (a gate's leg)
-   ov-slot     {}                          ; install slot: peep 0 -> (DOM SIGS) or ()
-   (overlay-set dom sigs) (pin ov-slot 0 [dom sigs])
-   (overlay-off _) (pin ov-slot 0 ())
-
-   (ov-hook e0 e)
-     (ov-slot 0 @ v (two? v ? (ov-eng <v <>v e, e0 e) (e0 e))))
-) ; module overlay
-
-; uu -- MLTT with the UniMath Preamble's seven inductives (empty unit bool coprod nat paths
-; total2), bidirectional checking, NbE conversion (de bruijn levels as fresh vars, sigma- and
-; pi-eta), type-in-type as UniMath has it. an axiom is a book entry with a type and no value.
-; names follow UniMath.
-;
-; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
-;   (pi x A B) (lam x b) (total2 x A B) (tpair a b) (pr1 w) (pr2 w) (succ n)
-;   (coprod A B) (ii1 a) (ii2 b) (paths a a b) (idpath a) (the T t)
-;   (nat_rect P z s n) (bool_rect P t f b) (unit_rect P u x)
-;   (coprod_rect P f g v) (empty_rect P e) (paths_rect P pr e)
-;   (let x a b) -- definitional: x binds the value of a, transparent to conv
-; and any other list is an application spine. (f) == f here too.
-; the defn/defq/axm macros live in this module's macro table.
-
-; --- the kernel: values, evaluation, conversion, checking ---
-(module '(uu axm bridge capp chk conv defcx defn defq defvc defvcs GLOB HELPC lof rejects sugar vcs-of vof)
-(: GLOB {} HELPC {} SRC {} CMEM {} BRIDGE {} CX {})
-
-(: (vsucc v) (charm? v ? (v + 1) ['succ v])
-
-   ; a uu closure ('clo f) carries a love function, so applying one is an application, not a
-   ; re-walk of syntax. only capp opens one.
-   (capp cl v) (<>cl v)
-   (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
-   (dop1 v) (v @ ['chain a _] a ['np1 v])
-   (dop2 v) (v @ ['chain _ b] b ['np2 v])
-   (donr P z s m) (charm? m ?
-    (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
-    (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
-   ; a step that never reads its recursive result needs none computed, a case and no fold:
-   ; a double recursion, natgtb or natminus, costs a sum of its literals and not their binomial
-   (dosr P z s m) (charm? m ? (m = 0 ? z (vapp (vapp s (m - 1)) 0))
-    (m @ ['succ n] (vapp (vapp s n) 0) ['nnr P z s m]))
-   (reads? x t) (t == x || two? t && (reads? x <t || reads? x >t))
-   (stepless? s) (s @ ['lam _ ['lam u b]] !(reads? u b) 0)
-   (dobr P x y v) (v @ 'true x  'false y  ['nbr P x y v])
-   (dour P x v) (v @ 'tt x ['nur P x v])
-   (docr P f g v) (v @ ['i1 a] (vapp f a) ['i2 b] (vapp g b) ['ncr P f g v])
-   (doer P v) ['ner P v]
-   (dojr P r ev) (ev @ ['refl _] r ['njr P r ev])
-   (vof-sym en x) (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
-
-   ; --- comp: a term walked once into a love function of the env. vof-sym stays inside the
-   ; (\ en ..): a later defn must be visible to a term compiled earlier.
-   ; arms run most frequent first (lam and succ are half); they are exclusive, so order is free.
-   (comp t)
-   (? (charm? t) (en \ t)
-      (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) (en \ t)
-                  (t = 'zero) (en \ 0)
-                  (en \ vof-sym en t))
-      ; a spine's list head matches no tag, so it falls through to the else
-      (t @
-         ['lam x b]             (comp b @ cb (en \ ['lam ['clo (v \ cb ([x v] . en))]]))
-         ['succ a]              (comp a @ ca (en \ vsucc (ca en)))
-         ['pi x A B]            (: cA (comp A) cB (comp B)
-                                 (en \ ['pi (cA en) ['clo (v \ cB ([x v] . en))]]))
-         ['paths A a b]         (: cA (comp A) ca (comp a) cb (comp b)
-                                 (en \ ['paths (cA en) (ca en) (cb en)]))
-         ['nat_rect P z s n]    (: cP (comp P) cz (comp z) cs (comp s) cn (comp n)
-                                   go (stepless? s ? dosr donr)
-                                 (en \ go (cP en) (cz en) (cs en) (cn en)))
-         ['tpair a b]           (: ca (comp a) cb (comp b) (en \ ['chain (ca en) (cb en)]))
-         ['idpath a]            (comp a @ ca (en \ ['refl (ca en)]))
-         ['paths_rect P r e]    (: cP (comp P) cr (comp r) ce (comp e)
-                                 (en \ dojr (cP en) (cr en) (ce en)))
-         ['bool_rect P x y w]   (: cP (comp P) cx (comp x) cy (comp y) cw (comp w)
-                                 (en \ dobr (cP en) (cx en) (cy en) (cw en)))
-         ['coprod A B]          (: cA (comp A) cB (comp B) (en \ ['coprod (cA en) (cB en)]))
-         ['coprod_rect P f g w] (: cP (comp P) cf (comp f) cg (comp g) cw (comp w)
-                                 (en \ docr (cP en) (cf en) (cg en) (cw en)))
-         ['empty_rect P e]      (: cP (comp P) ce (comp e) (en \ doer (cP en) (ce en)))
-         ['unit_rect P u x]     (: cP (comp P) cu (comp u) cx (comp x)
-                                 (en \ dour (cP en) (cu en) (cx en)))
-         ['UU 0]                (en \ 'UU)
-         ['UU l]                (en \ ['U l])
-         ['the T u]             (comp u)                    ; the ascription is the term
-         ['let x a b]           (: ca (comp a) cb (comp b) (en \ cb ([x (ca en)] . en)))
-         ['total2 x A B]        (: cA (comp A) cB (comp B)
-                                 (en \ ['sig (cA en) ['clo (v \ cB ([x v] . en))]]))
-         ['pr1 w]               (comp w @ ca (en \ dop1 (ca en)))
-         ['pr2 w]               (comp w @ ca (en \ dop2 (ca en)))
-         ['ii1 a]               (comp a @ ca (en \ ['i1 (ca en)]))
-         ['ii2 b]               (comp b @ ca (en \ ['i2 (ca en)]))
-         (: cf (comp <t) cas (map comp >t) (en \ spine en (cf en) cas))))
-
-   (spine en f cas) (cas @ (a . u) (spine en (vapp f (a en)) u) f)
-
-   vof (flip comp)                               ; compile, then run
-
-   ; `==`, not `=`: `=` walks closures, exponential over shared environments. a `?`, not a
-   ; pattern, which would build [a b] per call
-   (conv d a b)
-   (? (a == b) 1
-      (atom? a || atom? b) 0
-      (<a = 'lam || <b = 'lam)
-       (['nv d] @ fr (conv (d + 1) (vapp a fr) (vapp b fr)))
-      (<a = 'chain && <b != 'chain)
-       (conv d <>a (dop1 b) && conv d <>>a (dop2 b))
-      (<b = 'chain && <a != 'chain)
-       (conv d (dop1 a) <>b && conv d (dop2 a) <>>b)
-      (<a = 'pi && <b = 'pi)
-       (conv d <>a <>b && (['nv d] @ fr (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      (<a = 'sig && <b = 'sig)
-       (conv d <>a <>b && (['nv d] @ fr (conv (d + 1) (capp <>>a fr) (capp <>>b fr))))
-      (<a = <b)
-       (conv-args d >a >b))
-
-   (conv-args d as bs)
-   (atom? as && atom? bs || two? as && two? bs && conv d <as <bs && conv-args d >as >bs)
-
-   (inf-sym cx x)
-   (x @ ('UU || 'nat || 'bool || 'unit || 'empty) 'UU
-        'zero 'nat
-        'tt 'unit
-        ('true || 'false) 'bool
-        (assq x cx @ (_ T) T (GLOB x @ (g . _) g (scare 'uu-unbound x))))
-
-   (inf-spine cx en d f as)
-   (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
-                   (scare 'uu-not-a-pi as)) f)
-
-   ; each arm matches the term, then the type; the inner else is the mismatch
-   (chk cx en d t T)
-   (t @
-      ['lam x b]   (T @ ('pi A q) (['nv d] @ fr
-                                     (chk ([x A] . cx) ([x fr] . en) (d + 1) b (capp q fr)))
-                        (scare 'uu-lam-needs-pi t))
-      ['tpair a b] (T @ ['sig A q] (chk cx en d a A,
-                                    chk cx en d b (capp q (vof en a)))
-                        (scare 'uu-tpair-needs-total2 t))
-      ['ii1 a]     (T @ ['coprod A _] (chk cx en d a A) (scare 'uu-ii1-needs-coprod t))
-      ['ii2 b]     (T @ ['coprod _ B] (chk cx en d b B) (scare 'uu-ii2-needs-coprod t))
-      ['idpath a]  (T @ ['paths A av bv]
-                          (: v (chk cx en d a A, vof en a)
-                           (conv d v av && conv d v bv || scare 'uu-idpath-mismatch t))
-                        (scare 'uu-idpath-needs-paths t))
-      ['let x a b] (: Av (inf cx en d a)
-                      va (vof en a)
-                    (chk ([x Av] . cx) ([x va] . en) d b T))
-      (inf cx en d t @ Ti
-         (conv d T Ti || scare 'uu-type-mismatch t)))
-
-   ; the else is the spine; a tag at the wrong length reaches it too and scares unbound
-   (inf cx en d t)
-   (? (charm? t) 'nat
-      (nom? t) (inf-sym cx t)
-      (t @
-         [('pi || 'total2) x A B]
-          (: fr (chk cx en d A 'UU, ['nv d])
-           (chk ([x (vof en A)] . cx) ([x fr] . en) (d + 1) B 'UU, 'UU))
-         ['coprod A B] (chk cx en d A 'UU, chk cx en d B 'UU, 'UU)
-         ['paths A a b]
-          (: Av (chk cx en d A 'UU, vof en A)
-           (chk cx en d a Av, chk cx en d b Av, 'UU))
-         ['succ n] (chk cx en d n 'nat, 'nat)
-         ['idpath a]
-          (: Av (inf cx en d a) v (vof en a) ['paths Av v v])
-         ['pr1 w]
-          (inf cx en d w @ ['sig A _] A (scare 'uu-pr1-needs-total2 t))
-         ['pr2 w]
-          (inf cx en d w @ ['sig _ q] (capp q (dop1 (vof en w))) (scare 'uu-pr2-needs-total2 t))
-         ['the T u]
-          (: Tv (chk cx en d T 'UU, vof en T) (chk cx en d u Tv, Tv))
-         ['let x a b]
-          (: Av (inf cx en d a) va (vof en a) (inf ([x Av] . cx) ([x va] . en) d b))
-         ['nat_rect P z s n]
-          (: Pv (chk cx en d n 'nat,
-                 chk cx en d P (vof 0 '(pi x nat UU)),
-                 vof en P)
-           (chk cx en d z (vapp Pv 0),
-            chk cx en d s (vof [['P Pv]] '(pi k nat (pi r (P k) (P (succ k))))),
-            vapp Pv (vof en n)))
-         ['bool_rect P x y w]
-          (: Pv (chk cx en d w 'bool,
-                 chk cx en d P (vof 0 '(pi x bool UU)),
-                 vof en P)
-           (chk cx en d x (vapp Pv 'true),
-            chk cx en d y (vapp Pv 'false),
-            vapp Pv (vof en w)))
-         ['unit_rect P u w]
-          (: Pv (chk cx en d w 'unit,
-                 chk cx en d P (vof 0 '(pi x unit UU)),
-                 vof en P)
-           (chk cx en d u (vapp Pv 'tt),
-            vapp Pv (vof en w)))
-         ['empty_rect P e]
-          (chk cx en d e 'empty,
-           chk cx en d P (vof 0 '(pi x empty UU)),
-           vapp (vof en P) (vof en e))
-         ['coprod_rect P f g w]
-          (inf cx en d w @
-           ['coprod A B]
-            (: Pv (chk cx en d P (vof [['A A] ['B B]] '(pi x (coprod A B) UU)),
-                   vof en P)
-             (chk cx en d f (vof [['A A] ['P Pv]] '(pi a A (P (ii1 a)))),
-              chk cx en d g (vof [['B B] ['P Pv]] '(pi b B (P (ii2 b)))),
-              vapp Pv (vof en w)))
-           (scare 'uu-coprod_rect t))
-         ['paths_rect P r e]
-          (inf cx en d e @
-           ['paths A av bv]
-            (: Pv (chk cx en d P (vof [['A A] ['a av]] '(pi b A (pi e (paths A a b) UU))),
-                   vof en P)
-             (chk cx en d r (vapp (vapp Pv av) ['refl av]),
-              vapp (vapp Pv bv) (vof en e)))
-           (scare 'uu-paths_rect t))
-         (('lam || 'tpair || 'ii1 || 'ii2) . _) (scare 'uu-cannot-infer t)
-         (inf-spine cx en d (inf cx en d <t) >t))))
-
-; --- drivers: defn checks then pins; an axiom's value is its own neutral name; rejects runs a
-; sugar, gone before the kernel sees a term: (pi x A y B C) and (lam x y b) nest, and a context
-; defcx names binds its telescope, (under cx C) as pis and (given cx b) as lams. the exporters read it too
-(: (cx-of c) (CX c @ b (two? b ? b (scare 'uu-no-context c)))
-   (pis r) (r @ [b] (sugar b) (x . A . u) ['pi x (sugar A) (pis u)])
-   (lams r) (r @ [b] (sugar b) (x . u) ['lam x (lams u)])
-   (cx-pis bs b) (bs @ ([x A] . u) ['pi x A (cx-pis u b)] (sugar b))
-   (cx-lams bs b) (bs @ ([x _] . u) ['lam x (cx-lams u b)] (sugar b))
-   (sugar t)
-    (atom? t ? t
-     (t @ ('pi . r) (pis r)
-          ('lam . r) (lams r)
-          ['under c b] (cx-pis (cx-of c) b)
-          ['given c b] (cx-lams (cx-of c) b)
-          (map sugar t)))
-   ; (defcx name [parent] (x A) ..): a parent's binders first
-   (defcx nm r)
-    (: own (x \ [<x (sugar (x 1))])
-     (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
-
-; thunk expecting the kernel to refuse
-(: (defn nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
-     pin GLOB nm [Tv (vof 0 t)],
-     pin SRC nm [t],
-     nm))
-   (axm nm T0)
-   (: T (sugar T0)
-    (chk 0 0 0 T 'UU,
-     pin GLOB nm [(vof 0 T) ['nv nm]],
-     nm))
-   ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
-   ; never builds its beta-normal form
-   (defq nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
-     pin GLOB nm [Tv ['nv nm]],
-     nm))
-   ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
-   ; ran, and a cite of it is unbound
-   (defvc nm T0 t0)
-   (: T (sugar T0) t (sugar t0) Tv (chk 0 0 0 T 'UU,
-          vof 0 T)
-    (chk 0 0 0 t Tv,
-     pin GLOB nm 1,
-     nm))
-   ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
-   (vcs-of l)
-    (l @ (nm . i . c . bs . r)
-     (: (names b) (two? b ? (<b . names >>b) ())
-        (go i r) (two? r ? ([(intern "\(nm)-\(i)") ['under c ('pi . bs + [<r])] ['given c ('lam . names bs + [(r 1)])]] . go (i + 1) >>r) ())
-      (go i r)))
-   (defvcs l) (map (e \ defvc <e (e 1) (e 2)) (vcs-of l))
-   (rejects th)
-   (: r (call-cc (k \ (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
-    (pin HELPC () 0, r)))
-
-; --- uu2l: a closed term to a love form whose value is vof's answer (charms for nats,
-; ('chain a b) for pairs); lof evaluates one. untrusted: chk/conv never use it, so a bug
-; cannot fake a theorem. globals embed as quoted literals, so no uu binder can capture them.
-; bridge maps names to native love; a defq or axm name compiles to its own neutral.
-(: (qlit v) ['\ v]
-   (kchain a b) ['chain a b]
-   (kp1 v) (v @ ['chain a _] a ['np1 v])
-   (kp2 v) (v @ ['chain _ b] b ['np2 v])
-   (ksucc v) (v + 1)
-   (ki1 a) ['i1 a]
-   (ki2 a) ['i2 a]
-   (krefl a) ['refl a]
-   (knrec s z n) (foldl (flip s) z ^n)
-   (kbrec x y b) (b @ 'true x y)
-   (kcrec f g v) (v @ ['i1 a] (f a) ['i2 b] (g b))
-   (kseq e r) r
-
-   (uglo nm)
-   (CMEM nm @ (_ v) v
-    (BRIDGE nm @ (_ v) v
-     (SRC nm @ (src) (ev (u2 src ()) @ v (pin CMEM nm ['hit v], v))
-               ['nv nm])))
-
-   (u2app t bs) (map (a \ u2 a bs) t)
-
-   ; the eliminators reorder their operands to the k- helpers'
-   (u2 t bs)
-   (? (charm? t) t
-      (nom? t)
-      (? (t = 'zero) 0
-         (memq t '(UU nat bool unit empty tt true false)) (qlit t)
-         (memq t bs) t
-         (qlit (uglo t)))
-      (t @
-         ['lam x b]   ['\ x (u2 b (x . bs))]
-         ['let x a b] [': x (u2 a bs) (u2 b (x . bs))]
-         ['the T u]   (u2 u bs)
-         (('pi || 'total2 || 'coprod || 'paths) . _) (qlit ['ty <t])
-         ['tpair a b] [kchain (u2 a bs) (u2 b bs)]
-         ['pr1 w]     [kp1 (u2 w bs)]
-         ['pr2 w]     [kp2 (u2 w bs)]
-         ['succ n]    [ksucc (u2 n bs)]
-         ['ii1 a]     [ki1 (u2 a bs)]
-         ['ii2 b]     [ki2 (u2 b bs)]
-         ['idpath a]  [krefl (u2 a bs)]
-         ['nat_rect _ z s n]     [knrec (u2 s bs) (u2 z bs) (u2 n bs)]
-         ['bool_rect _ x y w]    [kbrec (u2 x bs) (u2 y bs) (u2 w bs)]
-         ['unit_rect _ u w]      [kseq (u2 w bs) (u2 u bs)]
-         ['coprod_rect _ f g w]  [kcrec (u2 f bs) (u2 g bs) (u2 w bs)]
-         ['paths_rect _ r e]     [kseq (u2 e bs) (u2 r bs)]
-         ['empty_rect _ e]       [kseq (u2 e bs) (qlit 'ner)]
-         (u2app t bs)))
-
-   (uu2l t) (u2 t ())
-   (lof t) (ev (u2 t ()))
-   (bridge nm f) (pin BRIDGE nm ['hit f], nm))
-
-; --- arity guards: curried defn/defq/axm given too few operands would answer a truthy
-; closure and pin nothing. the macros scare on a wrong count in call position.
-(: q (map qlit)
- (:: 'defn (l \ l @ [_ _ _] (defn . q l) (scare 'uu-defn-arity l)),
-  :: 'defq (l \ l @ [_ _ _] (defq . q l) (scare 'uu-defq-arity l)),
-  :: 'defvc (l \ l @ [_ _ _] (defvc . q l) (scare 'uu-defq-arity l)),
-  :: 'defvcs (l \ #l > 3 && #l % 2 = 0 ? [defvcs (qlit l)] (scare 'uu-defq-arity l)),
-  :: 'axm  (l \ l @ [_ _]   (axm  . q l) (scare 'uu-axm-arity  l)),
-  :: 'defcx (l \ [defcx (qlit <l) (qlit >l)])))
-
-) ; module uu
 
 ; peg -- parser combinators. a parser is (\ s y n) over a state s = (text . i), with success
 ; y = (\ rest payload) and failure n = (\ rest); payloads are lists `seq` concatenates, and
@@ -2238,10 +1695,10 @@
                                   [p (map show (filter (v \ prov v = p) (keys prov))) (map show (filter (m \ mods m = p) (keys mods)))
                                      (seen u ? () (pin seen u 1, need u))])
                                ps))
-               cl (cite 'posix 'close)
+               cl (cite 'posix 'close) fdopen (cite 'posix 'fdopen)
                (flush out, flush err,
-                pipe 0 @ pp
-                (fork 0 @ k
+                cite 'posix 'pipe 0 @ pp
+                (cite 'posix 'fork 0 @ k
                   (? (k < 0) (cl <pp, cl >pp, lay (), rec ())
                      (k = 0) (cl <pp,
                               trap (_ \ (lay (), fdopen >pp @ w (say w (show (rec ())), flush w), quit 0)) ()
@@ -2285,7 +1742,7 @@
    (load1 p) ((cite 'posix 'open) p "r" @ q
                (hot? q ? (reads q, cite 'posix 'close q) (scare 'no-source p)))
 
-   ; --- packs: apps and libraries outside the tree, a folder each under ~/.love/pack. the
+   ; --- packs: apps and libraries outside the tree, a folder each under the nest's pack/. the
    ; folder's name is the key: a miss on verb or module NAME reads pack NAME, its .l files in
    ; name order. a pack never pins over a verb already laid, and a bake reads none
    (pk-root _) (cite 'path 'nest 0 + "/pack")
@@ -2531,7 +1988,7 @@
    (edkey p) (see p @ c
                 (? (c = -1) -7
                    (c != 27) c
-                   !(rest 1, cue? p) 27
+                   !(heed p 25) 27   ; a sequence's next byte inside 25 ms, else escape alone
                    (see p @ c2
                       (? (c2 = 91) (edcsi p)
                          (c2 = 79) (peep arrow (see p) 0)    ; SS3: application cursor mode's arrows, home, end
@@ -2784,7 +2241,7 @@
    ; this build's name: the version and a short hash of the source it carries, off the
    ; carried tree's section crcs. same source, same name; no source, the version alone
    (love-build _)
-    (tree-head 0 @ () "love \(love-version)"
+    (cite 'tree 'tree-head 0 @ () "love \(love-version)"
        h "love \(love-version) \(snip (cite 'hashes 'sha256 (show (map (s \ [<s (s 2) (s 4)]) h))) 0 8)")
    (udoor nm f u h? v?)
     (: (say1 x) (: n #x                       ; a page that ends in a newline keeps just the one
@@ -3012,6 +2469,7 @@
    (: (charm0 x) (charm? x ? x 0)
       V  (cite 'verbs)
       _  (ev [': 'cmdline ['\ ln] 'argv ['\ ln] ])   ; C's line is already past the primes
+      _  (setenv "LOVE_NEST" (cite 'path 'nest 0))  ; resolved once; children and C read it
       f  (V 'seat <ln)
       (charm0 (? f          (trap (_ \ (f >ln)) () (\ a b (a @ 'leave (charm0 b) (scare a b))))
                  (two? >ln) (cli-rail ln)

@@ -113,7 +113,7 @@ txt = $(addprefix $(BDIR)/,$(addsuffix .txt,$(1)))
 # alone (the root does not include it), so it says so itself. see ../Makefile.
 .DELETE_ON_ERROR:
 
-.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm ccloops ccraster korebench $(ALL_LANGS)
+.PHONY: all bench run raw html clean satrace setup ccbench ccsize ccdead ccnif ccwasm ccloops ccraster korebench proofbench $(ALL_LANGS)
 .DEFAULT_GOAL := bench
 
 # Build/refresh the host binary via the root Makefile.
@@ -165,15 +165,15 @@ setup: $(SETUP)
 
 # The compiler shootout (the page's FOURTH table): build the love host binary with
 # mooncc / gcc / clang, then run the full corpus ($t), the two cipher rows
-# (bench/ccrypto.l) and the three heavy-nif rows (bench/cnifs.l) through each.
-# Rows build+test+chacha+poly1305+inflate+crc32+sha256,
+# (bench/ccrypto.l), the heavy-nif rows (bench/cnifs.l) and raster (bench/raster.l) through each.
+# Rows build+test+chacha+poly1305+inflate+zstd+raster+crc32+sha256,
 # columns the compilers. cflags + the corpus come from the Makefile (one source of
 # truth); the mooncc lane runs the artifact's own mooncc verb, so `dist-seed` stands
 # beside `host` -- an intermediate keys the cached moonlibc archive on its own stat and
 # the build row pays a libc build inside it. cached; `make ccbench` refreshes it on its
 # own. (mooncc is x86-64 only -- dnf elsewhere.)
 CCBENCH := $(BDIR)/ccbench.txt
-$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l $(GL) $(love_c) $(host_c) | $(BDIR)
+$(CCBENCH): ccbench.sh ccrypto.l cnifs.l ccgen.l raster.l $(GL) $(love_c) $(host_c) | $(BDIR)
 	@$(MAKE) -s -C $(R) host dist-seed
 	@LOVE_CFLAGS='$(cflags)' CORPUS='$(t)' LOVE_C='$(abspath $(love_c))' HOST_C='$(abspath $(host_c))' ./ccbench.sh $(TIMEOUT) $(SAMPLES) > $@
 ccbench: $(CCBENCH)
@@ -232,6 +232,13 @@ MB ?= 8
 KOREBENCH := $(BDIR)/korebench.txt
 korebench: $(GL)
 	@RAW=$(KOREBENCH) ./korebench.sh $(MB) $(SAMPLES)
+
+# proofbench.sh: uu's kernel beside rocqchk and leanchecker, on the terms uu2coq and uu2lean
+# export, a workload at a time. not cached and not a gate; needs coqc, rocqchk, lean and
+# leanchecker, and the stdlib test_uugen builds. heavy: the corpus compiles take gigabytes
+PROOFBENCH := $(BDIR)/proofbench.txt
+proofbench: $(GL)
+	@RAW=$(PROOFBENCH) ./proofbench.sh $(SAMPLES)
 
 # Self-contained results page: bench/bench.html, the full roster as columns
 # (a present-but-empty language shows a dotted column), with a transpose button

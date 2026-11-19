@@ -98,10 +98,10 @@ static struct dev *dev_of_port(word x) {
   return dev_of_fd(io_fd((struct io*) x)); }
 
 // --- the clock and the waits -----------------------------------------------
-uintptr_t love_clock(void) {
+uint64_t love_clock(void) {
   struct timespec ts;
   return clock_gettime(CLOCK_MONOTONIC, &ts) ? 0
-       : (uintptr_t) (ts.tv_sec * 1000u + (uintptr_t) ts.tv_nsec / 1000000u); }
+       : (uint64_t) ts.tv_sec * 1000u + (uint64_t) ts.tv_nsec / 1000000u; }
 
 // every wait the scheduler reaches lands here, so counting them here counts them
 // all -- see the (naps ()) nif, and the law it is the gauge for.

@@ -373,22 +373,19 @@
                  (inf-letrans (succ q) run mxh2 (inf-ltsu q run f3) (inf-letrans run (natminus mxh2 nb) mxh2 g11 (inf-suble mxh2 nb))) Mw)
        "j0j-1" '(bz-nbr nb run mxh2 g11 f2c)}}
 
-   ; the inverse transform and the walk, the runs of four undone on the way out
-   dout
-    {'name "bz_dout" 'short "zbout"
+   ; the inverse transform, linked through tt's high bits, and the walk set at its start
+   dlink
+    {'name "bz_dlink" 'short "zblink"
      'attrs '("static")
      'ret 'int
-     'params '(("d" (ptr (struct "bz_d"))) ("w" (ptr (struct "bz_w"))) ("nb" uint) ("orig" uint) ("want" uint))
-     'state '((on on0) (oc oc0))
-     'arrays '((Tt (d "tt") tn) (Cn (d "cnt") 256) (Cf (d "cf") 256) (Cr (d "crct") 256))
+     'params '(("d" (ptr (struct "bz_d"))) ("nb" uint) ("orig" uint))
+     'arrays '((Tt (d "tt") tn) (Cn (d "cnt") 256) (Cf (d "cf") 256))
      'requires
-      '((Tt (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat)) (Cr (pi x nat nat))
-        (w nat) (lim nat) (tn nat) (nb nat) (orig nat) (on0 nat) (oc0 nat)
-        (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim)))
-        (hq (inf-le on0 oc0)) (hf (inf-lt oc0 (inf-pow w))))
-     'decls '((uint (c) (s) (u) (j) (x) (p) (crc) (y) (same) (tn (raw (var "BZ_TN")))) (int (last)))
-     'ensures '((e1 (inf-le on oc)) (e2 (inf-lt oc (inf-pow w))))
-     'calls [bwbyte]
+      '((Tt (pi x nat nat)) (Cn (pi x nat nat)) (Cf (pi x nat nat))
+        (w nat) (lim nat) (tn nat) (nb nat) (orig nat)
+        (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim))))
+     'decls '((uint (c) (s) (u) (j) (x) (tn (raw (var "BZ_TN")))))
+     'ensures ()
      'body
       '((i0 if g0 (lt tn nb) ((r0 ret 2)))
         (i1 if g1 (le nb orig) ((r1 ret 2)))
@@ -402,12 +399,47 @@
           (i2 if g2 (le nb j) ((r2 ret 2)))
           (p1 poke Tt j (bor64 (at Tt j) (shl64 u 8)))
           (p2 poke Cf (low x 255) (wadd j 1))))
-        (h4 havoc p (shr64 (at Tt orig) 8))
-        (h5 havoc crc (raw (num 4294967295)))
-        (h6 havoc last (raw (un neg (num 1))))
-        (h7 havoc same 0)
-        (f2 for u 0 nb ((f2a (inf-le on oc)) (f2b (inf-lt oc (inf-pow w))))
-         ((i3 if g3 (le nb p) ((r3 ret 2)))
+        (d0 dstore "p" (shr64 (at Tt orig) 8))
+        (d1 dstore "crc" (raw (num 4294967295)))
+        (d2 dstore "last" (raw (un neg (num 1))))
+        (d3 dstore "same" 0)
+        (d4 dstore "u" 0)
+        (r3 ret 0))
+     'macros '()
+     'proofs {}}
+
+   ; the walk from where it stood, the runs of four undone on the way out, until the block is out
+   ; or the sink holds room: 0 the block out, its crc checked and left in d->bc | 1 paused | an error
+   dwalk
+    {'name "bz_dwalk" 'short "zbwalk"
+     'attrs '("static")
+     'ret 'int
+     'params '(("d" (ptr (struct "bz_d"))) ("w" (ptr (struct "bz_w"))) ("room" (named "uintptr_t")))
+     'wfields '(on oc)
+     'state '((on on0) (oc oc0))
+     'arrays '((Tt (d "tt") tn) (Cr (d "crct") 256))
+     'requires
+      '((Tt (pi x nat nat)) (Cr (pi x nat nat))
+        (w nat) (lim nat) (tn nat) (room nat) (on0 nat) (oc0 nat)
+        (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim)))
+        (hf (inf-lt oc0 (inf-pow w))))
+     'decls '((uint (c) (u) (u0) (j) (x) (p) (nb) (crc) (y) (same) (want) (tn (raw (var "BZ_TN")))) (int (last)))
+     'ensures ()
+     'calls [bwbyte]
+     'body
+      '((i0 if g0 (lt oc on) ((r0 ret 2)))
+        (h0 havoc nb (dg "nb"))
+        (i1 if g1 (lt tn nb) ((r1 ret 2)))
+        (h1 havoc p (dg "p"))
+        (h2 havoc crc (dg "crc"))
+        (h3 havoc last (dg "last"))
+        (h4 havoc same (dg "same"))
+        (h5 havoc u0 (dg "u"))
+        (f2 for u u0 nb ((f2a (inf-le on oc)) (f2b (inf-lt oc (inf-pow w))))
+         ((i2 if g2 (le room on)
+           ((d0 dstore "u" u) (d1 dstore "p" p) (d2 dstore "crc" crc) (d3 dstore "last" last) (d4 dstore "same" same)
+            (r2 ret 1)))
+          (i3 if g3 (le nb p) ((r3 ret 2)))
           (h8 havoc x (at Tt p))
           (s0 set c (low x 255))
           (h9 havoc p (shr64 x 8))
@@ -423,38 +455,39 @@
             (c1 call "bw_byte" ((raw (var "w")) (u8 c)) (w lim) ())
             (e1 ife g5 (eq c (u32 last)) ((h16 havoc same (wadd same 1))) ((h17 havoc same 1)))
             (h18 havoc last c)))))
+        (d5 dstore "u" nb)
         (i4 if g6 (ne (wg "bad") 0) ((r4 ret (raw (un neg (num 1))))))
+        (h19 havoc want (dg "want"))
         (i5 if g7 (ne (bnot crc) want) ((r5 ret 4)))
+        (d6 dstore "bc" want)
         (r6 ret 0))
      'macros '()
      'proofs {}}
 
-   ; one block after its magic -> 0 | an error; its bytes appended to w, their crc checked and left in
-   ; d->bc. it takes nothing from its caller it cannot check, but that the pointers hold what they say
+   ; one block after its magic -> 0 | an error, read and linked for bz_dwalk, its crc in d->want.
+   ; it takes nothing from its caller it cannot check, but that the pointers hold what they say
    dblock
     {'name "bz_dblock" 'short "zbblock"
      'attrs '("static")
      'ret 'int
-     'params '(("d" (ptr (struct "bz_d"))) ("r" (ptr (struct "bz_r"))) ("level" uint) ("w" (ptr (struct "bz_w"))))
-     'fields rd-fields 'wfields '(on oc)
-     'state (rd-state + '((on on0) (oc oc0)))
+     'params '(("d" (ptr (struct "bz_d"))) ("r" (ptr (struct "bz_r"))) ("level" uint))
+     'fields rd-fields
+     'state rd-state
      'arrays rd-arrays
      'requires
       '((In (pi x nat nat)) (Ps (pi x nat nat)) (Ln (pi x nat nat)) (Sq (pi x nat nat)) (Sl (pi x nat nat)) (Yy (pi x nat nat))
         (Cn (pi x nat nat)) (Cf (pi x nat nat)) (Tt (pi x nat nat)) (Cr (pi x nat nat)) (Zt (pi x nat nat))
-        (n nat) (w nat) (i0 nat) (k0 nat) (on0 nat) (oc0 nat) (ms nat) (tn nat) (lim nat) (tl nat)
+        (n nat) (w nat) (i0 nat) (k0 nat) (ms nat) (tn nat) (lim nat) (tl nat)
         (gw (inf-le 32 w)) (hl (inf-le 19 lim)) (hm (inf-lt lim 31)) (hts (inf-le tn (inf-pow lim)))
-        (hms (inf-lt ms (inf-pow w))) (h20 (inf-le 20 tl)) (hq (inf-lt tl 30))
-        (hf (inf-lt oc0 (inf-pow w))))
+        (hms (inf-lt ms (inf-pow w))) (h20 (inf-le 20 tl)) (hq (inf-lt tl 30)))
      'decls '((uint (want) (orig) (x) (nb)))
      'ensures ()
-     'calls [get past dhead dsyms dout]
+     'calls [get past dhead dsyms dlink]
      'body
       '((i0 if g0 (over n 9) ((r0 ret 2)))
         (i1 if g1 (over16 (+ n 9)) ((r1 ret 2)))
         (i2 if g2 (lt (+ n 9) i) ((r2 ret 2)))
         (i3 if g3 (lt 64 k) ((r3 ret 2)))
-        (i4 if g4 (lt oc on) ((r4 ret 2)))
         (c0 calx want "br_get" ((raw (var "r")) 32) (In n w (K 32)) ())
         (c1 calx x "br_get" ((raw (var "r")) 1) (In n w (K 1)) ())
         (i5 if g5 (nz x) ((r5 ret 2)))
@@ -466,9 +499,9 @@
         (c5 calx x "br_past" ((raw (var "r"))) (n i k) ())
         (i8 if g8 (nz x) ((r8 ret 3)))
         (h0 havoc nb (dg "nb"))
-        (c6 calx x "bz_dout" ((raw (var "d")) (raw (var "w")) nb orig want) (Tt Cn Cf Cr w lim tn nb orig) ())
+        (c6 calx x "bz_dlink" ((raw (var "d")) nb orig) (Tt Cn Cf w lim tn nb orig) ())
         (i9 if g9 (nz x) ((r9 ret x)))
-        (d0 dstore "bc" want)
+        (d0 dstore "want" want)
         (r10 ret 0))
      'macros '()
      'proofs {}}
@@ -482,14 +515,15 @@
        uint32_t limit[22], base[22]; uint16_t perm[258]; unsigned maxl; };
       struct bz_d {
        uint32_t tt[BZ_TN]; struct bz_tab tab[6]; uint8_t sel[BZ_MAXSEL]; uint32_t crct[256];
-       uint32_t cnt[256], cf[256], alpha, ns, nb, bc; uint8_t seq[256], yy[256], len[258], pos[6]; };
+       uint32_t cnt[256], cf[256], alpha, ns, nb, bc, want, p, u, crc, same; int last;
+       uint8_t seq[256], yy[256], len[258], pos[6]; };
       """])
-   bz-specs [bwbyte fill get past tbuild sym dhead dsyms dout dblock]
+   bz-specs [bwbyte fill get past tbuild sym dhead dsyms dlink dblock dwalk]
    bz-h (cats ["// bz_gen.h -- laid by src/love/compress/bz.l, `make mx`. edit that file.\n"
                bz-head
                (cats (map (s \ clay-show (cl-fn s)) bz-specs))])
    bz-ledger
-    [["pointers" "bz_dblock's d, r and w" "bz2.c hands them over whole, d from alloc, r over the string, w from its caller"]
+    [["pointers" "bz_dblock's d and r, bz_dwalk's d and w" "bz2.c hands them over whole, d from alloc or its state, r over the string, w from its caller"]
      ["sink" "w's p holds oc bytes" "w is all zero, or bz2_into's out and cap (srctree.c)"]
      ["reader" "br_get from bz_dec and bz_step" "n + 9 fits, i <= n + 9, k <= 64: bz2.c's framing; bz_dblock checks them for itself"]
      ["alloc" "NULL or the bytes asked for" "alloc.c, as inflate's ledger has it"]

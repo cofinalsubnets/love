@@ -28,9 +28,9 @@ love_noinline intptr_t nclock(void) {
   : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
- if (!g || !ok(g)) return;
- if (love_inflag)                                        // the blocking bit was ours
+ if (love_inflag)                                        // the blocking bit was ours, a scare or not
   fcntl(STDIN_FILENO, F_SETFL, (int) getcharm(love_inflag)), love_inflag = 0;
+ if (!g || !ok(g)) return;
  if (!evenp(g->hook[hook_inport]) || lseek(STDIN_FILENO, 0, SEEK_CUR) < 0) return;   // an unseekable door: stdin_hand's
  uintptr_t n = io_pending(g, (struct io*) g->hook[hook_inport])
              + (getcharm(love_stdin.io.ungetc_buf) != EOF ? 1 : 0);
@@ -47,9 +47,6 @@ static struct g *stdin_take(struct g *g) {
  g->hook[hook_inport] = g->sp[0], g->sp++;
  return g; }
 
-_lvm(k_lvm_quit);
-_lvm(k_lvm_getpid);
-
 // a process on inle speaks linux's calls, and only its uname names the kernel under it
 static bool on_inle(void) {
 #if defined(__moonlibc__)
@@ -60,12 +57,23 @@ static bool on_inle(void) {
 #endif
 }
 
-// on inle a twirled task is a process of the shell's
-static lvm(lvm_exit) {
- if (__love_osv < 0) love_musttail return Ap(k_lvm_quit, g);
+// ..and forks where the kernel copies its machine, x64's; elsewhere a shell's own stage is a
+// task in its heap
+static bool inle_tasks(void) {
+#if defined(__x86_64__)
+ return false;
+#else
+ return on_inle();
+#endif
+}
+
+// on inle without fork a twirled task is a process of the shell's
+love_doorlvm(lvm_exit) {
  union u *t = g->tasks;
- if (t && (t[2].x & 1) && getcharm(t[2].x) && on_inle()) love_musttail return Ap(lvm_task_quit, g);
- for (;;) stdin_give(g), exit(getcharm(Sp[0])); }
+ if (t && (t[2].x & 1) && getcharm(t[2].x) && inle_tasks()) love_musttail return Ap(lvm_task_quit, g);
+ int rc = (int) getcharm(Sp[0]);
+ stdin_give(g), fin(g);                          // as main's end: the finalizers drain each port's residue
+ for (;;) exit(rc); }
 
 
 static void stdin_hand(struct g *g) {
@@ -184,9 +192,10 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
   g->sp[2] = putcharm(-2); }                              // drained; now reap
  int st; pid_t w;
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
- if (!w) { g->next_wake_at = love_clock() + 1; return g; }
+ if (!w) { g->next_wake_at = tick_add(love_tick(), 1); return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
- if (n) len(g->sp[0]) = n;
+ // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
+ if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
  else g->sp[0] = EmptyString;
  int status = w < 0 ? -1
             : WIFEXITED(st) ? WEXITSTATUS(st)
@@ -258,8 +267,7 @@ static lvm(lvm_getenv) {
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
  LvmCallp(g, 1, strof, v) }
 
-static lvm(lvm_getpid) {
-  if (__love_osv < 0) love_musttail return Ap(k_lvm_getpid, g);
+love_doorlvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
@@ -269,7 +277,7 @@ LvDef("quit", exit, 1, NULL);
 LvNif("hark", nif_hark, NULL);
 LvNif("herald", nif_herald, NULL);
 LvDef("exec", exec, 1, NULL);
-LvDef("fexec", fexec, 2, NULL);
+LvDef("fexec", fexec, 2, "posix");
 LvDef("getenv", getenv, 1, NULL);
 LvDef("getpid", getpid, 1, NULL);
 
@@ -293,7 +301,8 @@ static char const glaze_off[] = "";
 // the session tail of both the egg boot and the image wake, love0's too; the rest is post.l's cli-line
 static struct g *run_program(struct g *g, bool replp) {
   if (replp) (void) raw_mode(1);
-  if (__love_osv > 0 && on_inle()) g = evals_(g, "(task-doors-on 0)");
+  if (__love_osv > 0 && inle_tasks()) g = evals_(g, "(task-doors-on 0)");
+  else if (__love_osv > 0 && on_inle()) g = evals_(g, "(pin (cite 'posix) 'forks 1)");
   g = love_open(g);
   char const *ng = getenv("LOVE_NO_GLAZE");
   if (ng && *ng) g = evals_(g, glaze_off);
@@ -473,23 +482,10 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
-  g = cats_egg(g);                                    // prel then ev's half, and the printer with `@`
-  g = cats_lib(g);                                   // register every baked module
-  g = evals_(g,
-    "(borrow 'kanren)"
-    "(borrow 'overlay)"
-    "(: ev ((cite 'overlay 'ov-hook) ev))"
-    "(borrow 'uu)"
-    "(borrow 'holo)"
-  );
-  g = shelve(g);
-  g = evals_(g, "(borrow 'cli)(borrow 'verbs)");
-  g = shelve(g);
-  // off again: no module stays ambient, a file borrows what it names
-  for (int i = 0; i < 4; i++) g = shelve(g);        // cli, uu, overlay, kanren
+  g = cats_egg(g);                                    // prel then ev's half, post and the arch's holo
   g = cats_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = shelve(g);                                    // holo back to non-ambient
+  g = shelve(g);                                    // glaze.l's own borrow of holo
 #endif
   g = evals_(g, "(latemop ())");                    // the egg's mop
 
@@ -511,7 +507,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
     "   (raw on) (peep seat-doors 8 0 on)"
     "   (ttyfg pg) (peep seat-doors 9 0 pg)"
     "   (ttypg fd) (peep seat-doors 10 0 fd))");
-  // inle has no fork: a shell's own stage (['thunk f]) runs as a task in its heap
+  // where inle has no fork, a shell's own stage (['thunk f]) runs as a task in its heap
   g = evals_(g, src_tasks);
   g = evals_(g,
     "(: (task-doors-on _)"
@@ -691,10 +687,11 @@ int main(int argc, char const **argv) {
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uintptr_t t0 = love_clock(), blen = 0;
+   uint64_t t0 = love_clock();
+   uintptr_t blen = 0;
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
-    woke_ms = love_clock() - t0,
+    woke_ms = (uintptr_t) (love_clock() - t0),
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   char const *envimg = getenv("LOVE_IMAGE");
@@ -761,3 +758,7 @@ int main(int argc, char const **argv) {
   stdin_give(g);
   enum status s = fin(g);
   return s ? (int) s : rc; }
+
+// the doors under a second name, for a wasm process's table (love.h)
+love_door_user(lvm_exit)
+love_door_user(lvm_getpid)

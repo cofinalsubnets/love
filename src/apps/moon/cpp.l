@@ -4,6 +4,7 @@
 ; a #include, preprocessed on the shared macro table; () incf means no includes.
 (module 'moon
 (borrow 'kore)
+(borrow 'posix)   ; cwd, for a once key
 (:
    ; at the head: love0's single-pass compiler folds a pure global at its definition, so one
    ; bound mid-list reads `;; missing m64` in the #if evaluator (only the mooncc0 bake fails)
@@ -32,7 +33,7 @@
              "may_alias" 'hint "warn_if_not_aligned" 'hint "tls_model" 'hint "returns_twice" 'hint
              "noplt" 'hint "nocf_check" 'hint "indirect_branch" 'hint "function_return" 'hint
              "common" 'hint "nocommon" 'hint
-             "constructor" 'no "destructor" 'no "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
+             "constructor" 'do "destructor" 'do "ifunc" 'no "weakref" 'no "mode" 'do "vector_size" 'no
              "transparent_union" 'do "naked" 'no "interrupt" 'no "patchable_function_entry" 'do
              "no_profile_instrument_function" 'do
              ; i386's conventions: gcc ignores them on every target here
@@ -647,8 +648,9 @@
           (pin macs 'ninc (nth + 1),
            atom? txt ? (gripeat body "cannot resolve #include \(spelt)")      ; unresolved -> fatal
              (: ipath (3 < #txt ? <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
-                ; #pragma once: a header that says it is read once per TU, by its folded path
-                okey "#once:\(pnorm ipath)"
+                ; #pragma once: a header that says it is read once per TU, by its folded path from /,
+                ; so one file reached by a relative and an absolute spelling is one key
+                okey "#once:\(pnorm (0 < #ipath && ipath 0 != 47 ? (cwd 0 + "/" + ipath) ipath))"
                 seen (0 < #ipath && two? (macs okey))
                 _ (!seen && 0 < #ipath && oncep <>txt && pin macs okey [1])
                 pre (nth = 0 ? (msnap macs))

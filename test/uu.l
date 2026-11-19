@@ -1,18 +1,31 @@
-; uu -- the UniMath corpus, checked by the uu kernel baked from post.l
+; uu -- the UniMath corpus, checked by the uu kernel, src/apps/uu.l
 ; the kernel surface the corpus reads bare re-leaks here, body-less, for later files
 (: uu (cite 'uu) GLOB (uu 'GLOB) HELPC (uu 'HELPC) vof (uu 'vof)
    capp (uu 'capp) conv (uu 'conv)
    rejects (uu 'rejects)                    ; not defn/defq/axm: a bound head hides its macro,
                                             ; and the macro is what quotes their operands
-   lof (uu 'lof) bridge (uu 'bridge))
+   lof (uu 'lof) bridge (uu 'bridge) univ (uu 'univ) kof (uu 'kof))
 ; ..so hoist the three macros here, in a form of their own: c0 compiles a whole form at once
-(: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx)))
+(: _ (transcribe 'uu '(defn defq defvc defvcs axm defcx defind)))
 
 ; with `uu` missing every defn is a truthy no-op and the corpus paints fake green
 (test
  (defn uu-alive (pi n nat nat) (lam n (succ n)),
   two? (peep GLOB 'uu-alive 0))
  (3 = vof 0 '(uu-alive 2)))
+
+; a closure says how it reads its binder: 1 never, 2 only under a lambda or a branch, 0 at once.
+; a codomain that never reads it is laid without the argument's value, and the argument is still checked
+(test
+ (vof 0 '(pi x nat nat) @ ['pi _ q] (kof q = 1) 0)
+ (vof 0 '(pi x nat (paths nat x x)) @ ['pi _ q] (kof q = 0) 0)
+ (vof 0 '(total2 x nat bool) @ ['sig _ q] (kof q = 1) 0)
+ (vof 0 '(lam x 3) @ ['lam q] (kof q = 1) 0)
+ (vof 0 '(lam x (bool_rect (lam b nat) x 0 true)) @ ['lam q] (kof q = 2) 0)
+ (vof 0 '(lam x (lam y x)) @ ['lam q] (kof q = 2) 0)
+ (vof 0 '(lam x (succ x)) @ ['lam q] (kof q = 0) 0)
+ (defn uu-skip (pi p (paths nat 0 0) nat) (lam p 3))
+ (3 = vof 0 '(uu-skip (idpath 0))))
 
 ; --- UniMath Foundations PartA. definitions and statements from here down are ported from
 ; --- UniMath (https://github.com/UniMath/UniMath, Foundations/PartA.v et al), mit license,
@@ -855,6 +868,8 @@
    (funextsec nat (lam n nat) (lam n (add n 0)) (lam n n) natplusr0)))
 
 ; the girard canary: under type-in-type, but_seriously_the_world_explodes : empty checks.
+; it runs with universes off; with them on, wfs_wf_t is refused (the laws past hear)
+(: canary-univ (univ 0))
 ; formers and the nat_rect tower stay transparent (descent's type must compute); proofs Qed
 (test
  (defn wf (pi Flse UU T UU UU)
@@ -1029,6 +1044,7 @@
    (lam Flse (irref Flse (wfs_wf_t Flse) (wfs_wf_t Flse) (whoa Flse))))
  (defq but_seriously_the_world_explodes empty
    (the_world_explodes empty)))
+(univ canary-univ)
 
 ; the hprop logic layer (Propositions.v): impred_isaprop the engine, isapropiscontr the
 ; keystone. formers stay transparent (the demos project them with pr1); proofs Qed
@@ -2305,7 +2321,31 @@
  ('rejected = rejects (z \ defn uu-bad4 (coprod nat bool) (ii1 true)))
  ('rejected = rejects (z \ defn uu-bad5 nat (let x (lam y y) x)))
  ('rejected = rejects (z \ defn uu-bad6 (pi x nat 5) (lam x x)))
+ ; an argument whose value no codomain reads is still checked
+ ('rejected = rejects (z \ defn uu-skip-bad nat (uu-skip (idpath 1))))
+ ('rejected = rejects (z \ defn uu-skip-badp (total2 x nat bool) (tpair 0 7)))
  ('accepted = rejects (z \ defn uu-good (paths nat 2 2) (idpath 2))))
+
+; universes: a type holds only smaller ones, so the canary's wfs within itself is refused
+(: univ-was (univ 1))
+(test
+ (defn uwfs (pi Flse UU UU) (lam Flse (total2 T UU (wf Flse T))))
+ ('rejected = rejects (z \ defn uwfs_t (pi Flse UU (uwfs Flse)) (lam Flse (tpair (uwfs Flse) (wfs_wf Flse)))))
+ ('rejected = rejects (z \ defn uu-uu0 (UU 0) (UU 0)))
+ ('accepted = rejects (z \ defn uu-uu01 (UU 1) (UU 0)))
+ ; a cite takes fresh levels: uidf applies at its own type, a level up
+ (defn uidf (pi T UU x T T) (lam T x x))
+ ('accepted = rejects (z \ defn uidf-self (pi T UU x T T) (uidf (pi T UU x T T) uidf))))
+(univ univ-was)
+; a vc's levels go once it is checked, and what a path through them implied stays
+(: ufresh (uu 'ufresh) ule (uu 'ule) ucommit (uu 'ucommit) ucompact (uu 'ucompact)
+   ureset (uu 'ureset) ulive (uu 'ulive))
+(test
+ (: n (ulive 0) _ (defvc uu-lv-vc (pi T UU (pi x T T)) (lam T (lam x x))) (n = ulive 0))
+ (: _ (ureset 'uu-lv-ab) a (ufresh 0) b (ufresh 0) _ (ucommit 'uu-lv-ab)
+    _ (ureset 'uu-lv-d) d (ufresh 0) _ (ule a d) _ (ule ['lv (d 1) 1] b) _ (ucompact () (ucommit 'uu-lv-d))
+    ('accepted = rejects (z \ (ureset 'uu-lv-ok, ule a b, ucommit 'uu-lv-ok))
+     && 'rejected = rejects (z \ (ureset 'uu-lv-no, ule b a, ucommit 'uu-lv-no)))))
 ; --- conv in pairs: a mixed-up env or de bruijn level would accept a bad proof
 ; --- silently. each negative needs its accepted twin ---
 (test

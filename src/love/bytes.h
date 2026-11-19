@@ -25,12 +25,18 @@ static love_inline uint8_t *pcm_lay(uint8_t *q, float const *x, uintptr_t n, boo
    *q++ = (uint8_t) t, *q++ = (uint8_t) (t >> 8); }
  return q; }
 
-// one unaligned load where the machine takes it: mooncc lays a byte gather as eight loads
+// one unaligned load where the machine takes it: mooncc lays a byte gather as eight loads. runs
+// may overlap part way (a match under 16 back), which gcc assumes two struct accesses never do
 #if defined(__x86_64__) || defined(__aarch64__)
 #define wideld 1
+#if defined(__mooncc__)
 struct u64u { uint64_t v; } __attribute__((packed, aligned(1)));
 #define ld64(p) (((struct u64u const*)(p))->v)
 #define st64(p, x) (((struct u64u*)(p))->v = (x))
+#else
+static love_inline uint64_t ld64(void const *p) { uint64_t v; __builtin_memcpy(&v, p, 8); return v; }
+static love_inline void st64(void *p, uint64_t x) { __builtin_memcpy(p, &x, 8); }
+#endif
 #else
 #define wideld 0
 #endif
@@ -40,3 +46,9 @@ static love_inline uint32_t crc_msb(uint32_t c, uint8_t b) {
  c ^= (uint32_t) b << 24;
  for (int k = 0; k < 8; k++) c = (c & 0x80000000u) ? (c << 1) ^ 0x04c11db7u : c << 1;
  return c; }
+
+// sha-256 over runs fed in turn, for C that needs the digest itself (hash.c keeps the rounds)
+struct sha256s { uint32_t h[8]; uint64_t n; unsigned r; uint8_t b[64]; };
+void sha256s_init(struct sha256s *s);
+void sha256s_feed(struct sha256s *s, void const *p, uintptr_t n);
+void sha256s_done(struct sha256s *s, uint8_t out[32]);

@@ -19,6 +19,12 @@ bee - the hive of sessions on this machine, and the merge queue they land throug
 
 **love bee --resume** \[*name* \[*prompt* ...\]\]
 
+**love bee --relay** \[**--once**\] \| **--cards** \| **--drop** *name* *host*
+
+**love bee --drain** \[**--off**\]
+
+**love bee --mirror** \[**--stamp**\]
+
 **love bee --mcp**
 
 **love bee --state busy** \| **idle** \[**--pid** *pid*\]
@@ -45,16 +51,16 @@ While it is open, the hud holds the *user's card*, at the login's name (**USER**
 
 The hud is drawn by **src/apps/mitty/hud.l**. It reaches the hive through bee's *core*, a tablet of doors (**bee-core** in **src/apps/bee.l**): the user's card and its mail, the sessions, and the queues' lines.
 
-The settings are read from **~/.love/etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
+The settings are read from the nest's **etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
 
 # SESSIONS AND MESSAGES
 
-Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else **~/.love/run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
+Every session has a name. It is **BEE_NAME** when that is set and free; otherwise it is the last part of the working directory followed by two hex digits. Sessions find each other, and write to each other, through plain files under the *hive*: **BEE_HIVE** when set, else the nest's **run/hive**. Anything that can write a file can take part: a shell, a script, or another kind of agent.
 
 A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 
 **card**
-:   Who the session is, one *key value* pair a line: **pid**, **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
+:   Who the session is, one *key value* pair a line: **pid**, **host** (the host it was written on), **cwd**, **branch**, **model**, **state** (**idle** or **busy**) and **since** (epoch seconds), and for a Claude Code session **turn**, when its state last moved, and **parent**, the pid of the Claude Code it serves. It is rewritten whole, through a rename, on every change of state.
 
 **inbox/**
 :   The messages sent to the session, one file each.
@@ -62,11 +68,14 @@ A session keeps one directory in the hive, its *cell*, *hive***/***name***/**:
 **read/**
 :   The messages the session has taken, moved there from **inbox/**.
 
+**beat**
+:   The time in seconds, rewritten through a rename every 10 seconds while a Claude Code session's server runs. It is a file of its own so that a beat never races a card's rewrite.
+
 The reading of cells and cards that every client shares (**pier**'s bar counts the live sessions with it) is the module **hive**, **src/apps/hive.l**.
 
 A *message* file is a header and a body. The header is *key value* lines, **from** *name* and **sent** *seconds* among them; a blank line ends it, and everything after the blank line is the text. To send, write the file as **inbox/.***id* and then rename it to **inbox/***id*. A reader ignores dot files, so it never sees a message half written. Messages are taken in the order their ids sort, so an id should begin with the time in milliseconds; bee's own are *ms***-***sender***-***hex*.
 
-A session is live while its card's **pid** is. Whoever lists the hive removes a cell whose card names a dead pid, along with its messages. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
+A session is live while its card's **pid** is. A card whose **host** is another host's (**BEE_HOST**, else the kernel's hostname, names this one) is live instead while its beat is younger than the lease, **BEE_LEASE** seconds (60): a pid means nothing off its own host. Whoever lists the hive removes a cell whose card names a dead pid here, along with its messages; a remote cell past its lease is hidden, and removed only once its beat is ten leases old, so a host away for maintenance comes back to its mail. A cell without a card is still being made, and is left alone. A session removes its own cell when it exits.
 
 A *user's card* is the person at a login, in the hive through the hud. It says **kind user** and **model user**, its name is the login's, and its **state** is **here** while a hud holds it (its pid the hud's) and **away** after. It is never removed, so mail to the user waits in its inbox until a hud opens. One login has one, no agent may settle or be named as it, and **love bee --list** shows it as **user**. A message the hud sends says **kind user** in its header.
 
@@ -107,6 +116,34 @@ The server also leaves its way back. It writes **.resume/***name* in the hive, h
 
 Asking stays with Claude Code: its permission prompt asks before a message or a queue write goes out, unless that session runs without asking.
 
+# THE RELAY
+
+Hives on several hosts join into one through a *relay*. Its peers are the hosts in the registry (HOSTS) with the cap **hive**; a host's fact **love** names the love binary there, **love** unless given. Every Claude Code session's server tries for the exclusive lock **bee-relay** every 5 seconds, and the one holding it relays; **love bee --relay** runs the same loop on a host with no session, and **--once** runs one round.
+
+A round asks each peer, over the registry's ssh, for **love bee --cards**: the cards of the sessions on that host, never the ones it relays itself. Each is laid here as a *remote cell*, under the session's own name unless a live card of another host holds that name here, and then as *name***@***host*. Its card is the peer's, with **of** (its name there) and **via** (the registry's name for the host) added, and its beat is written by this host's clock as the card arrives, so the hosts' clocks need not agree. A session the peer no longer lists is gone: the mail waiting in its cell goes back to each sender, from **bee-relay**, and the cell is removed. A peer that does not answer is left alone, and its cells lapse with their lease.
+
+Mail to a remote cell is written into its inbox like any other. Each round carries every message waiting there to its host, **love bee --drop** *name* *host* with the message on its standard input, and removes it once it is delivered. **--drop** writes it into *name*'s inbox there, its **from** spelled as that hive names the sender: the bare name when the card it holds under it is the sending host's, else *name***@***host*, so an answer finds its way back. It exits 3 when *name* has no live session on that host, and the relay then sends the message back to its sender. While a host is down, its mail waits in its cells here, which are not removed while mail waits in them.
+
+A **kind user** line rides with the message, so a user typing into a hud on one host reaches a session on another as the user. ssh is the boundary of trust here, as the login is within one host.
+
+**love bee --list** says **on** *host* after a remote session's state.
+
+**love bee --drain** takes this host down for maintenance. It lays **.drain** in the hive and tells each session here, from **bee**, to hand any queue it leads to a live session on another host (**queue_lead**), to start no gate, and to let a running one finish or write its row **waiting**. Its sessions go on taking mail, and the relay's **--cards** says **drain 1** on each of their cards, but every host's queue watching counts them gone: the watchdog rings past a row whose owner is draining, after **(gone-minutes** *n***)**, and the head row's session may take the lead, acting, from a draining leader. **--drain --off** ends it. **love bee --list** says **draining** after such a session's state.
+
+# THE MIRROR
+
+The *save point* is a copy of the work kept at **/srv/love** (**BEE_SRV**) on each host the registry gives the cap **srv-mirror**, its fact **srv** naming another root there: **g.git**, a bare repository holding every ref; **g.sb**, an sb nest; **notes/**, **tools/**, **bin/** (the love that serves the nest, **bin/love**) and **manifest**. Its **stamp** is *key value* lines: **cut** (the seconds it was cut at), **head** (**g.git**'s HEAD then) and **from** (the host that cut it).
+
+The box holding the work cuts the save point into its own root, or pushes it to one host, and then lays the stamp with **love bee --mirror --stamp**, once the cut is whole. Every other node pulls with **love bee --mirror**, on a timer, so any node may go down and the rest go on from whichever answers:
+
+- It reads each srv-mirror host's stamp over the registry's ssh, and takes git and the files from the one with the newest cut, never from one older than its own stamp: a stale node never moves a ref back or lays older notes. A tie goes to the host the registry names first.
+- git is **git fetch '+refs/*:refs/*'**, never pruned: a branch gone from the work stays in the save point.
+- **notes/**, **tools/**, **bin/** and **manifest** are copied in one **tar** over the ssh into a staging directory, then laid whole, so a copy cut off leaves the last one.
+- Only then is the source's stamp laid as its own.
+- sb only grows, so it pulls from every host that answered, **sb sync --take** with the far **bin/love** serving.
+
+It prints the stamps it saw and what it took, and exits 0, 1 when a pull failed, and 75 when no srv-mirror host answers with a stamp.
+
 # LOCKS
 
 The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A session's locks are held under its server's pid, the one on its card.
@@ -121,7 +158,7 @@ Which lanes a change owes is data, **src/apps/lanemap.l**: path rules, each nami
 
 # HOSTS
 
-Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, **~/.love/etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
+Work this box cannot do, or should not, runs on another: an a64 binary on an arm box, a kernel under kvm, a test on a BSD guest. The hosts a session may use are a registry, the nest's **etc/bee/hosts** (**BEE_HOSTS** names another file), kept by **src/apps/hosts.l**. It holds a paragraph a host, each a run of *key value* lines like a card's, with a blank line between and **#** lines left out:
 
 **name**
 :   The host's name, which its locks carry.
@@ -132,8 +169,14 @@ Work this box cannot do, or should not, runs on another: an a64 binary on an arm
 **slots**
 :   How many pieces of work it takes at once, 1 unless given. Each slot is an exclusive lock, **host-***name***-***n*, so two lanes never crowd one box.
 
+**slots-***cap*
+:   Slots of that cap's own, kept apart from **slots**: work asking for *cap* takes **host-***name***-***cap***-***n* instead, so it never waits on, or crowds out, the host's other caps.
+
+**apart-***cap*
+:   Hosts, by name, that work asking for *cap* never runs beside: every slot of each is held for as long as the work runs, so their lanes wait for it and it waits for them.
+
 **caps**
-:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against), **rp2040-swd** (an rp2040 on a cmsis-dap probe's swd, its uart0 on one of the host's serial ports; a board is one piece of work, so its paragraph names it apart from its host, with one slot).
+:   What it can do, as words: **a64-exec** (runs linux/arm64 binaries), **kvm-a64** (boots an a64 guest under kvm), **vt-x** (boots an x64 guest that uses VT-x), **freebsd-x64**, **netbsd-x64**, **freebsd-a64**, **netbsd-a64**, **freebsd-rv64**, **netbsd-rv64** (that system, to test against), **rp2040-swd** (an rp2040 on a raspberry pi debug probe: its swd on the probe's D port, its uart0 on the probe's U port), **nucleo446-swd** (a nucleo-f446re on its st-link, its console the st-link's serial port), **esp32-uart** (an esp32 on its usb uart, which test/gate/esp32board.sh runs from ram through src/tools/esprom.l; its facts **tty** and **love** name the port and the love that drives it), **teensy41-usb** (a teensy 4.1 on usb running our image, flashed through teensy_loader_cli, its console the usb tty its **tty** fact names). a board is one piece of work, so its paragraph names it apart from its host, with one slot; test/gate/mcuboard.sh knows each board's probe, flash and console. **lanes** takes a gate's lanes, test/gate/lanes.sh.
 
 Any other line is a *fact*, such as **isa**, **os** or **page** (its page size in bytes). For example:
 
@@ -149,7 +192,7 @@ reach ssh -p 2222 root@127.0.0.1
 caps freebsd-x64
 ```
 
-**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--ship** *dir*\] **--** *command* ... picks a host with *cap* that answers ssh, and whose fact *key* is *value* when **--where** asks; a **page** the registry does not give is asked of the host. It waits for a free slot on one, lays *dir*'s files in a scratch directory there in one tar over the one ssh, runs *command* in it with only **PATH**, **HOME** and **LANG=C**, removes the directory, frees the slot, and exits with the command's status. Its output comes back on this side's. **--probe** in place of the command exits 0 when such a host answers and 75 when none does; **--ssh** prints the words that reach it. **love bee --hosts** lists the registry.
+**love bee --on** *cap* \[**--where** *key***=***value*\] \[**--whole**\] \[**--ship** *dir* | **--in** *dir* \[**--push** *sha* | **--at** *sha*\]\] **--** *command* ... picks a host with *cap* that answers ssh, and whose fact *key* is *value* when **--where** asks; a **page** the registry does not give is asked of the host. It waits for a free slot on one, lays *dir*'s files in a scratch directory there in one tar over the one ssh, runs *command* in it with only **PATH**, **HOME**, **LANG=C** and the host's facts, each as **BEE_***KEY* (a **tty** fact is **BEE_TTY**), removes the directory, frees the slot, and exits with the command's status. Its output comes back on this side's. **--in** *dir* in place of **--ship** keeps a directory there instead, under the host's home unless absolute: the command runs in it and nothing is removed after, so one build serves the runs that follow. **--push** *sha* lays this repository's commit *sha* in it first: pushed over the one ssh, checked out over whatever was there, and its untracked files cleaned but **out/**. A file the commit keeps keeps its time, so a make in it rebuilds what moved and only that. The command then runs only while the directory is at *sha*. **--push** with no command pushes and stops, taking no slot. **--whole** waits for every slot the cap has on one host, for work that runs with nothing beside it. **--at** *sha* runs the command only while the directory's checkout is *sha* and its tracked files are untouched, and exits 97 otherwise. **--probe** in place of the command exits 0 when such a host answers and 75 when none does; **--ssh** prints the words that reach it; **--list** prints the hosts that answer, *name slots isa* a line, their slots the cap's own. **love bee --hosts** lists the registry.
 
 The lanes ask for hosts this way: the a64 kernel lane boots on a **kvm-a64** host, the a64 lanes' binaries run on an **a64-exec** one, **test_kernel_vmx** boots on **vt-x**, and the BSD lanes find their boxes by their caps. A lane with a fallback takes 75 as its cue; one without skips loudly, which a strict box makes red. For one release the environment still names hosts, and a cap it names takes its hosts over the registry's: **KTEST_A64_HOSTS** (*host***:***slots* ...) for **a64-exec** and **kvm-a64**, **KTEST_VMX_HOSTS** for **vt-x**, and **FBSD_SSH**, **NBSD_SSH**, **FBSD_ARM64_SSH** and **NBSD_ARM64_SSH** (an ssh prefix each) for the four systems.
 
@@ -160,6 +203,10 @@ Sessions working in parallel often share one branch, the *base*, and merge into 
 ## The store
 
 A queue is a text kept where it moves only by compare-and-swap: a git ref under **refs/queue/**. The queue **refs/queue/***name* merges into the branch *name*. Read it with **git cat-file -p refs/queue/***name*; a write is **git hash-object -w** *file*, then **git update-ref refs/queue/***name* *new* *old*.
+
+A tree whose queues are shared by several hosts names their *home*, a git remote every host reaches: **(queue-home "***remote***")** in its **.bee.l**, or **BEE_QUEUE_HOME**. Then the queue there is the queue. Every read first fetches **refs/queue/*** from the home, pruning, into the same refs here, which are only its mirror. Every write is one **git push --atomic** to the home, the queue's ref leased on the value it was read at (**--force-with-lease=refs/queue/***name***:***old*), so a host that read a stale queue is refused and reads again, as with **update-ref**. The same push lays each row's gated head as **refs/queue-heads/***name***/***position*, and drops the heads of rows gone, so a commit a row names is in every host's repository after its next read. The base branch is the home's too: **queue_land** checks the home's branch and says to fetch it before the merge and to push it to the home after the fast gate, and **queue_landed** finds the landing on the home's branch, so a landing counts once it is pushed. With the home on a host apart from the ones that gate, the queue keeps moving while any of those is down.
+
+A queue knows a session by its name alone, so once hives are joined (THE RELAY) a name must be one session's in all of them. A session whose name a live session on another host also holds is refused every queue tool until one of them takes another name (**set_name**). A remote session answers to its own name for the queue's watching, so the watchdog does not take a row written on its host for one whose owner is gone.
 
 ## The text
 
@@ -280,7 +327,7 @@ See who is running, and send one of them a note:
 Send the same note with nothing but a shell:
 
 > ```
-> d=~/.love/run/hive/g-3f/inbox; id=$(date +%s)000-me
+> d=$(sh src/tools/nest.sh)/run/hive/g-3f/inbox; id=$(date +%s)000-me
 > printf 'from me\n\nrow 62 landed\n' > "$d/.$id" && mv "$d/.$id" "$d/$id"
 > ```
 
@@ -290,17 +337,29 @@ Send the same note with nothing but a shell:
 :   This session's name, and the sender that **--send** signs with.
 
 **BEE_HIVE**
-:   The hive's directory, **~/.love/run/hive** when unset.
+:   The hive's directory, the nest's **run/hive** when unset.
 
 **BEE_SELF_WATCH**
 :   Seconds between looks at the binary this session runs, 30 when unset.
 
+**BEE_HOST**
+:   The host this session's card says it was written on, the kernel's hostname when unset.
+
+**BEE_LEASE**
+:   How many seconds a remote card's beat keeps it live, 60 when unset.
+
+**BEE_QUEUE_HOME**
+:   The git remote that holds the queues, over the tree's **(queue-home** *remote***)**; the repository's own refs when neither names one.
+
+**BEE_SRV**
+:   The save point's root on this host, **/srv/love** when unset.
+
 **BEE_HOSTS**
-:   The host registry, **~/.love/etc/bee/hosts** when unset.
+:   The host registry, the nest's **etc/bee/hosts** when unset.
 
 # EXIT STATUS
 
-**0** when the run ends normally. **--on** exits with its command's status, **75** when no host with the cap answers and **255** when ssh or the host fails. **--lock** exits with its command's status. **1** when a message cannot be delivered. **2** for a malformed **--send**, or an unknown option.
+**0** when the run ends normally. **--on** exits with its command's status, **75** when no host with the cap answers, **97** when its kept directory is not at the commit **--push** or **--at** names, and **255** when ssh or the host fails. **--lock** exits with its command's status. **1** when a message cannot be delivered. **2** for a malformed **--send**, or an unknown option.
 
 # SEE ALSO
 

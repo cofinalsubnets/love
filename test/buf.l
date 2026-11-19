@@ -62,6 +62,19 @@
        (test (65533 = peep g 0 0) (65535 = peep g 1 0)
              (0 = peep g 2 0) (1 = peep g 3 0))),
 
+    ; whole words, 8 wide and 8 apart, read in one copy: the same as their halves put together.
+    ; a 32-bit word's tray cannot hold v, so only the shapes hold there
+    (: c (cask 32) v @(5 -2 -33554437 4294967296)
+       _ (lay c 0 8 8 v)
+       g (see c 0 8 8 4) lo (see c 0 4 8 4) hi (see c 4 4 8 4)
+       (test (4 = #g) (word ? (aall (g = v)) 1) (aall (g = (hi - 4294967296 * (hi >= 2147483648)) * 4294967296 + lo))
+             (word ? (aall (see c 8 8 8 2 = @(-2 -33554437))) 1))),
+
+    ; a byte and three bytes, each its own way, 5 apart
+    (: c (cask 20) v @(200 7 255 1) u @(16777215 65536 258 0)
+       _ (lay c 0 1 5 v) _ (lay c 1 3 5 u)
+       (test (aall (see c 0 1 5 4 = v)) (aall (see c 1 3 5 4 = u)) (aall (see c 1 2 5 4 = u & 65535)))),
+
     ; the empty run fits anywhere inside the cask, and lays nothing
     (cask 4 @ c (test (c = lay c 4 1 1 (iota 0)))),
 
@@ -76,4 +89,14 @@
              !(lay c 0 1 1 [1 2])                     ; not a tray
              !(see c 0 4 4 3)                         ; three words do not fit in eight bytes
              !(see c 0 4 4 neg))),                    ; nor a negative count
+
+    ; pinf lays 4-byte floats: 1.5 is 0x3fc00000, -2.25 0xc0100000, an int 2 as 2.0
+    (: layf (bufv 'pinf) c (cask 16)
+       _ (layf c 0 8 (iota 2 * -3.75 + 1.5))          ; 1.5 -2.25, a word apart
+       _ (layf c 4 8 (iota 2 + 2))                    ; 2 3, between them
+       g (see c 0 4 4 4)
+       (test (1069547520 = peep g 0 0) (1073741824 = peep g 1 0)
+             ((word ? 3222274048 -1072693248) = peep g 2 0) (1077936128 = peep g 3 0)   ; a whole 32-bit word reads signed
+             (c = layf c 16 4 (iota 0))
+             !(layf c 12 4 (iota 2)) !(layf c 0 2 (iota 2)) !(layf c 0 4 [1 2]) !(layf "abcd" 0 4 (iota 1)))),
     ()))

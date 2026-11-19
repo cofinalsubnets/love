@@ -21,7 +21,7 @@ static void m7_exit(uintptr_t code) {
 
 static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &b); }
 
-uintptr_t love_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
+uint64_t love_clock(void) { return (uint64_t) sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
 // every fault vectors here (start.S): name the stacked pc/lr, exit 98
 static void sh_hex(uintptr_t v) { bput_x(sh_putc, v, 8); }
@@ -93,7 +93,8 @@ static struct def defs[] = { {"m7exit", {.k = nif_m7exit}} };
 #include "../ffalloc.h"
 
 // the seat check: the egg hatched into the self-hosted ev, and a closure runs through the heap
-#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4))"
+// the book here has no tty, so the editor's sizes are the no-terminal ones
+#define SEAT_OK "(lit? ev && map (+ 1) '(1 2 3) = '(2 3 4) && (cite 'cli 'ttysize) 7 19 = [24 80])"
 static struct mem *freelist;
 
 #define POOL ((uint8_t*) 0x60000000u)
@@ -115,8 +116,6 @@ void k_horn_close(void) {}
 #endif
 #if defined(BAKER_STONES)
 #define IMPATH "out/mps2/love-pds.img"
-#elif defined(BAKER_RUNE)
-#define IMPATH "out/mps2/love-pd.img"
 #else
 #define IMPATH "out/mps2/love.img"
 #endif
@@ -184,8 +183,6 @@ int main(void) {
     "          (: t0 (clock 0) _ (each ^10 (_ \\ pd-frame ())) t1 (clock 0)"
     "             _ (puts (\"; ten frames, ms \" + show (t1 - t0) + \"\\n\"))"
     "             (0 < (pd-at 'st) 'pz && tablet? (pd-at 'song))))"
-#elif defined(BAKER_RUNE)
-    "          (! ((cite ()) = ())))"           // rune registered
 #else
     "          1)"
 #endif
@@ -203,16 +200,6 @@ int main(void) {
 #define SH_WRITE 0x05
 #define SH_CLOSE 0x02
 static void sh_puts(const char *s) { while (*s) sh_putc(*s++); }
-// rune is a plain text consumers borrow, so its module wrapper is here
-static char const src_mods[] =
-#ifdef BAKER_RUNE
-"(module 'rune "
-#include "rune.h"
-")"
-#else
-""
-#endif
-;
 int main(void) {
   sh_puts("\n; src/inle/mps2 baker -- baking the corpus\n");
   freelist = (struct mem*) POOL;
@@ -236,18 +223,14 @@ int main(void) {
     ,
 #include "post.h"
     );
-  r = evals_(r, src_mods);
   r = evals_(r,
 #if defined(BAKER_STONES)
     // the playdate's stones: the lore libraries and the glue, one text
 #include "stones.h"
-#elif defined(BAKER_RUNE)
-    // the playdate corpus: rune + cas; cas's crank/pushed/cur_set stay unbound until the device defn's them
-    "(borrow 'rune)"
-    " "
-#include "cas.h"
 #else
-    "(borrow 'cli)"
+    // the board cut: the cli, and fat.l over the board's disk nifs
+    "(borrow 'cli) "
+#include "fat.h"
 #endif
     "(: _ (pull book 'born 0)"            // this boot's cost, not the image's
     "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");

@@ -386,7 +386,7 @@
          (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
 ; --- the config (config.l): every law reads an empty tablet, never lux-cfg's, so the
-; gate means the same on a machine with its own ~/.love/etc/lux.l ---
+; gate means the same on a machine with its own etc/lux.l in its nest ---
 (: c0 {}
    lay0 (foldr lux-wrap-of (choice (filter two? (map lux-lay-of (conf-roster c0 'layout '((rtall 1 0.02 0.5) (dwindle phi))))))
                (conf-roster c0 'layout-wrap '(minimize smart toggle-full mirror)))
