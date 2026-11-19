@@ -459,7 +459,7 @@
    (tyat? ps ts) (tkbty? ps <(pquals ts))              ; a type begins at ts, past its qualifiers
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor (floor.l, shared with gen) takes the word and the tag table from ps --
-   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa))   ; long 4 bytes, long long the pair
+   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips))   ; long 4 bytes, long long the pair
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
@@ -849,16 +849,16 @@
                     ; `:0` aligns the cursor off a union; AAPCS also raises the struct's alignment
                     za (paapcs? ps && mx < a ? a mx)
                     (? (w = 0) (go >l (uni ? bit (aup bit (a * 8))) za acc)
-                       (uni && run) (: fld (name ? ([name 0 ['bitfield ty 0 w ((w + 7) >> 3)]] + qt))
+                       (uni && run) (: fld (name ? ([name 0 ['bitfield ty (pbfo ps (((w + 7) >> 3) * 8) 0 w) w ((w + 7) >> 3)]] + qt))
                                       (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
-                       uni (: fld (name ? ([name 0 ['bitfield ty 0 w]] + qt))
+                       uni (: fld (name ? ([name 0 ['bitfield ty (pbfo ps ubits 0 w) w]] + qt))
                               (go >l (bit < w ? w bit) nmx (name ? (fld . acc) acc)))
-                       run (: fld (name ? ([name (bit >> 3) ['bitfield ty (& bit 7) w pn]] + qt))
+                       run (: fld (name ? ([name (bit >> 3) ['bitfield ty (pbfo ps (pn * 8) (& bit 7) w) w pn]] + qt))
                              (go >l (bit + w) nmx (name ? (fld . acc) acc)))
                        (: bit2 ((& bit (ubits - 1)) + w > ubits ? (aup bit ubits) bit)   ; bump to avoid straddling the unit
                           uoff (& (bit2 >> 3) (0 - usz))              ; the aligned unit holding the bits
                           bitoff (bit2 - uoff * 8)
-                          fld (name ? ([name uoff ['bitfield ty bitoff w]] + qt))   ; anonymous -> reserve bits, no field
+                          fld (name ? ([name uoff ['bitfield ty (pbfo ps ubits bitoff w) w]] + qt))   ; anonymous -> reserve bits, no field
                           (go >l (bit2 + w) nmx (name ? (fld . acc) acc)))))
                  !name                               ; the anonymous struct/union splice
                  (: inner (peep (ps 'stag) <>ty 0)
@@ -882,6 +882,8 @@
                     nbit (uni ? (bit < sz * 8 ? (sz * 8) bit) (abit + sz * 8))
                     (go >l nbit nmx (([name at ty] + qt) . acc))))))
        (go ms 0 0 ()))
+   ; a bitfield's shift in its unit of ub bits: big-endian mips counts the cursor from the top
+   (pbfo ps ub o w) (ps 'tgt = 'mips ? (ub - o - w) o)
    (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon\(k)"))
    ; a block's tag (C11 6.7.2.3) cannot be scoped like an enum constant: gen lays by the key
    ; long after the brace. so a key is minted, `.`-led so clay calls the block inexpressible.
@@ -971,7 +973,7 @@
                                (-32768 <= lo && hi <= 32767) 'short
                                'int)
                      ty0 (? wide wide
-                            (pst32? ps && !(elem (ps 'tgt) '(i386 i386m16 rv32 xtensa)) || pk) narrow   ; AAPCS32's short enums; SysV i386, riscv and xtensa say int
+                            (pst32? ps && !(elem (ps 'tgt) '(i386 i386m16 rv32 xtensa mips)) || pk) narrow   ; AAPCS32's short enums; SysV i386, riscv, xtensa and o32 say int
                             pos 'uint 'int)
                      ; mode(M): M's width, signedness kept; refused if an enumerator won't fit
                      ty (? (m = ()) ty0

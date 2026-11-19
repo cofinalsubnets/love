@@ -141,8 +141,8 @@
    (mips-ldx op d base index scale disp) (m-memx op (mr d) base index scale disp)
    (mips-stx op base index scale disp s) (m-memx op (mr s) base index scale disp)
 
-   (mips-push s) (catall [(mo 'addiu [29 29 -8]) (mo 'sw [(mr s) [0 29]])])
-   (mips-pop d) (catall [(mo 'lw [(mr d) [0 29]]) (mo 'addiu [29 29 8])])
+   (mips-push s) (catall [(mo 'addiu [29 29 -16]) (mo 'sw [(mr s) [0 29]])])
+   (mips-pop d) (catall [(mo 'lw [(mr d) [0 29]]) (mo 'addiu [29 29 16])])
    (mips-neg d) (mr d @ dn (mo 'subu [dn 0 dn]))
    (mips-not d) (mr d @ dn (mo 'nor [dn dn 0]))
 
@@ -225,6 +225,7 @@
           ('stx . mips-stx 'sw) ('stxb . mips-stx 'sb)
           ('push . mips-push) ('pop . mips-pop) ('neg . mips-neg) ('not . mips-not)
           ('inc . (d \ m-addk (mr d) (mr d) 1)) ('dec . (d \ m-addk (mr d) (mr d) -1))
+          ('clz . (d \ s \ mo 'clz [(mr d) (mr s)]))
           ('set . mips-set) ('jmp . mips-jmp) ('br . mips-br) ('call . mips-call)
           ('jmpr . mips-jmpr) ('jmpt . mips-jmpt) ('callr . mips-callr) ('la . mips-la)
           ('raw . 1)

@@ -14,6 +14,7 @@
    (ragp g) (? (a64? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r12 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                (rv? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 r11 r13 r14 r15 r19 r20 r21 r22 r23 r24 r25 r26)
                (xt? g) '(r0 r1 r2 r3 r5 r6 r7 r9 r10 r11)
+               (mp? g) '(r0 r1 r2 r3 r5 r6 r8 r9 r10 r11)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
                (t2? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 q4)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
