@@ -1,7 +1,8 @@
 /* src/apps/droid/bridge.c -- the native activity an apk's love runs behind. built with
    `mooncc -t a64 -shared` against the phone's own libraries, it owns what only the app
    process may: the window, the input queue, logcat. love is the static binary shipped as
-   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
+   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here, and
+   LOVE_GLHELP naming lib/ABI/libglhelp.so, the gpu's helper, where the apk ships one.
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, each pixel the whole number of the window's that fit
@@ -960,7 +961,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400], gh[640];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -989,9 +990,10 @@ static void spawn(br *b, deck *d) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img;
-  int e = 8;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=" };
+  snprintf(gh, sizeof gh, "LOVE_GLHELP=%s/libglhelp.so", b->dir);   /* the gpu's helper, run from where the app may exec */
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img; ev[8] = gh;
+  int e = 9;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=", "LOVE_GLHELP=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;

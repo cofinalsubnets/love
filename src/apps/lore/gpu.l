@@ -1,5 +1,6 @@
 ; gpu -- frames on the system's gpu, drawn by glhelp (glhelp.c), a process of its own that
-; loads the system's gles through dlopen. built once and kept in the nest's cache, keyed by its
+; loads the system's gles through dlopen. $LOVE_GLHELP where it names one (an apk's, from the lib
+; dir an app may run), else built once and kept in the nest's cache, keyed by its
 ; source: by mooncc, an executable naming the system's loader, else by the
 ; system's cc. LOVE_GPU_CC picks one, moon or cc. the bulk rides a tmpfs file both hold, a
 ; line each way says what to do with it.
@@ -79,7 +80,8 @@
  (helper-argv _)
   (: src (source ()) d (cache-dir ()) m (uname 0 @ u (two? u ? (u 4) ""))
      how (getenv "LOVE_GPU_CC" @ () 'any "moon" 'moon "cc" 'cc w (scare 'gpu-cc w))
-     (? !(string? src) 'no-source !(string? d) 'no-cache
+     gh (getenv "LOVE_GLHELP")
+     (? (string? gh && here? gh) [gh] !(string? src) 'no-source !(string? d) 'no-cache
         (: key (snip (sha256 (src + m)) 0 12) cf (d + "/glhelp-" + key + ".c")
            mb (d + "/glhelp-" + key + ".moon") cb (d + "/glhelp-" + key + ".cc") ld (loader m)
            ; ..each made under a name of its own and moved into place: shards build at once
