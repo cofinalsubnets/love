@@ -212,5 +212,10 @@
    (tw-spread y q) (: vs (map (k \ tw-at y q (0.07 * k)) ^60) (foldl max 0.0 vs - foldl min 9.0 vs))
  (test (0.0 < tw-spread 0.9 1.0) (2.0 * tw-spread 0.9 1.0 < tw-spread 0.12 1.0)
        (tw-spread 0.12 0.0 < 1e-9) (tw-spread 0.9 0.0 < 1e-9) (0.0 < tw-at 0.12 1.0 0.3)))
+; a picture on a window's paper at a whole scale: 2 by 1 doubled on 5 by 3, the column and
+; row past it black where they held something before
+(: P (frame-paint (iota 15 * 0 + 7) 5 1 (cask 60) 5) (wd v) (string [v 0 0 0])
+   _ (mesh-paint (gem-tray [2] [1 2]) 2 1 P 5 3)
+   (test (string P = foldr (+) "" (map wd [1 1 2 2 0  1 1 2 2 0  0 0 0 0 0]))))
 (test_fin ())
 (puts "mesh: ok\n")
