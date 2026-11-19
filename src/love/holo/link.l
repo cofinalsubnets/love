@@ -92,6 +92,9 @@
                                [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
                                 (f h ha) (f h he) (f h hl) (f h hi)]))
                         ^shnum))
+       ; a mips object is RELA as holo lays it, or REL as gcc and GNU as do
+       mrel (rle16 s 18 = 8 && elem 9 (map (i \ sec i 1) ^shnum))
+       rf (mrel ? elf32f fs)
        ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
            'sec sec 'syms {} 'nsym 0 'rela {} 'rels () 'relz {}}
        ; held to sh_entsize: a wrong stride reads well-formed garbage
@@ -115,8 +118,8 @@
                                    (? (two? m) m (: v (row i) _ (pin memo i v) v))))
                      (pin ob 'symr row, pin ob 'syms sym))
                   (pin ob 'syms (spread (map row ^n))))))
-       rty (ld-n fs 'rl-ty) re (ld-n fs 'rl-ent)
-       ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
+       rty (ld-n rf 'rl-ty) re (ld-n rf 'rl-ent)
+       ro (ld-row rf 'rl-off) rk (ld-row rf 'rl-kind) rs (ld-row rf 'rl-sym) ad (ld-row rf 'rl-add)
        ; entries i to j of the section r holds
        (ents r i j) (: (go k acc) (? (k < i) acc
                                      (: e (r 3 + re * k)
@@ -124,11 +127,13 @@
                        (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
                                        (? (r 1 != rty) 0
-                                          (: _ (esz r 'rl-ent)
-                                             (? (rels? = 2) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
+                                          (: _ (r 6 = re ? 0 (scare 'link-entsize <r))
+                                             (? (rels? = 2 && !mrel) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
                                                 (: es (ents r 0 (r 4 // re)) (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))))))))
             0)
        _ (pin ob 'rels (rev (ob 'rels)))
+       _ (mrel ? (pin ob 'rels (map (p \ (: es (ld-mreladd s (sec <p 3) >p (ob 'syms)) (pin (ob 'rela) <p es, <p . es)))
+                                   (ob 'rels))))
        ob)
 
    ; section si's relocations, decoded afresh under 'relz; the target sections that have them
@@ -142,6 +147,26 @@
     (? (c 'n < 0) (: l (c 'l) _ (pin c 'l ()) l)
        (: i (c 'i) j (min (c 'n) (i + k)) _ (pin c 'i j) (? (i < j) ((c 'f) [i j]) ())))
 
+   ; o32 REL addends out of their fields, as GNU ld reads them: a 32 the word, a 26 its
+   ; word target (sign-extended for a global), a PC16 its words, a LO16 its signed half, a
+   ; HI16 its half above the low half of the next LO16 against the same symbol. es are
+   ; [off kind sym ()] in file order (GNU as files a HI16 out of place, beside its LO16), the
+   ; target's bytes at base; a kind left out answers 0. -> by offset, as the patcher reads them
+   (ld-mreladd s base es syms)
+    (: (w o) (rdbe s (base + o) 4)
+       (sx v b) (: m (2 ** b) h (m // 2) ((v & (m - 1) ^ h) - h))
+       (lo16 l sy) (? (l = ()) (scare 'link-mips-hi16 sy)
+                      (<l 1 = 6 && <l 2 = sy) (sx (w (<l 0)) 16)
+                      (lo16 >l sy))
+       (add e l) (: k (e 1) v (w (e 0))
+                    (? (k = 2) (sx v 32)
+                       (k = 4) (: a ((v & 0x3ffffff) << 2) (peep (peep syms (e 2) ()) 1 0 = 0 ? a (sx a 28)))
+                       (k = 10) (sx v 16 << 2)
+                       (k = 6) (sx v 16)
+                       (k = 5) (((v & 0xffff) << 16) + lo16 l (e 2))
+                       0))
+       (go l) (l = () ? () ([(<l 0) (<l 1) (<l 2) (add <l >l)] . go >l))
+       (sort (go es)))
    ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
    ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,
    ; u32 u16 u8 unsigned, s32 signed, pc32 S+A-P signed; else a backend's instruction field, ored
@@ -294,6 +319,8 @@
    (ld-read id s mach)
     (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94 8)) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
+       ; an abicalls object (e_flags pic or cpic) wants a got this link does not lay
+       _ (mach = 8 && 0 < rle32 (r 'src) 36 & 6 ? (scare 'link-mips-abicalls id))
        secs {} lanes {} drops {}
        ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
        ; droppable: empty, no shf_alloc, a note, or the unwinder's tables. the index is
@@ -318,8 +345,10 @@
                           (nm = ".comment" ? (pin ob 'comment (snip s off (off + sz))) 0,
                            class (i + 1))
                          (scare 'link-section nm)))
-                  (ty = 2 || ty = rty || elem ty '(0 3)) (class (i + 1))
+                  (ty = 2 || ty = rty || elem ty '(0 3) || mach = 8 && ty = 9) (class (i + 1))
                   (drop? i ty fl nm sz) (class (i + 1))
+                  ; mips's .reginfo and .MIPS.abiflags: allocated, read by no static image
+                  (mach = 8 && elem ty '(1879048198 1879048234)) (pin drops i 1, class (i + 1))
                   (scare 'link-section nm))))
        _ (class 1)
        ; the named lanes this object carries, first-seen in header order

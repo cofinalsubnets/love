@@ -4,7 +4,7 @@
 # miss; test/holo/mipscodec.l lays a word corpus of every row of mips-tab, which llvm-mc assembles
 # and llvm-objdump reads back as decode.l does (rdhwr aside: llvm-objdump leaves it <unknown>)
 # test/holo/mipslink.l links two of its objects, by holo and by lld, which exit 42 too, and which
-# kore's objdump and readelf read as llvm's and gnu's do
+# kore's objdump and readelf read as llvm's and gnu's do; clang's o32 REL objects link by holo too
 # usage: mips.sh LOVE OUTDIR
 . test/gate/skip.sh
 set -u
@@ -65,6 +65,39 @@ else
   gate_partly "$name: kore's readers unchecked ($kr)"; kr=""
 fi
 
+# o32 REL objects, as gcc and GNU as lay them, read by holo's link beside a mooncc object: clang
+# builds test/holo/mipsrel.c, mipsrela.s and an archive of mipsrelb.c, which exit 42 linked by
+# holo as by lld (100+n names the first address that disagreed)
+rl=""
+for t in clang llvm-ar; do command -v $t > /dev/null 2>&1 || rl="no $t"; done
+if [ -z "$rl" ]; then
+  mkdir -p "$d/rel"
+  ras() { clang --target=mips-linux-gnu -mcpu=mips32r2 -msoft-float -fno-pic -mno-abicalls -c "$@"; }
+  rcc() { ras -G0 -O1 "$@"; }
+  rcc test/holo/mipsrel.c -o "$d/rel/rel.o" && ras test/holo/mipsrela.s -o "$d/rel/rela.o" \
+    && rcc test/holo/mipsrelb.c -o "$d/rel/relb.o" || fail "clang could not lay the REL objects"
+  rm -f "$d/rel/librelb.a"; llvm-ar rcs "$d/rel/librelb.a" "$d/rel/relb.o" || fail "llvm-ar could not lay librelb.a"
+  $love mooncc -t mips -os none -c -o "$d/rel/relm.o" test/holo/mipsrelm.c || fail "mooncc could not lay mipsrelm.c"
+  ro="$d/rel/relm.o $d/rel/rel.o $d/rel/rela.o $d/rel/librelb.a"
+  $love mooncc -t mips -os none -nostdlib -Ttext 0x400000 -o "$d/rel/rel.elf" $ro || fail "holo's link refused the REL objects"
+  timeout 60 qemu-mips -cpu 24Kc "$d/rel/rel.elf"
+  a=$?
+  [ "$a" -eq 42 ] || fail "holo's link of the REL objects answered $a, want 42"
+  if command -v ld.lld > /dev/null 2>&1; then
+    ld.lld -e _start -Ttext=0x400000 -o "$d/rel/rel.lld" $ro || fail "lld refused the REL objects"
+    timeout 60 qemu-mips -cpu 24Kc "$d/rel/rel.lld"
+    a=$?
+    [ "$a" -eq 42 ] || fail "lld's link of the REL objects answered $a, want 42"
+  fi
+  # an abicalls object wants a got: refused by name
+  clang --target=mips-linux-gnu -mcpu=mips32r2 -msoft-float -c test/holo/mipsrelb.c -o "$d/rel/pic.o" || fail "clang could not lay pic.o"
+  ! $love mooncc -t mips -os none -nostdlib -Ttext 0x400000 -o "$d/rel/pic.elf" "$d/rel/relm.o" "$d/rel/pic.o" > "$d/rel/pic.log" 2>&1 \
+    && grep -q link-mips-abicalls "$d/rel/pic.log" || { cat "$d/rel/pic.log"; fail "an abicalls object was not refused by name"; }
+  rl="; REL objects from clang (and an archive of one) linked beside mooncc's to 42, an abicalls one refused"
+else
+  gate_partly "$name: the REL objects unchecked ($rl)"; rl=""
+fi
+
 for t in llvm-mc llvm-objcopy llvm-objdump; do
   command -v $t > /dev/null 2>&1 || gate_skip "$name: the run and the link held; codec skipped (no $t)"
 done
@@ -83,4 +116,4 @@ awk -F'\t' 'NR == FNR { if ($2 ~ /^rdhwr/) skip[$1] = 1; next } !($1 in skip)' "
 n=$(wc -l < "$d/ours.cmp" | tr -d ' ')
 [ "$n" -gt 2000 ] || fail "only $n rows read back"
 cmp -s "$d/llvm.cmp" "$d/ours.cmp" || { diff "$d/llvm.cmp" "$d/ours.cmp" | head -20; fail "decode.l reads the corpus otherwise than llvm-objdump"; }
-echo "$name: $(sed -n 's/^mipsrun: //p' "$d/law.log"), every answer as love's own on qemu-mips; two objects linked and run$lld$kr; $(sed -n 's/^test\/holo\/mipscodec: //p' "$d/codec.log"), $n as llvm-objdump writes them"
+echo "$name: $(sed -n 's/^mipsrun: //p' "$d/law.log"), every answer as love's own on qemu-mips; two objects linked and run$lld$kr$rl; $(sed -n 's/^test\/holo\/mipscodec: //p' "$d/codec.log"), $n as llvm-objdump writes them"

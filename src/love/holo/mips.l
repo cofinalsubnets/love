@@ -251,12 +251,15 @@
     (? (kind = 'abs32) (be32 (target + aux))
        (mips-fits? kind target site ? (be32 (mips-field kind target site aux))
           (scare 'mips-fix-range [kind target site])))
-   ;; a link's field: the word its object left, the field or'd in; () out of reach. target is
-   ;; S + A, a branch's A counting from the branch itself (-4 to its slot)
+   ;; a link's field: the word its object left, its field cleared (a REL object's addend rode
+   ;; there) and the value or'd in; () out of reach. target is S + A, a branch's A counting
+   ;; from the branch itself (-4 to its slot)
    (mips-refix kind bs target site width)
     (: t (kind = 'mb16 ? (target + 4) target)
+       w (bs 0 << 24 | bs 1 << 16 | bs 2 << 8 | bs 3)
+       m (kind = 'mj26 ? 0x3ffffff 0xffff)
        (? (kind = 'mabs32) (be32 target)
-          (mips-fits? kind t site ? (be32 (mips-field kind t site (bs 0 << 24 | bs 1 << 16 | bs 2 << 8 | bs 3))))))
+          (mips-fits? kind t site ? (be32 (mips-field kind t site (w & (4294967295 ^ m)))))))
 
    mips {'lower mips-lower 'patch mips-patch 'refix mips-refix 'nop mnop}
    _ (defbackend 'mips mips))
