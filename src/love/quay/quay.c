@@ -616,19 +616,23 @@ static struct cb_cell *cb_frow(struct cb *c, uint32_t from, int lay, uint32_t r)
 // old's main screen, history then grid, laid again c->cols wide: a soft-wrapped run of rows is one
 // line, its bare cells off the end (never a cursor's). with lay, rows before from go into c's
 // history, the next c->rows into its grid. answers the rows; *end past the last holding a cell,
-// at[0] and at[1] the cursor and the saved one as row * cols + col
+// at[0] and at[1] the cursor and the saved one as row * cols + col, *pend when the cursor waits
+// on a last column: after a glyph old's cursor waited past, or just past a line filling a row
 static uint32_t cb_flow(struct cb *c, struct cb const *old, uint32_t from, int lay, uint32_t *end,
-                        uint32_t at[2]) {
-  uint32_t const oc = old->cols, cs = c->cols, n = old->hn + old->rows, base = old->hn * oc;
-  uint32_t const want[2] = { base + old->wpos, base + old->spos };
+                        uint32_t at[2], uint32_t *pend) {
+  uint32_t const oc = old->cols, cs = c->cols, n = old->hn + old->rows, base = old->hn * oc,
+                 waits = old->flag & cb_pend, wrap = old->flag & cb_wrap;
+  uint32_t const wp = old->wpos - (waits && old->wpos && cb_wide(old->cb[old->wpos].g) == cb_tail);
+  uint32_t const want[2] = { base + wp, base + old->spos };
   uint32_t r = 0, got = 0;
-  *end = 0, at[0] = at[1] = 0;
+  *end = 0, at[0] = at[1] = 0, *pend = 0;
   for (uint32_t i = 0; i < n; ) {
     uint32_t j = i;
     while (j + 1u < n && cb_orow(old, j)[oc - 1u].fg & cb_soft) j++;
     uint32_t const a = i * oc, span = (j + 1u - i) * oc;
     uint32_t len = span, k = 0;
     while (len && cb_bare(&cb_orow(old, i + (len - 1u) / oc)[(len - 1u) % oc])) len--;
+    uint32_t const held = len;
     for (uint32_t m = 0; m < 2; m++)
       if (want[m] >= a && want[m] < a + span && want[m] - a + 1u > len) len = want[m] - a + 1u;
     struct cb_cell *row = cb_frow(c, from, lay, r);
@@ -638,12 +642,18 @@ static uint32_t cb_flow(struct cb *c, struct cb const *old, uint32_t from, int l
       if (w == cb_tail) continue;                   // laid with its lead
       if (o % oc == oc - 1u && o + 1u < len && !e->g          // the blank a wide char wrapped past
           && cb_wide(cb_orow(old, i + 1u + o / oc)[0].g) == cb_lead) continue;
+      if (k == cs && o >= held && !(got & 1u) && want[0] == a + o) {   // just past a full row
+        at[0] = r * cs + cs - 1u, got |= 1u, *pend = wrap ? 1u : 0u;
+        break; }
       if (k + need > cs) {                          // the row wraps into the next
         if (row) row[cs - 1u].fg |= cb_soft;
         if (lay && r < from) cb_line(c, row, cs);
         row = cb_frow(c, from, lay, ++r), k = 0; }
       for (uint32_t m = 0; m < 2; m++)
         if (!(got >> m & 1u) && want[m] >= a && want[m] <= a + o) at[m] = r * cs + k, got |= 1u << m;
+      if (waits && want[0] == a + o) {              // old's cursor waited past this glyph
+        if (k + need < cs) at[0] += need;
+        else at[0] += need - 1u, *pend = 1u; }
       if (!cb_bare(e)) *end = r + 1u;
       if (row) {
         row[k] = *e, row[k].fg &= ~cb_soft;
@@ -663,7 +673,7 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
                uint32_t tw) {
   uint32_t const orows = old->rows, ocols = old->cols, cr = old->wpos / ocols, alt = old->flag & cb_alt,
                  w = cols < ocols ? cols : ocols;
-  uint32_t from = cr >= rows ? cr - rows + 1u : 0, end, at[2];
+  uint32_t from = cr >= rows ? cr - rows + 1u : 0, end, at[2], pend;
   *c = *old;
   c->rows = rows, c->cols = cols;
   cb_store(c, sn);
@@ -688,11 +698,12 @@ void cb_regrid(struct cb *c, struct cb const *old, uint16_t rows, uint16_t cols,
     c->wpos = cb_carry(old->wpos, ocols, from, rows, cols);
     c->spos = cb_carry(old->spos, ocols, from, rows, cols); }
   else {
-    cb_flow(c, old, 0, 0, &end, at);
+    cb_flow(c, old, 0, 0, &end, at, &pend);
     uint32_t const wr = at[0] / cols, last = end > wr + 1u ? end : wr + 1u;
     from = last > rows ? last - rows : 0;
     if (from > wr) from = wr;
-    cb_flow(c, old, from, 1, &end, at);
+    cb_flow(c, old, from, 1, &end, at, &pend);
+    if (pend) c->flag |= cb_pend;
     for (uint32_t r = 0; r < rows; r++) cb_mend(c, r);
     c->wpos = at[0] - from * cols;
     uint32_t const sr = at[1] / cols;
