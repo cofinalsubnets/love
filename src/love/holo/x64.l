@@ -259,14 +259,17 @@
          ('mem b ix sc d)
           (? (!(charm? d) || !(fits32 d) || ix = 4) ()
              (b < 0) [([(x86-modrm 0 rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) 5)] + le32 d) (ix < 0 ? 0 (ix >> 3)) 0]
-             (: md (? (d = 0 && (b & 7) != 5) 0 (fits8 d) 1 2)
-                dsp (md @ 0 () 1 [(byte d)] (le32 d))
+             (: md (x6md b d)
+                dsp (x6e-dsp md d)
                 hd (? (ix >= 0 || (b & 7) = 4) [(x86-modrm md rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) b)]
                       [(x86-modrm md rf b)])
                 [(hd + dsp) (ix < 0 ? 0 (ix >> 3)) (b >> 3)]))
          ())
    ;; an immediate's bytes by kind, or () when it does not fit
    (x6e-in lo v hi) ((lo <= v) && (v <= hi))
+   ;; [b+d]'s mod: none, a byte, a dword
+   (x6md b d) (? (d = 0 && (b & 7) != 5) 0 (fits8 d) 1 2)
+   (x6e-dsp md d) (md @ 0 () 1 [(byte d)] (le32 d))
    (x6e-imm l v osz byte?)
     (? (l = "Uv" && osz = 8) (le64 v)
        !(charm? v) ()
@@ -329,7 +332,10 @@
              mk (? (rm != ()) [[rm] 0 0]
                    (eo = ()) (gi >= 0 || ad != () ? () [() 0 0])
                    (x6e-rg? eo) [[(x86-modrm 3 rf (eo 1))] 0 (eo 1 >> 3 & 1)]
+                   (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0) 'base
                    'mem)
+             ; [b+d]: all but the displacement, laid once
+             mb (mk = 'base ? (eo @ ('mem b _ _ d) (: md (x6md b d) [md [((b & 7) = 4 ? [(x86-modrm md rf 4) (x86-sib 0 4 b)] [(x86-modrm md rf b)]) 0 (b >> 3)]])) ())
              ; a byte register 4..7 forces a REX; ah..bh refuse one
              bregs (filter (o \ x6e-rg? o && o 2 = 1) ops)
              frc (any (o \ 4 <= o 1 && o 1 <= 7) bregs) hib (any (o \ o 1 >= 16) bregs)
@@ -345,20 +351,27 @@
                                  (? (!(two? mrm) || (rex? && hib) || (ab = 1 && B = 0)) ()
                                     (pre0 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
                    ; ..once, where no memory operand lays it
-                   hd0 (mk = 'mem ? () (head mk))
+                   hd0 (? (mk = 'mem) () (mk = 'base) (head (mb 1)) (head mk))
+                   ; the immediates and targets, in order, after hd
+                   (tail hd pc is acc ops)
+                    (? !(two? is) acc
+                       (: i (<is 0) l (<is 1) o (ops i)
+                          (? (fix? (o 1)) (o 1 1 = (fw l) ? (tail hd pc >is (acc + [(o 1)]) ops) ())
+                             (elem l ["Jb" "Jz"])
+                              (: z (l = "Jb" ? 1 4) d (o 1 - (pc + #hd + #acc + z))
+                                 ((l = "Jb" ? (fits8 d) (fits32 d)) ? (tail hd pc >is (acc + (z = 1 ? [(byte d)] (le32 d))) ops) ()))
+                             (x6e-imm l (o 1) osz byte? @ b (two? b && (#o < 3 || o 2 = #b) ? (tail hd pc >is (acc + b) ops) ())))))
+                   (eo-of ops) (ops ei @ ('ind x) x x x)
                    (? (mk != 'mem && hd0 = ()) ()
-                (\ ops pc
-                   (: hd (mk = 'mem ? (head (x6e-mem rf (ops ei @ ('ind x) x x x))) hd0)
-                      (? (hd = ()) ()
-                         (: ; the immediates and targets, in order
-                            (tail is acc) (? !(two? is) acc
-                                             (: i (<is 0) l (<is 1) o (ops i)
-                                                (? (fix? (o 1)) (o 1 1 = (fw l) ? (tail >is (acc + [(o 1)])) ())
-                                                   (elem l ["Jb" "Jz"])
-                                                    (: z (l = "Jb" ? 1 4) d (o 1 - (pc + #hd + #acc + z))
-                                                       ((l = "Jb" ? (fits8 d) (fits32 d)) ? (tail >is (acc + (z = 1 ? [(byte d)] (le32 d)))) ()))
-                                                   (x6e-imm l (o 1) osz byte? @ b (two? b && (#o < 3 || o 2 = #b) ? (tail >is (acc + b)) ())))))
-                            (tail ims () @ t (t = () && two? ims ? () (hd + t))))))))))))) _ ())
+                      (!(two? ims) && mk = 'base) (mb 0 @ 0 (\ ops pc hd0)
+                                                        1 (\ ops pc (hd0 + [(byte (eo-of ops 4))]))
+                                                        (\ ops pc (hd0 + le32 (eo-of ops 4))))
+                      !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-mem rf (eo-of ops)))) (\ ops pc hd0))
+                      (\ ops pc
+                         (: hd (? (mk = 'mem) (head (x6e-mem rf (eo-of ops)))
+                                  (mk = 'base) (hd0 + x6e-dsp (mb 0) (eo-of ops 4))
+                                  hd0)
+                            (? (hd = ()) () (tail hd pc ims () ops @ t (t = () ? () (hd + t)))))))))))) _ ())
    ;; a row's bytes for the operands, pc where the instruction starts (a target is absolute), or ()
    (x6e-lay p w ops pc) (x6e-stage p w ops @ () () f (f ops pc))
 
@@ -382,16 +395,12 @@
    (x6q o)
     (? (atom? o) -1
        (<o = 'rg) (o @ ('rg n w) ((charm? n && 0 <= n && n < 32 && x6wc w >= 0) ? ((n * 8 + x6wc w) * 16 + 1) -1) _ -1)
-       (<o = 'im) (: v (o 1) z >>o
-                     c (? (fix? v) ((0 < v 1 && v 1 < 16) ? (64 + v 1) -1)
-                          (charm? v) ((-128 <= v && v <= 127) ? (v < 0 ? 59 63)
-                                        (foldl (\ c q (c * 2 + (x6e-in (q 0) v (q 1) ? 1 0))) 0 x6-ranges))
-                          127)
+       (<o = 'im) (: v (o 1) z >>o c (x6ic v)
                      zc (? (z = ()) 0 (#z = 1 && charm? (z 0) && 0 <= z 0 && z 0 < 15) (z 0 + 1) -1)
                      ((c < 0 || zc < 0) ? -1 ((zc * 128 + c) * 16 + 6)))
        (<o = 'lbl) ((fix? (o 1) && 0 < o 1 1 && o 1 1 < 16) ? ((64 + o 1 1) * 16 + 10) -1)
        (o @ ('rg n w) ((charm? n && 0 <= n && n < 32 && x6wc w >= 0) ? ((n * 8 + x6wc w) * 16 + 1) -1)
-            ('mem _ ix _ d) ((charm? d && fits32 d && ix != 4 ? 1 0) * 16 + 2)
+            ('mem b ix sc d) (? !(charm? d) 2 (ix < 0 && sc != 1) (fits32 d ? 18 2) (x6mq b ix d))
             ('rip () d) ((fix? d ? (d 1 = 4 ? 1 2) 0) * 16 + 3)
             ('seg s m) (x6q m @ q ((q < 0 || q >= 512 || !(charm? s && 0 <= s && s < 8)) ? -1 ((s * 32 + (q >> 4)) * 16 + 4)))
             ('ind x) (x6q x @ q ((q < 0 || q >= 4096) ? -1 (q * 16 + 5)))
@@ -399,6 +408,12 @@
             ('cr n) ((charm? n && 0 <= n && n < 16) ? (n * 16 + 8) -1)
             ('dr n) ((charm? n && 0 <= n && n < 16) ? (n * 16 + 9) -1)
             _ -1))
+   ;; an immediate's class: a fix by its width, a number by the ranges it fits
+   (x6ic v)
+    (? (fix? v) ((0 < v 1 && v 1 < 16) ? (64 + v 1) -1)
+       (charm? v) ((-128 <= v && v <= 127) ? (v < 0 ? 59 63)
+                     (foldl (\ c q (c * 2 + (x6e-in (q 0) v (q 1) ? 1 0))) 0 x6-ranges))
+       127)
    ;; the operands' shapes in one integer, 16 bits each, under their count and the width; -1
    ;; for none. jn: a name with a target row, where a number laid as one has no shape
    (x6key mn w ops) (: c (x6wc w) ((#ops > 3 || c < 0) ? -1 (x6kf (x64-jn mn) (#ops * 8 + c) ops)))
@@ -412,10 +427,29 @@
              (two? bs ? (: b (short ? (foldl (\ b x (#(x 1) < #(b 1) ? x b)) <bs >bs) <bs)
                            (key < 0 ? 0 (pin t key (b 0)), b 1)) ()))))
    (x6tab t k) (peep t k () @ () (: u {} (pin t k u, u)) u u)
-   (x6 mn w ops) (x6c (x6tab x6-rows mn) 1 (x6key mn w ops) (peep x64-byname mn ()) w ops @ () (scare 'x64-enc [mn w ops]) b b)
-   (x6k k mn w ops)
-    (: ps (filter (p \ p 0 1 * 256 + p 0 2 = k) (peep x64-byname mn ()))
-       (x6c (x6tab (x6tab x6-krows k) mn) 0 (x6key mn w ops) ps w ops @ () (scare 'x64-enc [mn k w ops]) b b)))
+   (x6h t key ops) (key < 0 ? () (peep t key () @ () () f (f ops 0)))
+   (x6at mn w key ops)
+    (: t (x6tab x6-rows mn)
+       (x6h t key ops @ () (x6c t 1 key (peep x64-byname mn ()) w ops @ () (scare 'x64-enc [mn w ops]) b b) b b))
+   (x6kat k mn w key ops)
+    (: t (x6tab (x6tab x6-krows k) mn)
+       (x6h t key ops @ ()
+        (x6c t 0 key (filter (p \ p 0 1 * 256 + p 0 2 = k) (peep x64-byname mn ())) w ops @ () (scare 'x64-enc [mn k w ops]) b b)
+        b b))
+   (x6 mn w ops) (x6at mn w (x6key mn w ops) ops)
+   (x6k k mn w ops) (x6kat k mn w (x6key mn w ops) ops)
+   ;; the keys of the shapes an emitter knows, x6key's for the same operands: a register n at
+   ;; w, [base+d] with no index, an immediate, a target fix, rip; one operand or two, under w
+   (x6rq n w) ((n * 8 + x6wc w) * 16 + 1)
+   (x6mq b ix d) (? !(fits32 d && ix != 4) 2
+                    (ix < 0 && charm? b && 0 <= b && b < 32) ((2 + b * 4 + x6md b d) * 16 + 2)
+                    18)
+   (x6iq v) (x6ic v @ c (c < 0 ? -1 (c * 16 + 6)))
+   (x6k1 w a) ((8 + x6wc w) * 65536 + a)
+   (x6k2 w a b) ((a < 0 || b < 0) ? -1 (((16 + x6wc w) * 65536 + a) * 65536 + b))
+   ;; ..and a cond's name by its stem, once
+   x6-ccm {}
+   (x6ccn pre c f) (: t (x6tab x6-ccm pre) (peep t c () @ () (: n (f c) (pin t c n, n)) n n)))
 
 (: x64-regs {'sp 4 'r0 0 'r1 1 'r2 2 'r3 3 'r4 5
              'r5 6 'r6 7 'r7 8 'r8 9 'r9 10
@@ -442,6 +476,10 @@
    ;; the table encoder's operands: a register at width w, an xmm, [base+off] ('rip with off
    ;; (sym k) is rip-relative), [base+index*scale+disp], an immediate, a target
    (x6g r w) ['rg (rn r) w]
+   ;; register and register, register and immediate, by their key
+   (x6gg mn w d s) (: dn (rn d) sn (rn s) (x6at mn w (x6k2 w (x6rq dn w) (x6rq sn w)) [['rg dn w] ['rg sn w]]))
+   (x6gm mn w d m) (: dn (rn d) (x6at mn w (x6k2 w (x6rq dn w) (x6mq (m 1) (m 2) (m 4))) [['rg dn w] m]))
+   (x6gi mn w d v) (: dn (rn d) (x6at mn w (x6k2 w (x6rq dn w) (x6iq v)) [['rg dn w] ['im v]]))
    (x6x r) ['rg (xrn r) 16]
    (x6m b off) (rn b @ bn (charm? off ? ['mem bn -1 1 off] (scare 'mem-disp off)))
    (x6mr b off) (b = 'rip && two? off ? (x6rip <off <>off) (x6m b off))
@@ -454,9 +492,11 @@
    (x6r mn w ops) (riptail (x6 mn w ops))
 
    ;; reg <- reg by the r/m-destination row (89, 01+8k), as the old hand did
-   (alu-rr w opcode d s) (x6k opcode (opcode @ 137 'mov (x6t-alu (opcode >> 3))) w [(x6g d w) (x6g s w)])
+   (alu-rr w opcode d s)
+    (: dn (rn d) sn (rn s)
+       (x6kat opcode (opcode @ 137 'mov (x6t-alu (opcode >> 3))) w (x6k2 w (x6rq dn w) (x6rq sn w)) [['rg dn w] ['rg sn w]]))
    ;; 83 /ext ib for a signed byte, else 81 /ext id, or rax's own 05+8*ext id: the shortest
-   (alu-ri w ext d imm) (x6 (x6t-alu ext) w [(x6g d w) (x6i imm)])
+   (alu-ri w ext d imm) (x6gi (x6t-alu ext) w d imm)
    (alu-step w rr ext d y) (reg? y ? (alu-rr w rr d y) (alu-ri w ext d y))
    (reg-eq a b) (rn a = rn b)
 
@@ -469,9 +509,9 @@
    ;; a symbol survives arithmetic, so imm is checked a number
    (emit-li d imm)
       (: _ (constellation? imm ? 0 (scare 'badimm imm))
-         (? (0 <= imm <= 4294967295) (x6 'mov 4 [(x6g d 4) (x6i imm)])
+         (? (0 <= imm <= 4294967295) (x6gi 'mov 4 d imm)
             (fits32 imm) (x6k 199 'mov 8 [(x6g d 8) (x6i imm)])
-            (x6 'mov 8 [(x6g d 8) (x6i imm)])))
+            (x6gi 'mov 8 d imm)))
    ;; d's low word <- imm by 66 B8+r iw; the rest of d stays
    (emit-li2 d imm) (x6 'mov 2 [(x6g d 2) (x6i imm)])
 
@@ -483,9 +523,9 @@
          (? (op = 'xor && reg-eq d a && reg? b && reg-eq d b) (alu-rr 4 49 d d)
             (reg-eq d a)                  (alu-step w rr ext d b)
             (reg? b && reg-eq d b)    (comm ? (alu-step w rr ext d a) (scare 'alias-dst [op d a b]))
-            (op = 'add && reg? b)     (x6 'lea w [(x6g d w) (MX a b 1 0)])
-            (op = 'add && fits32 b)   (x6 'lea w [(x6g d w) (x6m a b)])
-            (op = 'sub && fits32 -b) (x6 'lea w [(x6g d w) (x6m a -b)])
+            (op = 'add && reg? b)     (x6gm 'lea w d (MX a b 1 0))
+            (op = 'add && fits32 b)   (x6gm 'lea w d (x6m a b))
+            (op = 'sub && fits32 -b) (x6gm 'lea w d (x6m a -b))
             ;; a mask of the low 8/16/32 bits is one movzx or 32-bit mov
             (op = 'and && reg? a && elem b '(255 65535 4294967295))
              (emit-zxmw w (b @ 255 1 65535 2 4) d a)
@@ -507,12 +547,12 @@
    ;; D1 /ext for a count of 1, else C1 /ext ib; at w 4 the 32-bit write zero-extends
    (emit-shiftw w op d c)
       (: g (x6g d w) _ (shift-ext op)
-         (c @ 1 (x6 op w [g]) (x6 op w [g (x6i c)])))
+         (c @ 1 (x6 op w [g]) (x6gi op w d c)))
    (emit-shift op d c) (emit-shiftw 8 op d c)
    (emit-shift4 op d c) (emit-shiftw 4 op d c)
 
    ;; 85 /r, or A9 id on rax, else F7 /0 id
-   (emit-test a b) (: g (x6g a 8) (x6 'test 8 [g (reg? b ? (x6g b 8) (x6i b))]))
+   (emit-test a b) (reg? b ? (x6gg 'test 8 a b) (x6gi 'test 8 a b))
    ;; the low byte against an imm8, F6 /0 ib (A8 ib on al); spl..dil and r8b..r15b want a REX
    (emit-testb a k) (x6 'test 1 [(x6g a 1) (x6i k)])
    ;; movzx r32 in place, which clears the top half: no REX.W
@@ -520,8 +560,10 @@
    ;; d = s's low byte or word into r32, which clears the top half
    (emit-zxml w d s) (: g (x6g d 4) (x6 (w @ 1 'movzb 'movzw) 4 [g (x6g s w)]))
    ;; rsp cannot index (4 means none), and it is sp, never an r0..r14
-   (emit-ldx d base index scale disp)  (: g (x6g d 8) (x6 'mov 8 [g (MX base index scale disp)]))
-   (emit-stx base index scale disp s)  (: g (x6g s 8) (x6 'mov 8 [(MX base index scale disp) g]))
+   (emit-ldx d base index scale disp)
+    (: dn (rn d) m (MX base index scale disp) (x6at 'mov 8 (x6k2 8 (x6rq dn 8) (x6mq (m 1) (m 2) disp)) [['rg dn 8] m]))
+   (emit-stx base index scale disp s)
+    (: sn (rn s) m (MX base index scale disp) (x6at 'mov 8 (x6k2 8 (x6mq (m 1) (m 2) disp) (x6rq sn 8)) [m ['rg sn 8]]))
    (emit-leax d base index scale disp) (: g (x6g d 8) (x6 'lea 8 [g (MX base index scale disp)]))
    (emit-ldxb d base index scale disp) (: g (x6g d 8) (x6 'movzb 8 [g (MX base index scale disp)]))
    (emit-ldxh d base index scale disp) (: g (x6g d 8) (x6 'movzw 8 [g (MX base index scale disp)]))
@@ -540,8 +582,12 @@
    (emit-stxb base index scale disp s) (: g (x6g s 1) (x6 'mov 1 [(MX base index scale disp) g]))
 
    ;; a load into d at width w by name, a store from s
-   (ldw mn w d base off) (: g (x6g d w) (x6 mn w [g (x6m base off)]))
-   (stw w base off s) (: g (x6g s w) (x6 'mov w [(x6m base off) g]))
+   (ldw mn w d base off)
+    (: dn (rn d) bn (rn base)
+       (charm? off ? (x6at mn w (x6k2 w (x6rq dn w) (x6mq bn -1 off)) [['rg dn w] ['mem bn -1 1 off]]) (scare 'mem-disp off)))
+   (stw w base off s)
+    (: sn (rn s) bn (rn base)
+       (charm? off ? (x6at 'mov w (x6k2 w (x6mq bn -1 off) (x6rq sn w)) [['mem bn -1 1 off] ['rg sn w]]) (scare 'mem-disp off)))
    (emit-ld d base off)   (ldw 'mov 8 d base off)
    (emit-st base off s)   (stw 8 base off s)
    (emit-lea d base off)  (ldw 'lea 8 d base off)
@@ -713,11 +759,14 @@
    (emit-un op d) (x6 op 8 [(x6g d 8)])
 
    (jcc-op c) (look x64-cc c 'badcc)
-   (jcc-mn pre c) (x6t-ccn pre (jcc-op c & 15))
-   (emit-call label) (x6 'call 0 [(x6j (fix 4 'rel32 label 0))])
+   (jcc-mn pre c) (x6ccn pre c (c \ x6t-ccn pre (jcc-op c & 15)))
+   ;; a target fix of 4 bytes or 1, the key its width's
+   (x6t4 mn label) (x6at mn 0 (x6k1 0 1098) [['lbl (fix 4 'rel32 label 0)]])
+   (x6t1 mn label) (x6at mn 0 (x6k1 0 1050) [['lbl (fix 1 'rel8 label 0)]])
+   (emit-call label) (x6t4 'call label)
    ;; rip-relative lea
    (emit-la d label) (emit-laa d label 0)
-   (emit-laa d label k) (: g (x6g d 8) (x6 'lea 8 [g (x6rip label k)]))
+   (emit-laa d label k) (: dn (rn d) (x6at 'lea 8 (x6k2 8 (x6rq dn 8) 19) [['rg dn 8] (x6rip label k)]))
    ;; lia: the linked address by movabs, not where the pc runs -- for a kernel linked high that
    ;; runs low until paging is on
    (emit-lia d label) (x6 'mov 8 [(x6g d 8) (x6i (fix 8 'abs64 label 0))])
@@ -750,19 +799,19 @@
    (emit-str op w)
     (: _ (elem op '(movs cmps stos lods scas ins outs) ? 0 (scare 'x64-str op))
        (x6 (name (show op + (w @ 1 "b" 2 "w" 8 "q" "d"))) 0 []))
-   (emit-jmp  label)     (x6 'jmp 0 [(x6j (fix 4 'rel32 label 0))])
+   (emit-jmp  label)     (x6t4 'jmp label)
    ;; the table and its targets are for the analyses, not the machine
    (emit-jmpt d tl labs) (emit-jmpr d)
-   (emit-br cond label)  (x6 (jcc-mn "j" cond) 0 [(x6j (fix 4 'rel32 label 0))])
+   (emit-br cond label)  (x6t4 (jcc-mn "j" cond) label)
    ;; the short forms: EB rel8, and 70+cc rel8
-   (emit-jmp8 label)     (x6 'jmp 0 [(x6j (fix 1 'rel8 label 0))])
-   (emit-br8 cond label) (x6 (jcc-mn "j" cond) 0 [(x6j (fix 1 'rel8 label 0))])
+   (emit-jmp8 label)     (x6t1 'jmp label)
+   (emit-br8 cond label) (x6t1 (jcc-mn "j" cond) label)
    ;; FF /4 and FF /2; no REX.W, the operand size is 64 already
-   (emit-jmpr d) (x6 'jmp 0 [['ind (x6g d 8)]])
-   (emit-callr d) (x6 'call 0 [['ind (x6g d 8)]])
+   (emit-jmpr d) (: dn (rn d) (x6at 'jmp 0 (x6k1 0 (x6rq dn 8 * 16 + 5)) [['ind ['rg dn 8]]]))
+   (emit-callr d) (: dn (rn d) (x6at 'call 0 (x6k1 0 (x6rq dn 8 * 16 + 5)) [['ind ['rg dn 8]]]))
    (emit-jmpm base off) (x6r 'jmp 0 [['ind (x6m base off)]])
    ;; imul sets OF exactly when the product leaves signed 64, so jo; t is unused
-   (emit-mulo d a b t lbl) (emit-imul d a b + x6 'jo 0 [(x6j (fix 4 'rel32 lbl 0))])
+   (emit-mulo d a b t lbl) (emit-imul d a b + x6t4 'jo lbl)
    ;; the high 64 of the signed (F7 /5) or unsigned (F7 /4) product. rdx:rax-fixed: rdx is
    ;; saved round it; b immediate, rax or rdx goes through a stack cell. clobbers rax; d != r2
    (emit-mulh dig d a b)
