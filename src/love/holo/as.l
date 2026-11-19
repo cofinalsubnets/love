@@ -41,34 +41,12 @@
                     (as-a16? o) (md = 32 ? '(103) ())
                     (as-abs? o) ()
                     (md = 16 ? '(103) ()))
-   ;; 16-bit addressing's table: a base and an index (either order) -> rm, by the registers'
-   ;; numbers (bx 3 bp 5 si 6 di 7); -1 when the pair has no row
-   (as-a16rm b ix) (: x (b < ix ? ix b) y (b < ix ? b ix)       ; x the larger, y the smaller
-                      (? (y < 0) (x @ 6 4 7 5 5 6 3 7 -1)
-                         (y = 3) (x @ 6 0 7 1 -1)
-                         (y = 5) (x @ 6 2 7 3 -1)
-                         -1))
-   (as-mem16 rf o)
-      (: b (o 1 < 0 ? -1 (o 1 - 32)) ix (o 2 < 0 ? -1 (o 2 - 32)) d (o 4)
-         sy (5 < #o ? (o 5) ())
-         rm (as-a16rm b ix)
-         (? (rm < 0) (scare 'as-mem16 o)
-            (o 3 != 1) (scare 'as-mem16-scale o)
-            sy ([(as-mrm 2 rf rm)] + [(fix 2 'abs16 sy d)])
-            (d = 0 && rm != 6) [(as-mrm 0 rf rm)]
-            (fits8 d) [(as-mrm 1 rf rm) (byte d)]
-            ([(as-mrm 2 rf rm)] + le16 d)))
+   ;; memory by the table's lay (x64.l's x6e-memm, which gives the 67 as-asz lays here), or for
+   ;; EVEX's disp8*N in a 64-bit segment by as-mem32
    (as-mem-rm md rf o n)
-      (: b (o 1) ix (o 2) sc (o 3) d (o 4)
-         sy (5 < #o ? (o 5) ())                            ; a symbol displacement: four bytes, sign-extended in 64
-         d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32d) sy d)] (le32 d))
-         _ (md = 64 && (b >= 32 || ix >= 32) && scare 'as-mem16-mode o)
-         (? (as-a16? o) (as-mem16 rf o)
-            (md = 16 && b < 0 && ix < 0)                    ; an absolute address in a 16-bit segment: disp16
-             ([(as-mrm 0 rf 6)] + (sy ? [(fix 2 'abs16 sy d)] (le16 d)))
-            (md = 32 && b < 0 && ix < 0)                    ; ..and in a 32-bit one, no SIB
-             ([(as-mrm 0 rf 5)] + (sy ? [(fix 4 'abs32 sy d)] (le32 d)))
-            (as-mem32 rf o b ix sc d sy d4 n)))
+      (? (n = 1) (x6e-memm md rf o @ () (scare 'as-mem o) m (m 0))
+         (: sy (5 < #o ? (o 5) ()) d (o 4)
+            (as-mem32 rf o (o 1) (o 2) (o 3) d sy (sy ? [(fix 4 'abs32s sy d)] (le32 d)) n)))
    ; n scales a disp8: EVEX's disp8*N, 1 elsewhere
    (as-mem32 rf o b ix sc d sy d4 n)
          (b < 0 ? ([(as-mrm 0 rf 4) (as-sib (as-scb sc) (ix < 0 ? 4 ix) 5)] + d4)
@@ -97,15 +75,12 @@
    ;; the wide one (89/88, 01/00, c7/c6, f7/f6, ff/fe all sit in that relation). ---
    (as-rexw w) (w = 8)
    (as-opw opc w) (w @ 1 (opc - 1) opc)
-   (as-imw w n)   (w @ 1 [(byte n)] 2 (le16 n) (le32 n))
    ;; the reg-with-r/m family: size prefixes, REX, opcode, Modrm tail. `rn` is the reg field,
    ;; a register or an opcode extension digit
    (as-emit md w frc opc rn rm)
       (catall [(as-asz md rm) (as-osz md w) (as-rexm md frc (as-rexw w) (as-hi rn) (as-rm-x rm) (as-rm-b rm))
                 opc (as-rm md rn rm)])
 
-   ;; mnemonic -> (rr-opcode imm-ext): the table's opcode is reg -> r/m, and r/m -> reg is +2
-   as-alu {'add '(1 0) 'or '(9 1) 'and '(33 4) 'sub '(41 5) 'xor '(49 6) 'cmp '(57 7)}
    ;; jcc -> the low byte of 0F 8x
    as-cc {'jo 128 'jno 129 'jb 130 'jc 130 'jnae 130 'jae 131 'jnb 131 'jnc 131
           'je 132 'jz 132 'jne 133 'jnz 133 'jbe 134 'jna 134 'ja 135 'jnbe 135
@@ -116,55 +91,11 @@
 
    ;; an immediate spelled unsigned in w bytes, as the signed value those bytes hold
    (as-sx w v) (v >= 1 << (8 * w - 1) && v < 1 << 8 * w ? (v - (1 << 8 * w)) v)
-   ;; alu $imm,r/m: 80 /ext ib for a byte, else 83 /ext ib where the immediate fits, else 81 /ext iz
-   (as-alu-i md ext w frc rm imm)
-      (? (w = 1)              (as-emit md 1 frc '(128) ext rm + [(byte imm)])
-         (fits8 (as-sx w imm)) (as-emit md w frc '(131) ext rm + [(byte imm)])
-         (as-emit md w frc '(129) ext rm + as-imw w imm))
-
-   ;; mov $imm,%reg: b0/b8+r by width; at width 8, c7 /0 id where it fits signed-32, else movabs
-   (as-mov-ri md d w frc imm)
-      (as-rexm md frc (as-rexw w) 0 0 (as-hi d) @ rx
-         (? (w = 1) (catall [rx [(176 | as-lo d) (byte imm)]])
-            (w = 2) (catall [(as-osz md 2) rx [(184 | as-lo d)] (le16 imm)])
-            (w = 4) (catall [(as-osz md 4) rx [(184 | as-lo d)] (le32 imm)])
-            (fits32 (as-sx 8 imm)) (catall [rx [199 (as-mrm 3 0 d)] (le32 imm)])
-            (catall [rx [(184 | as-lo d)] (le64 imm)])))
-
    ;; the per-instruction encoders, in AT&T operand order.
    ;; a rip-relative operand with an immediate tail: x64-patch measures rel32 from the end of its
    ;; own field, so the fix's aux steps back over the n immediate bytes that follow it
    (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)
    (as-riptail bs n) (map (x \ (two? x && <x = 'fix && x 2 = 'rel32 ? (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
-   (as-2 md mn w a b)                                           ; AT&T src,dst
-      (: ka <a kb <b frc (as-frcs [a b])
-         alu (as-alu mn)
-         rr  (mn @ 'mov 137 'test 133 (alu @ (a . _) a 0))
-         opi (mn @ 'mov 199 'test 247 0)          ; the imm-to-r/m opcode, 0 = the ALU's
-         (? (mn = 'lea)
-            (kb = 'rg && as-mem? a ?
-             (as-emit md w frc '(141) (as-regn b) a)
-             (scare 'as-lea-form [a b]))
-            (rr = 0) (scare 'as-op2 mn)
-            (w = 0)  (scare 'as-nowidth [mn a b])
-            (as-mem? a && as-mem? b) (scare 'as-twomem [a b])
-            (ka = 'rg) (as-emit md w frc [(as-opw rr w)] (as-regn a) b)                ; reg -> r/m
-            (kb = 'rg && as-mem? a)                                              ; r/m -> reg
-            (as-emit md w frc [(as-opw (mn @ 'test rr (rr + 2)) w)] (as-regn b) a)
-            (ka = 'im)                                                             ; $imm -> r/m
-            (: im <>a
-               ; into the accumulator, no Modrm: test's a8/a9, the ALU's 04+8*ext where its
-               ; immediate is a byte's register or no 83 fits it
-               acc? (kb = 'rg && as-regn b = 0 && (mn = 'test || two? alu && (w = 1 || !(fits8 (as-sx w im)))))
-               bs (? acc? (catall [(as-osz md w) (as-rexm md frc (as-rexw w) 0 0 0)
-                                   [(mn = 'test ? (as-opw 169 w) (as-opw (<>alu * 8 + 5) w))] (as-imw w im)])
-                     (mn = 'mov && kb = 'rg) (as-mov-ri md (as-regn b) w frc im)
-                     (opi > 0) (as-emit md w frc [(as-opw opi w)] 0 b + as-imw w im)
-                     (as-alu-i md <>alu w frc b im))
-               ; the immediate's width as its encoder laid it: 80/83's byte, else the operand's
-               n (? (opi > 0) (w @ 1 1 2 2 4) (w = 1 || fits8 (as-sx w im)) 1 (w @ 2 2 4))
-               (<b = 'rip ? (as-riptail bs n) bs))
-            (scare 'as-op2-form [a b])))
    (as-1 md mn w a)
       (: k <a  frc (as-frc a)
          ; push/pop take 66 but never REX.W; outside 64 the width is the suffix's or the register's
@@ -304,7 +235,6 @@
    as-clmul {'pclmullqlqdq 0 'pclmulhqlqdq 1 'pclmullqhqdq 16 'pclmulhqhqdq 17}
    as-ssh {'psrlw [113 2] 'psraw [113 4] 'psllw [113 6] 'psrld [114 2] 'psrad [114 4] 'pslld [114 6]
            'psrlq [115 2] 'psllq [115 6] 'psrldq [115 3] 'pslldq [115 7]}
-   as-shf {'rol 0 'ror 1 'rcl 2 'rcr 3 'shl 4 'sal 4 'shr 5 'sar 7}
    as-sse2 {'punpckhbw [[102] 104] 'punpckhwd [[102] 105] 'punpckhdq [[102] 106] 'pmuludq [[102] 244]
             'pmulhw [[102] 229] 'pmulhuw [[102] 228] 'pmaddwd [[102] 245] 'packuswb [[102] 103]
             'packsswb [[102] 99] 'packssdw [[102] 107] 'pmaxsw [[102] 238] 'pminsw [[102] 234]
@@ -317,13 +247,9 @@
    ; a cmov/set condition -> jcc's low byte, past a width suffix if it carries one; none is 0
    (as-ccl nm k) (: c (snip nm k #nm) v (peep as-cc (name ("j" + c)) 0)
                     (0 < v || #c < 2 ? v (peep as-cc (name ("j" + snip c 0 (#c - 1))) 0)))
-   (as-sym o) (as-symw o 4)                                             ; `$sym+k` -> its fix
-   (as-symw o k) (xa-symoff (show <>o) @ so (fix k (k = 2 ? 'abs16 'abs32) <so >so))   ; ..a 16-bit operand's two bytes
+   (as-symw o k) (xa-symoff (show <>o) @ so (fix k (k = 2 ? 'abs16 'abs32) <so >so))   ; `$sym+k` -> its fix of k bytes
    (as-syms o) (xa-symoff (show <>o) @ so (fix 4 'abs32s <so >so))      ; ..a dword the cpu sign-extends (64-bit mode)
    (as-gp? o) (<o = 'rg && as-regw o < 16)
-   (as-xw d s w) (? (w = 8) 1 (as-gp? d && as-regw d = 8) 1 (as-gp? s && as-regw s = 8) 1 0)
-   (as-sse-op md pf op wb rn rm)
-    (catall [(as-asz md rm) pf (as-rexm md 0 wb (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 op] (as-rm md rn rm)])
    (as-sse-op3 md pf esc op rn rm)
     (catall [(as-asz md rm) pf (as-rexm md 0 0 (as-hi rn) (as-rm-x rm) (as-rm-b rm)) [15 esc op] (as-rm md rn rm)])
 
@@ -486,7 +412,6 @@
    as-x87a {'fadd 192 'fmul 200 'fsub 224 'fsubr 232 'fdiv 240 'fdivr 248}
    (as-more md mn w ops)
     (: nm (show mn) n #ops d (n > 0 ? (ops 0) ()) s (n > 1 ? (ops 1) ())
-       sr (peep as-sse mn (as-sse2 mn)) ss (as-sst mn)
        x7 (peep as-x87w mn mn)
        (? (n = 0 && two? (as-x87n mn)) (as-x87n mn)
           (n = 1 && as-mem? d && two? (as-x87m x7))
@@ -496,16 +421,6 @@
            (: i (? (n = 0) 1 (n = 1) <>d (<>d != 0) <>d <>s) (as-x87r mn @ r [<r (<>r + i)]))
           (n = 2 && charm? (as-x87a mn) && <d = 'st && <s = 'st)
            (as-x87a mn @ r (<>d = 0 ? [216 (r + <>s)] [220 (r + <>d)]))
-          ; the xmm moves across to a general register, and xmm<->m64
-          (elem mn '(movq movd))
-           (: g? (as-gp? d || as-gp? s) wq (mn = 'movq ? 1 0)
-              (? (g? && <d = 'rg && as-regw d = 16) (as-sse-op md [102] 110 wq (as-regn d) s)   ; 66 0F 6E
-                 g? (as-sse-op md [102] 126 wq (as-regn s) d)                                 ; 66 0F 7E
-                 (as-mem? d) (as-sse-op md [102] 214 0 (as-regn s) d)                         ; 66 0F D6
-                 (mn = 'movq) (as-sse-op md [243] 126 0 (as-regn d) s)                        ; F3 0F 7E
-                 (as-sse-op md [102] 110 0 (as-regn d) s)))
-          (two? ss && n = 2 && as-mem? d) (as-sse-op md <ss <>ss 0 (as-regn s) d)
-          (two? sr && n = 2) (as-sse-op md <sr <>sr (as-xw d s w) (as-regn d) s)
           (two? (as-s38 mn) && (n = 2 || (n = 3 && elem mn '(sha256rnds2 pblendvb blendvps blendvpd)
                                                    && <(ops 2) = 'rg && as-regw (ops 2) = 16 && as-regn (ops 2) = 0)))
            (as-s38 mn @ r (as-sse-op3 md <r 56 <>r (as-regn d) s))
@@ -516,34 +431,9 @@
           ; pextrd: the xmm in reg, the destination in r/m
           (n = 3 && elem mn '(pextrb pextrd) && <(ops 2) = 'im && <s = 'rg)
            (as-imt (as-sse-op3 md [102] 58 (mn = 'pextrb ? 20 22) (as-regn s) d + [(byte <>(ops 2))]) 1 d)
-          ; a symbol's address as the immediate
-          (n = 2 && <s = 'ims)
-           (: fx (md = 64 && w = 8 ? (as-syms s) (as-symw s (w = 2 ? 2 4))) frc (as-frc d)
-              (? (mn = 'mov && <d = 'rg && w <= 4) (catall [(as-osz md w) (as-rexm md frc 0 0 0 (as-hi (as-regn d))) [(184 | as-lo (as-regn d)) fx]])
-                 (mn = 'mov) (as-emit md w frc '(199) 0 d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
-                 (two? (as-alu mn)) (as-emit md w frc '(129) <>(as-alu mn) d + [fx] @ bs (<d = 'rip ? (as-riptail bs 4) bs))
-                 ()))
           ; push $sym: the segment's width unless a suffix says (pushw in a 32-bit one, pushl in a 16-bit)
           (n = 1 && mn = 'push && <d = 'ims)
            (: pw (? (w > 0) w (md = 16) 2 4) (as-osz md pw + [104 (md = 64 ? (as-syms d) (as-symw d (pw = 2 ? 2 4)))]))
-          (n = 1 && elem mn '(prefetchnta prefetcht0 prefetcht1 prefetcht2) && as-mem? d)   ; 0F 18 /0../3
-           (as-emit md 0 0 '(15 24) (mn @ 'prefetchnta 0 'prefetcht0 1 'prefetcht1 2 3) d)
-          ; the extends, exactly: w is the destination's, so movsbl sign-fills 32 and zeroes the rest
-          (n = 2 && elem mn '(movzb movzw movsb movsw movsl))
-           (as-emit md w (as-frcs ops) (mn @ 'movzb '(15 182) 'movzw '(15 183) 'movsb '(15 190) 'movsw '(15 191) '(99))
-                    (as-regn d) s)
-          ; the imm8 SSE forms: at&T `$k, src, dst` arrives [dst src k]; a shift names one register
-          (n = 3 && two? (as-ssi mn) && <(ops 2) = 'im)
-           (as-ssi mn @ r (as-imt (as-sse-op md <r <>r 0 (as-regn d) s + [(byte <>(ops 2))]) 1 s))
-          (n = 2 && two? (as-ssh mn) && <s = 'im)
-           (as-ssh mn @ r (as-sse-op md [102] <r 0 <>r d + [(byte <>s)]))
-          ; the shifts and rotates: by one, by an immediate, by %cl
-          (charm? (as-shf mn))
-           (: k (as-shf mn) frc (as-frc d) o8 (w = 1 ? 0 1)
-              (? (n = 1 || (n = 2 && <s = 'im && <>s = 1)) (as-emit md w frc [(208 + o8)] k d)
-                 (n = 2 && <s = 'im) (as-imt (as-emit md w frc [(192 + o8)] k d + [(byte <>s)]) 1 d)
-                 (n = 2 && <s = 'rg && as-regn s = 1) (as-emit md w frc [(210 + o8)] k d)
-                 ()))
           ; crc32 by its source's suffix: F2 0F 38 F0 a byte, F1 the rest; the destination's REX.W
           (n = 2 && elem mn '(crc32 crc32b crc32w crc32l crc32q) && <d = 'rg && (mn != 'crc32 || as-gp? s))
            (: sw (mn = 'crc32 ? (as-regw s) (xa-sfxw (nm 5))) ew (? (sw = 1) (as-regw d = 8 ? 8 4) (sw = 2) 4 sw)   ; gas lays 66 ahead of F2
@@ -556,29 +446,6 @@
            (as-vex md (mn @ 'shlx [102] 'sarx [243] [242]) 2 (as-regw d = 8 ? 1 0) 0 (as-regn d) (as-regn (ops 2)) 247 s)
           (n = 1 && mn = 'rdpid && <d = 'rg) ([243] + as-emit md 4 0 '(15 199) 7 d)          ; F3 0F C7 /7
           (n = 2 && mn = 'ud1 && <d = 'rg) (as-emit md w (as-frcs ops) '(15 185) (as-regn d) s)   ; 0F B9 /r
-          (n = 1 && mn = 'bswap && <d = 'rg)
-           (as-regn d @ r (catall [(as-rexm md 0 (as-rexw w) 0 0 (as-hi r)) [15 (200 + as-lo r)]]))
-          (n = 3 && elem mn '(shld shrd))
-           (: c (ops 2) b (mn = 'shld ? 164 172)
-              (<c = 'im ? (as-imt (as-emit md w (as-frcs ops) [15 b] (as-regn s) d + [(byte <>c)]) 1 d)
-                 (as-emit md w (as-frcs ops) [15 (b + 1)] (as-regn s) d)))
-          (n = 2 && starts? nm "cmov" && 0 < as-ccl nm 4) (as-emit md w (as-frcs ops) [15 (as-ccl nm 4 - 64)] (as-regn d) s)
-          (n = 1 && starts? nm "set" && 0 < as-ccl nm 3) (as-emit md 1 (as-frc d) [15 (as-ccl nm 3 + 16)] 0 d)
-          (n = 1 && elem mn '(mul imul div idiv))
-           (as-emit md w (as-frc d) [(as-opw 247 w)] (mn @ 'mul 4 'imul 5 'div 6 7) d)
-          ; imul $k, %r is imul $k, %r, %r
-          (mn = 'imul && (n = 3 && <(ops 2) = 'im || n = 2 && <d = 'rg && <s = 'im))
-           (: k <>(n = 3 ? (ops 2) s) f (n = 3 ? s d) n (? (fits8 k) 1 (w = 2) 2 4)
-              (as-imt (as-emit md w (as-frcs ops) [(fits8 k ? 107 105)] (as-regn d) f + (fits8 k ? [(byte k)] (as-imw (w = 8 ? 4 w) k))) n f))
-          (n = 2 && mn = 'imul && <d = 'rg) (as-emit md w (as-frcs ops) [15 175] (as-regn d) s)
-          ; xchg with the accumulator: 90+r, as gas lays it (not eax with itself: 90 is nop, and
-          ; the 32-bit exchange must zero the upper half)
-          (n = 2 && mn = 'xchg && 1 < w && <d = 'rg && <s = 'rg && (as-regn d = 0 || as-regn s = 0)
-           && !(as-regn d = 0 && as-regn s = 0))
-           (: o (as-regn d = 0 ? s d) k (as-regn o)
-              (catall [(as-osz md w) (as-rexm md 0 (as-rexw w) 0 0 (as-hi k)) [(144 + as-lo k)]]))
-          (n = 2 && mn = 'xchg && (<d = 'rg || <s = 'rg))
-           (: r (<d = 'rg ? d s) o (<d = 'rg ? s d) (as-emit md w (as-frcs ops) [(as-opw 135 w)] (as-regn r) o))
           ()))
 
    ;; an instruction of the value: (op mn w ops), ops destination first; the encoders above
@@ -608,14 +475,47 @@
         (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
         ((md < 64 || as-sys64? mn) && two? (as-sys md mn w ops)) (as-sys md mn w ops)
+        (two? (as-tab md mn w ops)) (as-tab md mn w ops)
         (as-vx md mn ops @ v
            (two? v ? v
               (as-more md mn w ops @ x
                  (two? x ? x
                     (#ops @ 0 (as-0 md mn)
                          1 (as-1 md mn w <ops)
-                         2 (as-2 md mn w <>ops <ops)
+                         2 (scare 'as-op2 [mn ops])
                          n (scare 'as-arity [mn n]))))))))
+   ;; the table's lay (x64-encm), the value in its terms: a cc alias by its number, an immediate
+   ;; signed at the width, $sym a fix of the immediate's field, a rip symbol its rel32. a width
+   ;; the text left 0 is the one width that lays, if one does; movd's is its name's. () where the table has no row;
+   ;; branches stay the encoders' above. an sse compare's predicate spelled in its name is
+   ;; its immediate
+   (as-cmpp p) (p @ "eq" 0 "lt" 1 "le" 2 "unord" 3 "neq" 4 "nlt" 5 "nle" 6 "ord" 7 -1)
+   (as-cmpn t) (? (#t > 5 && starts? t "cmp") (: k (as-cmpp (snip t 3 (#t - 2))) (k < 0 ? () [(name ("cmp" + snip t (#t - 2) #t)) k])) ())
+   (as-tabn mn)
+    (: t (show mn)
+       (? (mn = 'sal) 'shl
+          (starts? t "cmov") (as-ccl t 4 @ v (0 < v ? (x6t-ccn "cmov" (v - 128)) mn))
+          (starts? t "set") (as-ccl t 3 @ v (0 < v ? (x6t-ccn "set" (v - 128)) mn))
+          mn))
+   (as-tabo md w o)
+    (<o @ 'im (charm? <>o && 0 < w && w < 8 ? ['im (as-sx w <>o)] o)
+          'ims ['im (md = 64 && w = 8 ? (as-syms o) (as-symw o (w = 2 ? 2 4)))]
+          'rip (nom? <>o ? ['rip () (fix 4 'rel32 <>o <>>o)] ['rip () <>>o])
+          o)
+   (as-tab md mn w ops)
+    (: br? (xa-branch? mn || xa-cc? mn || charm? (as-loops mn) || elem mn '(calll callw jmpl jmpw))
+       rip? (any (o \ <o = 'rip) ops)
+       cp (as-cmpn (show mn))
+       tn (two? cp ? <cp (as-tabn mn))
+       os (two? cp ? (ops + [['im (cp 1)]]) ops)
+       (enc w) (x64-encm md tn w (map (as-tabo md w) os) 0 @ b (rip? ? (riptail b) b))
+       ; inc and dec of a whole register outside 64 lay 40+r and 48+r, as-1's
+       inc? (md != 64 && elem mn '(inc dec) && #ops = 1 && <(ops 0) = 'rg && 1 < as-regw (ops 0))
+       (? (br? || inc? || !(two? (peep x64-byname tn ()))) ()
+          (w != 0) (enc w)
+          (mn = 'movd) (enc 4)
+          (enc 0 @ b (two? b ? b
+             (filter two? (map enc '(1 2 4 8)) @ l (#l = 1 ? <l ()))))))
    (as-moffs md op w o)
     (: sy (5 < #o ? (o 5) ()) d (o 4)
        (as-osz md w + [(as-opw (op + 1) w)]

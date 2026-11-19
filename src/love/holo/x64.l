@@ -129,6 +129,9 @@
       (x6t-r 'xchg 0 144 '(Aw Aw) '((p 66)))                    ; 66 90: the two-byte nop's spelling
       (x6t-r 'nop 0 144 () ())]
      (map (r \ x6t-r 'xchg 0 (145 + r) '(Zv Av) ()) ^7)
+     ; ..the accumulator or the register written first, the same bytes; after, so a decode reads its own
+     [(x6t-r 'xchg 0 144 '(Av Zv) '((b 1)))] (map (r \ x6t-r 'xchg 0 (145 + r) '(Av Zv) ()) ^7)
+     [(x6t-r 'xchg 0 134 '(Gb Eb) ()) (x6t-r 'xchg 0 135 '(Gv Ev) ())]
      [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () ())
       (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () ())
       (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))
@@ -265,6 +268,42 @@
                       [(x86-modrm md rf b)])
                 [(hd + dsp) (ix < 0 ? 0 (ix >> 3)) (b >> 3)]))
          ())
+   ;; ..in a segment of md bits, as gas lays it -> [bytes X B 67]: 16-bit addressing (registers 32
+   ;; up), 67 where the address is not the segment's width (a 32-bit one in 64 marks field 6
+   ;; 'a32), a bare address by the segment's form, a symbol in field 5 the displacement's fix
+   (x6e-memm md rf o)
+    (o @ ('seg _ m) (x6e-memm md rf m)
+         ('rip _ _) (md = 64 ? (x6e-mem rf o @ () () m (m + [()])) ())
+         ('mem . b . ix . sc . d . more)
+          (: sy (two? more ? <more ()) a32 (#more > 1 && more 1 = 'a32)
+             (? (b >= 32 || ix >= 32) (md = 64 ? () (x6e-m16 rf b ix sc d sy @ () () m (m + [(md = 32 ? [103] ())])))
+                (sy = () && md = 64 && !a32) (x6e-mem rf o @ () () m (m + [()]))
+                (: d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32d) sy d)] (charm? d && fits32 d ? (le32 d) ()))
+                   a67 (? (md = 64) (a32 ? [103] ()) (md = 16) [103] ())
+                   (? (d4 = () || ix = 4) ()
+                      (md = 16 && b < 0 && ix < 0) [([(x86-modrm 0 rf 6)] + (sy ? [(fix 2 'abs16 sy d)] (le16 d))) 0 0 ()]
+                      (md = 32 && b < 0 && ix < 0) [([(x86-modrm 0 rf 5)] + (sy ? [(fix 4 'abs32 sy d)] (le32 d))) 0 0 ()]
+                      (b < 0) [([(x86-modrm 0 rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) 5)] + d4) (ix < 0 ? 0 (ix >> 3)) 0 a67]
+                      (: m (? sy 2 (d = 0 && (b & 7) != 5) 0 (fits8 d) 1 2)
+                         hd (? (ix >= 0 || (b & 7) = 4) [(x86-modrm m rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) b)]
+                               [(x86-modrm m rf b)])
+                         [(hd + (m @ 0 () 1 [(byte d)] d4)) (ix < 0 ? 0 (ix >> 3)) (b >> 3) a67])))))
+         ())
+   ;; 16-bit addressing: a base and an index (either order) -> rm by their numbers (bx 3 bp 5 si 6
+   ;; di 7), -1 for no row; bp alone has no disp-less form
+   (x6e-a16rm b ix) (: x (b < ix ? ix b) y (b < ix ? b ix)
+                       (? (y < 0) (x @ 6 4 7 5 5 6 3 7 -1)
+                          (y = 3) (x @ 6 0 7 1 -1)
+                          (y = 5) (x @ 6 2 7 3 -1)
+                          -1))
+   (x6e-m16 rf b0 ix0 sc d sy)
+    (: rm (x6e-a16rm (b0 < 0 ? -1 (b0 - 32)) (ix0 < 0 ? -1 (ix0 - 32)))
+       (? (rm < 0 || sc != 1) ()
+          sy [[(x86-modrm 2 rf rm) (fix 2 'abs16 sy d)] 0 0]
+          !(charm? d) ()
+          (d = 0 && rm != 6) [[(x86-modrm 0 rf rm)] 0 0]
+          (fits8 d) [[(x86-modrm 1 rf rm) (byte d)] 0 0]
+          [([(x86-modrm 2 rf rm)] + le16 d) 0 0]))
    ;; an immediate's bytes by kind, or () when it does not fit
    (x6e-in lo v hi) ((lo <= v) && (v <= hi))
    ;; [b+d]'s mod: none, a byte, a dword
@@ -301,12 +340,16 @@
         (filter (i \ elem (rl i) '(I U ub J)) ^n @ is (map (i \ [i (show (ks i))]) is))
         (r 2)])
    ;; a row's lay for operands of this shape, or (): all the shape decides, once, and a
-   ;; (\ ops pc) for the rest, a memory operand, the immediates and targets -> bytes or ()
-   (x6e-stage p w ops)
+   ;; (\ ops pc) for the rest, a memory operand, the immediates and targets -> bytes or ().
+   ;; md the segment's bits: outside 64 no REX, and 66 names the width that is not its own
+   (x6e-stage p w ops) (x6e-stagem 64 p w ops)
+   (x6e-stagem md p w ops)
     (p @ [_ n rl wl szc vsz byte? gi ei zi gwi ow iw0 ap mod rm ad aw ab opb pfx hasp ims oc]
      (: ; the operand size: ow, else a sized register's, else the item's
        sized (filter (i \ x6e-rg? (ops i) && ops i 2 >= 2) szc)
-       osz (? (ow != ()) ow (two? sized) (ops <sized 2) (w > 1) w 4)
+       dsz (md = 16 ? 2 4)
+       osz (? (ow != ()) ow (two? sized) (ops <sized 2) (w > 1) w dsz)
+       o66 (osz != dsz && (osz = 2 || osz = 4))
        (wd l) (l @ 'b 1 'w 2 'd 4 'q 8 'v osz 'p osz 'y osz 0)
        ; a field's width, for a fix laid in it
        (fw l) (l @ ("Jb" || "Ib" || "ub") 1 "Jz" 4 "Id" 4 "Uw" 2 ("Iz" || "Uv") (osz = 2 ? 2 (l = "Uv" && osz = 8 ? 8 4)) 0)
@@ -322,7 +365,7 @@
        ; the item's width as the decoder names it: iw, else the first general register kind's
        iw (iw0 != () ? iw0 (gwi < 0 ? 0 (wd (wl gwi))))
        (? (#ops != n || iw != w || !(oks ops rl wl) || (ow != () && w > 0 && vsz && w != ow)
-           || (osz = 2 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
+           || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
            ()
           (: eo (ei < 0 ? () (ops ei @ ('ind x) x x x))
@@ -333,7 +376,7 @@
              mk (? (rm != ()) [[rm] 0 0]
                    (eo = ()) (gi >= 0 || ad != () ? () [() 0 0])
                    (x6e-rg? eo) [[(x86-modrm 3 rf (eo 1))] 0 (eo 1 >> 3 & 1)]
-                   (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0) 'base
+                   (md = 64 && (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0)) 'base
                    'mem)
              ; [b+d]: all but the displacement, laid once
              mb (mk = 'base ? (eo @ ('mem b _ _ d) (: md (x6md b d) [md [((b & 7) = 4 ? [(x86-modrm md rf 4) (x86-sib 0 4 b)] [(x86-modrm md rf b)]) 0 (b >> 3)]])) ())
@@ -343,14 +386,15 @@
              W ((aw = 1) || (vsz && (osz = 8) && !hasp))
              R (rf >> 3 & 1)
              zb (zi >= 0 ? (ops zi 1 >> 3 & 1) ())
-             pre0 (catall [(eo @ ('seg s _) (x86-seg s) _ ()) (osz = 2 && vsz || ap = 66 ? [102] ()) pfx])
+             sg (eo @ ('seg s _) (x86-seg s) _ ())
+             pre1 (catall [(o66 && vsz || ap = 66 ? [102] ()) pfx])
              (? (mk = () || (aw = 0 && W)) ()
                 (: ; the head before the immediates, of a modrm laid
                    (head mrm) (: X (two? mrm ? (mrm 1) 0)
                                  B (? (zb != ()) zb (two? mrm) (mrm 2) 0)
                                  rex? (W || R || X || B || frc)
-                                 (? (!(two? mrm) || (rex? && hib) || (ab = 1 && B = 0)) ()
-                                    (pre0 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
+                                 (? (!(two? mrm) || (rex? && (hib || md != 64)) || (ab = 1 && B = 0)) ()
+                                    (sg + (#mrm > 3 ? (mrm 3) ()) + pre1 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
                    ; ..once, where no memory operand lays it
                    hd0 (? (mk = 'mem) () (mk = 'base) (head (mb 1)) (head mk))
                    ; each immediate or target's lay, of the operand and where its field starts
@@ -373,18 +417,19 @@
                       (!(two? ims) && mk = 'base) (mb 0 @ 0 (\ ops pc hd0)
                                                         1 (\ ops pc (hd0 + [(byte (eo-of ops 4))]))
                                                         (\ ops pc (hd0 + le32 (eo-of ops 4))))
-                      !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-mem rf (eo-of ops)))) (\ ops pc hd0))
+                      !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-memm md rf (eo-of ops)))) (\ ops pc hd0))
                       ; a head laid once and one immediate or target, at a known offset
                       (mk != 'mem && mk != 'base && #lays = 1)
                        (: i (lays 0 0) f (lays 0 1) nh #hd0
                           (\ ops pc (f (ops i) (pc + nh) @ () () b (hd0 + b))))
                       (\ ops pc
-                         (: hd (? (mk = 'mem) (head (x6e-mem rf (eo-of ops)))
+                         (: hd (? (mk = 'mem) (head (x6e-memm md rf (eo-of ops)))
                                   (mk = 'base) (hd0 + x6e-dsp (mb 0) (eo-of ops 4))
                                   hd0)
                             (? (hd = ()) () (tail hd pc lays () ops @ t (t = () ? () (hd + t)))))))))))) _ ())
    ;; a row's bytes for the operands, pc where the instruction starts (a target is absolute), or ()
    (x6e-lay p w ops pc) (x6e-stage p w ops @ () () f (f ops pc))
+   (x6e-laym md p w ops pc) (x6e-stagem md p w ops @ () () f (f ops pc))
 
    ;; each name's rows as plans, in table order
    x64-byname (foldl (\ t r (pin t <r (peep t <r () + [(x6e-plan r)]))) {} x64-tab)
@@ -394,6 +439,14 @@
     (: bs (filter two? (map (p \ x6e-lay p w ops pc) (peep x64-byname mn ())))
        (? !(two? bs) (scare 'x64-enc [mn w ops])
           (foldl (\ b x (#x < #b ? x b)) <bs >bs)))
+   ;; ..in a segment of md bits, or (); on a tie the row without the accumulator's, as gas
+   (x64-encm md mn w ops pc)
+    (: ls (filter (l \ two? (l 1)) (map (p \ [(elem 'A (p 2)) (x6e-laym md p w ops pc)]) (peep x64-byname mn ())))
+       (two? ls ? (foldl (\ b x (#(x 1) < #(b 1) || (#(x 1) = #(b 1) && b 0 && !(x 0)) ? x b)) <ls >ls 1) ()))
+   ;; a rip operand's rel32 measures from its own field's end: its addend steps back over the
+   ;; bytes laid after it, an immediate's, a fix counting its width
+   (riptail bs) (bs @ (b . r) (fix? b && fix-k b = 'rel32 ? (fix 4 'rel32 (b 3) (b 4 - x6blen r) . r) (b . riptail r)) _ ())
+   (x6blen l) (foldl (\ n x (n + (fix? x ? (x 1) 1))) 0 l)
    ;; the lowering's: by name, or the row of opcode k (map * 256 + opcode) when the form matters.
    ;; each takes the row chosen once for its operands' shape, an integer: a register itself, a
    ;; memory operand's kind, the ranges an immediate fits, a fix's width. a number laid as a
@@ -499,7 +552,6 @@
    (x6i v) ['im v]
    (x6j f) ['lbl f]
    ;; a rip displacement measures from the instruction's end: the bytes after its field come off
-   (riptail bs) (bs @ (b . r) (fix? b && fix-k b = 'rel32 ? (fix 4 'rel32 (b 3) (b 4 - #r) . r) (b . riptail r)) _ ())
    (x6r mn w ops) (riptail (x6 mn w ops))
 
    ;; reg <- reg by the r/m-destination row (89, 01+8k), as the old hand did
