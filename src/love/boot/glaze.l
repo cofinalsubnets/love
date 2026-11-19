@@ -2871,9 +2871,10 @@
        qualfr (G 'qualfr)  jitfrx (G 'jitfrx)  flo ((G 'targets) arch 'float)
        anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jgir-rerun-ok? (G 'jgir-rerun-ok?)  jitgroupirx (G 'jitgroupirx)  grpfix (G 'grpfix)
        njit-amble (G 'njit-amble)
-       asm (cite 'holo 'assemble)                                         ; pinned: the cat's later reopen of holo never moves it
-       _ (pin (G 'glazeasm) 'f asm)
-       _ (pin (G 'glazeasm) 'at (cite 'holo 'assemble-at))
+       ga (G 'glazeasm)                                                   ; the egg's holo till the blob's reload pins its own, glazed;
+       _ (pin ga 'f (cite 'holo 'assemble))                               ; the cat's later reopen of holo never moves it
+       _ (pin ga 'at (cite 'holo 'assemble-at))
+       (asm t ir) (ga 'f t ir)
        gvbox (G 'gvbox)                                                     ; canon reads globals through ala's gv, pinned here on the first closure
        probebox (G 'probebox)
        (hit x) (pin fires () (1 + peep fires () 0), x)
