@@ -28,13 +28,6 @@
 //         from everywhere but the sun and then the sun's, which a pixel takes as much of as
 //         sun, 16 numbers, and depth, a depth answer through sun, say it sees past
 #include "love.h"
-#if Bits == 64
-double lm_exp(double);
-#define rz_exp lm_exp
-#else
-float lm_expf(float);
-#define rz_exp lm_expf
-#endif
 
 enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11,   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
@@ -71,7 +64,6 @@ struct rz {
  struct rz_tex lv[rz_lv];
  int nlv; };
 
-static flo_t rz_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 static love_inline intptr_t rz_ifloor(flo_t x) { intptr_t const i = (intptr_t) x; return i - (x < (flo_t) i); }
 static love_inline flo_t rz_num(struct tray *v, uintptr_t i) { return tray_get_flo(v, i); }
 
@@ -104,7 +96,7 @@ static flo_t rz_lit(struct rz const *r, intptr_t i, intptr_t j, flo_t z) {
 love_noinline static flo_t rz_vis(struct rz const *r, flo_t lx, flo_t ly, flo_t lz) {
  flo_t const sx = (lx * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->SW - (flo_t) 0.5,
              sy = ((flo_t) 0.5 - ly * (flo_t) 0.5) * (flo_t) r->SH - (flo_t) 0.5,
-             fi = rz_floor(sx), fj = rz_floor(sy), fx = sx - fi, fy = sy - fj, z = lz - r->bias;
+             fi = love_floor(sx), fj = love_floor(sy), fx = sx - fi, fy = sy - fj, z = lz - r->bias;
  intptr_t const i = (intptr_t) fi, j = (intptr_t) fj;
  flo_t const t0 = rz_lit(r, i, j, z) + (rz_lit(r, i + 1, j, z) - rz_lit(r, i, j, z)) * fx,
              t1 = rz_lit(r, i, j + 1, z) + (rz_lit(r, i + 1, j + 1, z) - rz_lit(r, i, j + 1, z)) * fx;
@@ -120,7 +112,7 @@ static love_inline intptr_t rz_own(struct rz const *r, intptr_t y) {
 static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
  intptr_t X[3], Y[3];   // sixteenths inside the guard band, under 2^30 apart: only the area wants 64 bits
  for (int i = 0; i < 3; i++)
-  X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
+  X[i] = (intptr_t) love_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) love_floor(P[i]->y * 16 + (flo_t) 0.5);
  int64_t const A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
  intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
@@ -313,7 +305,7 @@ love_noinline static int rz_setup(struct rz *r, struct rz_plane *t, struct rz_v 
  struct rz_v const *P[3] = { p0, p1, p2 };
  intptr_t X[3], Y[3];
  for (int i = 0; i < 3; i++)
-  X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);   // in the guard band: a word
+  X[i] = (intptr_t) love_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) love_floor(P[i]->y * 16 + (flo_t) 0.5);   // in the guard band: a word
  int64_t A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0) return 0;
  if (A > 0 && (r->flags & rz_cull)) return 0;   // anticlockwise in gl's y-up faces the eye,
@@ -369,7 +361,7 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
 static love_inline void rz_place(struct rz const *r, flo_t x, flo_t y, flo_t z, flo_t w, struct rz_v *v) {
  flo_t const q = 1 / w;
  x = (x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W, y = ((flo_t) 0.5 - y * q * (flo_t) 0.5) * (flo_t) r->H;
- if (r->flags & rz_snap) x = rz_floor(x + (flo_t) 0.5), y = rz_floor(y + (flo_t) 0.5);
+ if (r->flags & rz_snap) x = love_floor(x + (flo_t) 0.5), y = love_floor(y + (flo_t) 0.5);
  v->x = x, v->y = y, v->z = z * q; }
 static love_inline void rz_project(struct rz const *r, struct rz_v *v) { rz_place(r, v->x, v->y, v->z, v->w, v); }
 
@@ -657,7 +649,7 @@ love_noinline static struct g *host_raster(struct g *g) {
  r.flags = (intptr_t) rz_opt(o, 5, 0), r.tone = rz_opt(o, 6, 0), r.bias = rz_opt(o, 7, 0);
  for (int i = 0; i < 256; i++) r.u8[i] = (flo_t) i / 255;
  if (r.tone > 0) for (int i = 0; i < rz_tn + 2; i++)
-  r.tl[i] = 255 * (1 - rz_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
+  r.tl[i] = 255 * (1 - love_exp(-(flo_t) (i < rz_tn ? i : rz_tn) / 32));
  rz_share(g, &r);
  a[0] = word(fr);
  return g; }

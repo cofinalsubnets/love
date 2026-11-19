@@ -1,13 +1,22 @@
 // paint -- a quay screen as 32bpp pixels, the only place the palette is spent
 #include "quay.h"
-#include "xterm256.h"
+
+// the xterm-256 palette as xterm sets it: sixteen classics, a 6x6x6 cube, a 24-step grey ramp
+static uint32_t const cb_classic[16] = { 0x000000, 0x800000, 0x008000, 0x808000, 0x000080, 0x800080, 0x008080, 0xc0c0c0,
+                                         0x808080, 0xff0000, 0x00ff00, 0xffff00, 0x0000ff, 0xff00ff, 0x00ffff, 0xffffff };
+static uint32_t cb_lv(uint32_t n) { return n ? 55 + 40 * n : 0; }   // the cube's levels: 0, 95, 135 .. 255
+static uint32_t cb_xterm(uint32_t v) {
+  if (v < 16) return cb_classic[v];
+  if (v >= 232) return (8 + 10 * (v - 232)) * 0x010101u;
+  v -= 16;
+  return cb_lv(v / 36) << 16 | cb_lv(v / 6 % 6) << 8 | cb_lv(v % 6); }
 
 // a colour word as xrgb; bold brightens the low eight
 static uint32_t cb_rgbof(struct cb const *c, uint32_t k, uint32_t d, int bright) {
   if (cb_kind(k) == cb_def) k = d;
   if (cb_kind(k) == cb_rgb) return cb_val(k);
   uint32_t v = cb_val(k) & 255u;
-  return xterm256[bright && v < 8 ? v + 8 : v]; }
+  return cb_xterm(bright && v < 8 ? v + 8 : v); }
 
 // halfway from a to b, per channel: dim's fg
 static uint32_t cb_mid(uint32_t a, uint32_t b) {

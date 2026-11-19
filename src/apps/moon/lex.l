@@ -67,7 +67,8 @@
    ; a token spelled as a one-char constant: 'c' or one escape; its value is the raw byte
    (chq? (_ . _ . _ . _ . s . _)) (: (bs i n) (i < #s ? (bs (i + 1) (s i = 92 ? (n + 1) n)) n)
                                      (string? s && 2 < #s && s 0 = 39 && (#s = 3 || s 1 = 92 && bs 1 0 = 1)))
-   ; for cpp: a token whitespace follows carries a 6th cell, so # can spell the gaps
+   ; for cpp: a token whitespace follows carries a 6th cell, so # can spell the gaps; wm 2
+   ; (-E -C) also keeps each comment as a ('cmt text line) token
    (clexw src ln0) (clexm src ln0 () 1)
    ; for a .S: 1b/2f is one word, $ @ \ ` are punctuators, `#` starts gas's comment (see go).
    ; each non-directive line opens with a ("\n") mark, so the text spelled back breaks as the source did
@@ -320,6 +321,7 @@
            (clex-run ctab src i @ m
               (: r (m & 65535) j (m >> 16)
                  (? (r = 4) (snip src i j @ t (idback? t i j acc ? (slow i line acc) (go j line (idtok t line . acc))))
+                    (r = 5 && wm = 2) (slow i line acc)                ; -C keeps the comment
                     (r = 2 || r = 5) (go j line (spc acc))            ; blanks, a // comment
                     (r = 7) (src i @ c (p1back? c j ? (slow i line acc) (go j line (p1tok c i line . acc))))
                     (r = 6) (go j line (['p (ptab (snip src i j)) line] . acc))
@@ -346,7 +348,7 @@
                  (asm && elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                  (c = 47 && at? i "//")
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
-                     (go (eat i) line (spc acc)))
+                     (go (eat i) line (wm = 2 ? (['cmt (snip src i (eat i)) line] . acc) (spc acc))))
                  (c = 47 && at? i "/*")
                   (: ; a \<nl> in a comment is a splice (phase 2 precedes comments): same logical line
                      (spliced? j) (0 < j && (src (j - 1) = 92 ||
@@ -356,9 +358,11 @@
                                               (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 k (charm? <r ? (nls i <r 0) 0)
+                                ; -C: the comment a token of its own, at the line it opens on
+                                cm (wm = 2 && charm? <r ? (['cmt (snip src i <r) line] . acc) (spc acc))
                                 (? !(charm? <r) ()
-                                   (0 < k && dirline? acc line) (pend1 k, go <r line (spc acc))
-                                   (go <r (line + k) (spc acc))))
+                                   (0 < k && dirline? acc line) (pend1 k, go <r line cm)
+                                   (go <r (line + k) cm)))
                  ; a quote that opens no literal is its own pp-token (C11 6.4p3), for skipped groups
                  (c = 34) (strbody (i + 1) 34 () @ r          ; a string literal
                              (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))

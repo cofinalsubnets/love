@@ -478,7 +478,7 @@
             (scare 'gas-a64-operand toks))
    (ga-r o) (o @ ('reg x _) x (scare 'gas-a64-register o))
    (ga-rw o) (o @ ('reg x w) [x w] (scare 'gas-a64-register o))
-   (ga-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-a64-operand o))   ; a register or an immediate
+   (ga-v o) (o @ ('imm n) (s64 n) ('reg x _) x (scare 'gas-a64-operand o))   ; a register or an immediate, a u64 pattern signed
    ;; a system register moves through an x register or xzr, never sp or a w
    (ga-xt m os i) ((os i) @ ('reg r 8) (r != 'sp ? r (scare 'gas-a64-operand [m os])) _ (scare 'gas-a64-operand [m os]))
    (ga-hw r) (r @ 'sp 31 'zr 31 'fp 29 'lr 30 (xa-num (snip (show r) 1 #(show r))))
@@ -1286,10 +1286,204 @@
    (ga-glue ts) (ts @ (('sym a) . ('sym b) . r) (b 0 = 46 ? (ga-glue (['sym (a + b)] . r)) (['sym a] . ga-glue (['sym b] . r)))
                       (t . r) (t . ga-glue r)
                       _ ts)
+   ;; any other instruction in a64-tab, its operands read as decode.l writes them and laid by the
+   ;; row's kinds; a word must decode back to what was written. no label operand
+   (ga-lc s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
+   (ga-num t) (#t > 0 && #t < 3 && all digit? (chars t) ? (xa-num t) ())
+   ;; a lone symbol: a register of any file, a lane's register (vel), cN, else a name
+   (ga-tn s)
+    (: t (ga-lc s) r (ga-reg s) c (t 0) n (ga-num (snip t 1 #t))
+       ds (filter (i \ t i = 46) ^#t) dn (two? ds ? (ga-num (snip t 1 <ds)) ()) ar (two? ds ? (snip t (<ds + 1) #t) "")
+       (? (two? r) [(r 2 = 8 ? 'x 'w) (<>r = 'sp ? 32 (ga-hw <>r))]
+          (charm? n && n < 32 && elem c [98 104 115 100 113]) ['f (name (string [c])) n]
+          (charm? n && c = 99 && n < 16) ['cr n]
+          (c = 118 && charm? dn && dn < 32 && elem ar a6t-arr) ['v dn ar]
+          (c = 118 && charm? dn && dn < 32 && elem ar ["b" "h" "s" "d"]) ['vel dn (name ar)]
+          ['nm t]))
+   ;; a register list's body -> [first count arrangement], () when not consecutive
+   (ga-tlist ts)
+    (: rs (catmap (g \ (g @ (('sym a)) [(ga-tn a)]
+                          (('sym a) ('ch 45) ('sym b))
+                           (: x (ga-tn a) y (ga-tn b)
+                              (<x = 'v && <y = 'v && x 2 = y 2 && x 1 != y 1 ? (map (j \ ['v ((x 1 + j) % 32) (x 2)]) ^((y 1 - x 1 + 32) % 32 + 1)) [()]))
+                          _ [()]))
+                  (gops ts))
+       a (two? rs && all (r \ two? r && elem <r '(v vel)) rs ? (rs 0 2) ())
+       (? (a = () || #rs > 4 || !(all (j \ rs j 1 = (rs 0 1 + j) % 32 && rs j 2 = a) ^#rs)) ()
+          [(rs 0 1) #rs (nom? a ? (show a) a)]))
+   ;; an address's body: [b], [b, #k], [b, rM{, ext {#a}}], pre-indexed when wb
+   (ga-taddr ts wb)
+    (: ps (gops ts) b (ps @ ((('sym s)) . _) (ga-tn s) _ ()) bn (two? b && <b = 'x ? (b 1 = 32 ? 31 (b 1)) ())
+       (? !(charm? bn) ()
+          (#ps = 1) (wb ? () ['memb bn])
+          (ps 1 @ (('ch 35) . v) 1 _ 0) (: k (gimm (>(ps 1))) [(wb ? 'pre 'mem) bn k])
+          wb ()
+          (: r (ps 1 @ (('sym s)) (ga-tn s) _ ())
+             ex (#ps > 2 ? (ps 2) ()) e (ex @ (('sym x) . _) (name (ga-lc x)) _ 'lsl)
+             a (ex @ (('sym _) . ('ch 35) . v) (gimm v) _ ())
+             (? (!(two? r) || !(elem <r '(x w)) || #ps > 3 || !(e = 'lsl || elem e a6t-extn)) ()
+                ['memr bn r e (charm? a ? a 0) (charm? a ? 1 0)]))))
+   ;; one operand run -> its form
+   (ga-tk toks)
+    (: (fl ts) (catall (map (t \ t @ ('num v) (show v) ('sym s) s ('ch 45) "-" ('ch 43) "" "?") ts))
+       (toks @ (('ch 35) . rest) (any (t \ t @ ('sym s) (s 0 = 46) _ 0) rest ? ['fl (read (fl rest))] ['im (gimm rest)])
+               (('num _) . _) ['im (gimm toks)]
+               (('ch 45) . _) ['im (gimm toks)]
+               (('sym s)) (ga-tn s)
+               (('sym s) ('ch 91) ('num i) ('ch 93)) (ga-tn s @ ('vel n c) ['el n c i] _ ())
+               (('sym s) . rest)
+                (: k (name (ga-lc s)) a (rest @ (('ch 35) . v) (gimm v) () 0 _ ())
+                   (? (elem k a6t-shn || k = 'msl) (charm? a && two? rest ? ['sh k a] ())
+                      (elem k a6t-extn) (charm? a ? ['ext k a] ())
+                      ()))
+               (('ch 91) . rest)
+                (: rv (rev rest) wb (<rv = '(ch 33)) body (rev (wb ? >>rv >rv))
+                   ((wb ? <>rv <rv) = '(ch 93) ? (ga-taddr body wb) ()))
+               (('ch 123) . rest)
+                (: n #rest cl (filter (i \ rest i = '(ch 125)) ^n) c (two? cl ? <cl n)
+                   l (ga-tlist (take c rest)) tl (snip rest (c + 1) n)
+                   (? !(two? l) ()
+                      (tl = ()) ['list (l 0) (l 1) (l 2) -1]
+                      (tl @ (('ch 91) ('num i) ('ch 93)) ['list (l 0) (l 1) (l 2) i] _ ())))
+               ()))
+   ;; a bare [b] before an immediate is post-indexed, else [b, #0]
+   (ga-tpost os) (os @ (('memb b) . ('im k) . r) (['post b k] . ga-tpost r)
+                       (('memb b) . r) (['mem b 0] . ga-tpost r)
+                       (o . r) (o . ga-tpost r)
+                       ())
+   ;; the forms a kind may read an operand as: a number its several spellings, a name by its file
+   (ga-tsreg t) (filter (e \ ga-lc (show (e 5)) = t) a6d-sregs @ (e . _) ((e 0 - 2) << 14 | e 1 << 11 | e 2 << 7 | e 3 << 3 | e 4) _ ())
+   (ga-tv o)
+    (o @ ('im v) [o ['dec v] ['imx v] ['m64 v] ['raw ("#" + show v)]]
+         ('fl x) (catall [(x = 0 ? [['raw "#0.0"]] ())
+                         (filter (i \ read (snip (a6t-fimm i) 1 #(a6t-fimm i)) = x) ^256 @ (i . _) [['raw (a6t-fimm i)]] _ ())])
+         ('cr n) [['raw ("c" + show n)]]
+         ('nm t) (: s (name t)
+                    (catall [(a6e-ix '(eq ne hs lo mi pl vs vc hi ls ge lt gt le al nv) s @ k (charm? k ? [['cc k]] ()))
+                             (s @ 'cs [['cc 2]] 'cc [['cc 3]] _ ())
+                             (filter (k \ a6d-bar k = t) ^16 @ (k . _) [['bar k]] _ ())
+                             (filter (k \ a6d-prf k = t) ^32 @ (k . _) [['prf k]] _ ())
+                             (ga-tsreg t @ k (charm? k ? [['sys k]] ()))
+                             (peep {'spsel 5 'daifset 30 'daifclr 31 'uao 3 'pan 4} s () @ k
+                                (charm? k ? [['pst (k >> 3) (k & 7)]] ()))]))
+         _ [o])
+   (ga-traw o) (o @ ('im v) ['raw ("#" + show v)] ('cr n) ['raw ("c" + show n)] _ o)
+   ;; a row's word from the forms, what each kind read kept: (word taken), or ()
+   (ga-tfit r os)
+    (: (go ks os acc tk)
+        (? !(two? ks) (os = () ? [acc tk] ())
+           (elem <ks '(sysop sysl))
+            (: os2 (map ga-traw os) e (a6e-op <ks os2 acc 0)
+               (e = () ? () (go >ks (snip os2 (e 1) #os2) (acc | <e) (tk + take (e 1) os2))))
+           (: (try vs) (? !(two? vs) ()
+                          (: os2 (<vs . >os) e (a6e-op <ks os2 acc 0)
+                             (e = () ? (try >vs)
+                                (go >ks (snip os2 (e 1) #os2) (acc | <e) (tk + take (e 1) os2) @ g
+                                   (g = () ? (try >vs) g)))))
+              ; a modified immediate reads its register and the value after it
+              (? (<ks = 'modi && two? >os)
+                  (: (try2 vs) (? !(two? vs) ()
+                                  (: os2 (<os . <vs . >>os) e (a6e-op 'modi os2 acc 0)
+                                     (e = () ? (try2 >vs)
+                                        (go >ks (snip os2 (e 1) #os2) (acc | <e) (tk + take (e 1) os2) @ g
+                                           (g = () ? (try2 >vs) g)))))
+                     (try2 (ga-tv (os 1))))
+                 (two? os) (try (ga-tv <os))
+                 (a6e-op <ks () acc 0 @ e (e = () ? () (go >ks () (acc | <e) tk))))))
+       (go (r 3) os (r 1) ()))
+   ;; llvm's aliases (decode.l's a6d-alias) -> the instructions they may stand for, as forms;
+   ;; a candidate stands only when its word shows again as what was written
+   (ga-tcc o) (ga-tv o @ ((k v) . _) (? (k = 'cc) v) _ ())
+   (ga-tal m os)
+    (: a (dc-at os 0) b (dc-at os 1) c (dc-at os 2) n #os
+       r? (two? a && elem <a '(x w)) z (r? ? [<a 31] ()) ww (two? a && <a = 'x ? 64 32)
+       (iv o) (o @ ('im v) v _ ()) (u v) (v < 0 ? (v + ww 2) v)
+       (dc v) ['dec v]
+       (cc o) (ga-tcc o @ k (charm? k ? ['cc (k ^ 1)] ()))
+       (lanes v) (map (k \ [((v // (16 * k) 2) % 65536) k]) ^(ww // 16))
+       (wide mn v) (map (p \ [mn (a . ['im <p] . (<>p = 0 ? () [['sh 'lsl (16 * <>p)]]))]) (lanes v))
+       (? !(two? a) ()
+          (m = 'mov && n = 2)
+           (? (r? && charm? (iv b)) (catall [(wide 'movz (u (iv b))) (wide 'movn (ww 2 - 1 - u (iv b)))
+                                              [['orr [a z ['im (ww = 64 ? (iv b) (u (iv b)))]]]]])
+              (r? && two? b && elem <b '(x w)) (? (a 1 = 32 || b 1 = 32) [['add [a b ['im 0]]]] [['orr [a z b]]])
+              (<a = 'v) [['orr [a b b]]]
+              (<a = 'el) [['ins os]]
+              r? [['umov os]]
+              (<a = 'f) [['dup os]]
+              ())
+          (m = 'mvn) (<a = 'v ? [['not os]] (r? ? [['orn (a . z . >os)]] ()))
+          (elem m '(cmp cmn tst) && two? a && elem <a '(x w)) [[(m @ 'cmp 'subs 'cmn 'adds 'ands) ([<a 31] . os)]]
+          (elem m '(neg negs) && r?) [[(m = 'neg ? 'sub 'subs) (a . z . >os)]]
+          (elem m '(ngc ngcs) && r?) [[(m = 'ngc ? 'sbc 'sbcs) [a z b]]]
+          (elem m '(lsl lsr asr ror) && n = 3 && two? c && elem <c '(x w)) [[(name (show m + "v")) os]]
+          (elem m '(lsl lsr asr) && n = 3 && charm? (iv c))
+           (: s (iv c) [(m = 'lsl ? ['ubfm [a b (dc ((ww - s) % ww)) (dc (ww - 1 - s))]]
+                           [(m = 'asr ? 'sbfm 'ubfm) [a b (dc s) (dc (ww - 1))]])])
+          (m = 'ror && n = 3) [['extr [a b b c]]]
+          (elem m '(sxtb sxth sxtw uxtb uxth) && n = 2 && two? b)
+           [[(show m 0 = 115 ? 'sbfm 'ubfm) [a [<a (b 1)] (dc 0) (dc (m @ 'sxtb 7 'uxtb 7 'sxth 15 'uxth 15 31))]]]
+          (elem m '(sbfiz ubfiz bfi sbfx ubfx bfxil) && n = 4)
+           (: l (iv c) w (iv (os 3)) mn (m @ 'sbfiz 'sbfm 'sbfx 'sbfm 'ubfiz 'ubfm 'ubfx 'ubfm 'bfm)
+              (charm? l && charm? w ?
+                 [[mn [a b (dc (elem m '(sbfiz ubfiz bfi) ? ((ww - l) % ww) l))
+                          (dc (elem m '(sbfiz ubfiz bfi) ? (w - 1) (l + w - 1)))]]] ()))
+          (m = 'bfc && n = 3)
+           (: l (iv b) w (iv c) (charm? l && charm? w ? [['bfm [a z (dc ((ww - l) % ww)) (dc (w - 1))]]] ()))
+          (elem m '(cset csetm) && n = 2) [[(m = 'cset ? 'csinc 'csinv) [a z z (cc b)]]]
+          (elem m '(cinc cinv cneg) && n = 3) [[(m @ 'cinc 'csinc 'cinv 'csinv 'csneg) [a b b (cc c)]]]
+          (elem m '(mul mneg smull smnegl umull umnegl) && n = 3)
+           [[(m @ 'mul 'madd 'mneg 'msub 'smull 'smaddl 'smnegl 'smsubl 'umull 'umaddl 'umsubl) (os + [['x 31]])]
+            [(m @ 'mul 'madd 'mneg 'msub 'smull 'smaddl 'smnegl 'smsubl 'umull 'umaddl 'umsubl) (os + [z])]]
+          (elem m '(ic dc at tlbi))
+           (: op (a @ ('nm t) (name t) _ ())
+              e (rvd-first (e \ e 4 = m && e 5 = op) a6d-sysops)
+              (two? e ? [['sys [['raw ("#" + show <e)] ['raw ("c" + show (e 1))] ['raw ("c" + show (e 2))]
+                                ['raw ("#" + show (e 3))] (n > 1 ? b ['x 31])]]] ()))
+          (show m @ t (#t > 2 && snip t 0 2 = "st" && two? (peep a64-byname (name ("ld" + snip t 2 #t)) ())))
+           [[(name ("ld" + snip (show m) 2 #(show m))) [a z b]]]
+          ()))
+   (ga-tnorm o) (o @ ('dec v) ['im v] ('imx v) ['im v] _ o)
+   ;; a written form and a decoded one alike, the written read any way it may be
+   (ga-tsame o d) (any (v \ ga-tnorm v = ga-tnorm d) (ga-tv o))
+   ;; llvm-mc's unpredictables over the decoded operands: ldp's two the same, a written-back base
+   ;; that is also a register moved, an exclusive store's status that is also a source
+   (ga-tunp mn os)
+    (: gn (filter (o \ two? o && elem <o '(x w) && o 1 < 31) os @ l (map (o \ o 1) l))
+       rn (map (o \ <o = 'f ? [(o 2)] [(o 1)]) (filter (o \ two? o && elem <o '(x w f)) os))
+       wb (filter (o \ two? o && elem <o '(pre post) && o 1 < 31) os)
+       bs (filter (o \ two? o && <o = 'mem && o 1 < 31) os @ l (map (o \ o 1) l))
+       (? (elem mn '(ldp ldpsw) && #rn >= 2 && rn 0 = rn 1 && (<(os 0) = 'f) = (<(os 1) = 'f)) 1
+          (two? wb && elem (wb 0 1) gn) 1
+          (elem mn '(stxr stlxr stxrb stlxrb stxrh stlxrh stxp stlxp) && two? gn && elem (gn 0) (>gn + bs)) 1
+          0))
+   (ga-tab m raw)
+    (: os (ga-tpost (map (o \ ga-tk (ga-glue o)) raw))
+       (rows mn) (: s (show mn) l (peep a64-byname mn ())
+                    (two? l || #s < 2 || s (#s - 1) != 50 ? [mn l] [(name (snip s 0 (#s - 1))) (peep a64-byname (name (snip s 0 (#s - 1))) ())]))
+       ; what the word shows as, objdump's alias rule, against what was written
+       (shows? mn r w)
+        (map (k \ a6d-op k w 0) (r 3) @ back
+           (: dops (catall back) al (a6d-alias mn dops w)
+              (!(elem 'bad back) && a6d-two <al (r 3) w = m && #(al 1) = #os && all (i \ ga-tsame (os i) (al 1 i)) ^#os)))
+       (lay mn cos r) (ga-tfit r cos @ f
+                        (: w (two? f ? <f ())
+                           (? (!(charm? w) || (w & r 2) != r 1) ()
+                              (map (k \ a6d-op k w 0) (r 3) @ back
+                                 (? (elem 'bad back || ga-tunp mn (catall back)) ()
+                                    (mn = m && a6d-two mn (r 3) w = m && catall back = f 1) w
+                                    (shows? mn r w) w
+                                    ())))))
+       (cand c) (rows <c @ (mn l) ((: (go l) (? !(two? l) () (lay mn (c 1) <l @ w (charm? w ? w (go >l))))) l))
+       (go cs) (? !(two? cs) (scare 'gas-a64-op m) (cand <cs @ w (charm? w ? (ga-raw w) (go >cs))))
+       (? (elem () os) (scare 'gas-a64-operand [m raw]) (go ([m os] . ga-tal m os))))
    (ga-line toks)
     (gline toks @ l
        (l @ ('label s) [['label s]]
-            ('ins m os) (ga-ins m (map (o \ ga-opnd (ga-glue o)) os))
+            ; what the old path takes stays its own; the table takes the rest, else the first refusal.
+            ; an unpredictable form stays refused: the table has no word for what it does
+            ('ins m os) (trap (_ \ ga-ins m (map (o \ ga-opnd (ga-glue o)) os)) 0
+                              (a \ b \ (a = 'gas-a64-unpredictable ? (scare a b) (trap (_ \ ga-tab m os) 0 (_ \ _ \ scare a b)))))
             ()))
 
    ;; riscv: dst first, the ABI register names, off(base) memory, the csr pseudos; rv32 reads
@@ -1310,28 +1504,28 @@
    (gr-v o) (o @ ('imm n) n ('reg x _) x (scare 'gas-rv64-operand o))
    gr-nils (gtab '((nop nop) (ret ret) (ecall sys) (ebreak trap) (wfi wfi) (sret sret) (mret mret) (fence fence) (fence.i fencei)))
    gr-alu (gtab '((add add) (addi add) (sub sub) (and and) (andi and) (or or) (ori or) (xor xor) (xori xor) (mul imul)))
-   gr-sh (gtab '((slli shl) (srli shr) (srai sar) (sll shlv) (srl shrv) (sra sarv)))
+   gr-sh (gtab '((slli shl) (srli shr) (srai sar)))          ; sll srl sra: the table's, any count register
    gr-ld (gtab '((ld ld) (lw ld4) (lwu ldu4) (lh ld2) (lhu ldu2) (lb ld1) (lbu ldu1)))
    gr-st (gtab '((sd st) (sw st4) (sh st2) (sb st1)))
    gr-bcc (gtab '((beq eq) (bne ne) (blt lt) (bge ge) (bltu below) (bgeu ae)))
    gr-bz (gtab '((beqz eq) (bnez ne) (bltz lt) (bgez ge)))
    gr-csr1 '(csrw csrs csrc csrwi csrsi csrci)
    gr-csr2 '(csrrw csrrs csrrc csrrwi csrrsi csrrci)
-   (gr-ins m os)
+   (gr-ins m os raw)
     (#os @ k
-       (? (ghas? gr-nils m) [[(gr-nils m)]]
+       (? (ghas? gr-nils m && k = 0) [[(gr-nils m)]]                  ; fence r, rw: the table's
           (m = 'unimp) '((csrw cycle zr))
           (m = 'sfence.vma) [['sfence (k > 0 ? (gr-r (os 0)) 'zr) (k > 1 ? (gr-r (os 1)) 'zr)]]
           (m = 'li) [['li (gr-r (os 0)) (<>(os 1))]]
           (m = 'mv) [['mov (gr-r (os 0)) (gr-r (os 1))]]
           (m = 'j) [['jmp (<>(os 0))]]
           (m = 'jr) [['jmpr (gr-r (os 0))]]
-          (m = 'jalr) [['callr (gr-r (os 0))]]
+          (m = 'jalr && k = 1) [['callr (gr-r (os 0))]]
           (m = 'call) [['call (<>(os 0))]]
           (ghas? gr-bcc m) [['cmp (gr-r (os 0)) (gr-r (os 1))] ['br (gr-bcc m) (<>(os 2))]]
           (ghas? gr-bz m) [['cmp (gr-r (os 0)) 0] ['br (gr-bz m) (<>(os 1))]]
           (ghas? gr-alu m) [[(gr-alu m) (gr-r (os 0)) (gr-r (os 1)) (gr-v (os 2))]]
-          (ghas? gr-sh m)
+          (ghas? gr-sh m && os 0 = os 1)                                 ; else one instruction, the table's
            (: d (gr-r (os 0)) s (gr-r (os 1))
               ((d = s ? () [['mov d s]]) + [[(gr-sh m) d (gr-v (os 2))]]))
           (m = 'neg) (: d (gr-r (os 0)) s (gr-r (os 1)) ((d = s ? () [['mov d s]]) + [['neg d]]))
@@ -1341,11 +1535,63 @@
           (m = 'csrr) [['csrr (gr-r (os 0)) (<>(os 1))]]
           (elem m gr-csr1) [[m (<>(os 0)) (gr-v (os 1))]]
           (elem m gr-csr2) [[m (gr-r (os 0)) (<>(os 1)) (gr-v (os 2))]]
-          (scare 'gas-rv64-op m)))
+          (gr-tab m raw)))
+   ;; any other instruction in the table, each operand read by its kind: a register by its
+   ;; architectural name, off(base) memory, a csr by name or number, a fence's sets, a rounding
+   ;; mode llvm's default when left out. no label operand
+   (gr-at l s) (: (go i l) (? !(two? l) -1 (<l = s) i (go (i + 1) >l)) (go 0 l))
+   (gr-num nm ab s) (gr-at ab s @ k (k >= 0 ? k (gr-at (map (i \ name (nm + show i)) ^32) s)))
+   (gr-take k l) (k < 1 || !(two? l) ? () (<l . gr-take (k - 1) >l))
+   ;; an operand's tokens -> (s name), (m off base) or (i n)
+   (gr-tok toks)
+    (: n #toks
+       (? (n = 1 && <<toks = 'sym) ['s (name (toks 0 1))]
+          (n >= 3 && toks (n - 1) = '(ch 41) && toks (n - 3) = '(ch 40) && <(toks (n - 2)) = 'sym)
+           ['m (n = 3 ? 0 (gimm (gr-take (n - 3) toks))) (name (toks (n - 2) 1))]
+          ['i (gimm toks)]))
+   ;; a csr's number by llvm's name: a lone (number name), or a run (first count prefix from)
+   (gr-csrn s)
+    (: (go l) (? !(two? l) (scare 'gas-rv64-csr s)
+                 (#<l = 2) (<l 1 = s ? <<l (go >l))
+                 (: e <l k (gr-at (map (i \ name (show (e 2) + show (e 3 + i))) ^(e 1)) s)
+                    (k >= 0 ? (<e + k) (go >l))))
+       (go rvd-csrs))
+   (gr-fset s) (foldl (\ a c (a | (c @ 105 8 111 4 114 2 119 1 0))) 0 (chars (show s)))   ; iorw
+   ;; each immediate kind's range, as the field holds it. functions, not values: a bake-time
+   ;; assembly above reaches here before this block's later values are laid
+   (gr-range k) (k @ 'i12 [-2048 2047] 'u20 [0 1048575] 'sh6 [0 63] 'sh5 [0 31] 'zimm [0 31] 'csr [0 4095] ())
+   (gr-rm s) (gr-at '(rne rtz rdn rup rmm _ _ dyn) s)
+   (gr-val k o)
+    (: (bad _) (scare 'gas-rv64-operand [k o])
+       (ok v) (v < 0 ? (bad 0) v)
+       (in k v) (gr-range k @ r (!(two? r) || <r <= v && v <= r 1 ? v (bad 0)))
+       (xr s) (s = 'fp ? 8 (ok (gr-num "x" rvd-xn s))) (fr s) (ok (gr-num "f" rvd-fn s))
+       (? (elem k '(rd rs1 rs2)) (<o = 's ? (xr (o 1)) (bad 0))
+          (elem k '(fd fs1 fs2 fs3)) (<o = 's ? (fr (o 1)) (bad 0))
+          (elem k '(m ms)) (<o = 'm ? [(in 'i12 (o 1)) (xr (o 2))] (bad 0))
+          (k = 'am) (<o = 'm && o 1 = 0 ? (xr (o 2)) (bad 0))
+          (k = 'rm) (<o = 's ? (ok (gr-rm (o 1))) (bad 0))
+          (k = 'csr) (? (<o = 'i) (in k (o 1)) (<o = 's) (gr-csrn (o 1)) (bad 0))
+          (elem k '(b j)) (bad 0)
+          (<o = 'i) (in k (o 1))
+          (bad 0)))
+   (gr-tab m raw)
+    (rv-row m @ ra
+     (? !(two? ra) (scare 'gas-rv64-op m)
+        (: ks (rv-kinds <ra) os (map gr-tok raw) n #os
+           ; a fence's sets ride one kind; an rm left out is llvm's
+           vs (? (ks = '(fence)) (n = 0 ? [[15 15]] [[(gr-fset (os 0 1)) (gr-fset (os 1 1))]])
+                 (last ks = 'rm && n + 1 = #ks)
+                  (map (i \ i < n ? (gr-val (ks i) (os i)) (elem m rvd-exact ? 0 7)) ^#ks)
+                 (n = #ks) (map (i \ gr-val (ks i) (os i)) ^n)
+                 (scare 'gas-rv64-operands [m n]))
+           [['raw (le32 (rve-word <ra vs (ra 1)))]])))
    (gr-line toks)
     (gline toks @ l
        (l @ ('label s) [['label s]]
-            ('ins m os) (gr-ins m (map gr-opnd os))
+            ; what the lowering takes stays its own; the table takes the rest, else the first refusal
+            ('ins m os) (trap (_ \ gr-ins m (map gr-opnd os) os) 0
+                              (a \ b \ (two? (rv-row m) ? (trap (_ \ gr-tab m os) 0 (_ \ _ \ scare a b)) (scare a b))))
             ()))
 
    ;; thumb: the same operand grammar as a64 over r0..r12, a register list, a shifted operand

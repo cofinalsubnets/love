@@ -1296,7 +1296,9 @@
    ; ..what relit or shine-at keep on a mesh, named for the gpu by the mesh and what it was
    ; made of: they write it again only as that changes
    gk (tablet? (st 'gpu)) (named pk b x) (gk ? [(b 0) (b 1) [(gpu-name st pk) x]] b)
-   hall (map (q \ (: c (cks (q 1)) (named (c 'pk) (relit (c 'pk) (c 'lit)) dk)))
+   ; ..and one relit, by the ks of the lamps that reach it: a far lamp's breath sends it not
+   (lit-named pk b) (named pk b (mesh-lit-ks pk dk))
+   hall (map (q \ (: c (cks (q 1)) (lit-named (c 'pk) (relit (c 'pk) (c 'lit)))))
              (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness, or one opened by hand
    ; swung on its hinge away from who opened it
@@ -1329,7 +1331,7 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   glass (map (i \ named (sc 'panes i 'pk) (relit (sc 'panes i 'pk) (sc 'panes i 'lit)) dk) ^#(sc 'panes))
+   glass (map (i \ lit-named (sc 'panes i 'pk) (relit (sc 'panes i 'pk) (sc 'panes i 'lit))) ^#(sc 'panes))
    ; ..the sheets apart from the chunks, their texels drifting as they flow
    (drift x w) (x - w * floor (x / w))
    sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
@@ -1353,10 +1355,10 @@
                                    ^#lift-leaves)))
                     ^#(lv 'lifts))
    ; ..an iron fence's runs in sight, laid with the scene; a gate's leaf swung as far as it is open
-   fences (map (c \ named (c 'pk) (relit (c 'pk) (c 'lit)) dk) (filter seen? (sc 'fences)))
+   fences (map (c \ lit-named (c 'pk) (relit (c 'pk) (c 'lit))) (filter seen? (sc 'fences)))
    ; ..a vined tree's vines grown as far as they have since the loop first played
    vines (catmap (q \ (: n (net (q 'ts <= st 'mt - peep st 'vined 1e9))
-                         (n @ 0 () (: b (relit (q 'pk) (q 'lit)) [(named (q 'pk) (n = #(q 'ts) ? b [(b 0) (b 1 (iota (4 * n)))]) [dk n])]))))
+                         (n @ 0 () (: b (relit (q 'pk) (q 'lit)) [(named (q 'pk) (n = #(q 'ts) ? b [(b 0) (b 1 (iota (4 * n)))]) [(mesh-lit-ks (q 'pk) dk) n])]))))
                     (filter seen? (sc 'vines)))
    tears (tears-of st @ () () b [b]) hds (heralds-of st)
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
@@ -2180,6 +2182,7 @@
                                st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
+                               _ (mesh-gpu st)         ; its helper built while loading, not in a frame
                                (world-watch (world-size st w (h // 2)))))
                'stick [119 115 97 100 87] 'tap world-tap
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
