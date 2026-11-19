@@ -11,9 +11,9 @@ struct gcx {
  word *fwd;                  // the forwarding floor: word0 in [fwd, to_hi) = a copy made this pass
  word *cp;                   // the cheney scan cursor
  // a minor's survivors' block [s_lo, s_hi), filled to s_hp and scanned at s_cp; old says the
- // scan is in a tenured object and hit that it kept a survivor
+ // scan is in a tenured object and hit that it kept a survivor; ten that its young tenure with it
  word *s_lo, *s_hi, *s_hp, *s_cp;
- bool old, hit, over; };
+ bool old, ten, hit, over; };
 // a terminator is known by the live pool its head lands in, never the scan's range;
 // mid-pass the to-space counts as a third pool
 static love_inline bool tagl(struct g *g, struct gcx *X, word x) {
@@ -216,9 +216,9 @@ static void drain(struct g *g, struct gcx *X) {
    X->s_cp = X->cp, X->cp = c; }
   else if (X->cp < g->major_hp) {
    word *o = X->cp;
-   X->old = X->s_lo != NULL, X->hit = false;
+   X->old = X->ten = X->s_lo != NULL, X->hit = false;
    (datp(X->cp) ? evac_data : evac_thread)(g, X);
-   X->old = false;
+   X->old = X->ten = false;
    if (X->hit && !X->over) gen_remember(g, (word) o); }
   else return; } }
 
@@ -567,8 +567,8 @@ static love_noinline intptr_t gcp(struct g *g, struct gcx *X, word x) {
  union u *src = cell(x);
  word w = src->x;
  if (moved(X, w)) return seen(X, w);
- // a minor's nursery object survives once, a tenure's too; the survivors before tenure
- bool sv = X->s_lo && nur;
+ // a minor's nursery object survives once, but one a tenure reaches; the rest tenure
+ bool sv = X->s_lo && nur && !X->ten;
  return seen(X, in_data((void*) w) ? copy_data(g, X, src, sv) : copy_thread(g, X, src, sv)); }
 
 void walk_short(struct g *g, word const *base, word const *hi, uintptr_t want) {
