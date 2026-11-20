@@ -572,7 +572,9 @@
      ; a bare symbol a non-branch reads is memory at that address (no %rip)
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw) || charm? (as-loops mn))
      (nosp s) ((: (g i a) (i >= #s ? a (g (i + 1) (s i = 32 ? a (a + string (s i)))))) 0 "")
-     ops (map (o \ (<o = 'lbl && !br? ? (xa-symoff (nosp (show <>o)) @ so ['mem -1 -1 1 >so <so]) o)) ops0)
+     ops1 (map (o \ (<o = 'lbl && !br? ? (xa-symoff (nosp (show <>o)) @ so ['mem -1 -1 1 >so <so]) o)) ops0)
+     ; imul $k, %r is imul $k, %r, %r
+     ops (mn = 'imul && #ops1 = 2 && <(ops1 0) = 'rg && elem <(ops1 1) '(im ims) ? [(ops1 0) (ops1 0) (ops1 1)] ops1)
      (? (two? (as-stro md mn ops0)) (as-stro md mn ops0)
         (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
