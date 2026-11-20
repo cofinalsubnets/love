@@ -1,6 +1,7 @@
-// the feather's neopixel as a thermometer: the die's temperature, 10-60 c on xbell's magma
-// (gauge.h, laid by mkgauge.l), each second, and printed on the usb serial; a failed battery
-// blinks it red. the pixel is a ws2812 on gpio9 behind gpio20's power switch, clocked by rmt
+// the feather's neopixel as a thermometer on xbell's magma (gauge.h, laid by mkgauge.l), each
+// second, and printed on the usb serial: tau's cpu while its feed is fresh, 30-90 c, else the
+// die's own, 10-60 c; a failed battery blinks it red. the feed is a line "T" and tenths of a
+// degree on the usb serial (src/tools/gaugefeed.l). the pixel is a ws2812 on gpio9 behind gpio20's power switch, clocked by rmt
 // channel 0. registers by the esp32-c6 trm
 #include <stdint.h>
 #include "gauge.h"
@@ -23,7 +24,29 @@ static uint32_t ticks(void) {
   R(SYSTIM + 0x04u) = 1u << 30;
   while (!(R(SYSTIM + 0x04u) & 1u << 29)) {}
   return R(SYSTIM + 0x44u); }
-static void ms(uint32_t n) { uint32_t const t = ticks(); while (ticks() - t < n * 16000u) (void) serial_rx(); }
+static void us(uint32_t n) { uint32_t const t = ticks(); while (ticks() - t < n * 16u) {} }
+
+// the host's lines, a byte at a time: "T" and tenths of a degree, fresh for ten seconds
+struct feed { char b[12]; uint32_t n, age; int32_t t; };
+
+static void feed_byte(struct feed *f, int c) {
+  if (c != '\n' && c != '\r') {
+    if (f->n < sizeof f->b) f->b[f->n] = (char) c;
+    f->n++;
+    return; }
+  uint32_t const n = f->n, neg = n > 1 && f->b[1] == '-';
+  int32_t v = 0;
+  uint32_t i = 1 + neg, ok = n <= sizeof f->b && n > i && f->b[0] == 'T';
+  for (; ok && i < n; i++) ok = f->b[i] >= '0' && f->b[i] <= '9', v = v * 10 + (f->b[i] - '0');
+  if (ok) f->t = neg ? -v : v, f->age = 0;
+  f->n = 0; }
+
+// n milliseconds, the host's bytes read as they come (one left unread wedges its port)
+static void ms(struct feed *f, uint32_t n) {
+  uint32_t const t = ticks();
+  while (ticks() - t < n * 16000u) {
+    int const c = serial_rx();
+    if (c >= 0 && f) feed_byte(f, c); } }
 
 static void puts_(char const *s) { for (; *s; s++) serial_putc(*s); }
 static void putd(int32_t v) {
@@ -64,7 +87,7 @@ static void show(uint8_t const grb[3]) {
   R(RMT + 0x10u) = c | 1u << 1 | 1u << 24;                  // read address from the start
   R(RMT + 0x10u) = c | 1u | 1u << 24;
   for (uint32_t k = 0; k < 100000u && !(R(RMT + 0x38u) & 1u); k++) {}
-  ms(1); }
+  us(1000); }
 
 // the sensor clocked off the crystal, reset, sampling on its own timer and powered; its reading
 // creeps toward the die's. the dac keeps its reset range, offset 0 (-10..80 c)
@@ -74,7 +97,7 @@ static void tsens_init(void) {
   R(PCR + 0x88u) &= ~(1u << 23);
   R(SARADC + 0x68u) |= 1u << 16;
   R(SARADC + 0x58u) |= 1u << 22;
-  ms(20); }
+  us(20000); }
 
 // tenths of a degree, the trm's 0.4386 v - 20.52 at offset 0
 static int32_t tenths(uint32_t *raw) {
@@ -90,15 +113,18 @@ void gauge(int green) {
   rmt_init();
   if (!green) {
     uint8_t const red[3] = { 0, 64, 0 }, off[3] = { 0, 0, 0 };
-    for (;;) show(red), ms(500), show(off), ms(500); }
+    for (;;) show(red), ms(0, 500), show(off), ms(0, 500); }
   tsens_init();
+  struct feed f = { .age = 10 };
   for (;;) {
     uint32_t raw;
-    int32_t const t = tenths(&raw);
-    int32_t k = (t - 100) * 255 / 500;
+    int32_t const die = tenths(&raw), tau = f.age < 10;
+    int32_t const t = tau ? f.t : die, lo = tau ? 300 : 100, span = tau ? 600 : 500;
+    int32_t k = (t - lo) * 255 / span;
     k = k < 0 ? 0 : k > 255 ? 255 : k;
     show(gauge_grb[k]);
     int32_t const a = t < 0 ? -t : t;
-    puts_(t < 0 ? "; die -" : "; die "), putd(a / 10), serial_putc('.'), putd(a % 10);
-    puts_(" c (raw "), putd((int32_t) raw), puts_(", magma "), putd(k), puts_(")\n");
-    ms(1000); } }
+    puts_(tau ? "; tau " : "; die "), puts_(t < 0 ? "-" : ""), putd(a / 10), serial_putc('.'), putd(a % 10);
+    puts_(" c (die raw "), putd((int32_t) raw), puts_(", magma "), putd(k), puts_(")\n");
+    ms(&f, 1000);
+    if (f.age < 10) f.age++; } }
