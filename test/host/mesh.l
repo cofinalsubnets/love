@@ -134,6 +134,11 @@
    ; ..relit in place: one buffer, colours the latest
    b1 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [1.0] 1.0) c1 (peep (b1 0) (mid * 8 + 5) 0.0)
    b2 (mesh-lamps! fl [0.0 0.0 0.0] [ch] [3.0] 1.0)
+   ; ..a lamp out of its reach changing rewrites nothing, and is not in what names it
+   fl2 (mesh-pack (mesh-sheet [-2.0 0.0 -2.0] [4.0 0.0 0.0] [0.0 0.0 4.0] 4 4 [0.0 1.0 0.0] (p \ [0.0 0.0]) -1 white))
+   b3 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0) _ (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0)
+   c3 (peep (b3 0) (mid * 8 + 5) 0.0) b4 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 5.0] 1.0) k4 (mesh-lit-ks fl2 [1.0 5.0]) l4 (fl2 'live 'ks)
+   b5 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [2.0 5.0] 1.0)
  (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)
        (map shape r2 = [[2 2] [1 1]]) (peep (r2 0) [1 1] 0 = -1) (peep (r2 0) [0 1] 0 = 65280) (peep (r1 0) [0 0] 0 = 5592405)
        (up? sa) (up? sb)
@@ -145,7 +150,9 @@
        (amin (peep (sh 0) (iota 25 * 8 + 6) 0.0) = 0.5)
        (amax (texs (sh 1)) = -1) (amax (texs (gl 1)) = -2) (gl 0 = sh 0)
        (c1 = peep (lm 0) (mid * 8 + 5) 0.0 / 2.0) (peep (b2 0) (mid * 8 + 5) 0.0 = 3.0 * c1)
-       (b2 0 = b1 0) (lm 0 = mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0 0)))
+       (b2 0 = b1 0) (lm 0 = mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0 0)
+       (l4 = [1.0]) (peep (b4 0) (mid * 8 + 5) 0.0 = c3) (k4 = [1.0]) (mesh-lit-ks fl [2.0] = [2.0])
+       (peep (b5 0) (mid * 8 + 5) 0.0 = 2.0 * c3)))
 ; --- batches: each starts with no texture, whatever the batch before it last used
 (: W 40 H 24 white [1.0 1.0 1.0]
    v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
@@ -205,5 +212,10 @@
    (tw-spread y q) (: vs (map (k \ tw-at y q (0.07 * k)) ^60) (foldl max 0.0 vs - foldl min 9.0 vs))
  (test (0.0 < tw-spread 0.9 1.0) (2.0 * tw-spread 0.9 1.0 < tw-spread 0.12 1.0)
        (tw-spread 0.12 0.0 < 1e-9) (tw-spread 0.9 0.0 < 1e-9) (0.0 < tw-at 0.12 1.0 0.3)))
+; a picture on a window's paper at a whole scale: 2 by 1 doubled on 5 by 3, the column and
+; row past it black where they held something before
+(: P (frame-paint (iota 15 * 0 + 7) 5 1 (cask 60) 5) (wd v) (string [v 0 0 0])
+   _ (mesh-paint (gem-tray [2] [1 2]) 2 1 P 5 3)
+   (test (string P = foldr (+) "" (map wd [1 1 2 2 0  1 1 2 2 0  0 0 0 0 0]))))
 (test_fin ())
 (puts "mesh: ok\n")

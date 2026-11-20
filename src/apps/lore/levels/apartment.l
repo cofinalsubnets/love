@@ -7,36 +7,36 @@
 
 ; the textures: what is there, sand and the bed's mud, cracked as it dried
 (: sand (feel 'sand (texture 64 64 3
-         '((fill (rgb 0.8 0.68 0.48)) (noise 1 0.12) (noise 9 0.08) (patches 6 0.25 (shade 0.9))
-           (patches 4 0.12 (rgb 0.88 0.78 0.6))))))
+         '((fill (rgb 0.8 0.68 0.48)) (noise 1 0.07) (fbm 16 4 0.12) (stain 16 3 0.42 0.35 (shade 0.9))
+           (stain 8 3 0.38 0.35 (mix (rgb 0.88 0.78 0.6) 0.6)) (relief 1.5 2 0.08)))))
 (: mud (texture 64 64 4.4
-        '((fill (rgb 0.69 0.53 0.37)) (noise 2 0.08) (patches 6 0.2 (shade 0.92))
+        '((fill (rgb 0.69 0.53 0.37)) (fbm 16 4 0.15) (stain 16 3 0.42 0.35 (shade 0.88)) (relief 1.5 2 0.1)
           (cracks 16 16 1.2 3 (rgb 0.53 0.37 0.12)))))
 ; ..what the glass shows: grass, and water drifting down the river
 (: grass (feel 'grass (texture 64 64 2
-          '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
-            (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
+          '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.2) (fbm 8 4 0.22) (stain 16 3 0.45 0.35 (shade 0.82))
+            (stain 8 3 0.4 0.35 (mix (rgb 0.5 0.66 0.26) 0.7))))))
 (: water (texture 64 64 4
-          '((fill (rgb 0.16 0.36 0.5)) (noise 24 4 0.18) (patches 8 0.15 (rgb 0.4 0.6 0.72)) (noise 1 0.06))))
+          '((fill (rgb 0.16 0.36 0.5)) (fbm 16 4 0.25) (stain 16 3 0.42 0.35 (mix (rgb 0.4 0.6 0.72) 0.6)) (noise 1 0.03))))
 ; ..the cubes' glass, faintly green and smeared
-(: pane (texture 64 64 2 '((fill (rgb 0.6 0.74 0.7)) (noise 24 8 0.12) (patches 10 0.2 (shade 1.08)))))
+(: pane (texture 64 64 2 '((fill (rgb 0.6 0.74 0.7)) (fbm 32 3 0.08) (stain 32 3 0.3 0.5 (shade 1.06)))))
 ; ..the stone in the yard's corner
-(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.12) (noise 4 0.08) (patches 5 0.25 (rgb 0.5 0.56 0.36))))))
+(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.08) (fbm 8 3 0.12) (stain 8 3 0.4 0.3 (mix (rgb 0.5 0.56 0.36) 0.8)) (relief 1.5 2 0.1)))))
 ; ..the yard's: its iron, its fence's boards, and the tree's bark burnt black
-(: iron (feel 'hard (texture 16 16 1 '((fill (grey 0.16)) (noise 2 0.1)))))
-(: palings (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.6 0.45 0.3)) (noise 1 12 0.2) (patches 4 0.2 (shade 0.85))))))
-(: charred (feel 'wood (texture 32 64 0.5 '((fill (grey 0.08)) (noise 1 0.1) (noise 2 14 0.2) (stripes 11 1 0 (shade 1.4))
+(: iron (feel 'hard (texture 16 16 1 '((fill (grey 0.16)) (noise 1 0.05) (fbm 8 3 0.12)))))
+(: palings (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.6 0.45 0.3)) (noise 1 12 0.12) (fbm 16 3 0.14) (stain 16 3 0.42 0.35 (shade 0.86))))))
+(: charred (feel 'wood (texture 32 64 0.5 '((fill (grey 0.08)) (noise 1 0.08) (noise 1 14 0.15) (fbm 8 3 0.15) (stripes 11 1 0 (shade 1.4))
             (cracks 8 24 1 5 (rgb 0.3 0.12 0.05))))))
 ; ..the house's: clapboard and a tarred roof outside, plaster, floorboards, a rug and a sofa's
 ; cloth within, its door's wooden frame and clear glass
-(: siding (texture 32 32 0.3 '((fill (rgb 0.78 0.8 0.76)) (noise 2 0.06) (rows 0 2 (shade 0.72)))))
-(: tar (feel 'hard (texture 32 32 1.0 '((fill (grey 0.24)) (noise 1 0.15)))))
-(: plaster (texture 32 32 1.5 '((fill (rgb 0.86 0.83 0.76)) (noise 4 0.05))))
-(: boards (feel 'wood (texture 64 64 1.2 '((fill (rgb 0.5 0.34 0.2)) (noise 1 12 0.15) (stripes 8 1 0 (shade 0.6))))))
-(: rug (feel 'soft (texture 32 32 0.8 '((fill (rgb 0.55 0.2 0.18)) (checker 8 8 (shade 0.85)) (noise 2 0.08)))))
-(: cloth (feel 'soft (texture 32 32 0.5 '((fill (rgb 0.35 0.42 0.5)) (noise 1 0.12)))))
-(: oak (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.45 0.3 0.18)) (noise 1 10 0.15)))))
-(: clear (texture 64 64 2 '((fill (rgb 0.82 0.88 0.88)) (noise 24 8 0.06))))
+(: siding (texture 32 32 0.3 '((fill (rgb 0.78 0.8 0.76)) (fbm 8 3 0.06) (stain 16 3 0.25 0.4 (shade 0.94)) (rows 0 2 (shade 0.72)))))
+(: tar (feel 'hard (texture 32 32 1.0 '((fill (grey 0.24)) (noise 1 0.08) (fbm 8 3 0.12) (relief 1.5 2 0.08)))))
+(: plaster (texture 32 32 1.5 '((fill (rgb 0.86 0.83 0.76)) (fbm 16 3 0.05) (stain 16 3 0.25 0.5 (shade 0.96)))))
+(: boards (feel 'wood (texture 64 64 1.2 '((fill (rgb 0.5 0.34 0.2)) (noise 1 12 0.1) (fbm 16 3 0.1) (stripes 8 1 0 (shade 0.6))))))
+(: rug (feel 'soft (texture 32 32 0.8 '((fill (rgb 0.55 0.2 0.18)) (checker 8 8 (shade 0.85)) (noise 1 0.05) (fbm 8 3 0.08)))))
+(: cloth (feel 'soft (texture 32 32 0.5 '((fill (rgb 0.35 0.42 0.5)) (noise 1 0.08) (fbm 8 3 0.06)))))
+(: oak (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.45 0.3 0.18)) (noise 1 10 0.1) (fbm 16 3 0.08)))))
+(: clear (texture 64 64 2 '((fill (rgb 0.82 0.88 0.88)) (fbm 32 3 0.05))))
 
 ; the river: wandering across the plain along x, more the further from the cube. by the cube
 ; it parts in two channels sep x either side of its line, the island between

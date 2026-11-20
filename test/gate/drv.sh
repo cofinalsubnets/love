@@ -74,6 +74,17 @@ grep -q '#size-cells = <0>;' "$d/e.pp" || fail "-x assembler-with-cpp -E dropped
 # a pp-number runs on past a float suffix: clock@7ef00000 stays one
 printf 'clock@7ef00000 { };\n' > "$d/n.dts"
 moonc -E -undef -x assembler-with-cpp "$d/n.dts" | grep -q 'clock@7ef00000 {' || fail "-E split the pp-number 7ef00000: $(moonc -E -undef -x assembler-with-cpp "$d/n.dts" | tail -1)"
+# -P and -C lay a linker script as clang does, to the byte: a line's indent, the blank lines,
+# a substituted argument's space, a paste, comments kept but a directive's, and a guarded header
+# entered again while open; -U and --target ride along
+printf '/* g */\n#ifndef G_H\n#define G_H\n#include "g.h"\nG\n#endif\n' > "$d/inc/g.h"
+printf '#define NS(n) n : { *(n) }\n#define CAT(a,b) a##b\n#define DOT(a) a.\nA\n\n\n  NS(.x)\n#include "g.h"\n\tCAT(p,q) DOT(.). // c\n#include "g.h"\n#ifdef x86_64\nX\n#endif\n' > "$d/l.S"
+printf 'A\n  .x : { *(.x) }\n/* g */\n/* g */\nG\n pq .. . // c\n' > "$d/l.want"
+moonc -E -P -C -Ux86_64 --target=x86_64-linux-gnu -x assembler-with-cpp -I "$d/inc" "$d/l.S" > "$d/l.got" || fail "-E -P -C did not preprocess"
+cmp -s "$d/l.want" "$d/l.got" || fail "-E -P -C is not clang's text: $(od -c "$d/l.got" | head -4)"
+printf 'A\n  .x : { *(.x) }\nG\n pq .. .\n' > "$d/l.want"
+moonc -E -P -Ux86_64 -x assembler-with-cpp -I "$d/inc" "$d/l.S" > "$d/l.got" || fail "-E -P did not preprocess"
+cmp -s "$d/l.want" "$d/l.got" || fail "-E -P is not clang's text: $(od -c "$d/l.got" | head -4)"
 
 # 6: -MD, -MMD and -Wp,-MMD,FILE lay a dependency rule; -MMD leaves our headers out,
 # -MT names the target, -MP adds an empty rule per header

@@ -1,8 +1,9 @@
 ; src/apps/hearts/kcc.l -- the kernel's compiler under hearts: kbuild's clang line, a unit compiled
 ; by mooncc (and its asm by holo) in mooncc's spelling, for a64, x64 and arm32 (the compat vdso),
-; and clang's own line for the rest. a probe, a -E or -S, another target and a unit mooncc refuses
-; or outruns go to clang; each that lays a file, a probe's aside, is logged to $HEARTS_KCC_LOG as
-; `target<TAB>why`, so the build says what is still clang's.
+; and clang's own line for the rest. a -E that lays a file is mooncc's too, on its line as it stands.
+; a probe, a -S, another target and a unit mooncc refuses or outruns go to clang; each that lays a
+; file, a probe's aside, is logged to $HEARTS_KCC_LOG as `target<TAB>why`, so the build says what
+; is still clang's.
 ; usage: love kcc.l CLANG-ARGS..   (hearts lays .hearts/bin/hk-cc over this, as CC)
 (borrow 'posix)
 (: argv cmdline
@@ -54,7 +55,13 @@
    ; a probe lays /dev/null or kbuild's .tmp_ scratch
    (lays? _) (string? tg && tg != "/dev/null" && !(has? tg ".tmp_"))
    (why _) (? (elem "-E" av) "-E" (elem "-S" av) "-S" (string? arch) "not a -c unit" ("target " + <tgt))
-   (? !(moon? 0) (: _ (lays? 0 ? (log (why 0)) 0) (clang 0))
+   ; a -E lays as clang does with mooncc's own predefines: the kernel's linker scripts match to the byte
+   (cpp? _) (elem "-E" av && !(elem "-S" av) && lays? 0 && string? arch)
+   (? (cpp? 0)
+       (: r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch] + av))
+          (? (two? r && <r = 0) (quit 0)
+             (: _ (log ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r ""))) (clang 0))))
+      !(moon? 0) (: _ (lays? 0 ? (log (why 0)) 0) (clang 0))
       (: sp (abs <srcs)
          r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch "-c"]
                   + ident + spell av () + ["-o" tg sp]))
