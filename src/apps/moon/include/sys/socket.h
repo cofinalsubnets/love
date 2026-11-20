@@ -14,11 +14,39 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define PF_LOCAL  AF_LOCAL
 #define PF_INET   AF_INET
 #define PF_INET6  AF_INET6
+#ifdef __mips__
+#define SOCK_STREAM 2
+#define SOCK_DGRAM  1
+#else
 #define SOCK_STREAM 1
 #define SOCK_DGRAM  2
+#endif
 #define SOCK_RAW    3
 #define SOCK_SEQPACKET 5
 #define SOMAXCONN 4096
+#ifdef __mips__
+#define SOCK_NONBLOCK 128
+#define SOCK_CLOEXEC 524288
+#define SOL_SOCKET 65535
+#define SO_REUSEADDR 4
+#define SO_TYPE 4104
+#define SO_ERROR 4103
+#define SO_DEBUG 1
+#define SO_DONTROUTE 16
+#define SO_BROADCAST 32
+#define SO_SNDBUF 4097
+#define SO_RCVBUF 4098
+#define SO_KEEPALIVE 8
+#define SO_OOBINLINE 256
+#define SO_LINGER 128
+#define SO_RCVLOWAT 4100
+#define SO_SNDLOWAT 4099
+#define SO_RCVTIMEO 66
+#define SO_SNDTIMEO 67
+#define SO_ACCEPTCONN 4105
+#define SO_PROTOCOL 4136
+#define SO_DOMAIN 4137
+#else
 #define SOCK_NONBLOCK 2048
 #define SOCK_CLOEXEC 524288
 #define SOL_SOCKET 1
@@ -40,6 +68,7 @@ struct sockaddr_storage { sa_family_t ss_family; char __pad[126]; };
 #define SO_ACCEPTCONN 30
 #define SO_PROTOCOL 38
 #define SO_DOMAIN 39
+#endif
 #define SHUT_RD   0
 #define SHUT_WR   1
 #define SHUT_RDWR 2

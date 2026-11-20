@@ -175,6 +175,16 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
    return 0; }
   // the kernel is one process, its tasks threads; a task's pid is its nif's
   case NR_getpid: return 1;
+  // the ram is the kernel's heap, in words
+  case NR_sysinfo: {
+   struct k_sysinfo *s = (struct k_sysinfo *) a;
+   if (!s) return -EFAULT;
+   uintptr_t all, spare;
+   k_ram(&all, &spare);
+   memset(s, 0, sizeof *s);
+   s->uptime = (long) (k_clock_ms() / 1000);
+   s->totalram = all, s->freeram = spare, s->mem_unit = sizeof(uintptr_t);
+   return 0; }
   case NR_ioctl: return k_term_ioctl(1, (int) a, (unsigned long) b, (void *) c);
   case NR_uname: {
    struct utsname *u = (struct utsname *) a;

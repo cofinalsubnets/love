@@ -1,5 +1,5 @@
-// nucleo-F446RE arch backend, the C half (no HAL): the 180 MHz PLL, the USART2 console (the
-// ST-LINK VCP), TIM2's microseconds, LD2 and the button. vectors, crt0 and the asm helpers
+// nucleo-F446RE arch backend, the C half (no HAL): the 180 MHz PLL, the USART1 console (PA9
+// and PA10, on the headers), TIM2's microseconds, LD2 and the button. vectors, crt0 and the asm helpers
 // are mkboot.l's
 #include <stdint.h>
 #include "nucleo446.h"
@@ -79,36 +79,37 @@ uint32_t clock_mhz(void) {
   uint32_t div = 2u * (((p >> 16) & 3u) + 1u);       // PLLP: 00 = /2
   return in * n / m / div; }
 
-// APB1's clock (USART2's), from the live PPRE1
-static uint32_t pclk1_hz(void) {
-  uint32_t pre = (REG(RCC_CFGR) & CFGR_PPRE1_MASK) >> 10;
+// an APB's clock from its live prescaler: APB1's (TIM2's) at bit 10, APB2's (USART1's) at 13
+static uint32_t pclk_hz(uint32_t mask, uint32_t at) {
+  uint32_t pre = (REG(RCC_CFGR) & mask) >> at;
   uint32_t hz = clock_mhz() * 1000000u;
   return pre < 4u ? hz : hz >> (pre - 3u); }
+static uint32_t pclk1_hz(void) { return pclk_hz(CFGR_PPRE1_MASK, 10); }
 
-// --- USART2 console (PA2 TX / PA3 RX, AF7 -- the ST-LINK VCP) -------------
+// --- USART1 console (PA9 TX / PA10 RX, AF7): PA2/PA3 are the ST-LINK's -----
 void serial_init(void) {
   REG(RCC_AHB1ENR) |= AHB1ENR_GPIOA;
-  REG(RCC_APB1ENR) |= APB1ENR_USART2;
+  REG(RCC_APB2ENR) |= APB2ENR_USART1;
   uint32_t m = REG(GPIO_MODER(GPIOA_BASE));
-  m = (m & ~((3u << 4) | (3u << 6))) | (2u << 4) | (2u << 6);   // PA2/PA3 alternate
+  m = (m & ~((3u << 18) | (3u << 20))) | (2u << 18) | (2u << 20);   // PA9/PA10 alternate
   REG(GPIO_MODER(GPIOA_BASE)) = m;
-  uint32_t a = REG(GPIO_AFRL(GPIOA_BASE));
-  a = (a & ~((0xFu << 8) | (0xFu << 12))) | (7u << 8) | (7u << 12);  // AF7 = USART2
-  REG(GPIO_AFRL(GPIOA_BASE)) = a;
+  uint32_t a = REG(GPIO_AFRH(GPIOA_BASE));
+  a = (a & ~((0xFu << 4) | (0xFu << 8))) | (7u << 4) | (7u << 8);  // AF7 = USART1
+  REG(GPIO_AFRH(GPIOA_BASE)) = a;
   // 115200 8N1, oversample 16
-  REG(USART2_CR1) = 0;
-  REG(USART2_BRR) = (pclk1_hz() + 115200u / 2u) / 115200u;
-  REG(USART2_CR1) = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE; }
+  REG(USART1_CR1) = 0;
+  REG(USART1_BRR) = (pclk_hz(CFGR_PPRE2_MASK, 13) + 115200u / 2u) / 115200u;
+  REG(USART1_CR1) = USART_CR1_UE | USART_CR1_TE | USART_CR1_RE; }
 
 void serial_putc(int c) {
-  while (!(REG(USART2_SR) & USART_SR_TXE)) {}
-  REG(USART2_DR) = (uint32_t)(c & 0xff); }
+  while (!(REG(USART1_SR) & USART_SR_TXE)) {}
+  REG(USART1_DR) = (uint32_t)(c & 0xff); }
 
-int serial_rx_ready(void) { return (REG(USART2_SR) & USART_SR_RXNE) != 0; }
+int serial_rx_ready(void) { return (REG(USART1_SR) & USART_SR_RXNE) != 0; }
 
 int serial_getc(void) {
   while (!serial_rx_ready()) {}
-  return (int)(REG(USART2_DR) & 0xffu); }
+  return (int)(REG(USART1_DR) & 0xffu); }
 
 // ms since boot off TIM2's microseconds; its clock is 2x PCLK1 whenever PPRE1 divides
 void timer_init(void) {

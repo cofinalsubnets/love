@@ -9,10 +9,11 @@ int sigprocmask(int how, sigset_t const *s, sigset_t *o) {
     if (r < 0) { errno = (int) -r; return -1; }
     if (o) { memset(o, 0, sizeof *o); o->__v[0] = (long) __love_maskcan(ko[0]); }
     return 0; }
-  unsigned long long ks = s ? s->__v[0] : 0, ko = 0;
-  long r = sc4(NR_rt_sigprocmask, how, s ? (long) &ks : 0, o ? (long) &ko : 0, 8);
+  unsigned long ks[LvSigsz / sizeof(long)] = {0}, ko[LvSigsz / sizeof(long)] = {0};
+  if (s) __love_ksig(ks, s);
+  long r = sc4(NR_rt_sigprocmask, how, s ? (long) ks : 0, o ? (long) ko : 0, LvSigsz);
   if (r < 0) { errno = (int) -r; return -1; }
-  if (o) { memset(o, 0, sizeof *o); o->__v[0] = ko; }
+  if (o) { memset(o, 0, sizeof *o); __love_usig(o, ko); }
   return 0; }
 /* sigprocmask answering an error number, errno untouched */
 int pthread_sigmask(int how, sigset_t const *s, sigset_t *o) {

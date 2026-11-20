@@ -5,15 +5,29 @@
 #define O_WRONLY         1
 #define O_RDWR           2
 #define O_ACCMODE        3
+#ifdef __mips__
+#define O_CREAT         256
+#define O_EXCL         1024
+#define O_NOCTTY       2048
+#define O_TRUNC        512
+#define O_APPEND      8
+#define O_NONBLOCK    128
+#else
 #define O_CREAT         64
 #define O_EXCL         128
 #define O_NOCTTY       256
 #define O_TRUNC        512
 #define O_APPEND      1024
 #define O_NONBLOCK    2048
+#endif
 #define O_NDELAY      O_NONBLOCK
+#ifdef __mips__
+#define O_DSYNC       16
+#define O_SYNC     16400
+#else
 #define O_DSYNC       4096
 #define O_SYNC     1052672   /* __O_SYNC | O_DSYNC */
+#endif
 /* a64 keeps 32-bit arm's values for these two; rv64 takes asm-generic's, which are x86-64's */
 #if defined(__aarch64__) || defined(__arm__)
 #define O_DIRECTORY  16384   /* arm/a64 040000 */
@@ -27,6 +41,8 @@
 #define O_LARGEFILE 32768  /* off_t is 64-bit, so every open asks for it (rv32: asm-generic's 0100000) */
 #elif defined(__ARM_EABI__)
 #define O_LARGEFILE 131072 /* arm's 0400000 */
+#elif defined(__mips__)
+#define O_LARGEFILE 8192   /* mips's 0x2000 */
 #else
 #define O_LARGEFILE 0      /* glibc's on 64-bit: every open is large already */
 #endif
@@ -48,9 +64,15 @@
 #define FD_CLOEXEC       1
 #define F_DUPFD_CLOEXEC 1030   /* F_LINUX_SPECIFIC_BASE (1024) + 6 */
 /* posix record locks */
+#ifdef __mips__                /* mips's F_GETLK64 and kin: off_t is 64-bit, as is struct flock */
+#define F_GETLK          33
+#define F_SETLK          34
+#define F_SETLKW         35
+#else
 #define F_GETLK          5
 #define F_SETLK          6
 #define F_SETLKW         7
+#endif
 #define F_RDLCK          0
 #define F_WRLCK          1
 #define F_UNLCK          2

@@ -87,6 +87,14 @@
  !(tar-split (gz-mk 200 (i \ 97)))
  !(tar-head (tar-entry (gz-mk 200 (i \ 97)) 'file "" @ e e)))
 
+; a directory's header names it with a trailing /, as every tar writes it, and one already
+; there is not doubled; a long one splits before that /, not on it
+(: (tz-dir m) (tar-head (tar-entry m 'dir "")) tz-ld (tz-long + "deep"))
+(test
+ ("sub/" = tar-txt (tz-dir "sub") 0 100)
+ ("sub/" = tar-txt (tz-dir "sub/") 0 100)
+ (tz-dir tz-ld @ h (snip tz-ld 0 (#tz-ld - 5) = tar-txt h 345 155 && "deep/" = tar-txt h 0 100)))
+
 ; a .tar.gz built and taken apart entirely in love
 (: tgz-a (tar-pack [(tar-entry "x/one.txt" 'file "first\n")
                     (tar-entry "x/two.txt" 'file (gz-mk 5000 (i \ (97 + i % 26))))])

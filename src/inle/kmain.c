@@ -509,6 +509,11 @@ void *kmallocwa(uintptr_t n, uintptr_t a) { return ff_alloc_aligned(&kmem, n, a)
 
 void kfree(void *p) { ff_free(&kmem, p); }
 
+void k_ram(uintptr_t *all, uintptr_t *spare) {
+  uintptr_t f = 0;
+  for (struct mem const *m = kmem; m; m = m->next) f += m->len;
+  *all = kram_words, *spare = f; }
+
 // small objects ride malloc; kmallocw keeps the pages and regions
 void *k_grab(uintptr_t n) { return malloc(n); }
 void k_drop(void *p) { free(p); }

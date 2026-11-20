@@ -98,7 +98,7 @@ int __love_statx(int dirfd, char const *p, int fl, struct stat *st) {
   struct __lx_statx sx;
   long r = sc5(NR_statx, dirfd, (long) p, fl, STATX_BASIC_STATS, (long) &sx);
 #ifdef __ARM_EABI__
-  if (r == -38) return stat64(dirfd, p, fl, st);
+  if (r == -ENOSYS) return stat64(dirfd, p, fl, st);
 #endif
   if (er(r) < 0) return -1;
   memset(st, 0, sizeof *st);

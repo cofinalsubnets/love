@@ -107,8 +107,9 @@
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
    ; raspi3b: the zero 2 w's bcm2837 with 1G, since the corpus outgrows 512M. its console is
-   ; the mini uart, serial1
-   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" (pi? ? "1G" "1536M")]
+   ; the mini uart, serial1. KTEST_MEM: a lane's own
+   mem  (env-of "KTEST_MEM" @ m (string? m ? m (pi? ? "1G" "1536M")))
+   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" mem]
          + mach + kvm + (pi? ? () dargs)               ; the pi has no virtio: its card is rung 6's
          + (pi? ? ["-serial" "null" "-serial" "stdio"] ["-serial" "stdio"])
          + ["-display" "none" "-no-reboot"] + media)

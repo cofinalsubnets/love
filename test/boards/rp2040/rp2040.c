@@ -6,6 +6,7 @@
 // linker bounds (rp2040.lds)
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
+extern void *const vectors[];
 
 int main(void);
 
@@ -19,14 +20,14 @@ static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
 // --- crt0 / reset ---------------------------------------------------------
 // boot2 has loaded SP from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(VTOR_ADDR) = 0x10000100u;
+  REG(VTOR_ADDR) = (uint32_t) (uintptr_t) vectors;
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
 
-// --- vector table (at 0x10000100) -----------------------------------------
+// --- vector table (at 0x10000100, or sram's base in a ram image) ---------
 // system vectors only: no peripheral IRQ is enabled
 __attribute__((section(".vectors"), used))
 void *const vectors[] = {
@@ -153,12 +154,14 @@ static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flus
   flush(), boot2(); }
 
 void chip_uid(uint8_t id[8]) {
+  // from sram no boot2 ran and xip came up in reset: the rom's own slow xip goes back instead
+  int const sram = (uintptr_t) chip_uid >> 28 == 2u;
   uint32_t b2[64];
-  for (uint32_t i = 0; i < 64; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
+  for (uint32_t i = 0; i < 64 && !sram; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
   // the ram copy is past a bl's reach from flash: by register
   void (*volatile const ram)(uint8_t *, romfn, romfn, romfn, romfn) = flash_uid_ram;
   ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
-      (romfn) ((uintptr_t) b2 | 1u)); }
+      sram ? rom_fn('C' | 'X' << 8) : (romfn) ((uintptr_t) b2 | 1u)); }
 
 // --- into the rom's usb boot: reset_usb_boot, by its two-letter code ------
 void rom_bootsel(void) {

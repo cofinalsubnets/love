@@ -20,7 +20,7 @@ pobjs = $(R)/$(o)/rp2350.o $(R)/$(o)/probe.o $(R)/$(o)/pusb.o $(R)/$(o)/rt.o $(R
 
 .PHONY: rp2350
 default: rp2350
-rp2350: $(R)/$(o)/firm.uf2 $(R)/$(o)/probe.uf2
+rp2350: $(R)/$(o)/firm.uf2 $(R)/$(o)/firm-ram.uf2 $(R)/$(o)/probe.uf2
 
 $(eval $(call p_obj,rp2350,test/boards/rp2350/rp2350.c,rp2350.c rp2350.h $(S)/inle/bput.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,main,test/boards/rp2350/main.c,main.c rp2350.h ../battery.h $(S)/inle/bput.h $(mc),$(rp_cc)))
@@ -44,6 +44,21 @@ $(R)/$(o)/probe.elf: $(pobjs) $(R)/$(o)/rlink.l $(lv)
 
 # .bin byte offsets ARE flash offsets: an initial SP inside SRAM, a thumb-bit reset entry
 # inside flash, and the image definition's start marker and image type in the first 4 KB
+# the image a board lane runs from sram: a uf2 at sram's base, which the rom runs there, the
+# flash never written
+$(R)/$(o)/firm-ram.elf: $(objs) $(R)/$(o)/rlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/rlink.l -ram $(o)/firm-ram.elf $(objs:$(R)/%=%)
+
+$(R)/$(o)/firm-ram.bin: $(R)/$(o)/firm-ram.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/firm-ram.elf $(o)/firm-ram.bin
+	$(call p_ramchk,$(R)/$(o)/firm-ram.bin,0x20082000,0x20040000)
+
+$(R)/$(o)/firm-ram.uf2: $(R)/$(o)/firm-ram.bin $(S)/tools/uf2.l $(lv)
+	@echo LOVE	$@
+	@cd $(R) && out/love src/tools/uf2.l $(o)/firm-ram.bin $(o)/firm-ram.uf2 0x20000000 0xE48BFF59
+
 $(R)/$(o)/%.bin: $(R)/$(o)/%.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
 	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/$*.elf $(o)/$*.bin

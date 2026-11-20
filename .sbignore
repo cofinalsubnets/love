@@ -20,9 +20,6 @@ notes
 *.cache
 test/proof/rocq/.*.aux
 
-# lean's whole directory: it tracks nothing, and test_uulean makes it, so a tree cut before
-# the lane and after it would differ by the directory alone
-test/proof/lean
 # generated proof terms: their gates lay them from the corpus on every run
 test/proof/rocq/gen.v
 test/proof/rocq/uugen.v

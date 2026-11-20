@@ -314,13 +314,13 @@ static void sock_shut(int fd) { (void) fd; }
 #endif
 static int horn_sock_name(char const *dev) { return horn_sockdoor && dev && !strncmp(dev, "sock:", 5); }
 
-// macos: AudioToolbox by dlopen, weak, so only dyld's exe (mooncc -lSystem) reaches it. the
+// macos: AudioToolbox by dlopen, moonlibc's libsys word, so only dyld's exe reaches it. the
 // queue's thread takes what the ring holds, silence for the rest, so it never starves; a full
 // ring answers 0. one writer, one reader, x86's ordered stores: no lock. off the heap, unmoved
 #if defined(__moonlibc__) && defined(__x86_64__) && !love_horn_seat
 #define horn_mac 1
-void *dlopen(char const *path, int mode) __attribute__((weak));
-void *dlsym(void *lib, char const *name) __attribute__((weak));
+extern void *(*volatile __ls_dlopen)(char const *path, int mode) __asm__("libsys.dlopen");
+extern void *(*volatile __ls_dlsym)(void *lib, char const *name) __asm__("libsys.dlsym");
 typedef struct { double rate; uint32_t fmt, flags, bpp, fpp, bpf, ch, bits, res; } aq_fmt;
 typedef struct { uint32_t cap; void *data; uint32_t size; } aq_buf;   // AudioQueueBuffer's head
 enum { aq_nbuf = 3, aq_frames = 1024, aq_ring = 4096 };              // ~64 ms queued, ~85 more in the ring
@@ -344,16 +344,16 @@ static void aq_fill(void *u, void *q, aq_buf *b) {
  a->enqueue(q, b, 0, NULL); }
 
 static intptr_t aq_open(int rate, int *err) {
- void *lib = dlopen ? dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", 2) : NULL;
+ void *lib = __ls_dlopen ? __ls_dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", 2) : NULL;
  int (*mk)(aq_fmt const *, void (*)(void *, void *, aq_buf *), void *, void *, void *, uint32_t, void **) =
-  lib ? (int (*)(aq_fmt const *, void (*)(void *, void *, aq_buf *), void *, void *, void *, uint32_t, void **)) dlsym(lib, "AudioQueueNewOutput") : NULL;
- int (*mkbuf)(void *, uint32_t, aq_buf **) = lib ? (int (*)(void *, uint32_t, aq_buf **)) dlsym(lib, "AudioQueueAllocateBuffer") : NULL;
- int (*start)(void *, void const *) = lib ? (int (*)(void *, void const *)) dlsym(lib, "AudioQueueStart") : NULL;
+  lib ? (int (*)(aq_fmt const *, void (*)(void *, void *, aq_buf *), void *, void *, void *, uint32_t, void **)) __ls_dlsym(lib, "AudioQueueNewOutput") : NULL;
+ int (*mkbuf)(void *, uint32_t, aq_buf **) = lib ? (int (*)(void *, uint32_t, aq_buf **)) __ls_dlsym(lib, "AudioQueueAllocateBuffer") : NULL;
+ int (*start)(void *, void const *) = lib ? (int (*)(void *, void const *)) __ls_dlsym(lib, "AudioQueueStart") : NULL;
  struct aq *a = mk && mkbuf && start ? alloc(NULL, sizeof *a) : NULL;
  if (!a) return *err = ENODEV, -1;
  memset(a, 0, sizeof *a);
- a->enqueue = (int (*)(void *, aq_buf *, uint32_t, void const *)) dlsym(lib, "AudioQueueEnqueueBuffer");
- a->dispose = (int (*)(void *, unsigned char)) dlsym(lib, "AudioQueueDispose");
+ a->enqueue = (int (*)(void *, aq_buf *, uint32_t, void const *)) __ls_dlsym(lib, "AudioQueueEnqueueBuffer");
+ a->dispose = (int (*)(void *, unsigned char)) __ls_dlsym(lib, "AudioQueueDispose");
  aq_fmt f = { rate, 0x6c70636d, 12, 4, 1, 4, 2, 16, 0 };          // lpcm, signed and packed: s16 stereo
  if (!a->enqueue || !a->dispose || mk(&f, aq_fill, a, NULL, NULL, 0, &a->q)) return alloc(a, 0), *err = ENODEV, -1;
  for (int i = 0; i < aq_nbuf; i++) {

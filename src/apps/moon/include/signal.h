@@ -5,7 +5,11 @@ typedef struct { unsigned long long __v[16]; } sigset_t;   /* 128 bytes, glibc-s
 /* linux's 128-byte siginfo on every kernel: the bsds' differ, and the sigaction shim
  * translates. the head pads to 16 where a pointer is 8; i386's union follows at 12 */
 typedef struct {
+#ifdef __mips__
+  int si_signo, si_code, si_errno;   /* mips swaps the two */
+#else
   int si_signo, si_errno, si_code;
+#endif
 #ifndef __ILP32__
   int __si_pad;
 #endif
@@ -28,9 +32,15 @@ typedef struct {
 #define SI_USER    0
 #define SI_KERNEL  0x80
 #define SI_QUEUE   (-1)
+#ifdef __mips__
+#define SI_TIMER   (-3)
+#define SI_MESGQ   (-4)
+#define SI_ASYNCIO (-2)
+#else
 #define SI_TIMER   (-2)
 #define SI_MESGQ   (-3)
 #define SI_ASYNCIO (-4)
+#endif
 #define SI_SIGIO   (-5)
 #define SI_TKILL   (-6)
 /* ..or what faulted */
@@ -77,11 +87,17 @@ struct sigaction {
 #define SIGABRT  6
 #define SIGFPE   8
 #define SIGSEGV 11
-#define SIGBUS   7
-/* sa_flags: linux's values, the same on every arch */
+/* sa_flags: linux's values, mips's own two aside */
 #define SA_NOCLDSTOP 1
+#ifdef __mips__
+#define SIGBUS   10
+#define SA_NOCLDWAIT 65536
+#define SA_SIGINFO   8
+#else
+#define SIGBUS   7
 #define SA_NOCLDWAIT 2
 #define SA_SIGINFO   4
+#endif
 #define SA_ONSTACK   0x08000000
 #define SA_RESTART   0x10000000
 #define SA_NODEFER 1073741824
@@ -95,6 +111,29 @@ int raise(int), sigaction(int, struct sigaction const*, struct sigaction*), sige
 #define SIGPIPE 13
 #define SIGALRM 14
 #define SIGTERM 15
+#ifdef __mips__
+#define SIGTTIN 26
+#define SIGTTOU 27
+#define SIGWINCH 20
+#define SIGUSR1 16
+#define SIGUSR2 17
+#define SIGCHLD 18
+#define SIGCONT 25
+#define SIGSTOP 23
+#define SIGTSTP 24
+#define SIG_BLOCK   1
+#define SIG_UNBLOCK 2
+#define SIG_SETMASK 3
+#define SIGURG    21
+#define SIGXCPU   30
+#define SIGXFSZ   31
+#define SIGVTALRM 28
+#define SIGPROF   29
+#define SIGIO     22
+#define SIGPWR    19
+#define SIGSYS    12
+#define NSIG      128
+#else
 #define SIGTTIN 21
 #define SIGTTOU 22
 #define SIGWINCH 28
@@ -119,13 +158,18 @@ int raise(int), sigaction(int, struct sigaction const*, struct sigaction*), sige
 #define SIGSYS    31
 /* one past the highest signal, real-time ones included, as glibc counts */
 #define NSIG      65
+#endif
 #define _NSIG     NSIG
 int kill(pid_t, int), sigaddset(sigset_t*, int), sigdelset(sigset_t*, int),
     sigismember(sigset_t const*, int), sigprocmask(int, sigset_t const*, sigset_t*),
     sigsuspend(sigset_t const*), killpg(pid_t, int), pthread_sigmask(int, sigset_t const*, sigset_t*);
 void psignal(int, char const*);
 /* linux's shape on every kernel; reordered for the bsds underneath */
+#ifdef __mips__
+typedef struct { void *ss_sp; size_t ss_size; int ss_flags; } stack_t;   /* mips's, size before flags */
+#else
 typedef struct { void *ss_sp; int ss_flags; size_t ss_size; } stack_t;
+#endif
 #define SS_ONSTACK  1
 #define SS_DISABLE  2
 #define MINSIGSTKSZ 2048

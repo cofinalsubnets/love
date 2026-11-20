@@ -11,6 +11,15 @@ extern uintptr_t khhdm;
 // the kernel heap (kmallocw*, kfree) and libc's (k_grab, k_drop)
 void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
 void kfree(void *p), k_drop(void *p);
+void k_ram(uintptr_t *all, uintptr_t *spare);  // the heap's words, all and free
+// linux's struct sysinfo, as sys.c answers it
+struct k_sysinfo {
+  long uptime;
+  unsigned long loads[3], totalram, freeram, sharedram, bufferram, totalswap, freeswap;
+  unsigned short procs, pad;
+  unsigned long totalhigh, freehigh;
+  unsigned int mem_unit;
+  char tail[8]; };
 uintptr_t k_clock_ms(void);            // ms since the epoch, the kernel's one scale
 
 // input: kq takes one byte; the rest are the wasm host's and the boards' feeds
