@@ -86,12 +86,6 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define LvVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo '$(t_sh)	'$@
 
-out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
-	@mkdir -p out/lib
-	@printf 'love %s\n' "$$(cat $(R)/VERSION)" > $@
-	@$(love0) -h </dev/null >> $@
-	@echo 'LOVE	'$@
-
 ho = out$(hsuf)
 # the link the profiles are taken of: love.raw less the hot.prof and hot.calls it carries, so
 # each is a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
@@ -306,10 +300,10 @@ moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonl
 # out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
 # pole (six ISAs' runtime members, ~200 s of cpu cold) -- behind the TU list they start as
 # they finish and run alone. ahead of them they ride beside them, and -j loses that time.
-$(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+$(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # love for macos: love.raw's objects in its order, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), so the code is the same bytes in both. unbaked -- the image is its own binary's,
 # so the bake runs on the box (test_macos_love)
@@ -318,10 +312,10 @@ $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) $(kart_doom_o) out/src.o out/root
 	@mkdir -p $(dir $@)
 	@$(moon0) -os macos -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
-$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -580,9 +574,9 @@ $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
-$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o
 	@echo 'MOON	'$@
-	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -o $@
 # baked where it runs, so a kernel transposed from it wakes as the host lane's does
 $(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
 	@echo 'BAKE	'$@
