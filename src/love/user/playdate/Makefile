@@ -72,7 +72,7 @@ pd_local_c = $(wildcard *.c)
 # love_horn_writen for real -- see love_horn_seat in the flags below, and k_horn_* in main.c.
 # the stones add the rasterizer, the lamps and the pool they run on, and the song's tones and
 # packer, after horn.c, as src/inle/mps2's baker links them
-pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/pool.c $(S)/love/audio/tones.c $(S)/love/mem.c
+pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/pool.c $(S)/love/audio/tones.c $(S)/love/audio/tonerun.c $(S)/love/mem.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (src/inle/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
