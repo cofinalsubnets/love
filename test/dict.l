@@ -55,7 +55,7 @@
       (map (\ [h t] t) (defs zd "0" 'prefix) = [<>(es 0) <>(es 1)])
       ; the scanning strategies, each headword once
       (ms "and" "substring" = ["abandon"]) (ms "ON" "suffix" = ["Abaddon" "abandon"])
-      (ms "^A.*N$" "re" = ["Abaddon" "abandon"]) (ms "ba\\(d\\|t\\)" "regexp" = ["Abaddon" "bath"])
+      (ms "^A.*N$" "re" = ["Abaddon" "abandon"]) (ms "ba\\(d\\|t\\)" "regexp" = ["Abaddon" "bath"]) (ms "^$" "re" = ())
       (ms "abadon" "soundex" = ["Abaddon"]) (ms "abandn" "lev" = ["abandon"]) (ms "cappella" "word" = ["a cappella"])
       (ms "a" "first" = ["a cappella"]) (ms "cappella" "last" = ["a cappella"]) (ms "a" "last" = ())
       ; the keys' search refuses a hit in an offset's digits, and a word with a space in it
