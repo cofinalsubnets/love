@@ -573,8 +573,10 @@
      br? (xa-branch? mn || xa-cc? mn || elem mn '(calll callw jmpl jmpw) || charm? (as-loops mn))
      (nosp s) ((: (g i a) (i >= #s ? a (g (i + 1) (s i = 32 ? a (a + string (s i)))))) 0 "")
      ops1 (map (o \ (<o = 'lbl && !br? ? (xa-symoff (nosp (show <>o)) @ so ['mem -1 -1 1 >so <so]) o)) ops0)
-     ; imul $k, %r is imul $k, %r, %r
-     ops (mn = 'imul && #ops1 = 2 && <(ops1 0) = 'rg && elem <(ops1 1) '(im ims) ? [(ops1 0) (ops1 0) (ops1 1)] ops1)
+     ; imul $k, %r is imul $k, %r, %r; xchg of two registers keeps the destination in reg, as llvm
+     ops (? (mn = 'imul && #ops1 = 2 && <(ops1 0) = 'rg && elem <(ops1 1) '(im ims)) [(ops1 0) (ops1 0) (ops1 1)]
+            (mn = 'xchg && #ops1 = 2 && all (o \ <o = 'rg) ops1) (rev ops1)
+            ops1)
      (? (two? (as-stro md mn ops0)) (as-stro md mn ops0)
         (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
@@ -615,7 +617,7 @@
                           (elem tn '(loop loope loopne jrcxz)) ['lbl (fix 1 'pc8 <>o 0)]
                           ['lbl (ow = 2 ? (fix 2 'rel16 <>o 0) (fix 4 (md = 64 ? 'rel32 'pc32) <>o 0))])
    (as-tabo md w o)
-    (<o @ 'im (charm? <>o && 0 < w && w < 8 ? ['im (as-sx w <>o)] o)
+    (<o @ 'im (atom? <>o && !(nom? <>o) && 0 < w && w <= 8 ? ['im (as-sx w <>o)] o)
           'ims ['im (md = 64 && w = 8 ? (as-syms o) (as-symw o (w = 2 ? 2 4)))]
           'rip (nom? <>o ? ['rip () (fix 4 'rel32 <>o <>>o)] ['rip () <>>o])
           'ind ['ind (<(o 1) = 'lbl ? (xa-symoff (show <>(o 1)) @ so ['mem -1 -1 1 >so <so]) (as-tabo md w <>o))]
