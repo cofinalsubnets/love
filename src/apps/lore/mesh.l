@@ -345,14 +345,16 @@
    c [v B0 bare (two? sk)] q (tablet? gp ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os (peep v 'keys ()) sk c) ())
    r (? (tray? q || nom? q) [q c] (two? q) q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os) [v B0 bare 0]])
    (? (nom? (r 0)) [(r 0) (r 1 3 ? (r 1 2 2 2 (r 1 0)) ())] (r 1 3) (r 1 2 2 1 (r 1 0) (r 0)) (mesh-bare (r 0) (r 1 0) (r 1 1) (r 1 2))))
- ; ..the gpu that draws st's frames, opened at the first: with LORE_GPU=1, else 'off. each is
+ ; ..the gpu that draws st's frames, opened at the first: with LORE_GPU=1, or under android's
+ ; bridge (LOVE_GPU_FACE) but with LORE_GPU=0, else 'off. each is
  ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0; on an X window,
  ; or an app's under android's bridge, it shows them there itself, but with LORE_GPU_WIN=0
  (mesh-gpu st) (st 'gpu @ () (: w (st 'win) on (getenv "LORE_GPU_WIN" != "0") x (tablet? w && w 'how = 'x && on)
                                   dr (tablet? w && w 'how = 'droid && on)
                                   (open g) (: s (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0"))
                                               (? (x && gpu-win g (w 'xw) = ()) (pin s 'win 1) (dr && peep g 'face 0) (pin s 'win 1) s))
-                                  s (getenv "LORE_GPU" = "1" ? (gpu-open x @ g (tablet? g ? (open g) 'off)) 'off)
+                                  ge (getenv "LORE_GPU") on? (ge = "1" || ge != "0" && string? (getenv "LOVE_GPU_FACE"))
+                                  s (on? ? (gpu-open x @ g (tablet? g ? (open g) 'off)) 'off)
                                 (pin st 'gpu s, s))
                           s s)
  ; ..f's bare pixels filled as bare asks, through v, B0 the ground: again, none is left to fill

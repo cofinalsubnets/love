@@ -105,7 +105,7 @@
 ; ..the hall: three rooms by three by the graveyard, one room, white and higher than the rest, its
 ; floor in black and white squares, a doorway in the middle of each side. and the closet:
 ; a dark one off the end of a room across the ring, its door opened by hand, where the
-; player wakes, and another off a dead end further round, zooble's, where it sits waiting
+; player wakes, and another off a dead end further round
 (: ci 27 cj 6 zi 39 zj 10)
 (: closets [[ci cj] [zi zj]] shut (map (q \ 100000 + cid (q 0) (q 1)) closets)
    sides (catmap (q \ [(cid (q 0) (q 1)) (cid (q 0 - 1) (q 1))]) closets))
@@ -339,7 +339,6 @@
   (map (i \ map (panels i) ^nz) ^nx)
   (closet ci cj)
   (closet zi zj)
-  (plush [(cx * (zi + 0.5)) 0 (cz * (zj + 1) - wt - 0.4)] 180 "zooble.glb")
   exits
   ; ..the loop down there heard down there alone, as the buzz is
   (heard [0 0 0] [lx mh lz] pas)

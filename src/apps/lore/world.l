@@ -22,6 +22,9 @@
 (borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
 (borrow 'lore)                          ; lamp-open and its kin, lace and frame-paint, in C
 (borrow 'neon)                          ; the signs, and the poster's letters
+(borrow 'stow)                          ; a scene to bytes and back, for the scenes kept
+(borrow 'zstd)                          ; and those bytes packed, a tenth the size
+(borrow '(hashes path))                 ; sha256 and the nest, for their keys
 (borrow 'brush)                         ; the world, carved and filled
 (borrow 'swatch)                        ; the textures, from their recipes
 (borrow 'flicker)                       ; how the lights stammer, buzz and breathe
@@ -29,6 +32,7 @@
 (borrow 'mixer)                         ; the sounds, mixed into the horn
 (borrow 'sky)                           ; the sun, its light, the sky's colour
 (borrow 'bough)                         ; a tree grown, its wood and leaves drawn
+(borrow 'toys)                          ; the plushes, made
 (borrow 'decay)                         ; the loop a deck plays
 (borrow 'gesture)                       ; the eye kneeling at a grave, weeping, rising
 (:
@@ -916,6 +920,61 @@
  (celled bs dp sf kp sc) (: ch (sc 'chunks)
    (pin sc 'cells (kp ['cells (map (b \ [(b 'lo) (b 'hi) (b 'air) (peep b 'sheer 0) (peep b 'sig 0)]) bs) (map (c \ [(c 'lo) (c 'hi)]) ch)]
                       (_ \ cells-of bs dp sf ch))))
+ ; --- a scene's light, (lit pk) a packed mesh's {'base 'chs}, made of the level and the
+ ;     scene's surface, sky, brushes and lights, which a scene keeps ---
+ (scene-light lv sf sk bs ls) (:
+   ; ..in its streets the sky's light and the sun's on what faces them, scaled to the gain the
+   ; sky is seen through, and the level's skylight; its ambient off them. in a street or a void
+   ; the brushes round a point decide in their order: the open air puts it out, a solid buries
+   ; it, and a room carved where it is buried brings it in; open boxes a hair wider, so two that
+   ; meet leave no seam
+   la (peep lv 'ambient [0.0 0.0 0.0]) ls2 (peep lv 'skylight [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
+   dks (lv 'darks) pts (lv 'pits)
+   ; ..and end to end for lamp-open, each its kind, box and planes, or a land's low, its
+   ; cells and in each the numbers of its triangles, then those
+   (kind b) (b 'air + (peep b 'open 0 ? 2 0) + (b 'land @ () 0 4))
+   (land-db b) (: L (b 'land) hs (L 'cells) ks (keys hs) X (map (k \ k // 8192 - 4096) ks) Z (map (k \ k % 8192 - 4096) ks)
+     x0 (foldl min 4096 X) z0 (foldl min 4096 Z) nx (atom? ks ? 0 (foldl max -4096 X - x0 + 1)) nz (atom? ks ? 0 (foldl max -4096 Z - z0 + 1))
+     cl (catmap (i \ map (j \ hs ((x0 + i + 4096) * 8192 + z0 + j + 4096)) ^nz) ^nx)
+     ([(b 'low) land-g x0 z0 nx nz] + rev (foldl (\ a l (#l + <a . a)) [0] cl) + cats cl + catmap (cats * L 'tris) ^#(L 'tris)))
+   (body b) (b 'land @ () (catmap (q \ q 0 + [(q 1)]) (b 'planes)) (land-db b))
+   dbl (catmap (b \ body b @ q ([(kind b) #q] + b 'lo + b 'hi + q)) bs)
+   DB (gem-tray [#dbl] (map (v \ 1.0 * v) dbl))
+   ; ..cut finer where the sky's light changes only where a room stands up out of a land
+   lnds (filter (b \ b 'land != ()) bs)
+   (out-of b l) (b 'hi 1 > l 'low && all (k \ b 'lo k < l 'hi k && l 'lo k < b 'hi k) [0 2])
+   up (any (b \ b 'air = 1 && b 'land = () && !(peep b 'open 0) && any (out-of b) lnds) bs)
+   ; ..how open points X Y Z are, [m bo]: m the open's share, bo how buried where the open is
+   ; round, as a thing's foot is
+   (openness X Y Z)
+    (: w (lamp-open X Y Z DB)
+     m (min 1.0 (w 0 * (1 - w 1) + w 2))
+     ; ..and buried where the open is round it: half the open's light, none of a room's
+     [m (w 0 * w 1 * (1 - m))])
+   ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
+   ; only the lights that change
+   dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
+   ; ..the lamps whose reach touches the mesh's box, the rest none
+   LR (foldl (\ t l (pin t #t (map mesh-lamp-row (l 'lamps)))) {} ls)
+   (ch pk i) (lamp-light (pk 'cols) (LR i))
+   (daylit pk) (: c (pk 'cols) lt (sk 'lt) s (lt 'sun) X (c 0 + 0.05 * c 5) Y (c 1 + 0.05 * c 6) Z (c 2 + 0.05 * c 7)
+     w (openness X Y Z) m (w 0) bo (w 1) o (m + 0.5 * bo)
+     ; ..on a surface, the sun as high as it stands over each place, the eye's own light
+     ; setting the frame's gain
+     q (tablet? sf ? (sun-here sf sk (c 0) (c 1) (c 2)) [s (lt 'amb) (lt 'sunc) (lt 'sunk) (sk 'k)]) sl (q 0)
+     a (o * (0.5 + 0.5 * c 6) * q 4) d (o * max 0.0 (c 5 * sl 0 + c 6 * sl 1 + c 7 * sl 2) * (q 3 * q 4))
+     D ((1.0 - dark pk) * facing pk) K (1.0 - inks pts pk) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
+   ; ..a dark room's faces and what faces into it, its doorways' sides too, none of the
+   ; ambient: a corner a little way along its facing inside the room's box a wall's thickness over
+   (inks ks pk) (? (atom? ks) 0.0 (: c (pk 'cols) X (c 0 + 0.1 * c 5) Y (c 1 + 0.1 * c 6) Z (c 2 + 0.1 * c 7) m 0.15
+     (foldl (\ a b (max a ((b 0 0 - m < X) * (X < b 1 0 + m) * (b 0 1 - m < Y) * (Y < b 1 1 + m) * (b 0 2 - m < Z) * (Z < b 1 2 + m)))) (X * 0.0) ks)))
+   (dark pk) (inks dks pk)
+   ; ..the ambient by a face's facing, so planes part: all of it on a floor, three quarters on
+   ; a wall across z, less across x, half on a ceiling
+   (facing pk) (: c (pk 'cols) (0.75 + 0.25 * c 6 - 0.1 * c 5 * c 5))
+   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* ((1.0 - dark pk) * facing pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
+             'chs (map (ch pk) dyn)}
+   {'lit lit 'la la 'ob ob 'DB DB 'up up 'dyn dyn 'still still})
  (scene lv dir was tk) (: ps (lv 'posters) (tick w p) (tk @ () () f (f w p))
    ; ..what the scenes before made, kept where it would be made the same, by a key saying
    ; all it was made of; and a number for each key, never another's. kept on from scene to
@@ -973,61 +1032,13 @@
          + map (s \ (: m (made ['bar (vals s)] (_ \ strip-bar s)) (on (m 0) (m 1)))) (filter (s \ peep s 'unlit 0) (lv 'strips))
          + map (s \ (: m (made ['frame (vals s)] (_ \ troffer-frame s)) (on (m 0) (m 1)))) (filter (s \ peep s 'troffer 0) (lv 'strips))
          + map (o \ (: m (made ['tree (map o (sort (filter (k \ k != 'grown) (keys o))))] (_ \ (: i (tix tt (o 'tex)) (mesh-move (tree-mesh o i (tt i 3 / tt i 1)) (o 'at) 0.0)))) (on (m 0) (m 1)))) (lv 'trees))
-   ; ..the sky at the level's hour, and in its streets the sky's light and the sun's on what
-   ; faces them, scaled to the gain the sky is seen through, and the level's skylight; its ambient
-   ; off them. in
-   ; a street or a void the brushes round a point decide in their order: the open air puts it
-   ; out, a solid buries it, and a room carved where it is buried brings it in; open boxes a
-   ; hair wider, so two that meet leave no seam
-   sk (sky-on sf lv (sky-of lv)) la (peep lv 'ambient [0.0 0.0 0.0]) ls2 (peep lv 'skylight [0.0 0.0 0.0]) ob (map (b \ [(b 'lo) (b 'hi)]) (filter (b \ peep b 'open 0) bs))
-   ; ..and end to end for lamp-open, each its kind, box and planes, or a land's low, its
-   ; cells and in each the numbers of its triangles, then those
-   (kind b) (b 'air + (peep b 'open 0 ? 2 0) + (b 'land @ () 0 4))
-   (land-db b) (: L (b 'land) hs (L 'cells) ks (keys hs) X (map (k \ k // 8192 - 4096) ks) Z (map (k \ k % 8192 - 4096) ks)
-     x0 (foldl min 4096 X) z0 (foldl min 4096 Z) nx (atom? ks ? 0 (foldl max -4096 X - x0 + 1)) nz (atom? ks ? 0 (foldl max -4096 Z - z0 + 1))
-     cl (catmap (i \ map (j \ hs ((x0 + i + 4096) * 8192 + z0 + j + 4096)) ^nz) ^nx)
-     ([(b 'low) land-g x0 z0 nx nz] + rev (foldl (\ a l (#l + <a . a)) [0] cl) + cats cl + catmap (cats * L 'tris) ^#(L 'tris)))
-   (body b) (b 'land @ () (catmap (q \ q 0 + [(q 1)]) (b 'planes)) (land-db b))
-   dbl (catmap (b \ body b @ q ([(kind b) #q] + b 'lo + b 'hi + q)) bs)
-   DB (gem-tray [#dbl] (map (v \ 1.0 * v) dbl))
-   ; ..cut finer where the sky's light changes only where a room stands up out of a land
-   lnds (filter (b \ b 'land != ()) bs)
-   (out-of b l) (b 'hi 1 > l 'low && all (k \ b 'lo k < l 'hi k && l 'lo k < b 'hi k) [0 2])
-   up (any (b \ b 'air = 1 && b 'land = () && !(peep b 'open 0) && any (out-of b) lnds) bs)
-   ; ..how open points X Y Z are, [m bo]: m the open's share, bo how buried where the open is
-   ; round, as a thing's foot is
-   (openness X Y Z)
-    (: w (lamp-open X Y Z DB)
-     m (min 1.0 (w 0 * (1 - w 1) + w 2))
-     ; ..and buried where the open is round it: half the open's light, none of a room's
-     [m (w 0 * w 1 * (1 - m))])
+   ; ..the sky at the level's hour, and the light it and the lamps lay on a mesh
+   sk (sky-on sf lv (sky-of lv)) L (scene-light lv sf sk bs ls) la (L 'la) ob (L 'ob) DB (L 'DB) up (L 'up)
+   dyn (L 'dyn) still (L 'still) lit (L 'lit)
    cks (map (c \ [(c 0) (kept ['pack (c 0)] (c 1))])
             (chunks-kept bs [cell-top lamp-cell (coarse? lps tft tfm (tablet? sk && two? ob && up ? DB ()))] (look tt) chunk-m more kp))
    _ (pins memo 'pts pst 'wi wi 'ti ti 'tfb tfb, fresh ? (pin memo 'size (memo 'made)))
    drs (map (d \ kept ['door (vals d) tt] (_ \ mesh-pack (door-mesh d tt))) (lv 'doors))
-   ; ..each light's channel; the steady ones summed once with the ambient, so a frame adds
-   ; only the lights that change
-   dyn (filter (i \ two? (ls i 'how)) ^#ls) still (filter (i \ atom? (ls i 'how)) ^#ls)
-   ; ..the lamps whose reach touches the mesh's box, the rest none
-   LR (foldl (\ t l (pin t #t (map mesh-lamp-row (l 'lamps)))) {} ls)
-   (ch pk i) (lamp-light (pk 'cols) (LR i))
-   (daylit pk) (: c (pk 'cols) lt (sk 'lt) s (lt 'sun) X (c 0 + 0.05 * c 5) Y (c 1 + 0.05 * c 6) Z (c 2 + 0.05 * c 7)
-     w (openness X Y Z) m (w 0) bo (w 1) o (m + 0.5 * bo)
-     ; ..on a surface, the sun as high as it stands over each place, the eye's own light
-     ; setting the frame's gain
-     q (tablet? sf ? (sun-here sf sk (c 0) (c 1) (c 2)) [s (lt 'amb) (lt 'sunc) (lt 'sunk) (sk 'k)]) sl (q 0)
-     a (o * (0.5 + 0.5 * c 6) * q 4) d (o * max 0.0 (c 5 * sl 0 + c 6 * sl 1 + c 7 * sl 2) * (q 3 * q 4))
-     D ((1.0 - dark pk) * facing pk) K (1.0 - inks pts pk) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
-   ; ..a dark room's faces and what faces into it, its doorways' sides too, none of the
-   ; ambient: a corner a little way along its facing inside the room's box a wall's thickness over
-   (inks ks pk) (? (atom? ks) 0.0 (: c (pk 'cols) X (c 0 + 0.1 * c 5) Y (c 1 + 0.1 * c 6) Z (c 2 + 0.1 * c 7) m 0.15
-     (foldl (\ a b (max a ((b 0 0 - m < X) * (X < b 1 0 + m) * (b 0 1 - m < Y) * (Y < b 1 1 + m) * (b 0 2 - m < Z) * (Z < b 1 2 + m)))) (X * 0.0) ks)))
-   (dark pk) (inks dks pk)
-   ; ..the ambient by a face's facing, so planes part: all of it on a floor, three quarters on
-   ; a wall across z, less across x, half on a ceiling
-   (facing pk) (: c (pk 'cols) (0.75 + 0.25 * c 6 - 0.1 * c 5 * c 5))
-   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* ((1.0 - dark pk) * facing pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
-             'chs (map (ch pk) dyn)}
    ; ..a car lit where it stands, and by its own lamp, which goes with it
    ; ..a chunk's light kept by what lights it: the lights that reach its box, in their places
    ; ..a light as a key says it, its masks left to wk
@@ -1078,7 +1089,7 @@
                            'deep (hi 1 > pocket-cut lv && (dp 'deep?) lo hi) 'rad (0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))})) cks)
     'doors drs 'doors-lit (map (i \ lit-of ['door (vals (lv 'doors i)) tt] (drs i)) ^#drs) 'doors-swung (map swung-lit ^#drs) 'cars cars 'lifts lifts 'gates gates 'fences fences 'vines vines 'lights ls 'dyn dyn 'brushes bs 'sky sk 'open ob
     'ball (two? (lv 'balls) ? (ball-mesh ()) ()) 'lit lit
-    'plushes (map (u \ (: f (file-of dir u) (kept ['plush f (stamp f)] (_ \ plush-of f)))) (lv 'plushes))
+    'plushes (map (u \ (: f (file-of dir u) (kept ['plush (u 'toy) f (stamp f)] (_ \ plush-of (u 'toy) f)))) (lv 'plushes))
     'spins (map (s \ spin-mesh s tt) (lv 'spins))
     'heralds (map (h \ (: i (tix tt (h 'tex)) [i (tt i 1) (tt i 2)])) (lv 'heralds))
     'orbs (map (o \ (: k ['orb (o 'at) (o 'r) (o 'tex) (o 'turns) (o 'coarse) (peep o 'in 0) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
@@ -1086,6 +1097,43 @@
                (lv 'orbs))
     'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
     'memo memo 'surf sf 'deep-g (dp 'g) 'ports (dp 'ports)})))
+ ; --- the scenes kept: a level's first scene, stowed and zstd-packed, rides
+ ;     <nest>/cache/lore/<sha256>.scene, keyed by the binary's bytes, the level as read and the
+ ;     bytes of the files it names; only where a nest is, never making one. a cache that fails
+ ;     is a scene made again ---
+ (scene-files lv dir) (filter string? (map (file-of dir) (lv 'posters + lv 'plushes)))
+ (dir? p) (stat p @ s (two? s && s 2 & 61440 = 16384))
+ (dotted f e) (#f @ n (#e < n && snip f (n - #e) n = e))
+ (scene-dir _) (: n (nest ()) d (n + "/cache/lore/")
+   (dir? n && map (s \ mkdir s 493) [(n + "/cache") d], dir? d && d))
+ ; ..written beside, then renamed onto, so no reader meets a torn one
+ (scene-put f bs) (: t "\(f).\(getpid ())" q (open t "w")
+   (hot? q ? (say q bs, close q), hot? q && !(rename t f) ? () (unlink t), ()))
+ ; ..the binary's identity its bytes, memoized under its stat
+ (scene-id d) (: x (selfpath 0) st (string? x && stat x) k (two? st && sha256 "lore-cid 1\n\(x)\n\(show st)")
+   f "\(d)\(k).cid" r (string? k && uread f)
+   (two? r && #(<>r) = 64 ? (utime f (clock ()), <>r)
+      (string? k && uread x @ b (two? b ? (sha256 <>b @ h (scene-put f h, h))))))
+ ; ..the level by its stowed bytes, for show takes seconds over a big one
+ (scene-key d lv dir) (scene-id d @ id
+   (string? id && sha256 (cats (["lore-scene 2\n" id "\n" (stow lv @ b (string? b ? b (show lv))) "\n"]
+                                + map (f \ uread f @ r "\(f)\n\(two? r ? <>r "")\n") (scene-files lv dir)))))
+ ; ..bounded by count, ordered by use, the touch on a hit
+ (scene-sweep d) (: (old e most) (: es (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) f] . a) a))) () (readdir d))
+                                    (go l k) (two? l ? (most <= k && unlink (d + <>(<l)), go >l (k + 1)) 0)
+                                  (go (sortby (a \ b \ <b <= <a) es) 0))
+   (old ".scene" 4, old ".cid" 8))
+ ; ..read back, its light made again of what it keeps and its memo spent, so the next scene
+ ; begins one
+ (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
+   (tablet? sc ? (: sf (surf-of lv) (utime f (clock ()),
+                    pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+ (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" hit (string? k && scene-got f lv)
+   (tablet? hit ? hit
+      (scene lv dir () tk @ sc
+        (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b
+                        (string? b && (scene-put f (zstd-pack b 3), scene-sweep d))),
+         sc))))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
  ;     up and ahead there, unit; 'per how far along x and z a metre walked there goes;
@@ -1397,7 +1445,7 @@
  (state-at w h lv dir ld nm) (arrive! (state-new w h (entered lv nm) dir ld) nm)
  ; ..ld () or (_ \ tick), a fresh tick for each time the scene is made, kept to make it again
  (loader st) (st 'load @ () () f (f ()))
- (state-new w h lv dir ld) (: s (lv 'start) sc (scene lv dir () (ld @ () () f (f ())))
+ (state-new w h lv dir ld) (: s (lv 'start) tk (ld @ () () f (f ())) sc (view-busy tk (_ \ scene-kept lv dir tk))
    (world-size {'px (s 'at 0) 'pz (s 'at 1) 'py (s 'y + eye-h) 'th (s 'deg * pi / 180.0) 'ph (s 'pitch * pi / 180.0) 't 0 'mt 0.0 'gt 0.0
                    'lvl lv 'sc sc 'load ld 'dir dir 'doors (map (_ \ 0.0) (lv 'doors)) 'cars (cars-new lv) 'lifts (lifts-new lv) 'gates (gates-new lv) 'balls (balls-new lv sc) 'loop (two? (lv 'decks) ? (loop-new ()) ()) 'cut () 'ct 0.0 'deep 0 'kitty 0 'kp 1
                    'done 0 'msg () 'msg-t 0.0 'err 0}
@@ -1939,9 +1987,9 @@
       ? [(t 0) (t 2) (t 1) (t 3)] t))
    (mesh-pack (mesh vs (map out (bt + btris o1 + btris o2 + btris o3 + btris o4)))))
  ; ..the ball's mesh turned and moved to where it is, lit there
- ; ..a plush's model from its file, its origin set on the floor under it: r half its height,
- ; w as far as it reaches across; a ball where the file will not read
- (plush-of f) (: s (string? f ? (slurp-file f) ()) m (string? s ? (mesh-glb s) ())
+ ; ..a plush's model, made by name or read from its file, its origin set on the floor under
+ ; it: r half its height, w as far as it reaches across; a ball where there is none
+ (plush-of toy f) (: s (string? f ? (slurp-file f) ()) m (nom? toy ? (toy-mesh toy) (string? s ? (mesh-glb s) ()))
    (? (atom? m) {'pk (ball-mesh ()) 'r ball-r 'w ball-r}
       (: vs (m 0) ys (map (v \ v 1) vs) lo (foldl min <ys ys) r (max 0.02 (0.5 * (foldl max <ys ys - lo)))
          {'pk (mesh-pack (mesh-move m [0.0 (-lo - r) 0.0] 0.0)) 'r r
@@ -2111,7 +2159,7 @@
    (in L) (: qs (filter (p \ p 'lens = L) ps)
             (all (k \ foldl (\ a p (min a (p 'lo k))) 1e9 qs < e k && e k < foldl (\ a p (max a (p 'hi k))) -1e9 qs) ^3))
    (any (p \ in (p 'lens)) ps))
- (desert-near st xz) (: e [(st 'px) (st 'py + eye-h) (st 'pz)]
+ (desert-near st xz) (: e [(st 'px) (st 'py) (st 'pz)]   ; 'py is the eye's height already
    (open-at (st 'sc) e && !(glassed (st 'lvl) e) ? 1.0 0.15))
  hum-voices {'fluorescent [buzz-at buzz-near] 'wind [wind-at desert-near] 'bells [bells-at desert-near]
              'throb [throb-at (\ st xz 1.0)]}
@@ -2165,7 +2213,7 @@
                cs (#(lv 'cars) = #(st 'cars) ? (st 'cars) (cars-new lv))
                ls (#(lv 'lifts) = #(st 'lifts) ? (st 'lifts) (lifts-new lv))
                gs (#(lv 'gates) = #(st 'gates) ? (st 'gates) (gates-new lv))
-               sc (scene lv (st 'dir) (st 'sc) (loader st))
+               sc (loader st @ tk (view-busy tk (_ \ scene lv (st 'dir) (st 'sc) tk)))
                bl (#(lv 'balls) + #(lv 'plushes) = #(st 'balls) ? (st 'balls) (balls-new lv sc))
                _ (each bl (b \ pins b 'pk () 'r (b 'kind @ 'plush (sc 'plushes (b 'i) 'r) (b 'r))))
                (seen! (pins st 'hum () 'lvl lv 'sc sc 'doors ds 'cars cs 'lifts ls 'gates gs 'balls bl 'msg ("read " + st 'path + " again")
@@ -2182,7 +2230,7 @@
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
                                nm (o 'entry) came (peep o 'came 0)
-                               st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
+                               st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'puff (came ? 0.0 1.0) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                _ (mesh-gpu st)         ; its helper built while loading, not in a frame
@@ -2206,7 +2254,7 @@
                        (o2 \ world-tick o2 p @ lv (string? lv ? (pin bad 'why lv) (world-go o2 lv)))
                        (_ \ (say out mesh-gone, flush out)))
    (bad 'why ? (say err ("world: " + p + ": " + bad 'why + "\n"), flush err, 1) r))
- (world-tick o p) (world-loading p (view-tick (o 'win) (peep o 'loading view-spin)))
+ (world-tick o p) (view-tick (o 'win) (peep o 'loading view-spin) @ tk (view-busy tk (_ \ world-loading p tk)))
  ; ..and on to the level a walk left for, in the same window, as long as there is one
  (world-go o lv) (: st (world-walk o lv) g (st 'goto)
    (? (atom? g) st
@@ -2246,7 +2294,7 @@
       (: lv (world-read t)
          (? (string? lv) (vi 'vmsg vs ("scene: " + lv), pins ed 'text t 'dirty 1)
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
-               sc (scene lv (st 'dir) (st 'sc) (loader st))
+               sc (loader st @ tk (view-busy tk (_ \ scene lv (st 'dir) (st 'sc) tk)))
                _ (pins st 'lvl lv 'sc sc 'doors ds 'cars (cars-new lv) 'lifts (lifts-new lv) 'gates (gates-new lv) 'balls (balls-new lv sc))
                (vi 'vmsg vs "scene read again", pins ed 'text t 'dirty 1))))))
  ; ..vi's cursor on the text's offset a, its line a third of the way down the pane

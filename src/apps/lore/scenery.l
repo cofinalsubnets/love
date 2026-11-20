@@ -169,8 +169,8 @@
 ;                                      times as thick
 ;   (shadow-hole TREE)                 the tree's shadow under the level's sun a hole in the
 ;                                      ground it stands on, black down past where one falls
-;   (plush [x y z] bearing FILE)       a stuffed toy lying at x y z, facing bearing: a .glb
-;                                      beside the level, its origin the floor under it
+;   (plush [x y z] bearing TOY)        a stuffed toy lying at x y z, facing bearing: a name
+;                                      toys.l makes, or a .glb beside the level
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
@@ -393,8 +393,10 @@
    (? (!(kind? t ['tree])) (no u t) (!(num? k && k > 0)) (no u k) (!(num? g && g > 0)) (no u g)
       (with t 'size [(f k) (f g)])))
  (shadow-hole t) (kind? t ['tree] ? (with t 'hole 1) (no "(shadow-hole (tree ..))" t))
- (plush at deg file) (: u "(plush [x y z] bearing FILE)"
-   (string? file ? (part 'plush [['at (P at u)] ['deg (N deg u)] ['file file]]) (no u file)))
+ (plush at deg toy) (: u "(plush [x y z] bearing TOY)"
+   (? (nom? toy) (part 'plush [['at (P at u)] ['deg (N deg u)] ['toy toy]])
+      (string? toy) (part 'plush [['at (P at u)] ['deg (N deg u)] ['file toy]])
+      (no u toy)))
  ; ..a window: its opening, and its pane
  (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
    (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
@@ -1237,7 +1239,7 @@
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))
-       'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'file (p 'file) 'src (p 'src) 'xf (peep p 'xf xf-id)}) (of 'plush))
+       'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'toy (p 'toy) 'file (p 'file) 'src (p 'src) 'xf (peep p 'xf xf-id)}) (of 'plush))
        'voids (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'sheer 0) (of 'room)))
        'gravity (of 'gravity @ () () g (<g 'by))
        'surface (of 'surface @ () () s {'shape (<s 'shape) 'lx (<s 'lx) 'lz (<s 'lz)})

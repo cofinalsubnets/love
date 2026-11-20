@@ -3,6 +3,8 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
 (borrow '(world mesh neon posix bough gesture))
+; a nest that is not there, so no scene is kept in the user's or read from it
+(setenv "LOVE_NEST" (cwd 0 + "/out/.world-nest-" + show (getpid 0)))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -243,12 +245,12 @@
  (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
        (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
        (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
-; a plush lies where it is put facing its bearing, a turn swinging that on, its model read
-; from its file and set on the floor, the ball it is taken for half its height; one whose file
+; a plush lies where it is put facing its bearing, a turn swinging that on, its model made
+; by name and set on the floor, the ball it is taken for half its height; one whose file
 ; will not read is a ball. a click takes it like a ball, held it looks back at the player,
 ; and thrown it lands upright and stops
 (: (pud t) (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) " + t + " (start [5 0 1.5] 0 0))"))
-   pua (pud "(plush [5 0 3] 180 \"mouse.glb\")") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 \"mouse.glb\"))")
+   pua (pud "(plush [5 0 3] 180 'mouse)") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 'mouse))")
    pus (world-new 80 50 pua "src/apps/lore/levels/") pm (pus 'sc 'plushes 0) pk (pm 'pk) pt (pk 'tris) pb (pus 'balls 0) py0 (pb 'p 1)
    pno (world-new 80 50 (pud "(plush [5 0 3] 0 \"none.glb\")") "test/lore/")
    plo (map (k \ amin (pk 'cols k)) ^3) phi (map (k \ amax (pk 'cols k)) ^3) r (pm 'r)
@@ -256,7 +258,7 @@
    _ (pgo 2) _ (pin pus 'ph (-38.0 * pi / 180.0)) _ (world-mouse pus 'press 1) _ (world-mouse pus 'release 1)
    _ (pgo 2) ph1 (pb 'held) phq (pb 'q) _ (pin pus 'ph 0.4) _ (world-mouse pus 'press 1) _ (pgo 4) _ (world-mouse pus 'release 1)
    _ (pgo 80) pq (pb 'q) pp (pb 'p)
- (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'file = "mouse.glb")
+ (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'toy = 'mouse)
        (pb 'kind = 'plush) (0.05 < r) (r < 0.3) (py0 = r) (pb 'r = r) (1000 < pk 'n) (amax pt = pk 'n - 1) (amin pt = -1)
        (mag (plo 1 + r) < 1e-6) (mag (phi 1 - r) < 1e-6) (foldl max 0.0 (map abs [(plo 0) (phi 0) (plo 2) (phi 2)]) = pm 'w)
        (pno 'balls 0 'r = 0.12) (pno 'sc 'plushes 0 'r = 0.12)
@@ -1034,4 +1036,19 @@
 (: n {'n 0} l (world-reading "(: a 1) (level \"t\" (room [0 0 0] [2 2 2]))" (_ \ _ \ pin n 'n (n 'n + 1)))
    (test (tablet? l) (n 'n = 2)))
 
+; a scene kept: where a nest is, the first scene is stowed in its cache and the next read back
+; from there, the same but for its memo, spent
+(: kd (cwd 0 + "/out/.world-kept-" + show (getpid 0)) n0 (getenv "LOVE_NEST")
+   _ (hark ["rm" "-rf" kd], mkdir kd 448, setenv "LOVE_NEST" kd)
+   ; ..each read afresh, as a run reads its file: a scene pins what it grows into its level
+   (klv _) (world-read "(level \"t\" (room [0 0 0] [6 3 6]) (lamp [3 2.5 3]) (start [3 0 1] 0 0))")
+   ka (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   kf (filter (f \ #f > 6 && snip f (#f - 6) #f = ".scene") (readdir (kd + "/cache/lore/")))
+   kb (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
+   (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
+   ks (filter (k \ k != 'memo) (sort (keys ka)))
+ (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
+       (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)))
+(test_fin ())
 (puts "world: ok\n")

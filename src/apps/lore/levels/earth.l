@@ -799,8 +799,6 @@
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a stuffed Mitty someone left out on top of the arch, looking out over the street
-  (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
   ; wing, three windows up over each doorway into its glow
