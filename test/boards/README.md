@@ -83,5 +83,5 @@ Adafruit QT Py CH32V203 (WCH CH32V203G6, RV32IMAC, 32 KB flash, 10 KB SRAM -- fi
 only, no love). A blink, all `mooncc -t rv32` and linked at flash 0 with no crt0: boot.c's
 first words set the stack, and blink.c drives the board's only LED, a WS2812 on PA4, from the
 8 MHz HSI with no clock set up. No battery yet: the image has no console. test_ch32v203 builds
-it and verifies the image; test_ch32v203_board writes it on a host with ch32v203-isp through
+it and verifies the image; test_ch32v203_board writes it from this box's USB through
 src/tools/wchisp.l and the mask rom's USB ISP, which shows only with BOOT held over a reset.
