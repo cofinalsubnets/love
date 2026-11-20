@@ -43,7 +43,7 @@ struct k_boot {
  struct { u64 base; u16 w, h; u32 pitch_px; u8 scale; u32 cap_px; } fb;
  u8 has_fb;
  u64 date;                             // no door here answers it; kmain's rtc does
- char cmdline[256];
+ char cmdline[1024];
  void *image; u64 image_len, initrd, initrd_len;
  void *efi_st, *efi_image;             // love.stay: boot services kept, and our handle
  u64 (*efi_call)(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
