@@ -606,7 +606,8 @@
    ; ldlink binds the static exe. __love_start is weak here (calls main); moonlibc overrides it.
    ; x64's entry serves every kernel: linux zeroes rdi, freebsd hands the vector base there with
    ; a pad word maybe below argc, so zero says linux and freebsd pushes once to restore parity.
-   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits
+   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits. dyld's exe enters
+   ; at __love_main (macho.l's lc_main), so an ELF and a mach-o carry the same code bytes
    crt0 '((cmp r6 0)
           (br ne c0-fb)
           (mov r6 sp)
@@ -620,6 +621,14 @@
           (li r5 0)
           (call __love_start)
           (mov r6 r0) (li r0 1) (sys)
+          ;; main(argc, argv, envp, apple) on an aligned stack; argv still points into the
+          ;; kernel's block, so argc is the word below it. one kernel: 4 says which
+          (label __love_main)
+          (lea r6 r5 -8)
+          (and sp sp -16)
+          (li r5 4)
+          (call __love_start)
+          (mov r6 r0) (li r0 33554433) (sys)
           (label __love_start)
           (push r6)
           (lea r5 r6 8)
@@ -641,20 +650,6 @@
                 (call main)
                 (pop r6)
                 (ret))
-   ; dyld's exe enters by lc_main as main(argc, argv, envp, apple) on an aligned stack;
-   ; argv still points into the kernel's block, so argc is the word below it
-   crt0-macmain '((lea r6 r5 -8)
-                  (and sp sp -16)
-                  (li r5 4)
-                  (call __love_start)
-                  (mov r6 r0) (li r0 33554433) (sys)
-                  (label __love_start)
-                  (push r6)
-                  (lea r5 r6 8)
-                  (ld r6 r6 0)
-                  (call main)
-                  (pop r6)
-                  (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -1188,8 +1183,8 @@
        ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
        _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
        c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
-             mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
-       ent (dx ? ["_start" "atexit"] '("__love_start"))
+             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       ent (? dx ["_start" "atexit"] (tgt = 'x64 && !(mac? && !dyld?)) '("__love_start" "__love_main") '("__love_start"))
        all (arm? || so ? srcs
                    (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the

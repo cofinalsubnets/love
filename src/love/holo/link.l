@@ -60,6 +60,8 @@
    ; a segment's address for file offset f: the next page at or after v plus f's place in a
    ; page, the least fresh-page address with p_vaddr = p_offset (mod a). a < 2 packs tight.
    (ld-lift a v f) (a < 2 ? v (ld-align a v + f % a))
+   ; an executable's header room: the elf header, n phdrs, and netbsd's note
+   (ld-ehsz w32 n nb?) ((w32 ? 52 64) + (w32 ? 32 56) * n + (nb? ? 24 0))
    ; relocation arithmetic is modular; % truncates, so a negative sum is folded up
    (ld-u64 v) (v % 18446744073709551616 @ r
                  (r < 0 ? (r + 18446744073709551616) r))
@@ -530,10 +532,11 @@
    ; pin every section's load address: hdrsz of headers, text, rodata, data, then the nif
    ; region, 16-aligned and packed so the __start_/__stop_ bracket reads one array. bss is
    ; the caller's. salign is the grain the lanes are cut on (a page, or 1 to pack). dense 0
-   ; writes a cut's gap as zeros; 1 keeps the file offset and lifts only the address.
-   ; -> (end nifstart o0 d0 t1 o1); under dense 1 an end is not the next start.
+   ; writes a cut's gap as zeros; 1 keeps the file offset and lifts only the address; 2 lifts
+   ; by the address, as ldlink's script does. -> (end nifstart o0 d0 t1 o1); under dense an
+   ; end is not the next start.
    (ldlay objs base hdrsz salign dense)
-    (: (cut v f) (dense ? (ld-lift salign v f) (ld-align salign v))
+    (: (cut v f) (? (dense = 2) (ld-lift salign v v) dense (ld-lift salign v f) (ld-align salign v))
        t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
        o0 (cut t1 (t1 - base))
        o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
@@ -1274,7 +1277,7 @@
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
        bsd? (elem mach '(62 183 243 3) || target = 'arm)
        nb? (wx? && bsd?)
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 4 1) + (img? ? 1 0) + (nb? ? 1 0) + (tls? ? 1 0)) + (nb? ? 24 0))
+       hdrsz (ld-ehsz w32 ((wx? ? 4 1) + ?img? + ?nb? + ?tls?) nb?)
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0

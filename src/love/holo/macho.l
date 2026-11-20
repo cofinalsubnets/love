@@ -9,10 +9,15 @@
 (borrow '(hashes bytes))
 (: macho-cpus {'x64 [16777223 3]}      ; cpu_type_x86_64, cpu_subtype_x86_64_all
 
-   ; lc_segment_64 with no sections: the kernel maps the segment, not what it holds
-   (macho-seg nm addr vsz off fsz prot)
-    (catall [(le32 25) (le32 72) (map nm ^#nm) (ld-zeros (16 - #nm))
-             (le64 addr) (le64 vsz) (le64 off) (le64 fsz) (le32 prot) (le32 prot) (le32 0) (le32 0)])
+   ; lc_segment_64 and its sections, each (name addr size off align flags): the kernel maps the
+   ; segment, and the sections say what it holds to otool and objdump
+   (macho-name nm) (catall [(map nm ^#nm) (ld-zeros (16 - #nm))])
+   (macho-seg nm addr vsz off fsz prot sects)
+    (catall ([(le32 25) (le32 (72 + 80 * #sects)) (macho-name nm)
+              (le64 addr) (le64 vsz) (le64 off) (le64 fsz) (le32 prot) (le32 prot) (le32 #sects) (le32 0)]
+             + map (x \ catall [(macho-name <x) (macho-name nm) (le64 (x 1)) (le64 (x 2)) (le32 (x 3))
+                                (le32 (x 4)) (le32 0) (le32 0) (le32 (x 5)) (ld-zeros 12)])
+                   sects))
    ; lc_unixthread, x86_thread_state64: 21 words, rip the 17th, the rest zero
    (macho-thread ent)
     (catall [(le32 5) (le32 184) (le32 4) (le32 42) (ld-zeros 128) (le64 ent) (ld-zeros 32)])
@@ -81,47 +86,67 @@
        imps (dyn? ? (ld-imports objs0 + wimps) ()) ni #imps
        plt {'id "<stubs>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
-       objs (dyn? ? (objs0 + [plt]) objs0)
+       ; the stubs only when there are imports: an empty one's alignment would lift the text end
+       objs (dyn? && 0 < ni ? (objs0 + [plt]) objs0)
        pg 4096
        base elf-base
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
        dycmds (dyn? ? (catall ([macho-dyld] + map macho-dylib ("/usr/lib/libSystem.B.dylib" . dylibs)
                                + [macho-plat (macho-uuid (join " " (imps + dylibs + [(show (map (ob \ ob 'id) objs0))])))])) ())
        nseg (4 + ?img? + ?dyn?)          ; pagezero text rodata data, the image's or the linkedit
-       hdrsz (32 + 72 * nseg + (dyn? ? (24 + 48 + 24 + 80 + 16 + #dycmds) 184))
-       lay (ldlay objs base hdrsz pg 0)
+       nsect (6 + ?img?)                  ; __text, __pad __const, __pad __data __bss, and __image
+       hdrsz (32 + 72 * nseg + 80 * nsect + (dyn? ? (24 + 48 + 24 + 80 + 16 + #dycmds) 184))
+       ; laid as ldlink lays the same set, so the code is the same bytes: text at its header
+       ; room's place in a page, each cut lifting the address a page, the -pie table past the
+       ; nifs, and the image's place in a page its data end's
+       ehs (ld-ehsz 0 (5 + ?img?) 1)
+       ths (hdrsz + (ehs - hdrsz) % pg @ h (h < hdrsz ? (h + pg) h))
+       lay (ldlay objs base ths pg 2)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)
-       dend (ld-align 16 end)
+       (dn v) (v - (v - base) % pg)       ; a segment starts on its section's page
+       rs (dn o0) ds (dn d0)
+       nrel (pie ? (ld-nabs objs) 0)
+       r0 (pie ? (ld-align 16 end) end) r1 (r0 + 8 * nrel)
+       dend (ld-align 16 r1)
        gend (dend + 8 * ni)               ; the import slots, which dyld fills
        bend (ldlayn 'bss (ldlay1 'bss gend objs) objs)
        ioff (ld-align pg (gend - base))   ; .image past the data, __LINKEDIT past that: dyld
-       iaddr (ld-align pg bend)           ; wants it last, so a bake that grows the image moves it on
+       i0 (ld-align pg bend)              ; wants it last, so a bake that grows the image moves it on
+       iaddr (img? ? (i0 + (dend - base) % pg) i0)
+       ist (ld-align 16 iaddr)
        iend (img? ? (ldlay1 'image iaddr objs) iaddr)
-       ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
-       binds (catall ([[62 81]]                              ; dylib special -2, type pointer
-                      + map (k \ (: n ("_" + macho-dyname (imps k))
-                                     (catall [[(elem (imps k) wimps ? 65 64)] (map n ^#n) [0]   ; 65 a weak import
-                                              [115] (macho-uleb (dend - d0 + 8 * k)) [144]]))) ^ni
-                      + [[0]]))
-       loff (ld-align pg (ioff + (iend - iaddr)))
+       loff (ld-align pg (ioff + (iend - i0)))
        laddr (ld-align pg iend)
        glo (ldsyms objs)
        p0 (peep (plt 'base) 1 0)
        _ (each ^ni (k \ pin glo (imps k) [(p0 + 16 * k) 0]))
+       ; a "libsys." word an object defines is dyld's to fill, weakly: its code reads it the same
+       ; in every container
+       lsw (filter (n \ starts? n "libsys.") (sort (keys glo)))
+       ; the bind opcodes: flat lookup, pointers, then a name and its slot apiece
+       (bind nm a w) (: n ("_" + macho-dyname nm)
+                        (catall [[(w ? 65 64)] (map n ^#n) [0]          ; 65 a weak import
+                                 [115] (macho-uleb (a - ds)) [144]]))
+       binds (catall ([[62 81]]                              ; dylib special -2, type pointer
+                      + map (k \ bind (imps k) (dend + 8 * k) (elem (imps k) wimps)) ^ni
+                      + map (n \ bind n <(glo n) 1) lsw
+                      + [[0]]))
        _ (pin plt 'src (string (catall (map (k \ ld-plt-x64 (p0 + 16 * k) (dend + 8 * k)) ^ni))))
-       ent (: e (glo "_start")
+       ent (: e (glo (dyn? ? "__love_main" "_start"))
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        relbox {0 ()}                      ; abs64 sites
-       cx [glo n0 end end end relbox () () (backends target) (ld-extents objs) ()]
+       cx [glo n0 end r0 r1 relbox () () (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
        eo (ldemitn cx 'rodata objs (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (o0 - <et))])))
        ed (ldemitn cx 'data objs (ldemit cx 'data d0 objs (>eo + [(ld-zeros (d0 - <eo))])))
        en (ldemit cx 'nifs <ed objs >ed)
        ei (img? ? (ldemit cx 'image iaddr objs ()) [iaddr])
-       ro? (pie && any (a \ a < d0) (relbox 0))   ; a site in __RODATA: dyld writes it, so rw
-       rbs (pie ? (macho-rebase [[2 o0 o1] [3 d0 gend]] (sort (relbox 0))) ())
+       ro? (pie && any (a \ a < ds) (relbox 0))   ; a site in __RODATA: dyld writes it, so rw
+       rbs (pie ? (macho-rebase [[2 rs o1] [3 ds gend]] (sort (relbox 0))) ())
+       ; ldlink's table, dyld's rebases again, so moonlibc leaves it unread here
+       rtab ((pie ? (catall (map le64 (rev (relbox 0))))) + ld-zeros (gend - r1))
        rsz (ld-align 8 #rbs)
        bsz (ld-align 8 #binds)
        lesz (rsz + bsz + 8)               ; rebases, binds, and an empty string table after
@@ -130,12 +155,21 @@
        ssz (ld-align 16 (20 + 88 + #ident + 1 + 32 * ((soff + pg - 1) // pg)))
        lfsz (soff - loff + ssz)
        (up v) (ld-align pg v)
-       cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0)
-                      (macho-seg "__TEXT" base (o0 - base) 0 (o0 - base) 5)   ; dyld wants code's file and memory alike: the pad is in the file
-                      (macho-seg "__RODATA" o0 (up (o1 - o0)) (o0 - base) (o1 - o0) (ro? ? 3 1))
-                      (macho-seg "__DATA" d0 (up (bend - d0)) (d0 - base) (gend - d0) 3)]
-                     + (img? ? [(macho-seg "__IMAGE" iaddr (up (iend - iaddr)) ioff (iend - iaddr) 3)])
-                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1)])
+       t0 (base + ths)
+       ; section flags: pure and some instructions for code, zerofill for bss
+       cmds (catall ([(macho-seg "__PAGEZERO" 0 base 0 0 0 ())
+                      (macho-seg "__TEXT" base (rs - base) 0 (rs - base) 5   ; dyld wants code's file and memory alike: the pad is in the file
+                                 [["__text" t0 (t1 - t0) (t0 - base) 4 2147484672]])
+                      ; a lifted segment opens on __pad, its page's zeros below the section, so a
+                      ; reader that counts a segment from its first section counts as dyld does
+                      (macho-seg "__RODATA" rs (up (o1 - rs)) (rs - base) (o1 - rs) (ro? ? 3 1)
+                                 [["__pad" rs (o0 - rs) (rs - base) 0 0] ["__const" o0 (o1 - o0) (o0 - base) 4 0]])
+                      (macho-seg "__DATA" ds (up (bend - ds)) (ds - base) (gend - ds) 3
+                                 [["__pad" ds (d0 - ds) (ds - base) 0 0] ["__data" d0 (gend - d0) (d0 - base) 4 0]
+                                  ["__bss" gend (bend - gend) 0 4 1]])]
+                     + (img? ? [(macho-seg "__IMAGE" i0 (up (iend - i0)) ioff (iend - i0) 3
+                                           [["__image" ist (iend - ist) (ioff + (ist - i0)) 4 0]])])
+                     + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1 ())])
                      + (dyn? ? [(catall [(le32 2147483682) (le32 48) (le32 (#rbs && loff)) (le32 #rbs)   ; lc_dyld_info_only
                                          (le32 (loff + rsz)) (le32 #binds) (ld-zeros 24)])
                                 (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
@@ -147,12 +181,12 @@
        ncmd (nseg + 1 + (dyn? ? (4 + 2 + #dylibs + 2) 0))
        hdr (catall [(le32 4277009103) (le32 <cpu) (le32 <>cpu) (le32 2)   ; mh_magic_64, mh_execute
                     (le32 ncmd) (le32 #cmds) (le32 (dyn? ? (pie ? 2097157 5) 1)) (le32 0) cmds])   ; noundefs, dyldlink, pie
-       ps (hdr . (>en + [(ld-zeros (gend - <en))]
-                  + (img? ? ([(ld-zeros (ioff - (gend - base)))] + >ei))
-                  + (dyn? ? [(ld-zeros (loff - (img? ? (ioff + (iend - iaddr)) (gend - base)))) le
+       ps (hdr . (>en + [(ld-zeros (r0 - <en)) rtab]
+                  + (img? ? ([(ld-zeros (ioff + (iaddr - i0) - (gend - base)))] + >ei))
+                  + (dyn? ? [(ld-zeros (loff - (img? ? (ioff + (iend - i0)) (gend - base)))) le
                              (ld-zeros (soff - loff - lesz))])))
        pre (dyn? ? (join "" (map (p \ (string? p ? p (string (cask p)))) ps)) "")
        _ (hdrsz != #hdr && scare 'macho-headers #hdr)
        _ (dyn? && #pre != soff && scare 'macho-signature #pre)
-       (dyn? ? [pre (macho-sign pre ident (o0 - base))] ps)))
+       (dyn? ? [pre (macho-sign pre ident (rs - base))] ps)))
 ) ; module 'holo
