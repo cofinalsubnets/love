@@ -894,7 +894,9 @@ love_noinline static struct g *love_raise(struct g *c, union u const *K) {
  return encode(c, status_scare);
 }
 // a failed op's scare, its reason in g->scare; terminal
-#define Raise(K) { if (!ok(g = love_raise(g, K))) return g; Unpack(g); love_musttail return Continue(); }
+static lvm(_lvm_unheard) { return g; }   // the scare back to C, so an op's raise stays a jump
+#define Raise(K) { if (!ok(g = love_raise(g, K))) love_musttail return Ap(_lvm_unheard, g); \
+  Unpack(g); love_musttail return Continue(); }
 lvm(_lvm_raise) { g = core_of(g); Raise(help_scare_k) }
 // a wait nothing could wake: terminal
 lvm(lvm_deadlock) { Pack(g), g->scare = ScareDeadlock; Raise(help_scare_k) }
