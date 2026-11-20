@@ -6,6 +6,10 @@ src/inle/port.mk and bput.h with the love ports there. Gates: test_<board> build
 verifies the boot image, test_<board>_board runs the battery on a host with the board's cap.
 A board lane runs the battery from SRAM wherever the chip allows it, so it never writes flash;
 each battery says `; from sram` or `; from flash`, and a RAM image's lane wants the first.
+The arm boards share three files: boardld.l links over holo's ldbare32, each board's map a
+call to it; armboot.l lays the thumb2 boards' vector table and fault shim from holo IR, each
+board's mkboot.l a call to it; crt0.h is the C start they all make, and the thumb1 boards'
+vector table.
 
 ## nucleo446/
 
@@ -46,7 +50,7 @@ only, no love: the baked image is ~544 KB, so this is the toolchain on
 silicon, like nucleo446). ARMv6-M is the leanest target mooncc has -- no FPU
 and no divide instruction, so every `/`, `%`, float and double is a libcall --
 and main.c is a 32-check battery over exactly those. The one port with **no
-`.S` anywhere**: the vector table and crt0 are C (rp2040.c), and boot2 -- the
+`.S` anywhere**: the vector table and crt0 are C (../crt0.h), and boot2 -- the
 256-byte stage the mask ROM CRC-checks before running -- is laid by mkboot2.l
 into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where

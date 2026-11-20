@@ -1,51 +1,23 @@
 // the atsamd21's bare backend: vectors, crt0, the crystalless 48 MHz and a millisecond off
 // systick. the image runs from sram, put there and started by the uf2 bootloader's sam-ba
 #include <stdint.h>
+#define CRT0_V6M
 #include "samd21.h"
-
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
-extern void *const vectors[];
+#include "../crt0.h"
 
 int main(void);
 static void wdt_init(void);
 
-// v6-M has no fault status registers: a halt leaves the frame for swd
-void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
-
-static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
-
-// sam-ba's go has taken sp from vectors[0] and left the bootloader's interrupts on: they go off
-// before the vector table moves, since nothing here is an interrupt's. the double tap next: any
-// reset after, the watchdog's on a hang, comes back to the bootloader
+// sam-ba's go has taken sp from vectors[0] and left the bootloader's interrupts on, which crt0
+// turns off before the vector table moves. the double tap next: any reset after, the
+// watchdog's on a hang, comes back to the bootloader
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(SYST_CSR) = 0;
-  REG(NVIC_ICER) = ~0u;
-  REG(NVIC_ICPR) = ~0u;
-  REG(ICSR_ADDR) = ICSR_PENDSTCLR;
+  crt0(1);
   REG(BOOT_TAP) = BOOT_MAGIC;
   wdt_init();
-  REG(VTOR_ADDR) = (uint32_t) (uintptr_t) vectors;
-  // .data's load address follows .rodata's bytes, so it may sit at any byte
-  uint8_t const *s = (uint8_t const *) __data_load__;
-  for (uint8_t *d = (uint8_t *) __data_start__; d < (uint8_t *) __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
-
-__attribute__((section(".vectors"), used))
-void *const vectors[] = {
-  (void *) __stack_top__,   // 0  initial SP
-  reset_handler,            // 1  reset
-  default_handler,          // 2  NMI
-  isr_hardfault,            // 3  HardFault
-  0, 0, 0, 0, 0, 0, 0,      // 4..10 reserved
-  default_handler,          // 11 SVCall
-  0, 0,                     // 12..13 reserved
-  default_handler,          // 14 PendSV
-  default_handler,          // 15 SysTick
-};
 
 static void dfll_wait(void) { while (!(REG(SYSCTRL_PCLKSR) & PCLKSR_DFLLRDY)) {} }
 static void gclk_wait(void) { while (REG8(GCLK_STATUS) & GCLK_SYNCBUSY) {} }

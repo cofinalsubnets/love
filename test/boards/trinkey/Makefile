@@ -20,12 +20,12 @@ default: bin
 bin: $(R)/$(o)/firm-ram.bin $(R)/$(o)/stage2.pkt
 objs: $(objs)
 
-$(eval $(call p_obj,samd21,test/boards/trinkey/samd21.c,samd21.c samd21.h $(mc),$(tk_cc)))
+$(eval $(call p_obj,samd21,test/boards/trinkey/samd21.c,samd21.c samd21.h ../crt0.h $(mc),$(tk_cc)))
 $(eval $(call p_obj,main,test/boards/trinkey/main.c,main.c samd21.h ../battery1.h $(S)/inle/bput.h $(mc),$(tk_cc)))
 $(eval $(call p_obj,usb,test/boards/trinkey/usb.c,usb.c samd21.h $(S)/inle/usbcdc.h $(mc),$(tk_cc) -D UCDC_RXN=512))
 $(eval $(call p_obj,bat,test/boards/trinkey/bat.c,bat.c ../battery1.h $(S)/inle/bput.h $(mc),$(tk_cc)))
 
-$(eval $(call p_link,tlink))
+$(eval $(call p_link,tlink,../boardld.l))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/%2.o: $(R)/$(o)/%.o $(R)/$(o)/ocopy.l

@@ -19,10 +19,10 @@ objs = $(R)/$(o)/nrf52840.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/
 default: nrf52840
 nrf52840: $(R)/$(o)/firm.uf2 $(R)/$(o)/firm-ram.bin
 
-$(eval $(call p_obj,nrf52840,test/boards/nrf52840/nrf52840.c,nrf52840.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
+$(eval $(call p_obj,nrf52840,test/boards/nrf52840/nrf52840.c,nrf52840.c nrf52840.h ../crt0.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
 $(eval $(call p_obj,main,test/boards/nrf52840/main.c,main.c nrf52840.h ../battery.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
-$(eval $(call p_link,xlink))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",../armboot.l))
+$(eval $(call p_link,xlink,../boardld.l))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/xlink.l $(lv)

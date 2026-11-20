@@ -19,10 +19,10 @@ objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/
 default: microbit
 microbit: $(R)/$(o)/firm.bin $(R)/$(o)/firm-ram.bin
 
-$(eval $(call p_obj,microbit,test/boards/microbit/microbit.c,microbit.c microbit.h $(S)/inle/bput.h $(mc),$(mb_cc)))
+$(eval $(call p_obj,microbit,test/boards/microbit/microbit.c,microbit.c microbit.h ../crt0.h $(S)/inle/bput.h $(mc),$(mb_cc)))
 $(eval $(call p_obj,main,test/boards/microbit/main.c,main.c microbit.h ../battery.h $(S)/inle/bput.h $(mc),$(mb_cc)))
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
-$(eval $(call p_link,xlink))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",../armboot.l))
+$(eval $(call p_link,xlink,../boardld.l))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/xlink.l $(lv)

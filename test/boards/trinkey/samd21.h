@@ -7,11 +7,6 @@
 #define REG8(a)  (*(volatile uint8_t *) (uintptr_t) (a))
 
 // --- the core -------------------------------------------------------------
-#define ICSR_ADDR   0xE000ED04u
-#define ICSR_PENDSTCLR (1u << 25)
-#define VTOR_ADDR   0xE000ED08u
-#define NVIC_ICER   0xE000E180u
-#define NVIC_ICPR   0xE000E280u
 #define AIRCR_ADDR  0xE000ED0Cu
 #define SYST_CSR    0xE000E010u
 #define SYST_RVR    0xE000E014u

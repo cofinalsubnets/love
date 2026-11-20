@@ -2,11 +2,8 @@
 // daplink, TIMER0's microseconds, the 5x5 matrix, the die's temperature and a ble beacon. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "microbit.h"
+#include "../crt0.h"
 #include "../../../src/inle/bput.h"
-
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[];
-extern void *const vectors[];
 
 int main(void);
 
@@ -26,12 +23,9 @@ void hardfault_report(uint32_t *frame) {
 // interrupts pending, and this table has none past the system sixteen
 void cmain(void) {
   arm_irq_off();
-  for (uint32_t i = 0; i < 8; i++) REG(NVIC_ICER0 + 4u * i) = 0xFFFFFFFFu, REG(NVIC_ICPR0 + 4u * i) = 0xFFFFFFFFu;
   REG(SCB_CPACR) |= (0xFu << 20);
   arm_dsb_isb();
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
-  REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
+  crt0(8);
   clocks_init();
   serial_init();
   main();
