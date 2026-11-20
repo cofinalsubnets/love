@@ -82,7 +82,11 @@ int image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win)
   is.fsz = imgoff - is.off + len;
   is.vsz = (is.fsz + 4095) & ~(uint64_t) 4095;
   memcpy(cmds + si, &is, sizeof is);
-  if (is.nsect) memcpy(cmds + si + sizeof is + 40, &is.fsz, 8);   // __image, the segment's one section
+  if (is.nsect) {                                       // __image, the segment's one section: from its own offset
+    uint32_t so;
+    memcpy(&so, cmds + si + sizeof is + 48, 4);
+    uint64_t ssz = imgoff + len - so;
+    memcpy(cmds + si + sizeof is + 40, &ssz, 8); }
   if (li >= 0) {                                        // __LINKEDIT on past the image
     uint64_t off = (is.off + is.fsz + 4095) & ~(uint64_t) 4095, from = ls.off, d = off - ls.off;
     if ((rc = bake_move(src, dst, ls.off, off, ls.fsz, win))) goto out;
