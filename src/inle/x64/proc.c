@@ -126,10 +126,12 @@ static uint64_t k_uprot(uint64_t e, long prot);
 #include "../ushare.h"
 
 // c's shared page at va made its own to write -> 0; -EFAULT where it is no such page, or
-// -ENOMEM. one no other process holds is written in place, the rest copied apart. inle runs on
-// one cpu, so this cpu's flush is every translation's
+// -ENOMEM. one no other process holds is written in place, the rest copied apart; one c may
+// write already faulted on a translation from before, which goes. inle runs on one cpu, so
+// this cpu's flush is every translation's
 static long k_ubreak(struct k_uctx *c, uint64_t va) {
   uint64_t *e = va < k_utop ? k_uwalk(c, va) : NULL;
+  if (e && (*e & 7) == 7) return k_uflush(), 0;
   if (!e || !(*e & 1) || !(*e & k_ucow)) return -EFAULT;
   int i = k_umof(c, va);
   long k = i < 0 ? -1 : k_uinblk(&c->mm[i], *e);
