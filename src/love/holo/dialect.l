@@ -549,8 +549,8 @@
              (: src (filter (o \ lane o = 6) ms)
                 sg (two? src && <<src = 'seg ? <><src 'ds)
                 (? !(all (o \ elem (lane o) '(6 7)) ms) (scare 'as-strop ops)
-                   ((sg = 'ds ? () [(sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 (scare 'as-strop ops))])
-                    + as-asz md (bare <ms)
+                   (as-asz md (bare <ms)                  ; 67 ahead of the override, as llvm
+                    + (sg = 'ds ? () [(sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 (scare 'as-strop ops))])
                     + (as-tab md (name (show stem + (sw @ 1 "b" 2 "w" 4 "d" "q"))) 0 () @ b
                          (two? b ? b (scare 'as-strop ops)))))))))
    ; BMI's names, a width suffix past them
