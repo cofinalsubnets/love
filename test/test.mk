@@ -939,12 +939,14 @@ test_uulean:
 	@sh test/gate/skip.sh gate-skip "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
-	@mkdir -p test/proof/lean
-	@echo 'LOVE	'test/proof/lean/uugen.lean "(src/tools/uu2lean.l on $m)"
-	@$m src/tools/uu2lean.l > test/proof/lean/uugen.lean
-	@echo TEST test/proof/lean/uugen.lean "(lean)"
-	@$(LEAN) test/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
-	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
+	@rm -rf out/uulean; mkdir -p out/uulean
+	@echo 'LOVE	'out/uulean "(src/tools/uu2lean.l on $m)"
+	@$m src/tools/uu2lean.l out/uulean > out/uulean/order
+	@echo TEST out/uulean "(lean, a module at a time, each over the ones before)"
+	@: > out/.uulean.out; for f in $$(cat out/uulean/order); do \
+	  LEAN_PATH=out/uulean $(LEAN) -o out/uulean/$$f.olean out/uulean/$$f.lean >> out/.uulean.out 2>&1 \
+	    || { cat out/.uulean.out; exit 1; }; \
+	done; if grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
 # random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
