@@ -61,7 +61,8 @@
              {"name" (prop "the lock's name")} ["name"])
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
-       (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or the row behind a green one, its union "
+       (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or a row stacked on the gated head of one "
+                           + "gating or green ahead, its union "
                            + "merged and committed in dir. It writes the row gating with dir's HEAD and starts love bee "
                            + "--gate there, which runs every lane the union owes from the row's gated-on, light and heavy, "
                            + "once, the slow lane last, through test/gate/lanes.sh under the heavy lock, then writes the row "
@@ -600,8 +601,14 @@
             ; a plan is from the gated-on: none, and every lane but test and test_slow drops out
             (#(g-git dir ("rev-parse --verify -q " + sh-quote (rows r 3 + "^{commit}"))) = 0)
              ("row \(r) is gated on " + rows r 3 + ", not a commit: write gated_on with queue_row, the sha its union merges onto")
-            (0 < #prev && rows prev 5 != "green")
-             ("row " + prev + " ahead is \(rows prev 5): the head row gates, or the row behind a green one")
+            ; stacked: behind a gating row, the union merges onto that row's gated head
+            (0 < #prev && rows prev 5 = "gating"
+             && g-git dir ("rev-parse -q --verify " + sh-quote (rows r 3 + "^{commit}"))
+                != g-git dir ("rev-parse -q --verify " + sh-quote (rows prev 4 + "^{commit}")))
+             ("row " + prev + " ahead gates " + rows prev 4 + ", but row \(r) is gated on " + rows r 3
+              + ": merge onto its gated head and write gated_on with queue_row")
+            (0 < #prev && rows prev 5 != "green" && rows prev 5 != "gating")
+             ("row " + prev + " ahead is \(rows prev 5): the head row gates, or a row stacked on one gating or green")
             !(two? (stat "\(dir)/test/gate/lanes.sh")) "no test/gate/lanes.sh in \(dir)"
             (#(g-git dir "rev-parse --verify -q HEAD") = 0) "no commit checked out in \(dir)"
             (0 < #(g-git dir "status --short --untracked-files=no")) "\(dir) has changes not committed: a gate runs on a commit"
@@ -670,6 +677,16 @@
                (word w k) (: f (filter (\ x (starts? x k)) w) (two? f ? (snip <f #k #<f) ()))
                got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1)) (word w "on=") (word w "back=")]))
                         (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
+               ; each lane's time, a line apiece in the nest's run/lanes.tsv: when, queue, row, who, head, lane, rc, secs, host
+               _ (: o (open (cite 'path 'nest 0 + "/run/lanes.tsv") "a") t (show (clock 0 // 1000))
+                    (? (hot? o)
+                       (: _ (each (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ()))
+                                  (\ l (: w (words l)
+                                          (say o (join "\t" [t q r who h <w (snip (w 1) 5 #(w 1))
+                                                             (word w "secs=" @ s (string? s ? s ""))
+                                                             (word w "on=" @ s (string? s ? s "here"))] + "\n")))))
+                          (close o))
+                       0))
                (one l) (: g (filter (\ y (<y = l)) got) (? (two? g) <g [l (elem l stood ? "0" "unrun") () ()]))
                res (map one (q-uniq (all + stood + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
