@@ -155,8 +155,8 @@
      ; ..the accumulator or the register written first, the same bytes; after, so a decode reads its own
      [(x6t-r 'xchg 0 144 '(Av Zv) '((b 1)))] (map (r \ x6t-r 'xchg 0 (145 + r) '(Av Zv) ()) ^7)
      [(x6t-r 'xchg 0 134 '(Gb Eb) ()) (x6t-r 'xchg 0 135 '(Gv Ev) ())]
-     [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () ())
-      (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () ())
+     [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () '((ow 4)))
+      (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () '((ow 4)))
       (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))]
      ;; the x87 escapes d8..df: memory by the digit, at&t's names carrying the width
      (catmap (e \ x6t-dig 0 (216 + <e) '(Ed) '((mod m) (iw 0)) (e 1))
@@ -191,7 +191,7 @@
      ;; the string ops, Intel's names (the AT&T shower respells movsd's)
      (catmap (e \ (: op <e b (e 1)
                      [(x6t-r (name (b + "b")) 0 op () ()) (x6t-r (name (b + "w")) 0 (op + 1) () '((ow 2)))
-                      (x6t-r (name (b + (e 2))) 0 (op + 1) () '((ow 8)))  (x6t-r (name (b + "d")) 0 (op + 1) () ())]))
+                      (x6t-r (name (b + (e 2))) 0 (op + 1) () '((ow 8)))  (x6t-r (name (b + "d")) 0 (op + 1) () '((ow 4)))]))
              '((164 "movs" "q") (166 "cmps" "q") (170 "stos" "q") (172 "lods" "q") (174 "scas" "q")
                (108 "ins" "d") (110 "outs" "d")))
      [(x6t-r 'test 0 168 '(Ab Ib) ()) (x6t-r 'test 0 169 '(Av Iz) ())]
@@ -199,22 +199,23 @@
      (x6t-dig 0 192 '(Eb Ib) () x6t-grp2) (x6t-dig 0 193 '(Ev Ib) () x6t-grp2)
      (x6t-dig 0 208 '(Eb) () x6t-grp2) (x6t-dig 0 209 '(Ev) () x6t-grp2)
      (x6t-dig 0 210 '(Eb CL) () x6t-grp2) (x6t-dig 0 211 '(Ev CL) () x6t-grp2)
-     [(x6t-r 'ret 0 195 () ()) (x6t-r 'ret 0 194 '(Uw) '((iw 0)))
+     [(x6t-r 'ret 0 195 () '((ow 2) (iw 2))) (x6t-r 'ret 0 195 () ()) (x6t-r 'ret 0 194 '(Uw) '((iw 0)))
       (x6t-r 'mov 0 198 '(Eb Ib) ()) (x6t-r 'mov 0 199 '(Ev Iz) ())
       (x6t-r 'leave 0 201 () ()) (x6t-r 'int3 0 204 () ()) (x6t-r 'int 0 205 '(ub) ()) (x6t-r 'xlat 0 215 () ())
       (x6t-r 'call 0 232 '(Jz) ()) (x6t-r 'jmp 0 233 '(Jz) ()) (x6t-r 'jmp 0 235 '(Jb) ())
       (x6t-r 'loopne 0 224 '(Jb) ()) (x6t-r 'loope 0 225 '(Jb) ()) (x6t-r 'loop 0 226 '(Jb) ()) (x6t-r 'jrcxz 0 227 '(Jb) ())
       (x6t-r 'hlt 0 244 () ()) (x6t-r 'cmc 0 245 () ()) (x6t-r 'clc 0 248 () ()) (x6t-r 'stc 0 249 () ())
       (x6t-r 'cli 0 250 () ()) (x6t-r 'sti 0 251 () ()) (x6t-r 'cld 0 252 () ()) (x6t-r 'std 0 253 () ())
-      (x6t-r 'pushf 0 156 () ()) (x6t-r 'popf 0 157 () ())]
+      (x6t-r 'pushf 0 156 () '((ow 2) (iw 2))) (x6t-r 'pushf 0 156 () ()) (x6t-r 'pushf 0 156 () '((iw p)))
+      (x6t-r 'popf 0 157 () '((ow 2) (iw 2))) (x6t-r 'popf 0 157 () ()) (x6t-r 'popf 0 157 () '((iw p)))]
      (x6t-dig 0 246 '(Eb Ib) () '(test test)) (x6t-dig 0 246 '(Eb) () '(() () not neg mul imul div idiv))
      (x6t-dig 0 247 '(Ev Iz) () '(test test)) (x6t-dig 0 247 '(Ev) () '(() () not neg mul imul div idiv))
      (x6t-dig 0 254 '(Eb) () '(inc dec)) (x6t-dig 0 255 '(Ev) () '(inc dec))
      (x6t-dig 0 255 '(Nq) '((iw 0)) '(() () call () jmp)) (x6t-dig 0 255 '(Ep) () '(() () () () () () push))
      ;; the 0F map: the system lane
      (map (e \ x6t-r (e 1) 1 <e () ()) '((5 syscall) (11 ud2) (119 emms) (8 invd) (9 wbinvd) (51 rdpmc)
-                                       (48 wrmsr) (49 rdtsc) (50 rdmsr) (162 cpuid)))
-     [(x6t-r 'sysretq 1 7 () '((ow 8))) (x6t-r 'sysretl 1 7 () ())
+                                       (48 wrmsr) (49 rdtsc) (50 rdmsr) (162 cpuid) (52 sysenter) (53 sysexit) (6 clts)))
+     [(x6t-r 'sysretq 1 7 () '((ow 8))) (x6t-r 'sysretl 1 7 () '((ow 4))) (x6t-r 'sysret 1 7 () ())
       (x6t-r 'lar 1 2 '(Gv Ev) ()) (x6t-r 'lsl 1 3 '(Gv Ev) ())]
      (x6t-dig 1 0 '(Ew) '((iw 0) (mod m)) '(sldt str)) (x6t-dig 1 0 '(Ew) '((iw 0)) '(() () lldt () verr verw)) (x6t-dig 1 0 '(Ew) () '(() () () ltr))
      [(x6t-r 'nop 1 31 '(Ev) ())]                                       ; the long nops
@@ -222,7 +223,7 @@
      [(x6t-r 'endbr64 1 30 () '((p f3) (rm 250) (x 1))) (x6t-r 'endbr32 1 30 () '((p f3) (rm 251) (x 1)))]
      (map (e \ x6t-r (e 1) 1 1 () [['rm <e]])
           '((248 swapgs) (208 xgetbv) (209 xsetbv) (249 rdtscp) (202 clac) (200 monitor) (201 mwait)
-            (250 monitorx) (251 mwaitx) (203 stac) (238 rdpkru) (239 wrpkru)))
+            (250 monitorx) (251 mwaitx) (203 stac) (238 rdpkru) (239 wrpkru) (193 vmcall) (217 vmmcall)))
      (x6t-dig 1 1 '(Eq) '((mod m) (iw 0)) '(sgdt sidt lgdt lidt () () () invlpg))
      [(x6t-r 'mov 1 32 '(Eq C) ()) (x6t-r 'mov 1 34 '(C Eq) ()) (x6t-r 'mov 1 33 '(Eq D) ()) (x6t-r 'mov 1 35 '(D Eq) ())
       (x6t-r 'vmread 1 120 '(Eq Gq) ()) (x6t-r 'vmwrite 1 121 '(Gq Eq) ())]
@@ -425,7 +426,20 @@
      ; inc and dec 40+r and 48+r, REX in 64; mov's accumulator to and from an absolute address
      (map (r \ x6t-r 'inc 0 (64 + r) '(Zv) '((i64 1))) ^8) (map (r \ x6t-r 'dec 0 (72 + r) '(Zv) '((i64 1))) ^8)
      [(x6t-r 'mov 0 160 '(Ab Ob) '((i64 1))) (x6t-r 'mov 0 161 '(Av Ov) '((i64 1)))
-      (x6t-r 'mov 0 162 '(Ob Ab) '((i64 1))) (x6t-r 'mov 0 163 '(Ov Av) '((i64 1)))]])
+      (x6t-r 'mov 0 162 '(Ob Ab) '((i64 1))) (x6t-r 'mov 0 163 '(Ov Av) '((i64 1)))]
+     ;; the far returns and pusha at a suffix's operand size; the prefixes as instructions, as
+     ;; gas reads `rep; movsb` (the decoder reads them as prefixes first)
+     [(x6t-r 'lret 0 203 () '((iw o))) (x6t-r 'iret 0 207 () '((iw o))) (x6t-r 'ret 0 195 () '((iw o) (i64 1)))
+      (x6t-r 'pusha 0 96 () '((iw o) (i64 1))) (x6t-r 'popa 0 97 () '((iw o) (i64 1)))
+      (x6t-r 'lock 0 240 () ()) (x6t-r 'rep 0 243 () ()) (x6t-r 'repe 0 243 () ()) (x6t-r 'repz 0 243 () ())
+      (x6t-r 'repne 0 242 () ()) (x6t-r 'repnz 0 242 () ())
+      ; crc32 by its source's width, the item's; rdpid's register whole, no REX.W; ud1
+      (x6t-r 'crc32 2 240 '(Gd Eb) '((p f2) (w 0) (iw 1) (x 1))) (x6t-r 'crc32 2 240 '(Gq Eb) '((p f2) (w 1) (iw 1) (x 1)))
+      (x6t-r 'crc32 2 241 '(Gd Ev) '((p f2) (ow 2) (iw o) (x 1))) (x6t-r 'crc32 2 241 '(Gd Ev) '((p f2) (ow 4) (iw o) (x 1)))
+      (x6t-r 'crc32 2 241 '(Gq Eq) '((p f2) (w 1) (iw o) (x 1)))
+      (x6t-r 'ud1 1 185 '(Gv Ev) ())]
+     (x6t-dig 1 199 '(Eq) '((mod r) (p f3) (x 1)) '(() () () () () () () rdpid))
+     (x6t-dig 1 199 '(Ed) '((mod r) (p f3) (x 1) (i64 1)) '(() () () () () () () rdpid))])
    ;; the rows by map and opcode, in table order
    x64-tabix (foldl (\ t r (: k (r 1 * 256 + r 2) (pin t k (peep t k () + [r])))) {} x64-tab)
    ;; the encoder: a row lays operands written as the decoder's (decode.l), Intel order; of the
@@ -512,7 +526,7 @@
        (idx role) (filter (i \ elem (rl i) role) ^n @ (i . _) i _ -1)
        [r n rl wl
         (filter (i \ elem (wl i) '(v p y) && elem (rl i) '(G E Z A)) ^n)
-        (any (i \ elem (wl i) '(v p y z) && nelem (rl i) '(V W H L)) ^n || a 'ow != () || a 'iw = 'p)
+        (any (i \ elem (wl i) '(v p y z) && nelem (rl i) '(V W H L)) ^n || a 'ow != () || elem (a 'iw) '(p o))
         (any (i \ wl i = 'b && nelem (rl i) '(I U J)) ^n)
         (idx '(G V S C D)) (idx '(E W N T)) (idx '(Z))
         (catmap (ro \ filter (i \ rl i = ro) ^n) '(G E Z A) @ (i . _) i _ -1)
@@ -554,7 +568,8 @@
        ; outside 64 a target's or an indirect one's is the operand size it names
        iw (? (iw0 = 'p) (md = 64 ? (osz = 2 ? 2 8) osz) (iw0 = 'o) w (iw0 != ()) iw0 (gwi < 0 ? 0 (wd (wl gwi))))
        jn (any (r \ elem r '(J N)) rl)
-       (? (#ops != n || (i6 && md = 64) || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
+       ; outside 64 no 64-bit register, and no 64-bit push
+       (? (#ops != n || (i6 && md = 64) || (md != 64 && (any (o \ x6e-rg? o && o 2 = 8) ops || hasp && osz = 8)) || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
            || (ow != () && w > 0 && vsz && w != ow) || (hasp && md = 64 && osz = 4)
            || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'st || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))

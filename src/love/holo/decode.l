@@ -287,9 +287,10 @@
           ""))
    (od-mn mn w ops)
     (: s (show mn)
-       (? (elem mn '(push pop)) (s + (w = 2 ? "w" "q"))
-          (elem mn '(call ret pushf popf)) (s + "q")
-          (elem mn '(ljmp lcall in out)) (s + xa-wsfx w)
+       (? (elem mn '(push pop ret pushf popf)) (s + (w = 2 ? "w" "q"))
+          (mn = 'call) (s + "q")
+          (mn = 'xlat) "xlatb"
+          (elem mn '(ljmp lcall in out lret iret crc32 ud1)) (s + xa-wsfx w)
           (elem mn '(lgdt lidt sgdt sidt)) (s + "q")
           (mn = 'fwait) "wait"
           (elem mn '(andn bzhi bextr pdep pext mulx sarx shlx shrx rorx blsr blsmsk blsi)) (s + xa-wsfx w)
