@@ -20,6 +20,8 @@ extern uintptr_t const k_pie_base, k_pie_data;   // kmain.c, patched in by the t
 #define k_slice 2                          // a turn, in timer ticks
 #define k_umbase 0x100000000000ull         // where mmap lays the first mapping
 #define k_ushared (1ull << 55)             // a descriptor's software bit: the kernel's page, lent
+#define k_ucow (1ull << 56)                // ..and the next, a page a fork shares, written once
+                                           // it is the writer's own
 #define k_upa 0x0000fffffffff000ull        // a descriptor's frame
 // a page's descriptor: valid page, AF, inner shareable, MAIR's write-back slot, EL1 never runs it
 #define k_upage_bits (3ull | 1ull << 10 | 3ull << 8 | 1ull << 2 | 1ull << 53)
@@ -32,9 +34,8 @@ struct k_aframe { uint64_t x[31], sp, pc, pstate, tp, pad; uint8_t q[512]; uint6
 #define k_sswap 176                        // k_kswap's save under it: lr at 88, daif at 160
 
 // one process's machine: the two kernel stacks a turn trades between, then what the kernel
-// keeps -- its blocks, freed at the end, and its mappings, each its own block, freed when it
-// goes. why: how its last turn ended; f: the frame of the call it is in
-struct k_umm { uint64_t lo, hi; void *raw; };
+// keeps -- its blocks, freed at the end, and its mappings (ushare.h), freed when they go.
+// why: how its last turn ended; f: the frame of the call it is in
 struct k_uctx {
   uint64_t ttbr0, msp, psp, mnext;
   long pid;
@@ -120,20 +121,46 @@ static uint8_t *k_ukva(struct k_uctx *c, uint64_t va) {
 static void k_ucopy(struct k_uctx *c, uint64_t va, void const *s, uint64_t n) {
   for (uint64_t i = 0; i < n; i++) *k_ukva(c, va + i) = ((uint8_t const*) s)[i]; }
 
+static uint64_t k_uprot(uint64_t e, long prot);
+#define k_epa(e) ((e) & k_upa)
+#include "../ushare.h"
+
+// c's shared page at va made its own to write -> 0; -EFAULT where it is no such page, or
+// -ENOMEM. one no other process holds is written in place, the rest copied apart. inle runs on
+// one core, so this core's tlbi is every translation's
+static long k_ubreak(struct k_uctx *c, uint64_t va) {
+  uint64_t *e = va < k_utop ? k_uwalk(c, va) : NULL;
+  if (!e || !(*e & 1) || !(*e & k_ucow)) return -EFAULT;
+  int i = k_umof(c, va);
+  long k = i < 0 ? -1 : k_uinblk(&c->mm[i], *e);
+  if (k < 0 || !c->mm[i].sh) return -EFAULT;
+  struct k_ushare *s = c->mm[i].sh;
+  if (s->n[k] > 1) {
+    uint8_t *p = k_upg(&c->mm[i]);
+    if (!p) return -ENOMEM;
+    memcpy(p, k_va(*e & k_upa), 4096);
+    if (!(*e & k_uxn)) k_usync(p, 4096);
+    s->n[k]--, s->live--;
+    *e = (*e & ~k_upa) | k_pa(p); }
+  *e = (*e & ~k_ucow) & ~k_uro;
+  k_tlbi_all();
+  return 0; }
+
 // is va's page c's, for the kernel to read -- and to write, with w?
 static bool k_upage(struct k_uctx const *c, uint64_t va, bool w) {
   if (va >= k_utop) return false;
   uint64_t *e = k_uwalk(c, va);
-  return e && *e & 1 && *e & k_uel0 && (!w || !(*e & k_uro)); }
+  return e && *e & 1 && *e & k_uel0 && (!w || !(*e & k_uro) || *e & k_ucow); }
 
-// does p..p+n lie in c's memory, and may the kernel write it with w?
-static bool k_uokw(struct k_uctx const *c, uint64_t p, uint64_t n, bool w) {
+// does p..p+n lie in c's memory, and may the kernel write it with w? a page to write is made
+// c's own first, since the kernel writes through c's descriptors
+static bool k_uokw(struct k_uctx *c, uint64_t p, uint64_t n, bool w) {
   if (p + n < p) return false;
   if (!n) return true;
   for (uint64_t va = p & ~4095ull; va < p + n; va += 4096)
-    if (!k_upage(c, va, w)) return false;
+    if (!k_upage(c, va, w) || (w && *k_uwalk(c, va) & k_ucow && k_ubreak(c, va))) return false;
   return true; }
-static bool k_uok(struct k_uctx const *c, uint64_t p, uint64_t n) { return k_uokw(c, p, n, false); }
+static bool k_uok(struct k_uctx *c, uint64_t p, uint64_t n) { return k_uokw(c, p, n, false); }
 
 // a string of c's, its NUL inside its memory
 static bool k_ustr(struct k_uctx const *c, uint64_t p) {
@@ -142,7 +169,7 @@ static bool k_ustr(struct k_uctx const *c, uint64_t p) {
   return false; }
 
 // a NULL-ended vector of c's strings, each in its memory
-static bool k_uvec(struct k_uctx const *c, uint64_t p) {
+static bool k_uvec(struct k_uctx *c, uint64_t p) {
   for (;; p += 8) {
     if (!k_uok(c, p, 8)) return false;
     uint64_t s = *(uint64_t const*) (uintptr_t) p;
@@ -151,7 +178,7 @@ static bool k_uvec(struct k_uctx const *c, uint64_t p) {
 
 // a call's pointers checked against the process's memory -> 0, or -EFAULT; an unknown call
 // is -ENOSYS, so nothing unchecked reaches k_proc_call
-static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint64_t d,
+static long k_uargs(struct k_uctx *c, long n, uint64_t a, uint64_t b, uint64_t d,
                     uint64_t e, uint64_t f, uint64_t g) {
   bool ok;
   switch (n) {
@@ -208,8 +235,8 @@ static uint64_t k_uprot(uint64_t e, long prot) {
   if (prot & PROT_EXEC) e &= ~k_uxn;
   return e; }
 
-// the calls on the process's own memory -> their answer. a mapping is a block of its own,
-// laid fresh past the last; a file's is a copy of its bytes, read through the process's fd
+// the calls on the process's own memory -> their answer. a mapping is laid fresh past the
+// last, in blocks of its own (k_umlay); a file's is a copy of its bytes, read through its fd
 static long k_umem(struct k_uctx *c, long n, uint64_t a, uint64_t b, long d, long e, long f, long g) {
   uint64_t lo = a & ~4095ull, hi = (a + b + 4095) & ~4095ull;
   if (n == NR_madvise) return 0;
@@ -217,30 +244,8 @@ static long k_umem(struct k_uctx *c, long n, uint64_t a, uint64_t b, long d, lon
     if (e & MAP_FIXED || !b) return -EINVAL;
     lo = c->mnext, hi = lo + ((b + 4095) & ~4095ull);
     if (hi > k_utop - k_ustack - 4096) return -ENOMEM;
-    if (c->nmm == c->cmm) {
-      int m = c->cmm ? 2 * c->cmm : 16;
-      struct k_umm *t = k_grab((uintptr_t) m * sizeof *t);
-      if (!t) return -ENOMEM;
-      for (int i = 0; i < c->nmm; i++) t[i] = c->mm[i];
-      k_drop(c->mm);
-      c->mm = t, c->cmm = m; }
-    void *raw;
-    uint8_t *k = k_uraw(hi - lo, &raw);
-    if (!k) return -ENOMEM;
-    if (!(e & MAP_ANONYMOUS)) {                    // the file's bytes from g on, its offset kept
-      long at = k_proc_call(c->pid, NR_lseek, f, 0, SEEK_CUR, 0, 0, 0), r = at;
-      if (r >= 0) r = k_proc_call(c->pid, NR_lseek, f, g, SEEK_SET, 0, 0, 0);
-      for (uint64_t o = 0; r >= 0 && o < b; o += (uint64_t) r)
-        if (!(r = k_proc_call(c->pid, NR_read, f, (long) (uintptr_t) (k + o), (long) (b - o), 0, 0, 0))) break;
-      if (at >= 0) k_proc_call(c->pid, NR_lseek, f, at, SEEK_SET, 0, 0, 0);
-      if (r < 0) return kfree(raw), r; }
-    if (d & PROT_EXEC) k_usync(k, hi - lo);
-    long r = k_umapb(c, lo, hi, false, false, k);
-    for (uint64_t va = lo; !r && va < hi; va += 4096) {
-      uint64_t *p = k_uwalk(c, va);
-      *p = k_uprot(*p, d); }
-    if (r) return kfree(raw), r;                   // its tables stay, on the block list
-    c->mm[c->nmm++] = (struct k_umm) { lo, hi, raw };
+    long r = k_umlay(c, lo, b, d, e & MAP_ANONYMOUS, f, g);
+    if (r < 0) return k_umem(c, NR_munmap, lo, hi - lo, 0, 0, 0, 0), r;
     c->mnext = hi + 4096;
     return (long) lo; }
   if (a & 4095 || hi <= lo || hi > k_utop) return -EINVAL;
@@ -250,13 +255,17 @@ static long k_umem(struct k_uctx *c, long n, uint64_t a, uint64_t b, long d, lon
     if (*p & k_ushared && d & PROT_WRITE) return -EACCES; }
   for (uint64_t va = lo; va < hi; va += 4096) {
     uint64_t *p = k_uwalk(c, va);
-    if (p && *p & 1) {
-      if (n == NR_mprotect && d & PROT_EXEC && !(*p & k_ushared)) k_usync(k_va(*p & k_upa), 4096);
-      *p = n == NR_munmap ? 0 : k_uprot(*p, d); } }
+    if (!p || !(*p & 1)) continue;
+    if (n == NR_mprotect && d & PROT_EXEC && !(*p & k_ushared)) k_usync(k_va(*p & k_upa), 4096);
+    int j = k_umof(c, va);
+    if (n == NR_munmap) { if (j >= 0) k_ulet(&c->mm[j], *p); *p = 0; continue; }
+    bool two = j >= 0 && k_uothers(&c->mm[j], *p);
+    *p = k_uprot(*p, d);                           // a page still shared is written once its own
+    if (two && !(*p & k_uro)) *p |= k_uro | k_ucow; }
   k_wr_ttbr0_el1(c->ttbr0);                        // the stale translations go
   if (n == NR_munmap)                              // a mapping wholly gone gives its block back
     for (int i = 0; i < c->nmm; i++)
-      if (lo <= c->mm[i].lo && c->mm[i].hi <= hi) kfree(c->mm[i].raw), c->mm[i--] = c->mm[--c->nmm];
+      if (lo <= c->mm[i].lo && c->mm[i].hi <= hi) k_unmm(&c->mm[i]), c->mm[i--] = c->mm[--c->nmm];
   return 0; }
 
 // the turn ends: back to the pump, why saying how (k_proc_run); a process that waits comes
@@ -311,10 +320,12 @@ static uint64_t k_uidreg(uint32_t k) {
   return v; }
 
 // a fault in the running process (a_ufault, from EL0): an mrs of an ID register answers as
-// linux's does, the process going on past it; any other ends it as linux's signal would
+// linux's does, the process going on past it; a write to a page a fork shares (a permission
+// fault, WnR) makes it the writer's; any other ends it as linux's signal would
 void k_proc_fault(uint64_t esr, struct k_aframe *f) {
   struct k_uctx *c = k_ucur();
   uint64_t ec = esr >> 26;
+  if (ec == 0x24 && (esr & 0x3c) == 0x0c && esr >> 6 & 1 && !k_ubreak(c, k_rd_far_el1())) return;
   uint32_t ins = (ec == 0 || ec == 0x18) && k_uok(c, f->pc, 4) ? *(uint32_t const*) (uintptr_t) f->pc : 0;
   if ((ins & 0xfff00000) == 0xd5300000 && (ins >> 12 & 0xff) == 0x80   // mrs, op0 3, op1 0, CRn 0
       && (ins >> 8 & 15) >= 4 && (ins >> 8 & 15) <= 7) {
@@ -409,11 +420,11 @@ static long k_uload_love(struct k_uctx *c, uint64_t *pc, uint64_t *phdr, uint64_
   *pc = k_upie + h->e_entry;
   return 0; }
 
+// the mappings go first: their walk reads the tables, which are blocks
 static void k_ufree(struct k_uctx *c) {
+  k_unmms(c);
   for (int i = 0; i < c->nblk; i++) kfree(c->blk[i]);
   k_drop(c->blk);
-  for (int i = 0; i < c->nmm; i++) kfree(c->mm[i].raw);
-  k_drop(c->mm);
   k_drop(c); }
 
 // the first turn's stacks: the frame a_uret erets from at the top, k_kswap's save under it
@@ -469,9 +480,10 @@ long k_proc_run(void *m) {
 void k_proc_drop(void *m) { k_ufree(m); }
 
 // the pages under p's table t, at level sh from va: counted in *n where c is NULL (those no
-// mapping holds), else laid in c -- a lent page as it is, a mapping's at its place in c's copy
-// of the mapping, the rest a page each from *b -> 0, or -ENOMEM
-static long k_ukin(struct k_uctx const *p, struct k_uctx *c, uint64_t const *t, int sh,
+// mapping holds), else laid in c -- a lent page as it is, a mapping's page in its block shared
+// (p's and c's both written once their own), the rest copied, a mapping's into c's chunk of it
+// and the others a page each from *b -> 0, or -ENOMEM
+static long k_ukin(struct k_uctx const *p, struct k_uctx *c, uint64_t *t, int sh,
                    uint64_t va, uint8_t **b, uint64_t *n) {
   for (int i = 0; i < 512; i++) {
     uint64_t e = t[i], at = va | (uint64_t) i << sh;
@@ -480,25 +492,35 @@ static long k_ukin(struct k_uctx const *p, struct k_uctx *c, uint64_t const *t, 
       long r = k_ukin(p, c, k_va(e & k_upa), sh - 9, at, b, n);
       if (r) return r;
       continue; }
-    int j = 0;
-    while (j < p->nmm && !(p->mm[j].lo <= at && at < p->mm[j].hi)) j++;
-    if (!c) { *n += !(e & k_ushared) && j == p->nmm; continue; }
+    int j = k_umof(p, at);
+    if (!c) { *n += !(e & k_ushared) && j < 0; continue; }
     uint64_t *d = k_upte(c, at);
     if (!d) return -ENOMEM;
     if (e & k_ushared) { *d = e; continue; }
-    uint8_t *to = j < p->nmm ? (uint8_t*) c->mm[j].raw + (at - p->mm[j].lo) : (*b += 4096) - 4096;
+    uint8_t *to;
+    if (j >= 0) {
+      struct k_umm *m = &c->mm[j];
+      long k = k_uinblk(m, e);
+      if (k >= 0 && m->sh->n[k] < 65535) {
+        if (!(e & k_uro)) t[i] = e = e | k_uro | k_ucow;
+        m->sh->n[k]++, m->sh->live++;
+        *d = e;
+        continue; }
+      if (!(to = k_upg(m))) return -ENOMEM; }
+    else to = (*b += 4096) - 4096;
     memcpy(to, k_va(e & k_upa), 4096);
     if (!(e & k_uxn)) k_usync(to, 4096);
-    *d = (e & ~k_upa) | k_pa(to); }
+    *d = (e & ~k_upa & ~(e & k_ucow ? k_ucow | k_uro : 0)) | k_pa(to); }
   return 0; }
 
 // sys.c's door: a process here forks and execs
 bool k_proc_forks(void) { return true; }
 
-// sys.c's door: pid a copy of m's process, standing in m's call -- its pages but the lent ones
-// copied, its registers as the call found them, x0 the call's answer here -> 0, or -errno
+// sys.c's door: pid a copy of m's process, standing in m's call -- its mappings' blocks shared
+// till written, its other pages but the lent ones copied, its registers as the call found them,
+// x0 the call's answer here -> 0, or -errno
 long k_proc_clone(void *m, long pid) {
-  struct k_uctx const *p = m;
+  struct k_uctx *p = m;
   void **seat = k_proc_seat(pid);
   if (!seat || !p->f) return -ENOSYS;
   struct k_uctx *c = k_grab(sizeof *c);
@@ -508,9 +530,10 @@ long k_proc_clone(void *m, long pid) {
   long r = (c->l0 = k_ublk(c, 4096)) ? 0 : -ENOMEM;
   if (!r && p->nmm && !(c->mm = k_grab((uintptr_t) p->nmm * sizeof *c->mm))) r = -ENOMEM;
   for (int i = 0; !r && i < p->nmm; i++) {
-    c->mm[i] = p->mm[i];
-    if (!k_uraw(p->mm[i].hi - p->mm[i].lo, &c->mm[i].raw)) r = -ENOMEM;
-    else c->nmm = c->cmm = i + 1; }
+    struct k_umm *q = &p->mm[i];
+    if (!q->sh && !(q->sh = k_ushare(p, q))) r = -ENOMEM;
+    else q->sh->refs++, c->mm[i] = (struct k_umm) { q->lo, q->hi, q->raw, q->sh, NULL, NULL, 0 },
+         c->nmm = c->cmm = i + 1; }
   uint64_t n = 0;
   uint8_t *b = NULL;
   if (!r) {
@@ -519,6 +542,7 @@ long k_proc_clone(void *m, long pid) {
     if (n && !(b = k_ublk(c, n * 4096))) r = -ENOMEM; }
   if (!r) r = k_ukin(p, c, p->l0, 39, 0, &b, &n);
   if (!r && !(c->kst = k_ublk(c, k_kstack))) r = -ENOMEM;
+  k_tlbi_all();                                    // p's pages shared now, so p's descriptors changed
   if (r) return k_ufree(c), r;
   struct k_aframe f = *p->f;
   f.x[0] = 0;
