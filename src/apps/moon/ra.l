@@ -535,8 +535,11 @@
        (vs @ () [fs () {}]
           _ [(catmap (i \ (ud i @ [u d]
                               (: a (has i)
-                                 (map ld (filter (v \ two? (plan v) && rr? v && nelem v a) u)
-                                  + map st (pre i) + [(ft i)]
+                                 rl (filter (v \ two? (plan v) && rr? v && nelem v a) u)
+                                 ; a park's reload goes straight in: past the cuse a temp may take an arg's register
+                                 pk (lead? i && (ft i @ ['mov _ v] (elem v rl) _ 0))
+                                 ((pk ? () (map ld rl))
+                                  + map st (pre i) + [(pk ? (ft i @ ['mov p v] ['ld p 'r4 (sl v)]) (ft i))]
                                   + map st (filter (v \ two? (plan v) && sd? v) d)
                                   + map ld (filter (v \ !(rr? v)) (at i))))))
                     ^n)
