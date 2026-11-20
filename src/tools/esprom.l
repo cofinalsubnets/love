@@ -12,12 +12,14 @@
 ;   love src/tools/esprom.l [-s SIZE] image ELF ID FILE  the rom's boot image of ELF, to write at
 ;                                                       0: ID the chip's (13 the c6), no tty
 ; TTY /dev/ttyUSB0; SIZE the flash's bytes; -b BAUD past the sync, as 921600; -x ELF reads through
-; a stub in RAM, as src/tools/espstub.c, and any rom; a number takes 0x and K or M
+; a stub in RAM, as src/tools/espstub.c, and any rom; -t APP, when TTY is absent, opens APP (an
+; app's own usb serial, as tinyusb's) at 1200 baud, which reboots the chip into its rom's
+; USB-Serial-JTAG, and waits for TTY; a number takes 0x and K or M
 (borrow '(posix bytes hashes))
 (: dtr 2 rts 4
    blk 6144                                           ; the rom's ram block
    fblk 1024                                          ; ..and its flash block
-   usage "usage: esprom [-p TTY] [-s SIZE] [-b BAUD] [-x STUB] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset | image ELF ID FILE"
+   usage "usage: esprom [-p TTY] [-t APP] [-s SIZE] [-b BAUD] [-x STUB] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset | image ELF ID FILE"
    (die m) (say err ("esprom: " + m + "\n"), flush err, quit 1)
    (num w) (: (dig c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) 99)
               hex (2 < #w && w 0 = 48 && (w 1 = 120 || w 1 = 88))
@@ -60,13 +62,27 @@
    ; the flags, then the verb and its words
    (opts as o) (as @ ("-p" . d . r) (opts r (pin o 'dev d)) ("-s" . n . r) (opts r (pin o 'size (num n)))
                   ("-b" . n . r) (opts r (pin o 'baud (num n)))
-                  ("-x" . f . r) (opts r (pin o 'stub (slurp f))) _ [o as])
+                  ("-x" . f . r) (opts r (pin o 'stub (slurp f))) ("-t" . a . r) (opts r (pin o 'app a)) _ [o as])
+   ; the 1200 baud touch, then up to 10 s for the rom's port; a chip still coming back from a
+   ; reset shows neither port a while
+   (touch a dev)
+    (: (show? k) (? (two? (stat dev) || two? (stat a) || k = 0) 0 (rest 100, show? (k - 1)))
+       (show? 50, two? (stat dev) ? 0 (poke a dev)))
+   (poke a dev)
+    (: f (openfd a 5)
+       _ (charm? f ? 0 (die (a + ": " + uerrno f)))
+       t (termios f)
+       _ (nom? t ? 0 (settermios f ([0 0 2224 0 1200] + drop 5 t)))
+       _ (close f)
+       (wait k) (? (two? (stat dev)) 0 (k = 0) (die (dev + ": no rom port after the touch")) (rest 100, wait (k - 1)))
+       (wait 100))
    (main as)
     (: oa (opts as {'dev "/dev/ttyUSB0"}) o <oa vs <>oa
        _ (vs @ ["image" e i f] (image (slurp e) (num i) (charm? (o 'size) ? (o 'size) 0) @ m
                                   (uwrite f m ? (say out "\(#m) bytes to \(f)\n", flush out, quit 0) (die ("cannot write " + f))))
                _ 0)
        dev (o 'dev)
+       _ (string? (o 'app) && !two? (stat dev) ? (touch (o 'app) dev))
        fd (openfd dev 5)
        _ (charm? fd ? 0 (die (dev + ": " + uerrno fd)))
        st0 (termios fd)
@@ -115,6 +131,9 @@
        (connect _) (reset 0, speed 115200, sync 30, o 'baud @ b (charm? b && !jtag? ? (call0 15 (w32 [b 0]) "change_baudrate", speed b, rest 50, pin got 'b "")))
        ; the esp32 classic by the word at 0x40001000: its rom takes a shorter flash_begin
        (esp32? _) (<(call0 10 (w32 [1073745920]) "read_reg") = 15736195)
+       ; the s3 by the same word; a touch left its rtc's force-download bit set, which a reset keeps
+       (s3? _) (<(call0 10 (w32 [1073745920]) "read_reg") = 9)
+       (app _) (s3? 0 ? (call0 9 (w32 [0x6000812C 0 0xFFFFFFFF 0]) "write_reg"), boot 0)
        ; the flash's pins and shape, as the rom wants them before it is read or written
        (attach _) (: sz (o 'size)
                      (charm? sz ? 0 (fail "-s SIZE: the flash's size is wanted"),
@@ -173,9 +192,9 @@
             fmd5 off #d @ sum (sum = md5 d ? (say out "md5 \(sum) as written\n", flush out)
                                 (fail ("the flash sums " + sum + ", the image " + md5 d)))))
        (vs @ ("run" . f . r) (run (slurp f) (r @ (s . _) (num s) _ 5), leave 0)
-             ["read" a n f] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, fread (num a) (num n) f), boot 0, leave 0)
-             ["md5" a n] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, say out (fmd5 (num a) (num n) + "\n"), flush out), boot 0, leave 0)
-             ["write" a f] (slurp f @ data (connect 0, attach 0 @ sz (inside (num a) #data sz, fwrite (num a) data), boot 0, leave 0))
-             ["reset"] (boot 0, leave 0)
+             ["read" a n f] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, fread (num a) (num n) f), app 0, leave 0)
+             ["md5" a n] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, say out (fmd5 (num a) (num n) + "\n"), flush out), app 0, leave 0)
+             ["write" a f] (slurp f @ data (connect 0, attach 0 @ sz (inside (num a) #data sz, fwrite (num a) data), app 0, leave 0))
+             ["reset"] (jtag? ? (connect 0, app 0) (boot 0), leave 0)
              _ (fail usage)))
    (main >argv))
