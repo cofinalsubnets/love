@@ -154,12 +154,14 @@ static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flus
   flush(), boot2(); }
 
 void chip_uid(uint8_t id[8]) {
+  // from sram no boot2 ran and xip came up in reset: the rom's own slow xip goes back instead
+  int const sram = (uintptr_t) chip_uid >> 28 == 2u;
   uint32_t b2[64];
-  for (uint32_t i = 0; i < 64; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
+  for (uint32_t i = 0; i < 64 && !sram; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
   // the ram copy is past a bl's reach from flash: by register
   void (*volatile const ram)(uint8_t *, romfn, romfn, romfn, romfn) = flash_uid_ram;
   ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
-      (romfn) ((uintptr_t) b2 | 1u)); }
+      sram ? rom_fn('C' | 'X' << 8) : (romfn) ((uintptr_t) b2 | 1u)); }
 
 // --- into the rom's usb boot: reset_usb_boot, by its two-letter code ------
 void rom_bootsel(void) {
