@@ -237,6 +237,9 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love0_o)
 endif
+# love's objects take linux's predefines on every host: moonlibc picks the running kernel at
+# run time, so a mac's or a BSD's rebuild compiles the same objects. a link still names its own
+moonc = $(moon0) -os linux
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -278,7 +281,7 @@ $$($(2))/sys.o: $$(holocat_dep) $$(love0)
 endef
 
 moon_d = $(ho)/moon
-$(eval $(call moonlane,moon,moon_d,moon0,hosta))
+$(eval $(call moonlane,moon,moon_d,moonc,hosta))
 mksys_l = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
           src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l src/love/holo/thumb2.l \
           src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l
@@ -894,7 +897,7 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 	@mkdir -p "$$(dir $$@)"
 	@LOVE_NO_IMAGE= $$(love0) -l $$< -q -e '(lay-vec "$$@" "$$($(4))")' && test -s $$@
 endef
-$(eval $(call kart,kart,moon_d,moon0,hosta))
+$(eval $(call kart,kart,moon_d,moonc,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
 # the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
@@ -919,7 +922,7 @@ kart_doom_o = $(moon_d)/inle/doom.o $(moon_d)/inle/doomsnd.o \
 $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
-	@$(moon0) $(kart_inc) -c $< $@
+	@$(moonc) $(kart_inc) -c $< $@
 $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
