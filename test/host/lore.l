@@ -9,7 +9,7 @@
                     st (h-wf <md)
                     _ (close >md)
                     [<st (split "\r\n" o) o])
-   games ["apartment" "court" "dusk" "garage" "grass88" "grass99" "saver" "shaft" "slop" "stones" "tower" "wad" "wade"]
+   games ["apartment" "court" "dream" "dusk" "garage" "grass88" "grass99" "saver" "shaft" "slop" "stones" "tower" "wad" "wade"]
    ls (lo-run [lo-love "play"])
    old (lo-run [lo-love "lore"])
    help (lo-run [lo-love "play" "--help"])
@@ -19,6 +19,7 @@
    ga (lo-run [lo-love "play" "grass" "--help"])          ; an alias plays its game, unlisted
    wh (lo-run [lo-love "play" "test/lore/hall.l" "--nope"])  ; a world's path, to its usage
    eh (lo-run [lo-love "lore" "edit"])
+   dh (lo-run [lo-love "lore" "dream" "--nope"])           ; the dream, from the apartment, to its usage
    (test (games = lore-games ())
          (0 = <ls) (all (n \ elem n (ls 1)) games) !(any (n \ elem n (ls 1)) ["story" "design" "world" "corridor" "edit"])
          (0 = <old) (ls 1 = old 1)
@@ -29,6 +30,7 @@
          (0 = <ga) (has? (ga 2) "usage: love play grass88") !(elem "grass" (ls 1))
          (2 = <wh) (has? (wh 2) "usage: love play LEVEL.l")
          (2 = <eh) (has? (eh 2) "no game edit")
+         (2 = <dh) (has? (dh 2) "usage: love play dream")
          (lore-kind "src/apps/lore/levels/lighthouse.l" = ['story 'design])
          (lore-kind "src/apps/lore/levels/earth.l" = ['world 'world-edit])
          (lore-kind "test/lore/hall.l" = ['world 'world-edit])

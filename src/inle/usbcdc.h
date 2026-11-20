@@ -1,11 +1,12 @@
 // a USB CDC-ACM console's class half, for any board's device controller: the descriptors,
 // endpoint 0's requests, the line state and both byte paths. the controller includes this
-// after naming UCDC_VID, UCDC_PID and UCDC_PRODUCT, defines the usbhw_ hooks, and calls
+// after naming UCDC_VID, UCDC_PID and UCDC_PRODUCT (and UCDC_SERIAL, "1" unless named), defines the usbhw_ hooks, and calls
 // ucdc_setup, ucdc_ep0_out, ucdc_rx and ucdc_reset from its interrupt. endpoint 2 bulk both
 // ways is the data; 3 in is the notification the class asks for, never sent. bytes go out
 // only while a host holds DTR, so a port nobody opened never stalls the console.
 // UCDC_ECM adds cdc-ecm beside it, a composite: interfaces 2 and 3 an ethernet link, its
-// notification on 4 in and its frames on 5 bulk both ways (see the ECM half below)
+// notification on 4 in and its frames on 5 bulk both ways (see the ECM half below).
+// UCDC_ACM2 adds a second cdc-acm port there instead, a uart's bytes (the second port's half)
 #include <stdint.h>
 
 enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = 4096 };   // ucdc_rxn a power of two
@@ -30,8 +31,17 @@ static void usbhw_ecm_tx(void const *src, uint32_t n);  // n bytes in on endpoin
 static int usbhw_ecm_tx_busy(void);
 static void usbhw_ecm_notify(void const *src, uint32_t n);   // in on endpoint 4
 #endif
+#ifdef UCDC_ACM2
+static void usbhw_uart_rx_arm(void);                    // a packet out of endpoint 5, then ucdc_uart_rx
+static void usbhw_uart_tx(void const *src, uint32_t n); // n bytes in on endpoint 5
+static int usbhw_uart_tx_busy(void);
+#endif
 
-#ifndef UCDC_ECM
+#ifndef UCDC_SERIAL
+#define UCDC_SERIAL "1"
+#endif
+
+#if !defined(UCDC_ECM) && !defined(UCDC_ACM2)
 static uint8_t const ucdc_dev[18] = {
   18, 1, 0x00, 0x02, 2, 0, 0, ucdc_pkt, UCDC_VID & 0xFF, UCDC_VID >> 8, UCDC_PID & 0xFF, UCDC_PID >> 8,
   0x00, 0x01, 1, 2, 3, 1 };
@@ -46,7 +56,35 @@ static uint8_t const ucdc_cfg[67] = {
   9, 4, 1, 0, 2, 0x0A, 0, 0, 0,
   7, 5, 0x02, 2, ucdc_pkt, 0, 0,
   7, 5, 0x82, 2, ucdc_pkt, 0, 0 };
-static char const *const ucdc_str[4] = { 0, "love", UCDC_PRODUCT, "1" };
+static char const *const ucdc_str[4] = { 0, "love", UCDC_PRODUCT, UCDC_SERIAL };
+#elif defined(UCDC_ACM2)
+// two ports, each under an interface association; the second's interface named "uart"
+static uint8_t const ucdc_dev[18] = {
+  18, 1, 0x00, 0x02, 0xEF, 2, 1, ucdc_pkt, UCDC_VID & 0xFF, UCDC_VID >> 8, UCDC_PID & 0xFF, UCDC_PID >> 8,
+  0x00, 0x01, 1, 2, 3, 1 };
+static uint8_t const ucdc_cfg[141] = {
+  9, 2, 141, 0, 4, 1, 0, 0x80, 50,
+  8, 0x0B, 0, 2, 2, 2, 1, 0,
+  9, 4, 0, 0, 1, 2, 2, 1, 0,
+  5, 0x24, 0x00, 0x10, 0x01,
+  5, 0x24, 0x01, 0x01, 0x01,
+  4, 0x24, 0x02, 0x06,
+  5, 0x24, 0x06, 0, 1,
+  7, 5, 0x83, 3, 16, 0, 64,
+  9, 4, 1, 0, 2, 0x0A, 0, 0, 0,
+  7, 5, 0x02, 2, ucdc_pkt, 0, 0,
+  7, 5, 0x82, 2, ucdc_pkt, 0, 0,
+  8, 0x0B, 2, 2, 2, 2, 1, 4,
+  9, 4, 2, 0, 1, 2, 2, 1, 4,
+  5, 0x24, 0x00, 0x10, 0x01,
+  5, 0x24, 0x01, 0x01, 0x03,
+  4, 0x24, 0x02, 0x06,
+  5, 0x24, 0x06, 2, 3,
+  7, 5, 0x84, 3, 16, 0, 64,
+  9, 4, 3, 0, 2, 0x0A, 0, 0, 0,
+  7, 5, 0x05, 2, ucdc_pkt, 0, 0,
+  7, 5, 0x85, 2, ucdc_pkt, 0, 0 };
+static char const *const ucdc_str[5] = { 0, "love", UCDC_PRODUCT, UCDC_SERIAL, "uart" };
 #else
 // a composite of two functions, each under an interface association
 static uint8_t const ucdc_dev[18] = {
@@ -75,7 +113,7 @@ static uint8_t const ucdc_cfg[154] = {
   7, 5, 0x05, 2, ucdc_pkt, 0, 0,
   7, 5, 0x85, 2, ucdc_pkt, 0, 0 };
 static char ucdc_mac[13] = "020000000001";   // the host's end, twelve hex digits; the controller may set it
-static char const *const ucdc_str[5] = { 0, "love", UCDC_PRODUCT, "1", ucdc_mac };
+static char const *const ucdc_str[5] = { 0, "love", UCDC_PRODUCT, UCDC_SERIAL, ucdc_mac };
 #endif
 
 static volatile uint32_t ucdc_cfgd, ucdc_dtr, ucdc_lc_wanted, ucdc_parked, ucdc_boot;
@@ -88,20 +126,22 @@ static volatile uint32_t ucdc_w, ucdc_r;
 static void ucdc_send(void const *src, uint32_t n, uint32_t want) { usbhw_ep0_in(src, n < want ? n : want); }
 
 // a bus reset: unconfigured, nobody listening
-static void ucdc_ecm_reset(void);
-static void ucdc_reset(void) { ucdc_cfgd = 0, ucdc_dtr = 0, ucdc_lc_wanted = 0, ucdc_ecm_reset(); }
-static int ucdc_ecm_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len);
+static void ucdc_fn2_reset(void);
+static void ucdc_fn2_open(void);
+static void ucdc_fn2_coding(uint8_t const *src, uint32_t n);
+static void ucdc_reset(void) { ucdc_cfgd = 0, ucdc_dtr = 0, ucdc_lc_wanted = 0, ucdc_fn2_reset(); }
+static int ucdc_fn2_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len);
 
 static void ucdc_setup(uint32_t s0, uint32_t s1) {
   uint32_t const req = s0 & 0xFFFFu, val = s0 >> 16, idx = s1 & 0xFFFFu, len = s1 >> 16;
   uint8_t b[64];
   ucdc_lc_wanted = 0;
-  if (ucdc_ecm_setup(req, val, idx, len)) return;
+  if (ucdc_fn2_setup(req, val, idx, len)) return;
   switch (req) {
   case 0x0500: usbhw_address(val & 0x7F); usbhw_ep0_ack(); return;          // set address
   case 0x0900:                                                               // set configuration
-    ucdc_cfgd = 0, ucdc_dtr = 0, ucdc_ecm_reset();
-    if (val == 1) usbhw_open(), ucdc_parked = 0, usbhw_rx_arm(), ucdc_cfgd = 1;
+    ucdc_cfgd = 0, ucdc_dtr = 0, ucdc_fn2_reset();
+    if (val == 1) usbhw_open(), ucdc_parked = 0, usbhw_rx_arm(), ucdc_fn2_open(), ucdc_cfgd = 1;
     usbhw_ep0_ack(); return;
   case 0x0880: b[0] = (uint8_t) ucdc_cfgd; ucdc_send(b, 1, len); return;
   case 0x0080: case 0x0081: case 0x0082: b[0] = b[1] = 0; ucdc_send(b, 2, len); return;
@@ -127,6 +167,7 @@ static void ucdc_setup(uint32_t s0, uint32_t s1) {
 // 134 baud is the loaders' ask for the bootloader (teensy_loader_cli -s), taken once the
 // status stage is out
 static void ucdc_ep0_out(uint8_t const *src, uint32_t n) {
+  if (ucdc_lc_wanted == 2) { ucdc_fn2_coding(src, n); ucdc_lc_wanted = 0; return; }
   if (ucdc_lc_wanted && n == 7) for (int i = 0; i < 7; i++) ucdc_lc[i] = src[i];
   if (ucdc_lc_wanted && n == 7 && (ucdc_lc[0] | ucdc_lc[1] << 8 | ucdc_lc[2] << 16 | (uint32_t) ucdc_lc[3] << 24) == 134)
     ucdc_boot = usbhw_ms() | 1;
@@ -169,10 +210,67 @@ int usb_getc(void) {
   if (ucdc_parked && sizeof ucdc_ring - (ucdc_w - ucdc_r) >= ucdc_pkt) ucdc_parked = 0, usbhw_rx_arm();
   return c; }
 
-#ifndef UCDC_ECM
-static void ucdc_ecm_reset(void) {}
-static int ucdc_ecm_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len) {
+#ifndef UCDC_ACM2
+static void ucdc_fn2_coding(uint8_t const *src, uint32_t n) { (void) src, (void) n; }
+#endif
+#if !defined(UCDC_ECM) && !defined(UCDC_ACM2)
+static void ucdc_fn2_reset(void) {}
+static void ucdc_fn2_open(void) {}
+static int ucdc_fn2_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len) {
   (void) req, (void) val, (void) idx, (void) len; return 0; }
+#elif defined(UCDC_ACM2)
+// --- the second port's half: interface 2's line coding and lines are the firmware's to lay on
+// its uart (usb_uart_codings counts each coding set); its bytes go out whenever configured, as
+// a uart's would, and a host that stops reading loses the newest
+enum { uacm_tx = 1024, uacm_rxn = 1024 };   // uacm_rxn a power of two
+static uint8_t uacm_lc[7] = { 0x00, 0xC2, 0x01, 0x00, 0x00, 0x00, 0x08 };   // 115200 8N1
+static volatile uint32_t uacm_codings, uacm_lines, uacm_parked;
+static uint8_t uacm_txb[uacm_tx];
+static uint32_t uacm_txn;
+static volatile uint8_t uacm_ring[uacm_rxn];
+static volatile uint32_t uacm_w, uacm_r;
+
+static void ucdc_fn2_reset(void) { uacm_lines = 0; }
+static void ucdc_fn2_open(void) { uacm_parked = 0, uacm_txn = 0, usbhw_uart_rx_arm(); }
+
+static int ucdc_fn2_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len) {
+  if ((idx & 0xFF) != 2) return 0;
+  switch (req) {
+  case 0x2021: if (len != 7) return 0; ucdc_lc_wanted = 2; usbhw_ep0_out(7); return 1;
+  case 0x21A1: ucdc_send(uacm_lc, 7, len); return 1;
+  case 0x2221: uacm_lines = val & 3; usbhw_ep0_ack(); return 1;   // bit 0 dtr, 1 rts
+  case 0x2321: usbhw_ep0_ack(); return 1; }
+  return 0; }
+
+static void ucdc_fn2_coding(uint8_t const *src, uint32_t n) {
+  if (n != 7) return;
+  for (int i = 0; i < 7; i++) uacm_lc[i] = src[i];
+  uacm_codings++; }
+
+static void ucdc_uart_rx(uint8_t const *src, uint32_t n) {
+  for (uint32_t i = 0; i < n && uacm_w - uacm_r < sizeof uacm_ring; i++) uacm_ring[uacm_w++ & (uacm_rxn - 1)] = src[i];
+  if (sizeof uacm_ring - (uacm_w - uacm_r) >= ucdc_pkt) usbhw_uart_rx_arm();
+  else uacm_parked = 1; }
+
+// the codings set so far, and the one standing: baud (4 bytes), stop bits, parity, data bits
+uint32_t usb_uart_codings(void) { return uacm_codings; }
+void usb_uart_coding(uint8_t lc[7]) { for (int i = 0; i < 7; i++) lc[i] = uacm_lc[i]; }
+uint32_t usb_uart_lines(void) { return uacm_lines; }
+
+int usb_uart_ready(void) { return uacm_w != uacm_r; }
+int usb_uart_getc(void) {
+  int c = uacm_ring[uacm_r++ & (uacm_rxn - 1)];
+  if (uacm_parked && sizeof uacm_ring - (uacm_w - uacm_r) >= ucdc_pkt) uacm_parked = 0, usbhw_uart_rx_arm();
+  return c; }
+
+// the staged bytes out once endpoint 5 is free; never waits
+void usb_uart_push(void) {
+  if (!ucdc_cfgd) { uacm_txn = 0; return; }
+  if (uacm_txn && !usbhw_uart_tx_busy()) usbhw_uart_tx(uacm_txb, uacm_txn), uacm_txn = 0; }
+
+void usb_uart_putc(int c) {
+  if (uacm_txn == uacm_tx) usb_uart_push();
+  if (uacm_txn < uacm_tx) uacm_txb[uacm_txn++] = (uint8_t) c; }
 #else
 // --- the ECM half: ethernet frames over endpoint 5, each ended by a short packet. a frame in
 // lands in a ring of whole frames, read as a stream of records, two bytes of length (high
@@ -187,9 +285,10 @@ static uint8_t uecm_tf[2 + uecm_mtu];
 static uint32_t uecm_tn;                           // bytes of the record being written
 static uint8_t const uecm_up[8] = { 0xA1, 0x00, 1, 0, 2, 0, 0, 0 };   // network connection: connected
 
-static void ucdc_ecm_reset(void) { uecm_alt = 0, uecm_in = 0, uecm_bad = 0; }
+static void ucdc_fn2_reset(void) { uecm_alt = 0, uecm_in = 0, uecm_bad = 0; }
+static void ucdc_fn2_open(void) {}
 
-static int ucdc_ecm_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len) {
+static int ucdc_fn2_setup(uint32_t req, uint32_t val, uint32_t idx, uint32_t len) {
   uint8_t b[1];
   switch (req) {
   case 0x0B01:                                                               // set interface

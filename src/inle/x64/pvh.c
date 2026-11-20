@@ -13,7 +13,7 @@ struct hvm_start_info {
 struct hvm_memmap_entry { uint64_t addr, size; uint32_t type, reserved; };
 struct hvm_modlist_entry { uint64_t paddr, size, cmdline_paddr, reserved; };
 
-// the image's top, patched in by src/tools/kproject.l: e820 still calls the image usable
+// the image's top, patched in by src/tools/transpose.l: e820 still calls the image usable
 // RAM, so pvh_give must carve it out
 extern uintptr_t const k_image_top;
 

@@ -75,9 +75,11 @@
    ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian
    (t32 w) (le16 (w >> 16) + le16 (w & 65535))
    ;; the wide thumb branch, byte offset o: S:J1:J2:imm10:imm11 with i1=~(J1^S), i2=~(J2^S);
-   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W
+   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W; it reaches +-16 MiB
+   (tbw-reach? o) (-16777216 <= o && o <= 16777214)
    (tbw o base)
-      (: imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
+      (: _ (tbw-reach? o ? 0 (scare 'thumb-branch-reach o))
+         imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
          i2 (o >> 22 & 1)  i1 (o >> 23 & 1)  s (o >> 24 & 1)
          j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
          (t32 ((0xF000 | (s << 10 | imm10)) << 16 | (base | (j1 << 13 | (j2 << 11 | imm11))))))
@@ -159,7 +161,7 @@
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'l32r 2
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'addpc 1 'l32r 2
              'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'testb 2 'zxl1 1 'zxl2 1 'zxml 3 'ldu1l 3 'ldu2l 3 'ldxbl 5 'ldxhl 5 'set 2 'set1 2 'br 2 'br8 2
              'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2

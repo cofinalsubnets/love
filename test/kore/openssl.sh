@@ -3,7 +3,7 @@
 . "$(dirname "$0")/common.sh"
 
 # the fixed answers are the host openssl's, pinned, so the check stands without one; where
-# openssl 3 is present whole outputs are compared too
+# openssl 4 is present whole outputs are compared too, as kore spells 4's x509 -text
 tc=test/host/tlschain
 d=$ho/.kore-openssl
 rm -rf "$d"; mkdir -p "$d"
@@ -184,7 +184,8 @@ clean "genpkey rsa" 1 genpkey -algorithm RSA
 clean "x509 -req a torn request" 1 x509 -req -in "$d/short.pem" -signkey "$d/lf.key"
 
 # --- whole outputs against the host's openssl, where it speaks the same face ---
-if command -v openssl > /dev/null 2>&1 && [ "$(openssl x509 -in $tc/leafr.pem -noout -subject 2>/dev/null)" = "subject=CN=leafr" ]; then
+if command -v openssl > /dev/null 2>&1 && openssl version 2>/dev/null | grep -q '^OpenSSL 4\.' &&
+   [ "$(openssl x509 -in $tc/leafr.pem -noout -subject 2>/dev/null)" = "subject=CN=leafr" ]; then
   for c in leafr leafe leaf512 leafw roote rootr rootw inter0 crit client nosan; do
     both "openssl x509 -text $c" openssl x509 -in $tc/$c.pem -noout -text
     both "openssl x509 fields $c" openssl x509 -in $tc/$c.pem -noout -subject -issuer -dates -serial -fingerprint -pubkey
@@ -206,5 +207,5 @@ if command -v openssl > /dev/null 2>&1 && [ "$(openssl x509 -in $tc/leafr.pem -n
   openssl req -in "$d/lf.csr" -noout -verify > /dev/null 2>&1 || fail "openssl verifies kore's request"
   echo "kore: openssl (x509 -text identical to the host openssl on the fixtures and on what genpkey, req and x509 -req made, verify, dgst, rand, base64, bad input) ok"
 else
-  echo "kore: openssl (x509, genpkey, req, x509 -req, verify, dgst, rand, base64, bad input) ok -- no openssl 3 here to compare whole outputs"
+  echo "kore: openssl (x509, genpkey, req, x509 -req, verify, dgst, rand, base64, bad input) ok -- no openssl 4 here to compare whole outputs"
 fi

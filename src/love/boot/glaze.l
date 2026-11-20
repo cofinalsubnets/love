@@ -2871,9 +2871,10 @@
        qualfr (G 'qualfr)  jitfrx (G 'jitfrx)  flo ((G 'targets) arch 'float)
        anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jgir-rerun-ok? (G 'jgir-rerun-ok?)  jitgroupirx (G 'jitgroupirx)  grpfix (G 'grpfix)
        njit-amble (G 'njit-amble)
-       asm (cite 'holo 'assemble)                                         ; pinned: the cat's later reopen of holo never moves it
-       _ (pin (G 'glazeasm) 'f asm)
-       _ (pin (G 'glazeasm) 'at (cite 'holo 'assemble-at))
+       ga (G 'glazeasm)                                                   ; the egg's holo till the blob's reload pins its own, glazed;
+       _ (pin ga 'f (cite 'holo 'assemble))                               ; the cat's later reopen of holo never moves it
+       _ (pin ga 'at (cite 'holo 'assemble-at))
+       (asm t ir) (ga 'f t ir)
        gvbox (G 'gvbox)                                                     ; canon reads globals through ala's gv, pinned here on the first closure
        probebox (G 'probebox)
        (hit x) (pin fires () (1 + peep fires () 0), x)
@@ -2992,13 +2993,13 @@
       tw (ev '(: (foldn f z x) (? (two? x) (foldl f z (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z)))
                  (foldrn f z x) (? (two? x) (foldr f z (jot x)) (: n (saturate x) (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0)))
                  (eachn x f) (? (two? x) (each (jot x) f) (: n (saturate x) (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0)))
-                 (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ())))
+                 (mapn f x) (? (two? x) (map f (jot x)) (: n (saturate x) (go i) (? (< i n) (: e (f i) (. e (go (+ i 1))))) (go 0)))
                  (alln f x) (? (two? x) (all f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0)))
                  (anyn f x) (? (two? x) (any f (jot x)) (: n (saturate x) (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0)))
                  (foldnn f z n) (: (go i a) (? (< i n) (go (+ i 1) (f a i)) a) (go 0 z))
                  (foldrnn f z n) (: (go i) (? (< i n) (f i (go (+ i 1))) z) (go 0))
                  (eachnn n f) (: (go i) (? (< i n) (: _ (f i) (go (+ i 1)))) (go 0))
-                 (mapnn f n) (: (go i a) (? (< i n) (go (+ i 1) (. (f i) a)) (rev a)) (go 0 ()))
+                 (mapnn f n) (: (go i) (? (< i n) (: e (f i) (. e (go (+ i 1))))) (go 0))
                  (allnn f n) (: (go i) (? (< i n) (? (f i) (go (+ i 1)) 0) 1) (go 0))
                  (anynn f n) (: (go i) (? (< i n) (? (f i) 1 (go (+ i 1))) 0) (go 0))
                  (list foldn foldrn eachn mapn alln anyn foldnn foldrnn eachnn mapnn allnn anynn)))

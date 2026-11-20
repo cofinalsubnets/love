@@ -24,6 +24,15 @@
    nf (fc-g (big -0.5 0 1 + big 0.5 1 0))
    (deep tris) (facets 4 4 7 fc-id nf (fc-z tris) () ())
    (cull tri fl) (facets 4 4 7 fc-id nf (fc-z [tri]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 fl]]))
+   ; a glow's three vertices at the middle, u v their offsets; the eye's right and up, near and
+   ; far, lead and soft past opts' first 8
+   pt (fc-g [(fc-vx 0 0 0 -1 -1 0.2 0 0) (fc-vx 0 0 0 3 -1 0.2 0 0) (fc-vx 0 0 0 -1 3 0.2 0 0)])
+   eye (fc-g [[0.0 0.0 0.0 0.0 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0 0.0 0.1 10.0 0.1 0.25]])
+   ; ..and a view looking along z, near 0.1 and far 10: a blue wall 2 away and a glow g before it
+   persp (fc-g [[1.0 0.0 0.0 0.0] [0.0 1.0 0.0 0.0] [0.0 0.0 (10.1 / 9.9) (-2.0 / 9.9)] [0.0 0.0 1.0 0.0]])
+   (span z r b) [(fc-vx -4 -4 z 0 0 r 0 b) (fc-vx 12 -4 z 0 0 r 0 b) (fc-vx -4 12 z 0 0 r 0 b)]
+   (red-at g o) (facets 4 4 7 persp (fc-g (span 2 0 1 + span (2 - g) 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () o @ f
+                 (peep f [1 1] 0 >> 16 & 255))
    ; a 4x4 texture laid a texel a pixel, perspective and affine; one texel a hole
    tex (star-tray [4 4] (map (k \ 1052688 * k) ^16))
    hol (star-tray [4 4] (map (k \ k = 5 ? -1 (1052688 * k)) ^16))
@@ -99,6 +108,11 @@
       ; a glow adds to what is under it, and is hidden by what is nearer
       (fc-n (facets 4 4 7 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) ((51 << 16) | 7) = 16)
       (fc-n (facets 4 4 7 fc-id (fc-g (big -0.5 0 1 + big 0.5 0.2 0)) (fc-z [[0 1 2 -1] [3 4 5 -2]]) () ()) 255 = 16)
+      ; ..a batch all glow turned to face the eye, each vertex u along its right and v along its up
+      (fc-n (facets 4 4 7 fc-id pt (fc-z [[0 1 2 -2]]) () eye) ((51 << 16) | 7) = 16)
+      (fc-n (facets 4 4 7 fc-id pt (fc-z [[0 1 2 -2]]) () ()) 7 = 16)
+      ; ..fading as what is behind it comes within the lead, over the soft; none past it
+      (red-at 1.0 eye = 51) (0 < red-at 0.05 eye < 51) (red-at -0.2 eye = 0) (red-at 0.05 () = 51)
       ; ..on a bare pixel kept as -1 less it, and added to what is drawn under it there
       (fc-n (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () ()) (-1 - (51 << 16)) = 16)
       (fc-n (facets 4 4 (facets 4 4 -1 fc-id (fc-g (big 0.0 0.2 0)) (fc-z [[0 1 2 -2]]) () (fc-g [[0.0 0.0 0.0 0.0 0.0 64.0]]))
@@ -133,4 +147,8 @@
       ; a 2x2 frame laid first under a 4x4, each of its pixels 2 by 2: the near face there stands
       ; over the far drawn after, the far there gives way to the near, none there the ground
       (fc-n (fc-under [[0 1 2 -1]] [[3 4 5 -1]]) blue = 16) (fc-n (fc-under [[3 4 5 -1]] [[0 1 2 -1]]) blue = 16)
-      (fc-n (fc-under [] []) 7 = 16) (fc-n (fc-under [[3 4 5 -1]] []) red = 16)))
+      (fc-n (fc-under [] []) 7 = 16) (fc-n (fc-under [[3 4 5 -1]] []) red = 16)
+      ; lace: row i the i-th of each column, a number in every row; () on a ragged or odd column
+      (lace [@(1 2) 5 @(3.5 4)] @ x (shape x = [6] && aall (x = @(1.0 5.0 3.5 2.0 5.0 4.0))))
+      (show (lace [@(7) (70 2)]) = "@(7.0 1.1805916207174113e21)")
+      (lace [@(1 2) @(1 2 3)] = ()) (lace [@(1 2) 'a] = ())))

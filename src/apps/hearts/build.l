@@ -27,7 +27,7 @@
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
 ;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
-;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
+;                named in .hearts/kcc.log), love's ld, the arm32 compat vdso's too, and love's ar
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 ; $HEARTS_CONFIG a config fragment laid over defconfig as merge_config.sh lays one: appended to
 ;                .config, then olddefconfig made (pi.config, the pi boards')
@@ -183,15 +183,15 @@
                        "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar")
                        "OBJCOPY" (selfpath 0 + " objcopy") "STRIP" (selfpath 0 + " strip") "NM" (selfpath 0 + " nm")
                        "OBJDUMP" (selfpath 0 + " objdump") "READELF" (selfpath 0 + " readelf")
-                       ; the compat vdso is elf32 arm, which love's ld does not link: lld's
-                       "LD_COMPAT" "ld.lld"
+                       ; the compat vdso's, elf32 arm
+                       "LD_COMPAT" (selfpath 0 + " ld")
                        ; x86's objtool: tools/build links and archives with HOSTLD and HOSTAR
                        @ c (x86 ? (pins c "HOSTCFLAGS" ("-idirafter " + here + "/usr/include")
                                         "HOSTPKG_CONFIG" (hd + "/libelf/pkg-config")
                                         "HOSTLD" (selfpath 0 + " ld") "HOSTAR" (selfpath 0 + " ar")) c))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
-                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"] ["HEARTS_PKG_CONFIG" "HOSTPKG_CONFIG"]
+                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_LD" "LD_COMPAT"] ["HEARTS_AR" "AR"] ["HEARTS_PKG_CONFIG" "HOSTPKG_CONFIG"]
                     ["HEARTS_OBJCOPY" "OBJCOPY"] ["HEARTS_STRIP" "STRIP"] ["HEARTS_NM" "NM"]
                     ["HEARTS_OBJDUMP" "OBJDUMP"] ["HEARTS_READELF" "READELF"]])
          goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
