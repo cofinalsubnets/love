@@ -10,8 +10,9 @@
 ;                      st their last two outputs each (() at rest): n of left then n of right,
 ;                      each operator's last two outputs, then scratch unless ws, a (tones-ws k)
 ;                      big enough, holds it; silence on a seat built without the kernel
-;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr raw], fn the left the operators
-;                      sum to, their outputs fed back from one run to the next
+;   (ops-voice os at end gl gr rate)  play's voice [end fn gl gr raw cv], fn the left the operators
+;                      sum to, their outputs fed back from one run to the next; cv the same voice
+;                      as tones' mixer runs it (tones-voice), () without the kernel
 (module (ops ops-row ops-rows ops-run ops-voice ops-db)
 (:
  width 49
@@ -24,6 +25,7 @@
  (ops-rows os) (gem-tray [(width * #os)] (catmap ops-row os))
  kern (cite 'dsp 'tones)
  kern-ws (cite 'dsp 'tones-ws)
+ kern-voice (cite 'dsp 'tones-voice)
  (ops-run R os st n f0 rate ws) (kern ? (kern R st n f0 rate ws) (gem-tray [(2 * n + 2 * #os)] (map (_ \ 0.0) ^(2 * n + 2 * #os))))
 
  ; --- a voice: the kernel run for the frames asked, outputs carried; frames asked out of
@@ -41,5 +43,5 @@
    ; ..raw the kernel's whole answer, its first n the left, for a mixdown that reads it in place
    (raw ix) (: n #ix f0 (peep ix 0 0) _ (reach f0) (run f0 n))
    fn (ix \ peep (raw ix) (iota #ix) 0.0)
-   [end fn gl gr raw])
+   [end fn gl gr raw (kern-voice && kern-voice R at end rate)])
 )) ; module ops
