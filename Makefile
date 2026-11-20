@@ -516,7 +516,7 @@ rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
 # the one roster: mkrt.l lays a frame per isa its groups name, and runtime-ar finds it by name.
 # wasm alone lays no mksys leaves: its jumps are wasmfn's
-rt_isas ?= x64 a64 rv64 i386 arm rv32 wasm thumb1 thumb2 thumb2sp xtensa
+rt_isas ?= x64 a64 rv64 i386 arm rv32 mips wasm thumb1 thumb2 thumb2sp xtensa
 rt_nosys = wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
@@ -528,7 +528,7 @@ rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
 # the 32-bit isas have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
-$(foreach i,i386 arm rv32 thumb1 thumb2 thumb2sp xtensa,$(eval rt_groups_$i = $$(rt_groups) rt))
+$(foreach i,i386 arm rv32 mips thumb1 thumb2 thumb2sp xtensa,$(eval rt_groups_$i = $$(rt_groups) rt))
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup
