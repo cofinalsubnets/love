@@ -414,7 +414,7 @@
    (ld-arpad s) (#s & 1 ? (s + "\n") s)
    (ld-arelf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70)
    ; a member's defined globals in symbol-table order; a non-ELF member defines nothing
-   (ld-ardefs f b) (ld-arelf? b ? (rev <(dusyms f b (b 18 + 256 * b 19))))
+   (ld-ardefs f b) (ld-arelf? b ? (rev <(dusyms f b (b 5 = 2 ? (256 * b 18 + b 19) (b 18 + 256 * b 19)))))   ; e_machine in the member's order
    (arbytes ms) (arlay 0 1 ms)
    ; ..any shape: thin keeps only each member's header, its name (a path from the archive's
    ; directory) in "//" however short, as llvm-ar lays one; ix 0 leaves the index out
