@@ -350,6 +350,13 @@
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; main.c pins `love-os` per run off __love_osv: one binary meets four kernels
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'macos "Darwin" 'inle "Inle"}
+   ; the kernels' vocabulary likewise, one word per OS
+   os-canon {'linux 'linux  'gnu-linux 'linux
+             'freebsd 'freebsd  'fbsd 'freebsd
+             'netbsd 'netbsd
+             'macos 'macos  'darwin 'macos  'osx 'macos  'macosx 'macos  'mac 'macos
+             'inle 'inle}
+   osof (os-canon * name)
    ; a nom or string -> the canonical nom, () for an unknown one
    archof (arch-canon * name)
    ; total: an unknown spelling passes through as its nom, for the refuser to name

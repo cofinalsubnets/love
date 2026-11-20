@@ -236,16 +236,37 @@
              'nostrip (say err ";; fixpoint: can't lay an imageless copy\n", 1)
              (say err ";; fixpoint failed\n", 1))))
 
-   ; a seed can lay for another machine: every love carries every ISA's runtime.
-   ; arch-nom (post.l) canonicalises any spelling to these words
+   ; a seed can lay for another machine: every love carries every ISA's runtime
    seed-arches '(x64 a64 rv64)
-   ; the arch word is positional and A PATH still wins: `./a64` is the
-   ; directory, the verb rail's own rule worn one level down.
-   (seed-arch? w) (:- (go 0) n #w (go i)
-                   (n <= i ? (elem (arch-nom w) seed-arches)
-                             (w i @ 47 0 (go (i + 1)))))
+   ; the words a seed reads, in any order, each to the slots it sets: an ISA itself (any
+   ; spelling archof knows), an OS its container, the metal an ELF. two values for one slot
+   ; refuse; a word naming none is the directory, and a path is never a word: `./a64`
+   seed-words {'elf [['cont 'elf]]  'macho [['cont 'macho]]  'mach-o [['cont 'macho]]
+               'kernel [['cont 'elf] ['kind 'kernel]]
+               'apk [['pkg "apk"]]  'aab [['pkg "aab"]]}
+   (seed-sets w) (: n (name w) a (archof n) o (osof n)
+                  (? (nom? a) [['arch a]]
+                     (o = 'inle) [['cont 'elf] ['kind 'kernel]]
+                     (nom? o) [['cont (o = 'macos ? 'macho 'elf)]]
+                     (seed-words n)))
+   seed-says {'arch "machines" 'cont "containers" 'kind "kinds" 'pkg "packages"}
+   ; t holds each slot as [value word], for the refusal to name both words
+   (seed-pin t w kv) (: k <kv v <>kv old (t k)
+                      (two? old && <old != v ?
+                       (src-die "seed: \(<>old) and \(w) are two different \(seed-says k)")
+                       (pin t k [v w])))
+   ; -> [slots leftovers]; past a package's directory the rest are love apk's, unread
+   (seed-reduce ws)
+    (:- (go ws {} ())
+       (go ws t rest)
+        (? (!(two? ws)) [t (rev rest)]
+           (string? <(t 'pkg) && two? rest) [t (rev rest + ws)]
+           (seed-sets <ws @ s
+              (two? s ? (map (seed-pin t <ws) s, go >ws t rest) (go >ws t (<ws . rest))))))
    ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
    (seed-native _) love-arch
+   ; this machine's own container
+   (seed-cont _) (elem 'love-os (names ()) && (ev 'love-os = 'macos) ? 'macho 'elf)
    ; the OS a cross lay is for, named only where this machine is not a hosted OS (inle): linux
    (seed-os _) (elem 'love-os (names ()) && ev 'love-os @ n
                   (nom? n && !(elem n '(linux freebsd netbsd)) ? 'linux ()))
@@ -271,14 +292,16 @@
        (e < 0 ? (src-die "can't write \(dst)"), puts ";; laid \(dst)\n"))
 
    (seed-usage _) (puts """
-    usage: love seed [-g] [ARCH] [DIR]
-           love seed [-g] FORMAT [DIR [FLAG..]]
-           love seed kernel [DIR]
-    lay this binary's source under DIR (default .) and rebuild it, byte for byte
-      ARCH   x64 | a64 | rv64: build for that machine instead, as DIR/love-ARCH
-      FORMAT apk | aab: android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
+    usage: love seed [-g] [WORD..] [DIR]
+           love seed [-g] apk|aab [DIR [FLAG..]]
+    lay this binary's source under DIR (default .) and rebuild it, byte for byte.
+    the words go in any order, and only two that disagree refuse
+      ARCH   x64 | a64 | rv64, or any spelling of one (x86_64, aarch64, riscv64 ..): build
+             for that machine instead, as DIR/love-ARCH
+      OS     linux | freebsd | netbsd | elf, macos | macho: the container, an ELF or a mach-o
       kernel this binary transposed onto the metal, as DIR/love-ARCH.elf: a reformat, its
-             code the running binary's, its own objects compiled from the carried tree
+             code the running binary's, its own objects compiled from the carried tree (inle)
+      apk | aab  android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
       -g     build with the system cc and tools, ours filling the gaps
 
     """)
@@ -286,16 +309,25 @@
    (seed-lay as0)
     (: _ (two? as0 && src-help? <as0 ? (seed-usage 0, quit 0))
        _ (two? as0 && src-vers? <as0 ? (src-vers "seed"))
-       _ (two? as0 && <as0 = "kernel" ? (quit (kern-seed >as0)))
        f0 (two? as0 ? <as0 "")
        greg? (f0 = "-g")
        as1 (greg? || f0 = "-a" ? >as0 as0)     ; -a is the default, still eaten
-       ; naming this machine's own arch is a native seed, fixpoint and all. the word is
-       ; eaten either way, or it would be read as the directory
-       fmt (two? as1 && elem <as1 seed-formats ? <as1)
-       xa0 (two? as1 && !(string? fmt) && seed-arch? <as1 ? (arch-nom <as1) ())
+       r (seed-reduce as1)
+       (slot k) <(<r k)
+       xa0 (slot 'arch) cont (slot 'cont) fmt (slot 'pkg)
+       as <>r
+       _ (!(string? fmt) && two? as && two? >as ? (src-die "seed: \(<as) and \(<>as) are two directories"))
+       _ (string? fmt && (nom? xa0 || nom? cont) ?
+          (src-die "seed: \(fmt) is android's app for both its abis, beside no machine or container"))
+       _ (nom? xa0 && !(elem xa0 seed-arches) ?
+          (src-die "seed: no seed for \(xa0) -- the machines: \(src-words (map show seed-arches))"))
+       ; naming this machine's own arch is a native seed, fixpoint and all
        xa (nom? xa0 && xa0 = seed-native 0 ? () xa0)
-       as (nom? xa0 || string? fmt ? >as1 as1)
+       _ (slot 'kind = 'kernel ?
+          (nom? xa ? (src-die "seed: the kernel is this binary transposed, for its own machine only")
+             (quit (kern-seed as))))
+       _ (nom? cont && cont != seed-cont 0 ?
+          (src-die "seed: a \(cont) seed transposes this binary, and that is not built yet"))
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
        exe (src-me 0)
