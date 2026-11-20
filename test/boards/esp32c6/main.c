@@ -1,6 +1,6 @@
 // esp32-c6 firmware, all mooncc -t rv32 (rv32imac, soft float: every float and double
 // through rt.o). not love: the toolchain on silicon, the boards' battery from ram over
-// the chip's own usb serial, then the gauge (gauge.c). the flash is never written
+// the chip's own usb serial, then the gauge (gauge.c); from the rom's loader or its flash
 #include <stdint.h>
 #include "../battery.h"
 

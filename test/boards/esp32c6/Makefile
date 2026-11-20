@@ -1,6 +1,6 @@
 # esp32-c6 build -- the battery compiled end to end by mooncc -t rv32 (rv32imac, soft float)
-# and linked by it at hp sram, one image the rom loader lays from its uart: no flash, no
-# bootloader, no crt0.
+# and linked by it at hp sram, one image the rom loader lays from its uart: no bootloader, no
+# crt0. esprom's image verb makes it a flash boot, written at 0 in the bootloader's place.
 #
 # `make` builds firm.elf and verifies where it loads; that is what `make test_esp32c6`
 # gates. test_esp32c6_board runs it on the chip through src/tools/esprom.l.

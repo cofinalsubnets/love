@@ -6,15 +6,18 @@
 ;                                                       -s attaches the flash first
 ;   love src/tools/esprom.l [-p TTY] -s SIZE read OFF LEN FILE   (the esp32's rom alone)
 ;   love src/tools/esprom.l [-p TTY] -s SIZE md5 OFF LEN
-;   love src/tools/esprom.l [-p TTY] -s SIZE write OFF FILE      erase, write, check, boot it
+;   love src/tools/esprom.l [-p TTY] -s SIZE write OFF FILE      erase, write, check; read, md5
+;                                                       and write boot the flash after
 ;   love src/tools/esprom.l [-p TTY] reset                       boot the flash
+;   love src/tools/esprom.l [-s SIZE] image ELF ID FILE  the rom's boot image of ELF, to write at
+;                                                       0: ID the chip's (13 the c6), no tty
 ; TTY /dev/ttyUSB0; SIZE the flash's bytes; -b BAUD past the sync, as 921600; -x ELF reads through
 ; a stub in RAM, as src/tools/espstub.c, and any rom; a number takes 0x and K or M
 (borrow '(posix bytes hashes))
 (: dtr 2 rts 4
    blk 6144                                           ; the rom's ram block
    fblk 1024                                          ; ..and its flash block
-   usage "usage: esprom [-p TTY] [-s SIZE] [-b BAUD] [-x STUB] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset"
+   usage "usage: esprom [-p TTY] [-s SIZE] [-b BAUD] [-x STUB] run ELF [SECONDS] | read OFF LEN FILE | md5 OFF LEN | write OFF FILE | reset | image ELF ID FILE"
    (die m) (say err ("esprom: " + m + "\n"), flush err, quit 1)
    (num w) (: (dig c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (65 <= c <= 70) (c - 55) 99)
               hex (2 < #w && w 0 = 48 && (w 1 = 120 || w 1 = 88))
@@ -44,12 +47,25 @@
                       ? [[(rdle f (o + 8) 4) (snip f (rdle f (o + 4) 4) (rdle f (o + 4) 4 + fs) + zbytes (ms - fs + padk ms 4))]]))
           [(rdle f 24 4) (catmap seg ^(rdle f 44 2))]))
    (slurp p) (uread p @ [1 t] t _ (die ("cannot read " + p)))
+   ; the rom's boot image: magic, the loads' count, dio, the size's code, the entry; no write
+   ; protect pin, the chip's id, any revision, a hash after; each load as address, size and
+   ; bytes; the loads' checksum closing a 16-byte edge, then the sha-256 of all before it
+   (image f id sz)
+    (: ld (loads f) sg <>ld
+       (code s) (s <= 1048576 ? 0 (1 + code (s // 2)))
+       hd (string [233 #sg 2 (16 * code sz)] + wrle <ld 4 + string [238 0 0 0] + wrle id 2 + string [0 0 0 255 255 0 0 0 0 1])
+       im (hd + join "" (map ([a b] \ wrle a 4 + wrle #b 4 + b) sg))
+       ck (im + zbytes (15 - #im % 16) + string [(xsum (join "" (map (l \ <>l) sg)))])
+       (ck + hex2b (sha256 ck)))
    ; the flags, then the verb and its words
    (opts as o) (as @ ("-p" . d . r) (opts r (pin o 'dev d)) ("-s" . n . r) (opts r (pin o 'size (num n)))
                   ("-b" . n . r) (opts r (pin o 'baud (num n)))
                   ("-x" . f . r) (opts r (pin o 'stub (slurp f))) _ [o as])
    (main as)
     (: oa (opts as {'dev "/dev/ttyUSB0"}) o <oa vs <>oa
+       _ (vs @ ["image" e i f] (image (slurp e) (num i) (charm? (o 'size) ? (o 'size) 0) @ m
+                                  (uwrite f m ? (say out "\(#m) bytes to \(f)\n", flush out, quit 0) (die ("cannot write " + f))))
+               _ 0)
        dev (o 'dev)
        fd (openfd dev 5)
        _ (charm? fd ? 0 (die (dev + ": " + uerrno fd)))
@@ -157,8 +173,8 @@
             fmd5 off #d @ sum (sum = md5 d ? (say out "md5 \(sum) as written\n", flush out)
                                 (fail ("the flash sums " + sum + ", the image " + md5 d)))))
        (vs @ ("run" . f . r) (run (slurp f) (r @ (s . _) (num s) _ 5), leave 0)
-             ["read" a n f] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, fread (num a) (num n) f), leave 0)
-             ["md5" a n] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, say out (fmd5 (num a) (num n) + "\n"), flush out), leave 0)
+             ["read" a n f] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, fread (num a) (num n) f), boot 0, leave 0)
+             ["md5" a n] (connect 0, attach 0 @ sz (inside (num a) (num n) sz, say out (fmd5 (num a) (num n) + "\n"), flush out), boot 0, leave 0)
              ["write" a f] (slurp f @ data (connect 0, attach 0 @ sz (inside (num a) #data sz, fwrite (num a) data), boot 0, leave 0))
              ["reset"] (boot 0, leave 0)
              _ (fail usage)))
