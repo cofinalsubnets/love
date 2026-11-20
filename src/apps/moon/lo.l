@@ -1439,8 +1439,9 @@
              (as (#as - 1) @ ['num o] [o ()]
                              e (lox g env e @ 'bad 'bad [_ _ fs] [5 fs])))
        (fx u d fs) ['fix u d fs]
-       ; t32's exclusive loops keep strex's status in r4, named so the frame saves it
-       (lx u d fs) (fx u d (t32? g ? ('(li r4 0) . fs) fs))
+       ; t32's exclusive loops keep strex's status in r4, and mips's sc its own there, named so
+       ; the frame saves it
+       (lx u d fs) (fx u d (t32? g || mp? g ? ('(li r4 0) . fs) fs))
        (? (bad? mo) 'bad
           (kind = 'generic) (nolane g "\(nm) is not carried out (its _n form is)")
           (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
