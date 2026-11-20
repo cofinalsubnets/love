@@ -23,9 +23,7 @@ static void cc_block(const uint32_t in[16], uint8_t out[64]) {
   QR(x[0], x[5], x[10], x[15]), QR(x[1], x[6], x[11], x[12]),
   QR(x[2], x[7], x[8],  x[13]), QR(x[3], x[4], x[9],  x[14]);
  for (int i = 0; i < 16; i++) {
-  uint32_t v = x[i] + in[i];
-  out[4*i] = (uint8_t) v;         out[4*i+1] = (uint8_t) (v >> 8);
-  out[4*i+2] = (uint8_t) (v >> 16); out[4*i+3] = (uint8_t) (v >> 24); } }
+  st32le(out + 4*i, x[i] + in[i]); } }
 
 // xor txt with the keystream from block ctr on: encrypt and decrypt are one act
 static void cc_xor(const uint8_t *key, const uint8_t *nonce, uint32_t ctr,
@@ -107,8 +105,7 @@ static void po_fin(const uint64_t h[5], const uint8_t *key, uint8_t out[16]) {
  w[3] = (uint64_t) ((p3 >> 18) | (p4 << 8))  & 0xffffffff;
  for (int i = 0; i < 4; i++) {
   f = w[i] + ld32le(key + 16 + 4*i) + (f >> 32);
-  out[4*i] = (uint8_t) f;           out[4*i+1] = (uint8_t) (f >> 8);
-  out[4*i+2] = (uint8_t) (f >> 16); out[4*i+3] = (uint8_t) (f >> 24); } }
+  st32le(out + 4*i, (uint32_t) f); } }
 
 static void po_mac(const uint8_t *key, const uint8_t *msg, uintptr_t n,
                    uint8_t out[16]) {
@@ -178,8 +175,6 @@ static void aes_block(const struct aes_ks *s, const uint8_t in[16], uint8_t out[
   for (int i = 0; i < 16; i++) a[i] = b[i] ^ s->rk[16 * r + i]; }
  memcpy(out, a, 16); }
 
-static void put64(uint8_t *p, uint64_t v) { for (int i = 7; i >= 0; i--) p[i] = (uint8_t) v, v >>= 8; }
-
 // y = (y ^ x) * h in gf(2^128), gcm's bit order: shift and mask, 128 steps, no branch
 static void gh_mul(uint64_t y[2], const uint8_t x[16], const uint64_t h[2]) {
  uint64_t x0 = y[0] ^ ld64be(x), x1 = y[1] ^ ld64be(x + 8), z0 = 0, z1 = 0, v0 = h[0], v1 = h[1];
@@ -200,9 +195,9 @@ static void gh_all(const uint64_t h[2], const uint8_t *aad, uintptr_t na,
    uintptr_t r = n - i < 16 ? n - i : 16;
    memset(blk, 0, 16), memcpy(blk, p + i, r);
    gh_mul(y, blk, h); } }
- put64(blk, (uint64_t) na * 8), put64(blk + 8, (uint64_t) nc * 8);
+ st64be(blk, (uint64_t) na * 8), st64be(blk + 8, (uint64_t) nc * 8);
  gh_mul(y, blk, h);
- put64(out, y[0]), put64(out + 8, y[1]); }
+ st64be(out, y[0]), st64be(out + 8, y[1]); }
 
 // the counter run from j0 + 1 over n bytes, and the tag's mask off j0 itself
 static void gcm_ctr(const struct aes_ks *s, const uint8_t iv[12], const uint8_t *in,
@@ -211,7 +206,7 @@ static void gcm_ctr(const struct aes_ks *s, const uint8_t iv[12], const uint8_t 
  memcpy(cb, iv, 12);
  for (uintptr_t i = 0; i < n; i += 16) {
   uint32_t c = (uint32_t) (i / 16 + 2);
-  cb[12] = (uint8_t) (c >> 24), cb[13] = (uint8_t) (c >> 16), cb[14] = (uint8_t) (c >> 8), cb[15] = (uint8_t) c;
+  st32be(cb + 12, c);
   aes_block(s, cb, ks);
   uintptr_t r = n - i < 16 ? n - i : 16;
   for (uintptr_t j = 0; j < r; j++) out[i + j] = in[i + j] ^ ks[j]; } }

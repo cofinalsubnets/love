@@ -555,7 +555,7 @@ xqemu_x64  = qemu-x86_64
 xqemu_a64 = qemu-aarch64
 xqemu_rv64 = qemu-riscv64
 # a kernel built for another arch on the roster is that arch's lane: its love is the one
-# projected. wasm is no lane's
+# transposed. wasm is no lane's
 xa ?= $(if $(filter x64 a64 rv64 arm,$(filter-out $(hosta),$a)),$a,$(if $(filter a64,$a),x64,a64))
 xqemu  = $(xqemu_$(xa))
 ifeq ($(filter $(xa),x64 a64 rv64 arm),)
@@ -584,7 +584,7 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
 	@echo 'MOON	'$@
 	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
-# baked where it runs, so a kernel projected from it wakes as the host lane's does
+# baked where it runs, so a kernel transposed from it wakes as the host lane's does
 $(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
 	@echo 'BAKE	'$@
 	@sh src/tools/xbake.sh $(ho)/love $(xa) $(xqemu) $< $(ho)/.dist-cat.l $@
@@ -728,7 +728,7 @@ k_h = $(love_h) $(S)/love/archive/ustar.h $(S)/love/archive/srctree.h $(wildcard
 k_odir = $(ko)/$(ka)
 k_elf = $(ko)/love-$(ka).elf
 k_pie = $(k_odir)/love.pie
-# ..and the wasm seat's own end of the lane: one module, no elf to project out of it,
+# ..and the wasm seat's own end of the lane: one module, no elf to transpose it to,
 # and one name -- wasm is nobody's arch, so the seat's letter is not in it
 k_mod = $(ko)/love.wasm
 
@@ -777,7 +777,7 @@ $(k_pie): $(k_o) $(mdep)
 # (the doom objects stay: they are C like any other, and the flag is a link input here
 # as it is for the host), and this link in place of the -pie one -- everything up to
 # `-t $a` is the lane the metal seats take. the module is where it ends; there is no
-# address space to project an elf out of, so $(k_elf) and its kproject have no wasm twin.
+# address space for an elf, so $(k_elf) and its transpose have no wasm twin.
 ifeq ($a,wasm)
 k_libc_c =
 k_mach_o = $(k_doom_o)
@@ -786,25 +786,25 @@ $(k_mod): $(k_o) $(mdep)
 	@mkdir -p "$(dir $@)"
 	@$(mooncc) -t $a $(k_o) -o $@
 endif
-kproject_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
-  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/lds.l $S/love/holo/link.l $S/tools/kproject.l
-$(k_odir)/kproject.list: force_dist_list
+transpose_l = $S/apps/kore/text.l $S/apps/kore/u.l $S/apps/kore/asbook.l \
+  $S/love/holo/elf.l $S/love/holo/obj.l $S/love/holo/lds.l $S/love/holo/link.l $S/tools/transpose.l
+$(k_odir)/transpose.list: force_dist_list
 	@mkdir -p "$(dir $@)"
-	@tf=$@.$$$$.tmp; echo '$(kproject_l)' > $$tf; \
+	@tf=$@.$$$$.tmp; echo '$(transpose_l)' > $$tf; \
 	 $(note)
-$(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
+$(k_odir)/transpose.l: $(transpose_l) $(k_odir)/transpose.list
 	@echo '$(t_cat)	'$@
 	@mkdir -p "$(dir $@)"
 	@{ echo "(borrow 'holo)"; cat $S/apps/kore/text.l $S/apps/kore/u.l; \
-	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(kproject_l)); } > $@
+	   echo "(borrow 'kore)"; cat $(filter-out $S/apps/kore/text.l $S/apps/kore/u.l,$(transpose_l)); } > $@
 
-# at the host's own arch the elf is projected out of the shipped love, with $(kart_o) laid
+# at the host's own arch the elf is the shipped love transposed, with $(kart_o) laid
 # past its data and bound to its doors, and it WAKES the image the binary carries. an arch
-# whose processes run love (a src/inle/<arch>/proc.c) projects the cross lane's love the
+# whose processes run love (a src/inle/<arch>/proc.c) transposes the cross lane's love the
 # same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
 # board (kb=) has metal files of its own, so it takes the pie.
 # $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
-# link, the kernel's bodies bound in. test_disk rides the projection, test_kernel_rv64 the pie.
+# link, the kernel's bodies bound in. test_disk rides the transpose, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
 k_pie_dep =
 k_pie_o =
@@ -819,10 +819,10 @@ k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
 k_pie_o = $(xkart_o)
 endif
 endif
-$(k_elf): $(k_odir)/kproject.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
+$(k_elf): $(k_odir)/transpose.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m $(k_odir)/kproject.l $(k_pie_in) $(k_boot_o) $@ $(ka) $(k_pie_o) && test -s $@
+	@$m $(k_odir)/transpose.l $(k_pie_in) $(k_boot_o) $@ $(ka) $(k_pie_o) && test -s $@
 
 # the pi's firmware and qemu's raspi load a flat image, not an elf
 $(ko)/love-$(ka).img: $(k_elf) $S/tools/kflat.l $(mdep)
@@ -862,8 +862,8 @@ $(k_odir)/%.o: $(S)/%.c $(k_h) $(mooncc_dep) out/lib/baked.h out/lib/distlist.h 
 # `a=` says; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
-# THE SEAT: the metal objects a projection lays beside the one binary; `love seed kernel` compiles
-# them from the source it carries and projects a bootable elf out of itself. one shape,
+# THE SEAT: the metal objects a transpose lays beside the one binary; `love seed kernel` compiles
+# them from the source it carries and transposes itself to a bootable elf. one shape,
 # worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
 # the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
 # carries no seat and its roster is empty.
@@ -930,7 +930,7 @@ $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@LOVE_NO_IMAGE= $(love0) $(holocat) src/tools/mkblob.l $< $@ doom_wad $(hosta)
 endif
 
-# doom's nifs ride the hosted link, their kernel names doors; the projection lays the rest
+# doom's nifs ride the hosted link, their kernel names doors; the transpose lays the rest
 kart_ko = $(filter-out $(kart_doom_o),$(kart_o))
 $(ho)/love.raw $(ho)/love.cand.raw $(ho)/love.praw: $(kart_doom_o)
 $(k_elf): $(k_pie_o)

@@ -8,7 +8,7 @@
 #endif
 
 // RAM below the image's far edge is spoken for, and nothing else reserves it: handed to the
-// heap, the kernel eats itself. a value kproject.l patches into the file
+// heap, the kernel eats itself. a value transpose.l patches into the file
 extern uintptr_t const k_image_top;
 
 

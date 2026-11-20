@@ -86,7 +86,6 @@ static double vb_p2(int e) {
  if (e > 1023) e = 1023;
  x.u = (uint64_t) (e + 1023) << 52;
  return x.d; }
-double lm_sin(double), lm_cos(double);
 #define VB_PI 3.14159265358979323846
 // sin and cos of 2 pi num / den
 static void vb_sc(long long num, long long den, double *s, double *c) {

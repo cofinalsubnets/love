@@ -3,13 +3,15 @@
 // integer-only: the x86 entry thunk saves only rsi/rdi, so ms_abi's xmm6..15 must stay untouched.
 // love.stay beside it keeps boot services: the kernel never returns, so the rule holds
 
+#include "../kboot.h"
+
 typedef unsigned long long u64;
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
 
 extern u64 efi_call(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e);
-extern u64 efi_call6(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
+extern uintptr_t efi_call6(void *fn, uintptr_t a, uintptr_t b, uintptr_t c, uintptr_t d, uintptr_t e, uintptr_t f);
 extern void efi_go(u64 pml4, u64 entry);
 extern void efi_stay(u64 pml4, u64 entry, u64 tcr);
 extern u8 efi_back[];
@@ -32,23 +34,6 @@ static void say(char *s) {
  efi_call(((void **) sys[8])[1], (u64) sys[8], (u64) w, 0, 0, 0); }
 
 static u64 die(char *s) { say("uefi: "); say(s); say("\r\n"); return 1; }
-
-// k.h's k_boot, copied by hand (this compiles before out/lib exists): every field through the
-// last one written here must match k.h's layout
-#define ram_max 64
-struct k_boot {
- u32 ram_n;
- struct { u64 base, len; } ram[ram_max];
- u64 hhdm;
- struct { u64 base; u16 w, h; u32 pitch_px; u8 scale; u32 cap_px; } fb;
- u8 has_fb;
- u64 date;                             // no door here answers it; kmain's rtc does
- char cmdline[256];
- void *image; u64 image_len, initrd, initrd_len;
- void *efi_st, *efi_image;             // love.stay: boot services kept, and our handle
- u64 (*efi_call)(void *fn, u64 a, u64 b, u64 c, u64 d, u64 e, u64 f);
- void *efi_back;
- u64 tsc0, tsc_khz; };
 
 static u8 mmap[32768];                 // the UEFI memory map, GetMemoryMap-filled
 // pml4, a pdpt per window, four pds, and a spare pd for a relocated kernel; a table's low
@@ -139,7 +124,7 @@ static u64 stay(void *handle, struct k_boot *kb, u64 entry) {
  return 1; }
 #endif
 
-// a link address's physical one: x64's image is linked high and loaded low (kproject.l)
+// a link address's physical one: x64's image is linked high and loaded low (transpose.l)
 static u64 kpa(u8 *e, u64 va) {
  u64 phoff = *(u64*) (e + 32);
  u16 phn = *(u16*) (e + 56), phsz = *(u16*) (e + 54);
@@ -262,7 +247,7 @@ u64 efi_main(void *handle, void *st) {
   u64 fb = *(u64*) (m + 24);
   u32 fmt = *(u32*) (info + 12);
   if (fb && fmt < 3) {                                 // 0/1 are the 32-bit orders, 2 a bitmask
-   kb->fb.base = fb;
+   kb->fb.base = (void *) fb;
    kb->fb.w = (u16) *(u32*) (info + 4);
    kb->fb.h = (u16) *(u32*) (info + 8);
    kb->fb.pitch_px = *(u32*) (info + 32);
@@ -332,10 +317,10 @@ u64 efi_main(void *handle, void *st) {
   u64 pe = pa + np * 4096, wb = (hi + 0x1fffff) & ~0x1fffffull;
   // a bent window runs lo..wb at kbase, so a block there has no code alias: the heap keeps out
   if (kbase != lo && pa < wb && lo < pe) {
-   if (pa < lo && kb->ram_n < ram_max) kb->ram[kb->ram_n].base = pa, kb->ram[kb->ram_n].len = lo - pa, kb->ram_n++;
+   if (pa < lo && kb->ram_n < k_boot_ram_max) kb->ram[kb->ram_n].base = pa, kb->ram[kb->ram_n].len = lo - pa, kb->ram_n++;
    if (pe <= wb) continue;
    pa = wb; }
-  if (kb->ram_n >= ram_max) break;
+  if (kb->ram_n >= k_boot_ram_max) break;
   kb->ram[kb->ram_n].base = pa;
   kb->ram[kb->ram_n].len = pe - pa;
   kb->ram_n++; }

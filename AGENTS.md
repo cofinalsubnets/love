@@ -34,7 +34,11 @@ Instructions for any coding agent in this tree.
 ; guidelines for working in this tree:
 ; - keep comments short, calm lowercase, inline when possible, no paragraphs
 ; - comments should not log history, cite fixed bugs, or refer outside the present code
-; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
+; - C code may not keep state that belongs to one love thread (a struct g) in a mutable global or
+;   static; truly per-process state, C runtime internals, and tables built once and never modified
+;   may be statics. a table built lazily publishes its ready flag with a release, read with an acquire
+; - C code may call malloc/free where it must, since moonlibc is ours; the love heap is preferred
+;   wherever it serves
 ; - makefiles must be compatible with our make (cook)
 ; - shell scripts must be compatible with our shell (lush)
 ; - `make test` is the fast gate to check if something works
@@ -46,7 +50,7 @@ Instructions for any coding agent in this tree.
 
 ; love artifact and build information:
 ; - love and inle are not separate builds. moon builds both with the same flags, and a
-;   kernel is projected out of the love binary that makes it: that binary's own bytes, plus
+;   kernel is transposed from the love binary that makes it: that binary's own bytes, plus
 ;   the kernel objects it compiles from the source it carries, so they share one copy of
 ;   almost everything. a given instance of the love artifact is linked for hosted or
 ;   freestanding use, but the translation is bidirectional and mechanical, and either
