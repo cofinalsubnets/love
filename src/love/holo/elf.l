@@ -7,7 +7,7 @@
 ; address is < 2^31, so the length does not move), then for real. load after holo.l + the backend(s).
 
 (module 'holo
-(borrow 'posix)
+(borrow '(posix bytes))
 
 (: elf-base 4194304                                            ; 0x400000, the classic et_exec base
    elf-hdr  120                                                ; 64-byte ELF header + 56-byte phdr
@@ -27,7 +27,8 @@
                  'thumb1 40 'thumb2 40 'thumb2sp 40 'arm 40    ; EM_ARM
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
                  'rv64 243 'rv32 243                         ; EM_RISCV
-                 'xtensa 94}                                   ; EM_XTENSA
+                 'xtensa 94                                    ; EM_XTENSA
+                 'mips 8}                                      ; EM_MIPS, big-endian
 
    ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)
@@ -100,8 +101,8 @@
    ;; e_flags for an EM_ARM executable: eabi 5 (0x05000000), plus ABI_FLOAT_HARD (0x400) for
    ;; a target with an fpu, mooncc having no softfp lane. a .o carries plain 0x05000000.
    (arm-eflags target) (elem target '(thumb2 thumb2sp arm) ? 83887104 83886080)
-   ; an ELF32 link's e_flags: rv32's RVC, xtensa's xt_insn | xt_lit, else arm's
-   (elf32-eflags target) (target @ 'rv32 1 'xtensa 768 _ (arm-eflags target))
+   ; an ELF32 link's e_flags: rv32's RVC, xtensa's xt_insn | xt_lit, mips32r2 o32 noreorder, else arm's
+   (elf32-eflags target) (target @ 'rv32 1 'xtensa 768 'mips 0x70001001 _ (arm-eflags target))
 
    ;; elf64-at's twin at 32 bits. 'entry is the even code address; the thumb bit is the header's.
    (elf32-at base target mkprog data)
@@ -115,6 +116,43 @@
          img (catall [(elf32-hdr 2 base org filesz filesz machine (arm-eflags target) ()) code data])
          res {'bytes img 'entry org 'dataddr dataddr})
    (elf32 target mkprog data) (elf32-at elf-base target mkprog data)
+
+   ;; byte order. holo lays every ELF little-endian and a big-endian machine's is turned at
+   ;; the end; elf-swap turns one either way: the headers, the symbols, the relocations and
+   ;; group words. a section's own bytes are its producer's, already in the machine's order
+   elf-bemach '(8)                                             ; EM_MIPS
+   (elf-be? m) (elem m elf-bemach)
+   ; a laid file, bytes or pieces, as machine m's; a big-endian one becomes one text
+   (elf-order m ps) (elf-be? m ? [(elf-swap ps)] ps)
+   ; pieces (texts, bytes, lists of either) as one text
+   (elf-flat x) (? (string? x) x (all charm? x) (string (cask x))
+                   (join "" (map (p \ charm? p ? (string [p]) (elf-flat p)) x)))
+   (elf-swap s0)
+    (: s (elf-flat s0) n #s d (s 5) w64 (s 4 = 2) ws (w64 ? 8 4)
+       _ (52 < n && elem d '(1 2) ? 0 (scare 'elf-swap-data d))
+       (rd i k) (d = 1 ? (rdle s i k) (rdbe s i k))
+       ; each word as (offset width)
+       hdr (w64 ? '((16 2) (18 2) (20 4) (24 8) (32 8) (40 8) (48 4) (52 2) (54 2) (56 2) (58 2) (60 2) (62 2))
+                  '((16 2) (18 2) (20 4) (24 4) (28 4) (32 4) (36 4) (40 2) (42 2) (44 2) (46 2) (48 2) (50 2)))
+       phf (w64 ? '((0 4) (4 4) (8 8) (16 8) (24 8) (32 8) (40 8) (48 8)) (map (i \ [(4 * i) 4]) ^8))
+       shf (w64 ? '((0 4) (4 4) (8 8) (16 8) (24 8) (32 8) (40 4) (44 4) (48 8) (56 8)) (map (i \ [(4 * i) 4]) ^10))
+       syf (w64 ? '((0 4) (6 2) (8 8) (16 8)) '((0 4) (4 4) (8 4) (14 2)))
+       phoff (rd (w64 ? 32 28) ws) phent (rd (w64 ? 54 42) 2) phnum (rd (w64 ? 56 44) 2)
+       shoff (rd (w64 ? 40 32) ws) shent (rd (w64 ? 58 46) 2) shnum (rd (w64 ? 60 48) 2)
+       (rows b k z fs) (catall (map (i \ map (f \ [(b + z * i + <f) <>f]) fs) ^k))
+       (sh i f) (shf f @ r (rd (shoff + shent * i + <r) <>r))
+       (tab i) (: ty (sh i 1) off (sh i 4) sz (sh i 5) es (sh i 9)
+                  (? (elem ty '(2 11)) (es > 0 ? (rows off (sz // es) es syf))         ; symtab, dynsym
+                     (ty = 9) (es > 0 ? (rows off (sz // es) es [[0 ws] [ws ws]]))     ; rel
+                     (ty = 4) (es > 0 ? (rows off (sz // es) es [[0 ws] [ws ws] [(2 * ws) ws]]))   ; rela
+                     (elem ty '(17 18)) (rows off (sz // 4) 4 '((0 4)))               ; group, symtab_shndx
+                     ()))
+       fs (hdr + rows phoff phnum phent phf + rows shoff shnum shent shf + catall (map tab ^shnum))
+       c (cask n)
+       (each ^n (i \ pin c i (s i)),
+        pin c 5 (3 - d),
+        each fs ([o k] \ each ^k (j \ pin c (o + j) (s (o + k - 1 - j)))),
+        string c))
 
    ;; write a byte list to a file, as casks; a string item (holo.l's blob) goes out whole.
    (write-bytes path bs)

@@ -25,7 +25,7 @@ int fcntl(int fd, int cmd, ...) {
     long r = er(sc3(NR_fcntl, fd, cmd, arg));
     if (r >= 0 && cmd == F_GETFL) r = __love_ocan(r);
     return (int) r; }
-#ifdef __ILP32__
+#if defined(__ILP32__) && !defined(__mips__)     /* mips's are the 64-bit ones already */
   if (cmd == F_GETLK || cmd == F_SETLK || cmd == F_SETLKW) cmd += 7;   /* F_GETLK64 12, F_SETLK64 13, F_SETLKW64 14 */
 #endif
   return (int) er(sc3(NR_fcntl, fd, cmd, arg)); }
