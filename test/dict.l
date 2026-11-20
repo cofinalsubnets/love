@@ -4,7 +4,7 @@
 (borrow "src/apps/dict/dict.l")
 (borrow '(bytes gz))
 
-(: d ("out/.dict-law." + show (getpid 0))        ; per process: shards run at once
+(: d ("/tmp/.dict-law." + show (getpid 0))       ; per process: shards run at once; the kernel corpus's /love is read-only
    _ (mkdir d 493)
    b64 "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    (enc n) (n < 64 ? (string [(b64 n)]) (enc (n // 64) + string [(b64 (n % 64))]))

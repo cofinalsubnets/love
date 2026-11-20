@@ -126,7 +126,7 @@ void
   cb_hist(struct cb*, uint32_t hl),    // lay an empty history of hl lines after the store
   cb_twin(struct cb*, uint32_t on),    // lay (1) or take away (0) the twin grid after the history
   cb_xclu(struct cb*, uint32_t cx),    // grow the slots after the twin to cx, the new ones empty
-  // old into a fresh rows x cols screen, with an sn store, hl history, a twin when tw, old's cx
+  // old into a fresh rows x cols screen, reflowed, with an sn store, hl history, a twin when tw, old's cx
   cb_regrid(struct cb*, struct cb const *old, uint16_t rows, uint16_t cols, uint32_t sn, uint32_t hl,
             uint32_t tw),
   cb_peer(struct cb*, uint32_t n),     // look n lines back into the history, 0 the live grid

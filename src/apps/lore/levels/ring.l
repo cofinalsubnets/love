@@ -20,20 +20,20 @@
 ; the textures: grass, stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the well's concrete
 (: grass (feel 'grass (texture 64 64 2
-          '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.25) (noise 8 0.12) (patches 6 0.25 (shade 0.82))
-            (patches 5 0.12 (rgb 0.5 0.66 0.26))))))
-(: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 2 0.15) (patches 4 0.2 (shade 0.8))))))
+          '((fill (rgb 0.3 0.52 0.2)) (noise 1 0.2) (fbm 8 4 0.22) (stain 16 3 0.45 0.35 (shade 0.82))
+            (stain 8 3 0.4 0.35 (mix (rgb 0.5 0.66 0.26) 0.7))))))
+(: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 1 0.06) (fbm 8 4 0.18) (stain 16 3 0.42 0.35 (shade 0.84)) (relief 1.5 2 0.12)))))
 (: water (texture 64 64 4
-          '((fill (rgb 0.16 0.36 0.5)) (noise 24 4 0.18) (patches 8 0.15 (rgb 0.4 0.6 0.72)) (noise 1 0.06))))
+          '((fill (rgb 0.16 0.36 0.5)) (fbm 16 4 0.25) (stain 16 3 0.42 0.35 (mix (rgb 0.4 0.6 0.72) 0.6)) (noise 1 0.03))))
 (: paper (texture 64 64 1.6
-          '((fill (rgb 0.8 0.73 0.44)) (stripes 8 2 0 (shade 0.95)) (noise 3 0.05) (patches 8 0.2 (shade 0.9))
-            (noise 1 0.04))))
+          '((fill (rgb 0.8 0.73 0.44)) (stripes 8 2 0 (shade 0.95)) (fbm 16 3 0.06) (stain 16 3 0.4 0.4 (shade 0.92))
+            (noise 1 0.03))))
 (: carpet (feel 'soft (texture 64 64 2
-           '((fill (rgb 0.58 0.51 0.31)) (noise 1 0.22) (noise 5 0.1) (patches 6 0.25 (shade 0.84))))))
-(: tiles (texture 64 64 1.2 '((fill (rgb 0.84 0.82 0.72)) (noise 1 0.08) (grid 32 32 1 (grey 0.6)))))
-(: oak (feel 'wood (texture 32 64 0.9 '((fill (rgb 0.52 0.34 0.19)) (stripes 5 1 0 (shade 0.9)) (noise 2 0.1)
+           '((fill (rgb 0.58 0.51 0.31)) (noise 1 0.16) (fbm 8 4 0.14) (stain 16 3 0.42 0.35 (shade 0.86))))))
+(: tiles (texture 64 64 1.2 '((fill (rgb 0.84 0.82 0.72)) (noise 1 0.04) (fbm 16 3 0.06) (stain 32 3 0.38 0.4 (shade 0.94)) (grid 32 32 1 (grey 0.6)))))
+(: oak (feel 'wood (texture 32 64 0.9 '((fill (rgb 0.52 0.34 0.19)) (stripes 5 1 0 (shade 0.9)) (noise 1 12 0.08) (fbm 8 3 0.08)
           (within 5 5 27 29 (bevel 22 24 1 (shade 1.18) (shade 0.68))) (within 5 34 27 59 (bevel 22 25 1 (shade 1.18) (shade 0.68)))))))
-(: concrete (feel 'hard (texture 32 32 1.5 '((fill (grey 0.5)) (noise 1 0.12) (noise 6 0.1) (patches 5 0.15 (shade 0.85))))))
+(: concrete (feel 'hard (texture 32 32 1.5 '((fill (grey 0.52)) (noise 1 0.06) (fbm 16 4 0.18) (stain 16 3 0.4 0.35 (shade 0.86)) (relief 1.5 2 0.12)))))
 
 ; the ground: swells that come round whole every way, the river's bed sunk along it, flat
 ; round the well and the lift's foot, and over the hall never lower than a slab over its
@@ -78,8 +78,8 @@
 ; ..the graveyard: a low iron fence on a square, its gate toward the well swinging in, a path
 ; from it to the plinth at the far end, and ten small headstones in rows either side of the
 ; path facing the gate, as a cemetery's do, the last row not yet full; each its name
-(: iron (feel 'metal (texture 32 32 0.3 '((fill (grey 0.07)) (noise 1 0.1) (patches 4 0.2 (rgb 0.2 0.1 0.06))))))
-(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.12) (noise 4 0.08) (patches 5 0.25 (rgb 0.5 0.56 0.36))))))
+(: iron (feel 'metal (texture 32 32 0.3 '((fill (grey 0.07)) (noise 1 0.08) (fbm 8 3 0.12) (stain 8 3 0.4 0.35 (mix (rgb 0.2 0.1 0.06) 0.8))))))
+(: granite (feel 'hard (texture 32 32 0.4 '((fill (grey 0.58)) (noise 1 0.08) (fbm 8 3 0.12) (stain 8 3 0.4 0.3 (mix (rgb 0.5 0.56 0.36) 0.8)) (relief 1.5 2 0.1)))))
 (: yx 6.0 yz (lz / 2) yh 4.0)           ; the yard's middle, and the fence's half side
 (: mourned ["Yuki" "Bella" "Light" "Salt" "Lauren" "Bette" "Ingrid" "Chestnut" "Lentil" "Chickpea"])
 (: (on-ground x z) [x (ground x z) z])
@@ -145,8 +145,8 @@
                   (elem e shut) 'none
                   (: w (? (peep dug e 0 = 1 && peep filled e 0 = 0) (h01 e 7 <= 0.15 ? 'open 'door) 'none)
                      (elem e sides && w = 'open ? 'door w))))
-(: white (texture 64 64 2 '((fill (grey 0.92)) (noise 3 0.03))))
-(: checks (feel 'hard (texture 64 64 1.2 '((fill (grey 0.93)) (checker 32 32 (grey 0.08)) (noise 2 0.04)))))
+(: white (texture 64 64 2 '((fill (grey 0.92)) (fbm 16 3 0.04))))
+(: checks (feel 'hard (texture 64 64 1.2 '((fill (grey 0.93)) (checker 32 32 (grey 0.08)) (fbm 16 3 0.05)))))
 (: (cell i j) (: wide (i < nx - 1 && through (cid i j) = 'open) z1 (cz * (j + 1) - wt) top-z (elem [i j] closets ? (z1 - 1.6) z1)
    ((hall? i j) ? () (room [(cx * i + wt) 0 (cz * j + wt)] [(cx * (i + 1) + (wide ? (wt + 0.01) -wt)) mh top-z]))))
 (: hall (dark (skin {'walls white 'floor checks 'ceiling white}
@@ -172,11 +172,11 @@
 ; ..in the hall the tree in a mound of dirt, and a stereo against the north wall: a cabinet,
 ; the amplifier on it, its display lit while the loop plays, the tape deck on top, a tap on
 ; any of it playing the loop, a speaker either side
-(: dirt (feel 'soft (texture 64 64 1.5 '((fill (rgb 0.34 0.25 0.17)) (noise 1 0.2) (noise 6 0.12) (patches 5 0.2 (shade 0.78))))))
-(: bark (feel 'wood (texture 32 64 0.5 '((fill (rgb 0.46 0.43 0.38)) (noise 1 0.08) (noise 2 14 0.18) (stripes 11 1 0 (shade 1.12))
-          (cracks 8 24 1 5 (shade 0.82)) (patches 5 0.2 (shade 0.86))))))
-(: wood (feel 'wood (texture 64 64 0.8 '((fill (rgb 0.42 0.26 0.14)) (stripes 8 1 1 (shade 0.85)) (noise 2 0.12)))))   ; its grain every 8, so it meets across the tile's edges
-(: ash (texture 32 32 0.6 '((fill (grey 0.1)) (noise 2 0.2))))
+(: dirt (feel 'soft (texture 64 64 1.5 '((fill (rgb 0.34 0.25 0.17)) (noise 1 0.14) (fbm 8 4 0.18) (stain 16 3 0.42 0.35 (shade 0.8)) (relief 1.5 2 0.12)))))
+(: bark (feel 'wood (texture 32 64 0.5 '((fill (rgb 0.46 0.43 0.38)) (noise 1 0.08) (noise 1 14 0.15) (fbm 8 3 0.08) (stripes 11 1 0 (shade 1.12))
+          (cracks 8 24 1 5 (shade 0.82)) (fbm 8 3 0.1) (stain 8 3 0.4 0.35 (shade 0.88))))))
+(: wood (feel 'wood (texture 64 64 0.8 '((fill (rgb 0.42 0.26 0.14)) (stripes 8 1 1 (shade 0.85)) (fbm 8 3 0.12)))))   ; its grain every 8, so it meets across the tile's edges
+(: ash (texture 32 32 0.6 '((fill (grey 0.1)) (noise 1 0.08) (fbm 8 3 0.16))))
 (: alu (feel 'metal (texture 32 32 0.5 '((fill (grey 0.6)) (stripes 2 1 0 (shade 0.92))))))
 ; ..the tape deck's face: two doors, a cassette behind each one's glass, the tape wound on
 ; its two hubs in its window, the counter and the keys beside them
@@ -207,7 +207,7 @@
 ; k the ring's x and z to a metre there: a woofer, a midrange and a tweeter down its front,
 ; the loop heard from it
 (: (block lo hi t) (skin {'all t} (solid (box lo hi))))
-(: drivers (texture 30 64 0.5 '((fill (grey 0.1)) (noise 2 0.2)
+(: drivers (texture 30 64 0.5 '((fill (grey 0.1)) (noise 1 0.08) (fbm 8 3 0.16)
                                 (disc 15 43 11 (grey 0.42)) (disc 15 43 9.8 (grey 0.05)) (disc 15 43 8 (grey 0.2)) (disc 15 43 3.5 (grey 0.45))
                                 (disc 15 22 5.4 (grey 0.42)) (disc 15 22 4.5 (grey 0.05)) (disc 15 22 3.6 (grey 0.2)) (disc 15 22 1.6 (grey 0.45))
                                 (disc 15 8 2.6 (grey 0.62)) (disc 15 8 1.3 (grey 0.36)))))
@@ -298,13 +298,11 @@
 ; runs on up through the container to its ceiling; the container lit by strips across its
 ; ceiling, a bed across one end on a frame, a pa speaker up in each corner, the hatch the platform
 ; comes up through in the middle of its floor
-(: pinkorb (texture 128 64 8 '((fill (rgb 0.96 0.46 0.7)) (patches 8 0.35 (shade 0.8)) (patches 4 0.2 (rgb 1 0.78 0.9))
-                               (noise 6 0.08) (rows 30 34 (shade 0.86)))))
-(: pinkin (texture 128 64 8 '((fill (rgb 0.72 0.24 0.5)) (patches 8 0.35 (shade 0.75)) (patches 5 0.25 (rgb 0.9 0.42 0.68))
-                              (noise 6 0.1) (grid 16 16 1 (shade 0.7)))))
-(: steel (feel 'metal (texture 64 64 1.2 '((fill (rgb 0.52 0.2 0.14)) (stripes 6 3 0 (shade 0.78)) (noise 2 0.08) (patches 6 0.2 (shade 0.86))))))
-(: paint (feel 'metal (texture 64 64 1.2 '((fill (rgb 0.7 0.71 0.66)) (stripes 6 3 0 (shade 0.88)) (noise 3 0.04)))))
-(: ply (feel 'wood (texture 64 64 1.6 '((fill (rgb 0.56 0.43 0.28)) (rows 0 1 (shade 0.7)) (rows 32 33 (shade 0.7)) (noise 2 0.12) (stripes 9 1 1 (shade 0.92))))))
+(: pinkorb (texture 128 64 8 '((fill (rgb 0.96 0.46 0.7)) (fbm 32 4 0.15) (stain 32 3 0.45 0.35 (shade 0.82)) (stain 16 3 0.4 0.35 (mix (rgb 1 0.78 0.9) 0.7)) (rows 30 34 (shade 0.86)))))
+(: pinkin (texture 128 64 8 '((fill (rgb 0.72 0.24 0.5)) (fbm 32 4 0.18) (stain 32 3 0.45 0.35 (shade 0.78)) (stain 16 3 0.4 0.35 (mix (rgb 0.9 0.42 0.68) 0.7)) (grid 16 16 1 (shade 0.7)))))
+(: steel (feel 'metal (texture 64 64 1.2 '((fill (rgb 0.52 0.2 0.14)) (stripes 6 3 0 (shade 0.78)) (fbm 8 3 0.08) (stain 16 3 0.4 0.35 (shade 0.88))))))
+(: paint (feel 'metal (texture 64 64 1.2 '((fill (rgb 0.7 0.71 0.66)) (stripes 6 3 0 (shade 0.88)) (fbm 16 3 0.05)))))
+(: ply (feel 'wood (texture 64 64 1.6 '((fill (rgb 0.56 0.43 0.28)) (rows 0 1 (shade 0.7)) (rows 32 33 (shade 0.7)) (noise 1 16 0.08) (fbm 16 3 0.1) (stripes 9 1 1 (shade 0.92))))))
 (: cy (hub - 1.15))                     ; the container's floor
 (: hang (pocket [sx 0]
    [(void [(sx - 1.6) (top - 0.5) -1.6] [(sx + 1.6) (hub - 1.29) 1.6])   ; the shaft, its floor under the grass
