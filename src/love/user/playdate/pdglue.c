@@ -42,12 +42,15 @@ static SoundSource *h_src;
 // at half the device's rate each frame plays twice, the first halfway from the one before
 static struct { int step; int16_t l, r; } h_up;
 
+// the trial's meter: frames the pull padded with silence, at the device's rate
+static unsigned h_short;
+unsigned pdg_horn_short(void) { return h_short; }
 static int pdg_horn_pull(void *ctx, int16_t *l, int16_t *r, int len) {
-  if (h_up.step == 1) return hring_pull(&h_ring, l, r, len), 1;
+  if (h_up.step == 1) return h_short += (unsigned) (len - hring_pull(&h_ring, l, r, len)), 1;
   int16_t sl[128], sr[128];
   for (int o = 0; o < len; o += 256) {
     int m = len - o < 256 ? (len - o + 1) / 2 : 128;
-    hring_pull(&h_ring, sl, sr, m);
+    h_short += (unsigned) (2 * (m - hring_pull(&h_ring, sl, sr, m)));
     for (int i = 0, j = o; i < m; i++, j += 2) {
       l[j] = (int16_t) ((h_up.l + sl[i]) >> 1), r[j] = (int16_t) ((h_up.r + sr[i]) >> 1);
       if (j + 1 < len) l[j + 1] = sl[i], r[j + 1] = sr[i];

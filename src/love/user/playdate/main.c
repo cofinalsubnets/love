@@ -138,7 +138,25 @@ static void blit(void) {
         frame[PDG_ROWSIZE * (8 * i + b) + j] = (uint8_t) ~bmp[b]; }
   pdg_mark_updated(); }
 
+// the trial's meter: each 60 updates, their mean and worst ms, the frames the song came up short
+static struct { uint32_t n, sum, max, short0; } K_m;
+static void meter(uint32_t ms) {
+  K_m.n++, K_m.sum += ms, K_m.max = ms > K_m.max ? ms : K_m.max;
+  if (K_m.n < 60) return;
+  unsigned sh = pdg_horn_short();
+  char line[96], *p = line;
+  uint32_t v[5] = { K_m.sum / K_m.n, K_m.max, sh - K_m.short0, (uint32_t) pdg_horn_lag(), K_m.sum };
+  char const *tag[5] = { "pd: frame ms mean ", " max ", " short ", " lag ", " of " };
+  for (int k = 0; k < 5; k++) {
+    for (char const *s = tag[k]; *s; s++) *p++ = *s;
+    char d[10]; int m = 0; uint32_t x = v[k];
+    do d[m++] = (char) ('0' + x % 10); while (x /= 10);
+    while (m) *p++ = d[--m]; }
+  *p = 0;
+  pdg_log(line);
+  K_m.n = K_m.sum = K_m.max = 0, K_m.short0 = sh; }
 static int k_update(void *_) {
+  uint32_t t0 = (uint32_t) love_clock();
   pdg_poll_buttons();
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
@@ -149,6 +167,7 @@ static int k_update(void *_) {
       if (code_of(K.g) == status_scare) scare_face(K.g);
       K.dead = 1; } }
   blit();
+  meter((uint32_t) love_clock() - t0);
   return 1; }
 
 // the console's written rows into the log, where the simulator shows them

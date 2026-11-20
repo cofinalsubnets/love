@@ -14,6 +14,7 @@ unsigned pdg_pushed(void);               // the latched fresh-press bits
 unsigned pdg_held(void);                 // the latched bits down now
 void *pdg_realloc(void *p, size_t n);    // the SDK heap (16 MB on device + sim)
 unsigned pdg_ms(void);                   // milliseconds since boot
+unsigned pdg_horn_short(void);      // the trial's meter: frames padded with silence
 void pdg_log(const char *s);             // one line to the SDK console
 unsigned char *pdg_frame(void);          // the LCD frame buffer
 void pdg_mark_updated(void);             // mark every row dirty
