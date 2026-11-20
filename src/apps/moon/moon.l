@@ -115,8 +115,9 @@
           'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
           'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
-          ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__")
-          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__")
+          'thumb2                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=14")   ; gcc's fpu bits: half, single, double
+          'thumb2sp                    '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=6")    ; no double: it is soft
+          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__" "__ARM_FP=14")
           'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__" "__ILP32__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
@@ -349,7 +350,7 @@
            (<l @ t
               (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
                  (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
-                 (: sep (? (atom? prev) () (spaced? prev || word? prev && word? t && pastes? (spell prev) (spell t)) [32] ())
+                 (: sep (? (atom? prev) () (spaced? prev || word? prev && word? t && pastes? () (spell prev) (spell t)) [32] ())
                     (go >l t (chars (spell t) . sep . acc))))))
        (go ts () ()))
    ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
@@ -556,16 +557,17 @@
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
    ; a .S reads as -x assembler-with-cpp does, __ASSEMBLER__ defined
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp 'fis fi}))
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp 'fis fi 'P np 'C kc}))
     (: xasm (xa || dotS? src)
        ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp + fincs fi)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
-       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexw (deftext ds9 + <>r) (1 - #ds9)))
+       wm (kc ? 2 1)                                 ; -C keeps the comments as tokens
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 wm) (clexm (deftext ds9 + <>r) (1 - #ds9) () wm))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        _ (pin cppdeps 'l ())
-       pp (cpp-text <>lx (incload vb is (cdir src)) src)
+       pp (cpp-text <>lx (incload vb is (cdir src)) src np kc)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
@@ -1295,7 +1297,7 @@
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'P () 'C () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
                    'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg () 'dl ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
@@ -1314,6 +1316,10 @@
           ("-g0" . r) (flags r (pin t 'dbg ()))
           ((a . r) && dbgon? a) (flags r (pin t 'dbg 1))
           ("-E" . r) (flags r (pin t 'E 1))
+          ; -P: -E without its line markers
+          ("-P" . r) (flags r (pin t 'P 1))
+          ; -C: -E keeping the comments, those in directives and macro arguments aside
+          ("-C" . r) (flags r (pin t 'C 1))
           ; love's own version: mooncc is a verb on the love binary
           (("--version" || "-v") . _)
            (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
@@ -1437,7 +1443,10 @@
           (("-Wp,-MQ," + w) . r) (flags r (pin t 'mt w))
           ((("-I" + d) . r) && #d) (flags r (fpush t 'is d))
           ((("-D" + d) . r) && #d) (flags r (fpush t 'ds d))
+          ((("-U" + d) . r) && #d) (flags r (fpush t 'ds ['u d]))
           ((("-t" + w) . r) && #w) (flags r (pin t 'tgt (totgt w)))
+          ; --target=TRIPLE (clang's): its head names the machine, as uname's would
+          ((("--target=" + w) . r) && #w) (flags r (pin t 'tgt (totgt <(split "-" w))))
           ; -nostdinc: our headers are the only standard set already
           ("-nostdinc" . r) (flags r t)
           ; -ffreestanding also defines __STDC_HOSTED__ 0 (cpp applies -D after its predefines)

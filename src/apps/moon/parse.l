@@ -882,6 +882,8 @@
                     nbit (uni ? (bit < sz * 8 ? (sz * 8) bit) (abit + sz * 8))
                     (go >l nbit nmx (([name at ty] + qt) . acc))))))
        (go ms 0 0 ()))
+   ; a name laid twice, an anonymous member's among its parent's (C11 6.7.2.1p13)
+   (dupnm fs seen) (atom? fs ? () (<<fs @ n (seen n ? n (pin seen n 1, dupnm >fs seen))))
    (panon ps) (peep ps 'anon 0 @ k (pin ps 'anon (k + 1), ".anon\(k)"))
    ; a block's tag (C11 6.7.2.3) cannot be scoped like an enum constant: gen lays by the key
    ; long after the brace. so a key is minted, `.`-led so clay calls the block inexpressible.
@@ -943,9 +945,11 @@
                           (: pa (pattpk ps <>mr)       ; a trailing packed lays align-1
                              lay (alask (playout ps <mr uni (<pb | <pa)) (max (pb 2) (pa 2)))
                              tu (uni && attrany? <>mr "transparent_union" "__transparent_union__")
+                             dm (dupnm <lay {})
                              (? (peep ps 'widebf ()) (pin ps 'widebf (), clblame "the width of a bit-field exceeds its type")
                                 (peep ps 'incmem ()) (ps 'incmem @ n (pin ps 'incmem (), clblame "field '\(n)' has incomplete type"))
                                 (tu && !(tuok? ps lay)) (clblame "a transparent union wants members of one word-sized scalar type")
+                                dm (clblame "duplicate member '\(dm)'")
                              (pin (ps 'stag) tag2 lay,
                               pin (ps 'fasks) tag2 (memasks ps <mr (<pb | <pa)),
                               pin ps 'tagdef 1,

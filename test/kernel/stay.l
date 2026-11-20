@@ -64,6 +64,27 @@
          (pin s1 'until (clock 0 - 1), bm-tick c s1 = 1)
          (s1 'pick = [(c 'rows 0) "x"])))
 
+; --- after a boot that came back the timeout runs to a reboot, and a key stops it; after the
+; shell, or with no timeout, a key waits
+(: log {}
+   d {'reset (_ \ pin log 'r 1) 'boot (p \ cmd \ rd \ (pin log 'b p, -1014)) 'read (_ \ ()) 'shell (_ \ 0)}
+   c (bm-conf """(timeout 2) (entry "a" "/a.efi" "x")""")
+   c0 (bm-conf """(timeout 0) (entry "a" "/a.efi" "x")""")
+   s0 (bm-visit c "" 1)
+   s1 (bm-visit c "a: the firmware refused /a.efi, status 14" 0)
+   s2 (bm-visit c "" 0)
+   s3 (bm-visit c "a returned 3" 0)
+   s4 (bm-visit c0 "a returned 3" 0)
+   _ (test (nil? (s0 'back)) (0 < bm-left s0 <= 2)
+           (s1 'back = 1) (0 < bm-left s1 <= 2) (0 <= findsub (bm-show c s1 60 12) "a reboot in ")
+           (nil? (s2 'until)) (nil? (s4 'until)) (s3 'back = 1))
+   _ (pin s1 'until (clock 0 - 1), bm-tick c s1)
+   _ (test (s1 'pick = ['reset]))
+   _ (bm-after c d s1)
+   _ (test (log 'r = 1) (nil? (log 'b)))
+   _ (bm-step c s3 -9)
+   (test (nil? (s3 'until)) (bm-tick c s3 = 0) (nil? (s3 'pick))))
+
 ; --- the frame: the rows, the cursor's row in reverse, the word, the footer, h - 1 lines
 (: c (bm-conf """(timeout 3) (default 1) (entry "arch" "/vmlinuz.efi" "rw") (entry "hello" "/hello.efi")""")
    st (bm-new c "arch returned 7")

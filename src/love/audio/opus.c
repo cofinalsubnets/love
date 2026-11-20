@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <string.h>
 
-double lm_exp(double);
 
 // the state: its channels and gain, the decoder, then room for a packet's samples
 #define OP_MAGIC 0x6f707573

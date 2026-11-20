@@ -4,7 +4,8 @@
 ; the menu with its status. the last row is love's own shell.
 ;
 ; boot.l, its forms read as data:
-;   (timeout 5)                        seconds before the default boots; 0 waits for a key
+;   (timeout 5)                        seconds before the default boots, and after a boot that
+;                                      comes back, before a reboot; 0 waits for a key
 ;   (default 0)                        the row the timeout boots, from 0
 ;   (entry TITLE PATH [CMD [INITRD]])  PATH and INITRD on the boot volume, CMD its LoadOptions
 ;
@@ -26,7 +27,8 @@
        (pins c 'rows (c 'rows + [bm-shell]) 'default (c 'default < n ? (c 'default) 0)))
 
    ; the state: 'cur the row, 'until the timeout's clock or (), 'edit the line being edited or
-   ; (), 'pick [row cmd] once chosen, 'msg the last boot's word
+   ; (), 'pick [row cmd] once chosen or ['reset], 'msg the last boot's word, 'back 1 when the
+   ; timeout reboots
    (bm-new c msg) {'cur (c 'default) 'until (0 < c 'timeout ? (clock 0 + 1000 * c 'timeout))
                    'edit () 'pick () 'msg msg 'shown ()}
    (bm-left st) (st 'until @ () () u (max 0 ((u - clock 0 + 999) // 1000)))
@@ -38,7 +40,7 @@
        (lines i l) (two? l ? (row i <l . lines (i + 1) >l) ())
        r (rows cur)
        foot (? (string? (st 'edit)) "\(bm-fit <r 16): \(bm-fit (st 'edit) (w - 20))"
-               (st 'until) "\(<r) in \(bm-left st)s, a key waits"
+               (st 'until) (st 'back ? "a reboot in \(bm-left st)s, a key waits" "\(<r) in \(bm-left st)s, a key waits")
                "arrows or a digit pick, enter boots, e edits the line")
        body (["love boot" ""] + lines 0 rows + ["" (st 'msg) foot])
        ("\e[H" + catmap (l \ "\(l)\e[K\r\n") (take (h - 1) body) + "\e[J"))
@@ -62,10 +64,11 @@
              (k = 101 && !(nil? ((rows cur) 1))) (pin st 'edit ((rows cur) 2))
              (49 <= k <= 57 && k - 49 < n) (pick (k - 49) ((rows (k - 49)) 2))
              st))))
-   ; the timeout picks the default; a frame is wanted when the seconds shown move
+   ; the timeout picks the default, or after a boot that came back the reboot; a frame is
+   ; wanted when the seconds shown move
    (bm-tick c st)
     (: s (bm-left st)
-       (? (s = 0) (pin st 'pick [((c 'rows) (c 'default)) ((c 'rows) (c 'default) 2)], 1)
+       (? (s = 0) (pin st 'pick (st 'back ? ['reset] [((c 'rows) (c 'default)) ((c 'rows) (c 'default) 2)]), 1)
           (s != st 'shown) (pin st 'shown s, 1)
           0))
 
@@ -81,12 +84,21 @@
                      (s < 0) "\(t): \(path) failed, \(s)"
                      "\(t) returned \(s)"))))))
 
-   ; one visit to the menu, then its choice; the timeout runs on the first visit only
+   ; a visit's state: the first runs the timeout to the default; one after a boot that came
+   ; back runs it to a reboot, so a pc whose own loader chained here is back there unattended
+   (bm-visit c msg first)
+    (: st (bm-new c msg)
+       (? first st (msg != "") (pin st 'back 1) (pin st 'until ())))
+   ; the visit's choice through the doors: a reboot, or a boot and the next visit
+   (bm-after c d st)
+    (st 'pick @ ['reset] ((d 'reset) ())
+                p (bm-run c d (bm-boot d p) 0))
+   ; one visit to the menu, then its choice
    (bm-run c d msg first)
-    (: st (bm-new (first ? c (pin c 'timeout 0)) msg)
+    (: st (bm-visit c msg first)
        (stage-run {'show (w \ h \ bm-show c st w h) 'step (bm-step c st) 'over? (_ \ two? (st 'pick))
                    'tick (_ \ bm-tick c st) 'every 100 'modes ['hide]},
-        (two? (st 'pick) ? (bm-run c d (bm-boot d (st 'pick)) 0))))
+        (two? (st 'pick) ? (bm-after c d st))))
    ; no boot.l, or one naming nothing, is the shell alone
    (bm-main d)
     (: c (bm-conf ((d 'read) "/boot.l"))
@@ -95,6 +107,7 @@
    (bm-doors _)
     {'read efi-read
      'boot (p \ cmd \ rd \ (nil? rd ? (kexec p cmd) (kexec-initrd p cmd rd)))
+     'reset (_ \ reset 0)
      'shell (_ \ k-prog ["pier" "--here"] @ pr (two? pr ? (trap (_ \ <pr >pr) () (a \ b \ 0))))})
 
 (peep argv 1 "" @ (_ + "uefi/menu.l") (bm-main (bm-doors ())) 0)

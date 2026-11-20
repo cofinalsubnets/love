@@ -100,8 +100,8 @@ x64 adds the 37 `-m16` units of setup.bin and realmode (in the 3004).
 | kvm nvhe `-r -T hyp.lds`, then `-r` | 2 | — |
 | boot: compressed/vmlinux `-pie`, setup.elf, realmode.elf | — | 3 |
 
-No love linker links a kernel yet: holo's `link.l` is a static ELF linker (`ldkern` for inle,
-`ldshared`); kore's `ld` takes no `-T`, `-r` or archives.
+love's `ld` runs every step, the arm32 compat vdso too: holo's `ld.l` takes lld's command line
+and lays the bytes ld.lld does, but the build-id (sha256's, not sha1's).
 
 ## 5. binutils — g-e9; archives g-05-5f
 

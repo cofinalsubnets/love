@@ -3,6 +3,7 @@
 // ulp, sin/cos ~0.74 ulp at every magnitude, atan2 asin acos correctly rounded, pow <= 2 ulp
 // typical (~40 at 1e+-300), exact for y in {2, 1, -1, 1/2}
 #include <stdint.h>
+#include "fpbits.h"
 
 typedef union { double d; uint64_t u; } db;
 static double mkd(uint64_t u) { db b; b.u = u; return b.d; }
@@ -505,8 +506,8 @@ double lm_pow(double x, double y) {
  return neg ? -e : e; }
 
 // float twins: real functions, not macros, since love takes their address. sqrt exp log pow
-// sin cos run in binary32 alone, for a machine whose fpu has no double; the rest round the
-// double's answer
+// sin cos, and tan where double is soft, run in binary32 alone, for a machine whose fpu has
+// no double; the rest round the double's answer
 typedef union { float f; uint32_t u; } fb;
 static float mkf(uint32_t u) { fb b; b.u = u; return b.f; }
 static uint32_t muf(float f) { fb b; b.f = f; return b.u; }
@@ -643,10 +644,11 @@ float lm_powf(float x, float y) {
 // |r| <= pi/4; past that the double's reduction
 static const float PIO2F_1 = 0x1.922p+0f, PIO2F_2 = -0x1.2aeep-18f, PIO2F_3 = -0x1.e973dcp-35f,
                    INVPIO2F = 0x1.45f306p-1f;
-static float ksinf(float r) { float z = r * r;
- return r + r * z * (-0x1.555556p-3f + z * (0x1.111112p-7f + z * (-0x1.a01a02p-13f + z * 0x1.71de3ap-19f))); }
-static float kcosf(float r) { float z = r * r, hz = 0.5f * z, w = 1.0f - hz;
- return w + (((1.0f - w) - hz) + z * z * (0x1.555556p-5f + z * (-0x1.6c16c2p-10f + z * (0x1.a01a02p-16f + z * -0x1.27e4fcp-22f)))); }
+// each as its head (r, w = 1 - z/2) and the tail past it
+static float ksintf(float r, float z) { return r * z * (-0x1.555556p-3f + z * (0x1.111112p-7f + z * (-0x1.a01a02p-13f + z * 0x1.71de3ap-19f))); }
+static float kcostf(float z, float hz, float w) { return ((1.0f - w) - hz) + z * z * (0x1.555556p-5f + z * (-0x1.6c16c2p-10f + z * (0x1.a01a02p-16f + z * -0x1.27e4fcp-22f))); }
+static float ksinf(float r) { return r + ksintf(r, r * r); }
+static float kcosf(float r) { float z = r * r, hz = 0.5f * z, w = 1.0f - hz; return w + kcostf(z, hz, w); }
 // r carried hi+lo: the first two products are exact, so only the subtractions round
 static int rpio2f(float x, float *r, float *rlo) {
  int k = (int) (x * INVPIO2F + (x > 0 ? 0.5f : -0.5f));
@@ -670,6 +672,22 @@ float lm_cosf(float x) {
  if (a >= 0x43c90000u) return (float) lm_cos(x);
  float r, rl; int k = rpio2f(x, &r, &rl);
  switch (k & 3) { case 0: return kcoslf(r, rl); case 1: return -ksinlf(r, rl); case 2: return -kcoslf(r, rl); default: return ksinlf(r, rl); } }
+#if fp_dsoft
+// sin over cos, each a pair of r and its tail, the quotient corrected once
+float lm_tanf(float x) {
+ uint32_t a = muf(x) & 0x7fffffffu;
+ if (a < 0x39800000u) return x;
+ if (a >= 0x43c90000u) return (float) (lm_sin(x) / lm_cos(x));
+ float r, rl; int k = rpio2f(x, &r, &rl);
+ float z = r * r, hz = 0.5f * z, w = 1.0f - hz, sh = r, ch = w, q, ph, pl;
+ float sl = ksintf(r, z) + rl * (1.0f - hz), cl = kcostf(z, hz, w) - rl * r;
+ if (k & 1) q = sh, sh = ch, ch = q, q = sl, sl = cl, cl = q;
+ fsum2(sh, sl, &sh, &sl); fsum2(ch, cl, &ch, &cl);
+ q = sh / ch;
+ fmul2(q, ch, &ph, &pl);
+ q += (((sh - ph) - pl) + sl - q * cl) / ch;
+ return k & 1 ? -q : q; }
+#endif
 
 
 // correctly rounded decimal -> binary64: a naive seed, then step one ulp until the input

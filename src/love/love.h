@@ -1019,6 +1019,33 @@ static love_inline flo_t love_trunc(flo_t x) {
  return (flo_t) (int64_t) x;
 #endif
 }
+static love_inline flo_t love_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
+// the math floor is ours on every frontend (moonlibc's math/lm.c); love_* is the word's width
+double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_asin(double), lm_acos(double),
+       lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
+float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_asinf(float), lm_acosf(float),
+      lm_sqrtf(float), lm_expf(float), lm_logf(float), lm_powf(float, float);
+#if Bits == 64
+#define love_sin   lm_sin
+#define love_cos   lm_cos
+#define love_atan2 lm_atan2
+#define love_asin  lm_asin
+#define love_acos  lm_acos
+#define love_sqrt  lm_sqrt
+#define love_exp   lm_exp
+#define love_log   lm_log
+#define love_pow   lm_pow
+#else
+#define love_sin   lm_sinf
+#define love_cos   lm_cosf
+#define love_atan2 lm_atan2f
+#define love_asin  lm_asinf
+#define love_acos  lm_acosf
+#define love_sqrt  lm_sqrtf
+#define love_exp   lm_expf
+#define love_log   lm_logf
+#define love_pow   lm_powf
+#endif
 // a float to int64: on a 32-bit word that goes through double, so a word's take the short way
 static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
 #if Bits == 32
