@@ -4,6 +4,7 @@
  * every answer is exact: a double has a finite decimal form and ties round to even. */
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "say.h"
 
 static char b[1400];
@@ -16,7 +17,7 @@ static float const f_max = 3.4028234663852886e38f, f_sub = 1.4e-45f, f_one = 1.0
 #define F(fmt, v) do { snprintf(b, sizeof b, fmt, v); say_s(fmt, b); } while (0)
 
 /* the same, off a bit pattern -- no literal, no strtod, nothing but the printer */
-static double bits(unsigned long u) { double d; memcpy(&d, &u, sizeof d); return d; }
+static double bits(uint64_t u) { double d; memcpy(&d, &u, sizeof d); return d; }
 #define B(nm, fmt, u) do { snprintf(b, sizeof b, fmt, bits(u)); say_s(nm, b); } while (0)
 
 int main(void)

@@ -33,6 +33,7 @@ for f in test/libc/*.c; do
     || { cat "$d/$b.build" >&2; fail "$b: mooncc could not build it"; }
   "$d/$b" > "$d/$b.ours" 2>&1
   ra=$?
+  { cat "$d/$b.ours"; echo "rc $ra"; } > "$d/$b.x64.out"
 
   # -w: gcc warns about deliberate edges (a truncating snprintf, a zero-length memset)
   $cc_g -O0 -w -Itest/libc -o "$d/$b.g" "$f" -lm 2> "$d/$b.gbuild" \
@@ -52,6 +53,28 @@ for f in test/libc/*.c; do
 done
 
 [ $n -gt 0 ] || fail "no programs found in test/libc/"
+
+# the same programs by mooncc's other backends under qemu: a64 and rv64 answer as x64 does,
+# arm as rv32, the other ILP32
+xisa() {
+  t=$1 q=$2 ref=$3
+  if ! have "$q"; then gate_partly "  (the $t leg skipped: no $q)"; return 0; fi
+  for f in test/libc/*.c; do
+    b=$(basename "$f" .c)
+    moonrun -t "$t" -Itest/libc -o "$d/$b.$t" "$f" > "$d/$b.$t.build" 2>&1 \
+      || { cat "$d/$b.$t.build" >&2; fail "$b: mooncc -t $t could not build it"; }
+    { timeout 300 "$q" "$d/$b.$t"; echo "rc $?"; } > "$d/$b.$t.out" 2>&1
+    if [ -n "$ref" ] && ! cmp -s "$d/$b.$ref.out" "$d/$b.$t.out"; then
+      echo "--- $b: $t vs $ref (first 20 differing lines) ---" >&2
+      diff "$d/$b.$ref.out" "$d/$b.$t.out" | head -20 >&2
+      fail "$b: mooncc's $t and $ref disagree"
+    fi
+  done
+}
+xisa a64 qemu-aarch64 x64
+xisa rv64 qemu-riscv64 x64
+xisa rv32 qemu-riscv32 ''
+if have qemu-riscv32; then xisa arm qemu-arm rv32; else gate_partly "  (the arm leg skipped: no rv32 to answer as)"; fi
 
 # ---------------------------------------------------------------------------
 # phase 2: every function any header declares is referenced by one generated program, so a
@@ -115,4 +138,4 @@ else
   gate_partly "test_libc: no a64 host for the weak-memory leg; skipped"
 fi
 
-echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, reads $ng patterns as gnu grep does, and waits alike on a weak memory ($nw a64 runs)"
+echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, answers alike by mooncc's a64, rv64, rv32 and arm, reads $ng patterns as gnu grep does, and waits alike on a weak memory ($nw a64 runs)"
