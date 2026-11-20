@@ -6,7 +6,10 @@ typedef long time_t;
 #endif
 typedef long clock_t;
 #define CLOCKS_PER_SEC 1000000
-#ifdef __ILP32__  /* the kernel's 16-byte time64 record */
+#if defined(__ILP32__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+/* the kernel's 16-byte time64 record, tv_nsec its low half: the pad unnamed, as an initializer skips it */
+struct timespec { time_t tv_sec; int : 32; long tv_nsec; };
+#elif defined(__ILP32__)  /* the kernel's 16-byte time64 record */
 struct timespec { time_t tv_sec; long tv_nsec; long __pad; };
 #else
 struct timespec { long tv_sec; long tv_nsec; };

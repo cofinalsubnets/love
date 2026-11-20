@@ -748,9 +748,10 @@
    (le2 x) [(x & 255) (x >> 8 & 255)]
    (le4 x) (le2 (x & 65535) + le2 (x >> 16))
    (tw x) (le2 (x >> 16) + le2 (x & 65535))
+   (be4 x) [(x >> 24 & 255) (x >> 16 & 255) (x >> 8 & 255) (x & 255)]
    ; the widths an exclusive loop lays: riscv's lr/sc are word and doubleword only, armv7-m has
    ; no doubleword exclusive, armv6-m none at all (gcc calls libatomic there); wasm is one thread
-   (awidths g) (? (wasm? g) '(1 2 4 8) (v6m? g || xt? g || mp? g) () (rv32? g) '(4) (rv64? g) '(4 8) (ilp32? g) '(1 2 4) '(1 2 4 8))
+   (awidths g) (? (wasm? g) '(1 2 4 8) (v6m? g || xt? g) () (rv32? g || mp? g) '(4) (rv64? g) '(4 8) (ilp32? g) '(1 2 4) '(1 2 4 8))
    (amw g pt) (? (ptr? pt) (wsize g) (elem pt '(char schar cchar uchar bool)) 1 (elem pt '(short ushort)) 2
                  (elem pt '(int uint)) 4 (elem pt '(long ulong llong ullong)) (tsz g pt) ())
    ; a full fence, and a compiler-only one (a raw form nothing moves across)
@@ -759,6 +760,13 @@
    (abar g) (? (wasm? g) () (x86? g) [['raw '(144)]] (a64? g) [['raw (le4 0xD503201F)]]
                (rv? g) [['raw (le4 19)]] (xt? g) [['raw '(240 32 0)]] (mp? g) [['raw '(0 0 0 0)]] [['raw (le2 0xBF00)]])
    (stw w) (w @ 1 'st1 2 'st2 4 'st4 'st)
+   ; mips's ll/sc loops, a word apiece and each branch's delay slot a nop: base $3 (r1); a
+   ; word from sync, a branch's offset in words from its slot
+   (mpll rt) (0xC0000000 | 3 << 21 | rt << 16)
+   (mpsc rt) (0xE0000000 | 3 << 21 | rt << 16)
+   (mpr f rd rs rt) (rs << 21 | rt << 16 | rd << 11 | f)
+   (mploop body) (: n (#body + 1)
+                    [['raw (catall (map be4 ([15] + body + [(0x10000000 | 6 << 21 | (-n & 0xFFFF)) 0 15])))]])   ; beqz a2, back; sync
    ; riscv's R and B shapes
    (rvr f7 rs2 rs1 f3 rd) (f7 << 25 | rs2 << 20 | rs1 << 15 | f3 << 12 | rd << 7 | 0x33)
    (rvbr f3 rs1 rs2 off) (: i (off & 0x1FFF)
@@ -795,6 +803,11 @@
            body ([lx] + ops + [sx])
            [['raw (catall (map le4 (body + [(0x35000000 | ((0x80000 - #body) & 0x7FFFF) << 5 | 4)   ; cbnz w4, back
                                             0xD5033BBF])))]])
+       (mp? g)                                                           ; ll v0; the op into a1; sc a copy
+        (mploop ([(mpll 2)]
+                 + (op @ 'add [(mpr 0x21 5 2 4)] 'sub [(mpr 0x23 5 2 4)] 'and [(mpr 0x24 5 2 4)] 'or [(mpr 0x25 5 2 4)]
+                         'xor [(mpr 0x26 5 2 4)] 'nand [(mpr 0x24 5 2 4) (mpr 0x27 5 5 0)] 'set [(mpr 0x25 5 4 0)])
+                 + [(mpr 0x21 6 5 0) (mpsc 6)]))
        (rv? g)
         (: f3 (w = 4 ? 2 3)
            lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 10 << 7 | 0x2F)             ; lr.aqrl a0, (a1)
@@ -858,6 +871,7 @@
             '(cmp r3 0) ['br 'ne lb] '(mov r0 r2)])
        (rv? g)
         [['raw (w @ 4 '(47 165 165 12) '(47 181 165 12))]]      ; amoswap.w/d.aq a0,a0,(a1)
+       (mp? g) (mploop [(mpll 4) (mpr 0x21 6 2 0) (mpsc 6)] + '((mov r0 r2)))   ; ll a0; sc a copy of v0
        (t32? g)                                                 ; ldrex r2 / strex r3, r0, [r1] until it holds, dmb
         (: body (tw 0xE8512F00 + tw 0xE8410300 + le2 0x2B00)    ; cmp r3, #0
            [['raw (body + le2 (0xD100 | (256 - (#body + 4) // 2) & 255) + tw 0xF3BF8F5F)]
@@ -870,6 +884,7 @@
        (wasm? g) [[(w @ 4 'st4 'st) 'r1 0 'r0]]
        (rv? g) ('((raw (15 0 16 3))) +                                       ; fence rw,w
                   [[(w = 4 ? 'st4 'st) 'r1 0 'r0]])
+       (mp? g) [['raw '(0 0 0 15)] ['st4 'r1 0 'r0]]                         ; sync, then the store
        [[(w @ 4 'st4 'st) 'r1 0 'r0]])
    ; a compare-and-swap: expected r0 (widened as the loop's load widens), pointer r1, desired r2 ->
    ; the old value r0, success (0/1) r2
@@ -887,6 +902,8 @@
                  sx ((w @ 1 0x0800FC00 2 0x4800FC00 4 0x8800FC00 0xC800FC00) | 4 << 16 | 32 | 2)   ; stlxr w4, x2, [x1]
                  [['raw (catall (map le4 [lx 0xEB00007F 0x54000061 sx                 ; cmp x3, x0; b.ne out
                                           (0x35000000 | (0x80000 - 4) << 5 | 4) 0xD5033BBF]))]])   ; cbnz w4, back
+             (mp? g)                                   ; ll a1; bne a1, v0 to the closing sync
+              (mploop [(mpll 5) (0x14000000 | 5 << 21 | 2 << 16 | 5) 0 (mpr 0x21 6 4 0) (mpsc 6)])
              (rv? g)
               (: f3 (w = 4 ? 2 3)
                  lr (2 << 27 | 3 << 25 | 11 << 15 | f3 << 12 | 13 << 7 | 0x2F)             ; lr.aqrl a3, (a1)
