@@ -24,7 +24,7 @@ if [ -z "${cc_g:-}" ]; then
   gate_skip "test_libc: no system cc for the second opinion, skipped"
 fi
 
-n=0
+nfam=0
 fams=
 for f in test/libc/*.c; do
   b=$(basename "$f" .c)
@@ -48,11 +48,11 @@ for f in test/libc/*.c; do
     fail "$b: our libc and the system's disagree"
   fi
 
-  n=$((n + 1))
+  nfam=$((nfam + 1))
   fams="$fams $b"
 done
 
-[ $n -gt 0 ] || fail "no programs found in test/libc/"
+[ $nfam -gt 0 ] || fail "no programs found in test/libc/"
 
 # the same programs by mooncc's other backends under qemu: a64 and rv64 answer as x64 does,
 # arm as rv32, the other ILP32
@@ -138,4 +138,4 @@ else
   gate_partly "test_libc: no a64 host for the weak-memory leg; skipped"
 fi
 
-echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($n families), defines all $nref names its headers declare, answers alike by mooncc's a64, rv64, rv32 and arm, reads $ng patterns as gnu grep does, and waits alike on a weak memory ($nw a64 runs)"
+echo "test_libc: moonlibc agrees with $cc_g's libc over$fams ($nfam families), defines all $nref names its headers declare, answers alike by mooncc's a64, rv64, rv32 and arm, reads $ng patterns as gnu grep does, and waits alike on a weak memory ($nw a64 runs)"
