@@ -63,6 +63,21 @@
        54 (go (j + 1) (pin p 'seg 'ss))  62 (go (j + 1) (pin p 'seg 'ds))
        (c && 64 <= c <= 79)
         (go (j + 1) (pins p 'rex 1 'w (c >> 3 & 1) 'r (c >> 2 & 1) 'x (c >> 1 & 1) 'b (c & 1)))
+       ; VEX's C5 and C4, EVEX's 62 (no masks, no registers past 15, so R' V' set, and X too when
+       ; r/m is a register): R X B and vvvv inverted
+       197 (: b (dc-at s (j + 1))
+              (j + 2 < n ? (dc-op s i (j + 2) (pins p 'vex 1 'vmap 1 'r (1 - (b >> 7)) 'vvvv (15 - (b >> 3 & 15)) 'vl (b >> 2 & 1) 'vpp (b & 3)))
+                 (dc-op s i j p)))
+       196 (: b (dc-at s (j + 1)) c (dc-at s (j + 2))
+              (j + 3 < n && 1 <= (b & 31) <= 3
+               ? (dc-op s i (j + 3) (pins p 'vex 1 'vmap (b & 31) 'r (1 - (b >> 7)) 'x (1 - (b >> 6 & 1)) 'b (1 - (b >> 5 & 1))
+                                       'w (c >> 7) 'vvvv (15 - (c >> 3 & 15)) 'vl (c >> 2 & 1) 'vpp (c & 3)))
+                 (dc-op s i j p)))
+       98 (: b (dc-at s (j + 1)) c (dc-at s (j + 2)) d (dc-at s (j + 3))
+             (j + 4 < n && (b & 28) = 16 && 1 <= (b & 3) && (c & 4) = 4 && (d & 159) = 8 && (b & 64 || dc-at s (j + 5) >> 6 != 3)
+              ? (dc-op s i (j + 4) (pins p 'vex 1 'evex 1 'vmap (b & 3) 'r (1 - (b >> 7)) 'x (1 - (b >> 6 & 1)) 'b (1 - (b >> 5 & 1))
+                                      'w (c >> 7) 'vvvv (15 - (c >> 3 & 15)) 'vl (d >> 5 & 3) 'vpp (c & 3)))
+                (dc-op s i j p)))
        (dc-op s i j p))))
 
    ;; the prefix items an instruction carries: lock always, rep/repne unless the opcode ate them
@@ -74,11 +89,12 @@
    ;; an instruction by its row in x64-tab (x64.l): the first row of its map and opcode whose
    ;; prefixes, modrm digit and widths fit, its kinds read in order
    (dc-op s i j p)
-    (: n #s c (dc-at s j)
-       mp (? (c != 15) 0 (dc-at s (j + 1) = 56) 2 (dc-at s (j + 1) = 58) 3 1)
-       oc (mp @ 0 c 1 (dc-at s (j + 1)) (dc-at s (j + 2)))
-       k (j + (mp @ 0 1 1 2 3))
-       px (? (pf p 'repne) 'f2 (pf p 'rep) 'f3 (pf p 'opsz) 66 'none)
+    (: n #s c (dc-at s j) vx (pf p 'vex) ev (pf p 'evex)
+       mp (? vx (pf p 'vmap) (c != 15) 0 (dc-at s (j + 1) = 56) 2 (dc-at s (j + 1) = 58) 3 1)
+       oc (? vx c (mp @ 0 c 1 (dc-at s (j + 1)) (dc-at s (j + 2))))
+       k (vx ? (j + 1) (j + (mp @ 0 1 1 2 3)))
+       px (? vx (pf p 'vpp @ 1 66 2 'f3 3 'f2 'none) (pf p 'repne) 'f2 (pf p 'rep) 'f3 (pf p 'opsz) 66 'none)
+       vw (16 << pf p 'vl)
        w (? (pf p 'w) 8 (pf p 'opsz) 2 4) w8 (pf p 'opsz ? 2 8) wx (pf p 'w ? 8 4) rexp (pf p 'rex)
        lead (mp = 0 ? c 15)
        (fin ate k2 items) (k2 > n ? (1 . [(dc-byte lead)]) ((k2 - i) . (dc-pre p ate + items)))
@@ -87,14 +103,19 @@
        (fits? at) (all (e \ (: v (peep at e ()) (v = () ||
                          (e @ 'p (v = px) 'b (pf p 'b = v) 'w (pf p 'w = v) 'ow (w = v)
                               'd (((m >> 3) & 7) = v) 'mod (v = 'r ? ((m >> 6) = 3) ((m >> 6) != 3)) 'rm (m = v) 1))))
-                       '(p b w ow d mod rm))
+                       '(p b w ow d mod rm)
+                  && (? ev (peep at 'evex () = pf p 'vl) vx (peep at 'vex () = pf p 'vl) (peep at 'vex () = () && peep at 'evex () = ())))
        (lay r)
         (: ks (r 3) at (r 4)
            g (dc-first (k \ elem (x64-role k) ["G" "V" "S" "C" "D"]) ks)
            e (dc-first (k \ elem (x64-role k) ["E" "W" "N"]) ks)
-           (kw k) (x64-role k @ "V" 16 "W" 16 "N" 8 "S" 8 "C" 8 "D" 8 (wd (x64-wl k)))
+           (kw k) (x64-role k @ ("V" || "W" || "H" || "L") (x64-wl k @ "x" 16 "y" 32 vw) "N" 8 "S" 8 "C" 8 "D" 8 (wd (x64-wl k)))
            wr (g = () ? (e = () ? 0 (kw e)) (kw g)) wm (e = () ? wr (kw e))
-           mr (g != () || e != ()) md (mr ? (dc-modrm s k p wr wm) ())
+           ; EVEX's disp8 counts in units of the row's n, else the whole vector
+           nn (peep at 'n () @ v (v != () ? v vw))
+           (scl o) (o @ ('mem b x c d) ['mem b x c (d * nn)] ('seg g q) ['seg g (scl q)] o)
+           mr (g != () || e != ()) md0 (mr ? (dc-modrm s k p wr wm) ())
+           md (ev && mr && (m >> 6) = 1 ? [(md0 0) (md0 1) (scl (md0 2)) (md0 3)] md0)
            (imm k0 l)                                          ; -> [operand next]
             (l @ "Ib" [['im (dc-imm s k0 1) 1] (k0 + 1)]
                  "Iz" ((w = 2 ? 2 4) @ z [['im (dc-imm s k0 z) z] (k0 + z)])
@@ -103,6 +124,7 @@
                  "Uw" [['im (dc-le s k0 2) 2] (k0 + 2)]
                  "ub" [['im (dc-at s k0)] (k0 + 1)]
                  "Jb" [['lbl (k0 + 1 + dc-imm s k0 1)] (k0 + 1)]
+                 "L" [['rg (dc-at s k0 >> 4) vw] (k0 + 1)]
                  [['lbl (k0 + 4 + dc-imm s k0 4)] (k0 + 4)])
            (go ks pos acc)
             (? !(two? ks) [pos (rev acc)]
@@ -115,6 +137,7 @@
                         "A" (go >ks pos (dc-reg 0 (wd (x64-wl q)) rexp . acc))
                         "CL" (go >ks pos (['rg 1 1] . acc))
                         "T" (go >ks pos (['st (m & 7)] . acc)) "K" (go >ks pos (['st] . acc))
+                        ("H" || "B") (go >ks pos (['rg (pf p 'vvvv) (kw q)] . acc))
                         (imm pos (show q) @ (o nx) (go >ks nx (o . acc))))))
            st (mr ? (md 0) (peep at 'rm () != () || any (k \ x64-role k = "T") ks ? (k + 1) k))
            ; the item's width: the first general register's, reg field ahead of r/m
@@ -124,7 +147,7 @@
            (go ks st () @ (pos ops)
               (peep at 'fw 0 && pos < n && 216 <= dc-at s pos <= 223 ? (dc-op s i pos p @ r (<r . ([['op 'fwait 0 ()]] + >r)))
                  (fin ate pos [['op <r iw ops]]))))
-       (try l) (? !(two? l) (mp = 0 ? (fin 0 k [(dc-byte c)]) (fin 0 (j + 1) [(dc-byte 15)]))
+       (try l) (? !(two? l) (? vx (1 . [(dc-byte (dc-at s i))]) (mp = 0) (fin 0 k [(dc-byte c)]) (fin 0 (j + 1) [(dc-byte 15)]))
                   (fits? (<l 4) ? (lay <l) (try >l)))
        (try (peep x64-tabix (mp * 256 + oc) ())))
 
@@ -265,6 +288,7 @@
     (: s (show mn)
        (? (elem mn '(call ret push pop pushf popf)) (s + "q")
           (mn = 'fwait) "wait"
+          (elem mn '(andn bzhi bextr pdep pext mulx sarx shlx shrx rorx blsr blsmsk blsi)) (s + xa-wsfx w)
           (elem mn '(fucomip fcomip)) (mn @ 'fucomip "fucompi" "fcompi")
           (elem mn '(lar lsl)) (s + xa-wsfx w)
           (elem mn '(lldt ltr)) (s + "w")

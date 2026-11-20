@@ -30,7 +30,7 @@
    ;; the prefix words a line may open with, each its own item ahead of the instruction
    xa-prefix {'lock 'lock 'rep 'rep 'repe 'rep 'repz 'rep 'repne 'repne 'repnz 'repne
               'cs 'cs 'ds 'ds 'es 'es 'ss 'ss}
-   (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 32 + w) nm)
+   (xa-reg! nm e w) (pin xa-regs (name nm) [e w], pin xa-names (e * 128 + w) nm)
    _ (foldl (\ _ row
                (row 0 @ e
                   (xa-reg! (row 1) e 8, xa-reg! (row 2) e 4,
@@ -48,7 +48,7 @@
    ;; ah/ch/dh/bh share 4..7 with spl/bpl/sil/dil (REX tells them apart), so they sit 16 above
    _ (foldl (\ _ r (xa-reg! <r <>r 1, 0)) 0 '(("ah" 20) ("ch" 21) ("dh" 22) ("bh" 23)))
    (xa-reg nm) (xa-regs (name nm) @ r (two? r ? ['rg <r <>r]))    ; or ()
-   (xa-regname o) (xa-names (<>o * 32 + <>>o))
+   (xa-regname o) (xa-names (<>o * 128 + <>>o))
    (xa-gpr? o) (<o = 'rg && <>>o < 16)
    (xa-cr s) (#s = 3 && s 0 = 99 && s 1 = 114 && digit? (s 2) ? ['cr (s 2 - 48)] ())
    (xa-dr s) (#s = 3 && s 0 = 100 && (s 1 = 98 || s 1 = 114) && 48 <= s 2 <= 55 ? ['dr (s 2 - 48)] ())   ; db or dr
@@ -283,7 +283,7 @@
    ; a %reg field, or absent; a 16-bit one (bx bp si di) is marked +32
    (at-mreg f) (0 = #f ? -1 (at-reglook (snip f 1 #f) @ r (<>>r = 2 ? (<>r + 32) <>r)))
    (at-w4? f) (1 < #f && f 0 = 37 && (at-reglook (snip f 1 #f) @ r <>>r = 4))
-   (xa-mregname n) (n >= 32 ? (xa-names ((n - 32) * 32 + 2)) (xa-names (n * 32 + 8)))
+   (xa-mregname n) (n >= 32 ? (xa-names ((n - 32) * 128 + 2)) (xa-names (n * 128 + 8)))
    (at-operand t)
       (? (t 0 = 42) ['ind (at-operand (snip t 1 #t))]
          (t 0 = 37 && xa-has? t 58) (t @ ("%" + s + ":" + r)

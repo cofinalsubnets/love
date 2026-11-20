@@ -960,7 +960,7 @@ test_holofuzz: host
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
-	@for p in order targets cached keyed; do \
+	@for p in order targets cached1 cached2 keyed; do \
 	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
 	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
 	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \
