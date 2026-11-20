@@ -872,7 +872,7 @@ void scare_args(struct g *c, word *a, word *b) {
  *b = s >= 0 ? putcharm(s) : s == ScareDeep ? putcharm(c0_room()) : zero; }
 
 // with nothing heard, or still too tight after a collect, the scare goes back to C. callers
-// Pack first; help_more_k's raise has [resume a b] on the stack, any other names its case
+// Pack first and enter help_drive through Raise, whose jump keeps a caught scare off the C stack; help_more_k's raise has [resume a b] on the stack, any other names its case
 love_noinline static struct g *love_raise(struct g *c, union u const *K) {
  word h = *task_help(c), a, b;
  if (h != ZeroPoint && avail(c) < 4) {
@@ -888,24 +888,23 @@ love_noinline static struct g *love_raise(struct g *c, union u const *K) {
   sp[2] = b;
   sp[3] = word(K);
   c->ip = (union u*) help_drive;
-#if tco
-  return c->ip->ap(c, c->ip, c->hp, c->sp);
-#else
-  return c;                       // ok-g: the trampoline dispatches help_drive
-#endif
+  return c;                       // ok-g: the raise site dispatches help_drive, in tail
  }
  if (K == help_more_k) c->scare = ScareRuntime;   // only now: a handled scare leaves the reason be
  return encode(c, status_scare);
 }
 // a failed op's scare, its reason in g->scare; terminal
-lvm(_lvm_raise) { return love_raise(core_of(g), help_scare_k); }
+static lvm(_lvm_unheard) { return g; }   // the scare back to C, so an op's raise stays a jump
+#define Raise(K) { if (!ok(g = love_raise(g, K))) love_musttail return Ap(_lvm_unheard, g); \
+  Unpack(g); love_musttail return Continue(); }
+lvm(_lvm_raise) { g = core_of(g); Raise(help_scare_k) }
 // a wait nothing could wake: terminal
-lvm(lvm_deadlock) { return Pack(g), g->scare = ScareDeadlock, love_raise(g, help_scare_k); }
+lvm(lvm_deadlock) { Pack(g), g->scare = ScareDeadlock; Raise(help_scare_k) }
 // (scare a b): the help's result is its value; with nothing heard, terminal
 lvm(lvm_scare) {
  Have1();                          // the resume push only: love_raise buys its own frame
  *--Sp = word(Ip + 1);             // [resume a b ..]: help_more_k's layout
- return Pack(g), love_raise(g, help_more_k); }
+ Pack(g); Raise(help_more_k) }
 // a name bound to zero is distinct from no entry
 static union u const no_entry[1];
 // the live book by name, never self-patching. a miss raises (help 'missing nom), terminal
@@ -920,7 +919,7 @@ lvm(lvm_index) {
  Have(3);                          // a collect here re-dispatches the op
  Sp -= 3;
  Sp[0] = word(Ip + 2), Sp[1] = g->nom[NomMissing], Sp[2] = Ip[1].x;   // help_more_k's layout
- return Pack(g), love_raise(g, help_more_k); }
+ Pack(g); Raise(help_more_k) }
 // the fused aps leave Ip on an operand, where a plain Have() would re-dispatch: gc and re-Ap
 #define NumapHave(self) if (Sp < Hp + 2) { \
  Pack(g); g = please(g, 2); if (!ok(g)) love_musttail return Ap(_lvm_raise, g); \
@@ -1056,7 +1055,7 @@ static love_inline bool apn_ok(word f, size_t n) {
 lvm(lvm_apn) {
  size_t n = getcharm(Ip[1].x);
  union u *r = Ip + 2;
- if (!apn_ok(Sp[n], n)) return Pack(g), g->scare = ScareApply, love_raise(g, help_scare_k);
+ if (!apn_ok(Sp[n], n)) { Pack(g), g->scare = ScareApply; Raise(help_scare_k) }
  Ip = cell(Sp[n]) + 2;                    // FIXME: past the cur; the compiler should skip it
  Sp[n] = word(r);
  YieldCheck();
@@ -1066,7 +1065,7 @@ lvm(lvm_apn) {
 lvm(lvm_tapn) {
  size_t n = getcharm(Ip[1].x),
         r = getcharm(Ip[2].x);
- if (!apn_ok(Sp[n], n)) return Pack(g), g->scare = ScareApply, love_raise(g, help_scare_k);
+ if (!apn_ok(Sp[n], n)) { Pack(g), g->scare = ScareApply; Raise(help_scare_k) }
  Ip = cell(Sp[n]) + 2;
  word *o = Sp;
  for (Sp += r + 1; n--; Sp[n] = o[n]);

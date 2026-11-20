@@ -221,13 +221,13 @@
        (points total offs sizes np)
         (: (go k acc) (? (total <= k * 10 * rate) (rev acc)
                          (: fi (k * 10 * rate // bs) sn (fi * bs)
-                            (go (k + 1) (acc && <<acc = sn ? acc ([sn (offs fi) (<(sizes fi))] . acc)))))
+                            (go (k + 1) (two? acc && <<acc = sn ? acc ([sn (offs fi) (<(sizes fi))] . acc)))))
            real (total = 0 || atom? sizes ? () (go 0 ()))
            ps (snip real 0 (min np #real))
            (join "" (map (p \ flac-be (p 0) 8 + flac-be (p 1) 8 + flac-be (p 2) 2) ps)
             + join "" (map (_ \ flac-be 18446744073709551615 8 + flac-be 0 8 + flac-be 0 2) ^(np - #ps))))
        np (? (dt <= 0) 0 (: (go k acc) (? (dt <= k * 10 * rate) acc
-                                          (: sn (k * 10 * rate // bs * bs) (go (k + 1) (acc && <acc = sn ? acc (sn . acc)))))
+                                          (: sn (k * 10 * rate // bs * bs) (go (k + 1) (two? acc && <acc = sn ? acc (sn . acc)))))
                             #(go 0 ())))
        vendor "love \(love-version)"
        (vc ts) (flac-le #vendor 4 + vendor + flac-le #ts 4 + join "" (map (t \ flac-le #t 4 + t) ts))

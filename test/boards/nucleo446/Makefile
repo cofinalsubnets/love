@@ -21,7 +21,7 @@ qobjs = $(R)/$(o)/nucleo446-q.o $(R)/$(o)/main-q.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o
 
 .PHONY: nucleo446 smoke flash
 default: nucleo446
-nucleo446: $(R)/$(o)/firm.hex
+nucleo446: $(R)/$(o)/firm.hex $(R)/$(o)/firm-ram.bin
 smoke: $(R)/$(o)/smoke.elf
 
 $(eval $(call p_obj,nucleo446,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
@@ -59,6 +59,16 @@ $(R)/$(o)/firm.hex: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
 	  ok = 0x20000000<sp<=0x20020000 and (entry&1)==1 and 0x08000000<entry<0x08080000; \
 	  print('boot image: sp %08x entry %08x --'%(sp,entry), 'ok' if ok else 'BAD'); \
 	  exit(0 if ok else 1)" || { echo "FAIL boot image layout"; exit 1; }
+
+# the image a board lane runs from sram over swd, the flash never written
+$(R)/$(o)/firm-ram.elf: $(objs) $(R)/$(o)/nlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/nlink.l -ram $(o)/firm-ram.elf $(objs:$(R)/%=%)
+
+$(R)/$(o)/firm-ram.bin: $(R)/$(o)/firm-ram.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/firm-ram.elf $(o)/firm-ram.bin
+	$(call p_ramchk,$(R)/$(o)/firm-ram.bin,0x20020000,0x20010000)
 
 # Flash a connected Nucleo over its ST-LINK:
 flash: $(R)/$(o)/firm.hex
