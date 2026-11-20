@@ -44,6 +44,8 @@
    ;; (align 4) (lapool Rd) (abs32 word): LDR.W Rd,[pc,#4] ; B.N over ; NOP pad. for playdate,
    ;; whose loader relocates abs32 words, never a MOVW/MOVT pair
    (thumb-lapool d) (rn d @ dn (catall [(t32 (0xF8DF0004 | dn << 12)) (t16 0xE002) (t16 0xBF00)]))
+   ;; add Rd, pc (the 16-bit hi form): a pooled pc-relative word made an address, as lap's add
+   (thumb-addpc d) (rn d @ dn (t16 (0x4478 | (dn >> 3) << 7 | dn & 7)))
 
    ;; mov is the 16-bit hi form, which keeps the flags and reaches sp and pc
    (thumb-mov d s) (thumb-movr d s)
@@ -604,7 +606,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool)
+          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)

@@ -262,9 +262,11 @@
    ;;    an address) and re-encode through relabelled rows
    (hexv c) (? (48 <= c <= 57) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))
    (unhex h) (string (map (i \ hexv (h (2 * i)) * 16 + hexv (h (2 * i + 1))) ^(#h // 2)))
+   ; an immediate's encoded size, which the source does not spell, is the decoder's alone
+   (unsz it) (<it = 'op ? ['op (it 1) (it 2) (map (o \ <o = 'im ? (snip o 0 2) o) (it 3))] it)
    (law3 name want src)
       (x64-disasm (unhex want) 0 @ rows
-       ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (catmap (r \ r 2) rows))),
+       ((has? src ":" ? 0 (chk-eq (name + ".decode") (att-read src) (map unsz (catmap (r \ r 2) rows)))),
         chk-eq (name + ".decode.hex") want (as-hexv (x64-relabel rows 0)),
         ; read at another address, the targets relabel the same
         chk-eq (name + ".decode.base") want (as-hexv (x64-relabel (x64-disasm (unhex want) 4198400) 4198400))))
