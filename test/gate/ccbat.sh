@@ -192,8 +192,8 @@ case $tgt in
     GCC=clang
     exitonly=1
     mflags="-os none -Dmain=cc_main -c"
-    # no inline atomics (ll/sc) yet, and no gas dialect: a __sync builtin and a target asm refuse
-    refuse="$int128s 364-w128float 297-frameaddr 129-sync 327-bcp-splice 357-asmoutaddr"
+    # no gas dialect: a target asm refuses
+    refuse="$int128s 364-w128float 297-frameaddr 327-bcp-splice 357-asmoutaddr"
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
     nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
@@ -531,6 +531,26 @@ if [ $tgt = rv32 ]; then
     echo "hosted: $nh programs the board cannot link run over moonlibc on qemu-riscv32 as on arm"
   else
     gate_partly "  (the hosted rv32 leg skipped: no qemu-arm for its witness)"
+  fi
+fi
+if [ $tgt = mips ]; then
+  # the hosted leg, as rv32's: what the board cannot link, and test/libc's programs whose output
+  # neither a 64-bit long nor mips's own numbers move, over moonlibc on linux, held to arm's
+  if have qemu-arm; then
+    nh=0
+    mlibc="altstack buf cal ctype elf exec fnmatch gen line mem mstream odds opt rbuf shell sort str terrno thread"
+    for b in $nolibc $mlibc; do
+      f=test/cc/$b.c; [ -f "$f" ] || f=test/libc/$b.c
+      moonrun -t mips -os linux -Itest/libc -o "$d/$b.h" "$f" > "$d/$b.hlog" 2>&1 || { cat "$d/$b.hlog" >&2; fail "$b: a hosted mips link failed"; }
+      moonrun -t arm -Itest/libc -o "$d/$b.ha" "$f" > "$d/$b.halog" 2>&1 || { cat "$d/$b.halog" >&2; fail "$b: the arm witness failed to build"; }
+      { timeout 120 qemu-mips -cpu 24Kc "$d/$b.h"; echo "rc $?"; } > "$d/$b.hout" 2>&1
+      { timeout 120 qemu-arm "$d/$b.ha"; echo "rc $?"; } > "$d/$b.haout" 2>&1
+      cmp -s "$d/$b.hout" "$d/$b.haout" || { diff "$d/$b.haout" "$d/$b.hout" | head -10 >&2; fail "$b: hosted mips and arm disagree"; }
+      nh=$((nh + 1))
+    done
+    echo "hosted: $nh programs run over moonlibc on qemu-mips as on arm"
+  else
+    gate_partly "  (the hosted mips leg skipped: no qemu-arm for its witness)"
   fi
 fi
 if [ $tgt = a64 ]; then

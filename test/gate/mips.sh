@@ -96,7 +96,10 @@ if [ -z "$rl" ]; then
     || fail "clang could not lay the pic objects"
   rm -f "$d/rel/libpicb.a"; llvm-ar rcs "$d/rel/libpicb.a" "$d/rel/picb.o" || fail "llvm-ar could not lay libpicb.a"
   po="$d/rel/relm.o $d/rel/pic.o $d/rel/rela.o $d/rel/relg.o $d/rel/libpicb.a"
-  $love mooncc -t mips -os linux -nostdlib -o "$d/rel/pic.elf" $po || fail "holo's link refused the pic objects"
+  # holo's linux link lays crt0, whose main enters cc_entry as _start does for lld
+  printf 'int cc_entry(void);\nint main(void) { return cc_entry(); }\n' > "$d/rel/pm.c"
+  $love mooncc -t mips -os linux -c -o "$d/rel/pm.o" "$d/rel/pm.c" || fail "mooncc could not lay pm.c"
+  $love mooncc -t mips -os linux -nostdlib -o "$d/rel/pic.elf" "$d/rel/pm.o" $po || fail "holo's link refused the pic objects"
   timeout 60 qemu-mips -cpu 24Kc "$d/rel/pic.elf"
   a=$?
   [ "$a" -eq 42 ] || fail "holo's link of the pic objects answered $a, want 42"
@@ -109,7 +112,7 @@ if [ -z "$rl" ]; then
   # a jal from outside pic into a pic function, whose gp wants $t9: refused by name
   printf 'int bump(int);\nint f(void) { return bump(1); }\n' > "$d/rel/la.c"
   $love mooncc -t mips -os none -c -o "$d/rel/la.o" "$d/rel/la.c" || fail "mooncc could not lay la.c"
-  ! $love mooncc -t mips -os linux -nostdlib -o "$d/rel/la.elf" "$d/rel/relm.o" "$d/rel/pic.o" "$d/rel/rela.o" "$d/rel/relg.o" "$d/rel/la.o" "$d/rel/picb.o" > "$d/rel/la.log" 2>&1 \
+  ! $love mooncc -t mips -os linux -nostdlib -o "$d/rel/la.elf" "$d/rel/pm.o" "$d/rel/relm.o" "$d/rel/pic.o" "$d/rel/rela.o" "$d/rel/relg.o" "$d/rel/la.o" "$d/rel/picb.o" > "$d/rel/la.log" 2>&1 \
     && grep -q link-mips-la25 "$d/rel/la.log" || { cat "$d/rel/la.log"; fail "a jal into a pic function was not refused by name"; }
   rl="; REL objects from clang (and an archive of one) linked beside mooncc's to 42, plain and pic, a jal into pic refused"
 else
