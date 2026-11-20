@@ -9,21 +9,16 @@
 #define R(a) (*(volatile uint32_t *)(uintptr_t)(a))
 void serial_putc(int c);
 int serial_rx(void);
+uint32_t ticks(void);                                      // c6.c's, 16 a microsecond
 
 #define PCR    0x60096000u
 #define IOMUX  0x60090000u
 #define GPIO   0x60091000u
 #define RMT    0x60006000u
 #define SARADC 0x6000E000u
-#define SYSTIM 0x6000A000u
 
 enum { pix = 9, pixpow = 20, rmt_out0 = 71 };
 
-// systimer unit 0, 16 mhz off the crystal: a value latched, then read
-static uint32_t ticks(void) {
-  R(SYSTIM + 0x04u) = 1u << 30;
-  while (!(R(SYSTIM + 0x04u) & 1u << 29)) {}
-  return R(SYSTIM + 0x44u); }
 static void us(uint32_t n) { uint32_t const t = ticks(); while (ticks() - t < n * 16u) {} }
 
 // the host's lines, a byte at a time: "T" and tenths of a degree, fresh for ten seconds
@@ -106,7 +101,6 @@ static int32_t tenths(uint32_t *raw) {
   return ((int32_t) (4386u * v) - 205200) / 1000; }
 
 void gauge(int green) {
-  R(SYSTIM) |= 1u << 30;                                    // the timer ms counts, kept running
   pin_out(pixpow, 0x80u);
   R(GPIO + 0x08u) = 1u << pixpow;
   pin_out(pix, rmt_out0);
