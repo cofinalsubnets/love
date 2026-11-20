@@ -6,6 +6,7 @@
 ; PSF1 and PSF2 both, 8 pixels wide (a row is one byte, as the C type says).
 ; a .psf.gz is not read: gunzip it first.
 (borrow 'posix)
+(borrow 'text)  ; cpat and cpnext, the unicode table and the comments read as utf-8
 (: (rd p) (uread p @ [1 s] (s + "") ())
    (die m) (udie 1 ("mkpsf: " + m))
    (hd d) (string (d < 10 ? (48 + d) (87 + d)))
@@ -13,12 +14,6 @@
    (hx v) (v < 16 ? (hd v) (hx (v >> 4) + hd (v & 15)))
    (le16 s i) (s i | s (i + 1) << 8)
    (le32 s i) (le16 s i | le16 s (i + 2) << 16)
-   (utf8 s) (s 0 @ b                                          ; the first char's codepoint
-             (? (b < 128) b
-                (b < 224) ((b & 31) << 6 | s 1 & 63)
-                (b < 240) ((b & 15) << 12 | (s 1 & 63) << 6 | s 2 & 63)
-                ((b & 7) << 18 | (s 1 & 63) << 12 | (s 2 & 63) << 6 | s 3 & 63)))
-   (utf8n b) (? (b < 128) 1 (b < 224) 2 (b < 240) 3 4)        ; and how many bytes it wore
    ; --- the header, as [version glyphs-at cell-bytes height table-at has-table width]
    (head s) (? (s 0 = 54 && s 1 = 4)                                           ; PSF1: 0x0436
                 (: n (s 2 & 1 ? 512 256) h (s 3)
@@ -41,10 +36,10 @@
                      (s i @ b
                         (? (b = 255) (u2 s (i + 1) n (g + 1) t)
                            (b = 254) (u2skip s (i + 1) n g t)
-                           (utf8n b @ k (u2 s (i + k) n g (put t (utf8 (snip s i (i + k))) g))))))
+                           (u2 s (cpnext s i) n g (put t (cpat s i) g)))))
    (u2skip s i n g t) (i >= n ? t
                          (s i @ b
-                            (b = 255 ? (u2 s (i + 1) n (g + 1) t) (u2skip s (i + utf8n b) n g t))))
+                            (b = 255 ? (u2 s (i + 1) n (g + 1) t) (u2skip s (cpnext s i) n g t))))
    (umap s h) (? !(h 5) (die "the font carries no unicode table")
                  (h 0 = 1) (u1 s (h 4) #s 0 {})
                  (u2 s (h 4) #s 0 {}))
@@ -52,7 +47,7 @@
    (refcell line) (split "// [" line @ ps
                      (!(two? >ps) ? ()
                         (: cmt (ps 1) qs (split "] (" cmt)
-                           (two? >qs ? [(utf8 <qs) "// [\(cmt)"] ()))))
+                           (two? >qs ? [(cpat <qs 0) "// [\(cmt)"] ()))))
    (refcells src) (filter two? (map refcell (lines src)))
    ; --- the lay --------------------------------------------------------------------
    ; quay erases with cell 0 and paints a newline as it, so U+0000 is laid blank
