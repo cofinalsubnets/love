@@ -78,7 +78,7 @@ pds_o = $(R)/$(o)/raster.o $(R)/$(o)/lamp.o $(R)/$(o)/pool.o $(R)/$(o)/tones.o $
 pds_skel = $(R)/$(o)/start.o $(filter-out %/nohorn.o,$(love_o)) $(R)/$(o)/horn.o $(pds_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
 $(foreach u,raster lamp pool mem,$(eval $(call p_obj,$u,src/love/$u.c,$(S)/love/$u.c $(love_dep),$(mps2_cc))))
 $(eval $(call p_obj,tones,src/love/audio/tones.c,$(S)/love/audio/tones.c $(love_dep),$(mps2_cc)))
-$(eval $(call p_obj,horn,src/love/horn.c,$(S)/love/horn.c $(love_dep),$(mps2_cc) -D love_horn_seat=1))
+$(eval $(call p_obj,horn,src/love/horn.c,$(S)/love/horn.c $(love_dep),$(mps2_cc) -D love_horn_seat=1 -D love_horn_rate=22050))
 FORCE:
 $(R)/out/playdate/stones.h: FORCE
 	@$(MAKE) --no-print-directory -C $(S)/love/user/playdate ../../../../out/playdate/stones.h
