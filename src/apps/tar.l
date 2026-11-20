@@ -36,12 +36,12 @@
    tar-get peep
 
    ; --- the name split ---
-   ; the "/" between prefix and name is not stored, so the split falls on a separator;
+   ; the "/" between prefix and name is not stored, so the split falls on a separator, never a last one;
    ; the longest prefix, because the name field is the tight one
    (tar-split m)                          ; -> (prefix name) | ()
     (#m @ n
      (n < 101 ? ["" m]
-      (: k (foldl (\ best i (m i = 47 && i < 156 && n - i - 1 < 101 ? i best)) -1 ^n)
+      (: k (foldl (\ best i (m i = 47 && i < 156 && i < n - 1 && n - i - 1 < 101 ? i best)) -1 ^n)
        (k >= 0 ? (: p (cask k)
                     q (pour p 0 m 0 k, cask (n - k - 1))
         (pour q 0 m (k + 1) (n - k - 1),
@@ -55,7 +55,7 @@
    (tar-head e)                             ; -> the 512-byte header | ()
     (: n (tar-get e 'nom "")
        kind (tar-get e 'kind 'file)
-       n2 (kind @- n 'dir (n || "/"))
+       n2 (kind @- n 'dir (#n && n (#n - 1) = 47 ? n (n + "/")))     ; a directory's name ends in /
        sp (tar-split n2)
        (!sp ? ()
           (: b (cask tar-blk)

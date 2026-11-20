@@ -29,7 +29,7 @@ static void on_segv(int s, siginfo_t *si, void *uc) {
 
 int main(void) {
   char mark; main_sp = (long) &mark;
-  stack_t st = {alt, 0, sizeof alt}, o;
+  stack_t st = {.ss_sp = alt, .ss_size = sizeof alt}, o;
   say_n("sigaltstack", sigaltstack(&st, 0));
   say_n("query", sigaltstack(0, &o));
   say_n("query.sp", o.ss_sp == alt); say_n("query.flags", o.ss_flags);
@@ -38,7 +38,7 @@ int main(void) {
   say_n("sigaction", sigaction(SIGSEGV, &sa, 0));
   if (!sigsetjmp(jb, 1)) *(volatile int *) 8 = 1;
   say_n("onalt", k_onalt); say_n("fault.sp", k_sp);
-  stack_t d = {0, SS_DISABLE, 0};
+  stack_t d = {.ss_flags = SS_DISABLE};
   say_n("disable", sigaltstack(&d, 0));
   say_n("disabled", sigaltstack(0, &o) == 0 && (o.ss_flags & SS_DISABLE) != 0);
   return 0; }

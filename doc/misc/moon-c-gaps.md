@@ -1570,9 +1570,9 @@ its text as one file-scope asm (`asmwrap`, moon.l); a `.S` is lexed on assembly'
 non-directive line is gas's comment, and each line opens with a mark cpp carries through), run
 through the C preprocessor as a C file is -- includes, macros, `#if`, `__ASSEMBLER__` defined --
 and spelled back into lines (`asmspell`). gas-top then reads it, and a file-scope run on x64 is
-encoded by **as.l, exactly**: the width the text says (a 32-bit op sets 32-bit flags), any
+encoded by **the x64 table, exactly** (dialect.l's lay): the width the text says (a 32-bit op sets 32-bit flags), any
 addressing, `%fs:`/`%gs:`, a symbol as an immediate or a displacement, SSE by table, cmov/set,
-shifts, extends. What as.l has no row for lowers as a function's template does. gas-top reads
+shifts, extends. What the table has no row for lowers as a function's template does. gas-top reads
 `.local`/`.comm`/`.lcomm`, `.weak`, `.base64`, and a symbol `.set` as an alias; a data section
 pads its alignment with zeros.
 

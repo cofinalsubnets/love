@@ -343,7 +343,7 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
 # the backends: one file per ISA, then the text faces they share
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
   src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/xtensa.l \
-  src/love/holo/text.l src/love/holo/dialect.l
+  src/love/holo/mips.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/lds.l src/love/holo/link.l src/love/holo/macho.l
 # the kernel's link: kore's alone, mooncc never reads it
@@ -375,8 +375,8 @@ korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
 # `cc` on inle are this line. the backends ride because the baked set is x64/a64/rv64.
-kcrewfiles = $(holo_be) src/love/holo/as.l src/love/holo/gas.l $(moon_mid) $(crewfiles)
-moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l $(holo_obj) $(moon_mid)
+kcrewfiles = $(holo_be) src/love/holo/gas.l $(moon_mid) $(crewfiles)
+moonfiles = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l $(holo_be) src/love/holo/decode.l src/love/holo/gas.l $(holo_obj) $(moon_mid)
 # the plain tree's cat and image beside this tree's: out/rt and moonlibc.o are pinned to out/
 # as love0 is, and take its image whatever hsuf says
 mcc_trees = $(sort out $(ho))
@@ -408,7 +408,7 @@ $(addsuffix /mooncc0.image,$(mcc_trees)): %/mooncc0.image: %/.mooncc-cat.l $(lov
 	@echo 'BAKE	'$@
 	@$(love0) -l $< -e '(? ((cite (quote image) (quote bake) "$@") = 1) (quit 0) (quit 1))'
 
-distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/as.l src/love/holo/gas.l \
+distfiles = $(kore_head) $(holo_be) src/love/holo/decode.l src/love/holo/gas.l \
             $(holo_obj) src/love/holo/copy.l $(holo_ld) $(moon_mid) $(kore_arc) $(kore_net) $(crewfiles)
 # carried, not baked: each a carry row in the cat, raised off /love at its unit's first call;
 # `love bake --with UNIT` bakes it (src/apps/roster.l). distlist.h lists them after a +
@@ -516,7 +516,7 @@ rt_lib = src/apps/moon/lib/moonlibc
 rt_h = $(wildcard src/apps/moon/include/*.h src/apps/moon/include/*/*.h $(rt_lib)/*.h $(rt_lib)/*/*.h)
 # the one roster: mkrt.l lays a frame per isa its groups name, and runtime-ar finds it by name.
 # wasm alone lays no mksys leaves: its jumps are wasmfn's
-rt_isas ?= x64 a64 rv64 i386 arm rv32 wasm thumb1 thumb2 thumb2sp xtensa
+rt_isas ?= x64 a64 rv64 i386 arm rv32 mips wasm thumb1 thumb2 thumb2sp xtensa
 rt_nosys = wasm
 rt_groups = sys-af sys-gl sys-mr sys-sz top net string signal fmt stdio math ctype mem proc dirent env search
 rt_sysrange = $(filter $(foreach c,$(1),$(rt_lib)/sys/$c%),$(wildcard $(rt_lib)/sys/*.c))
@@ -528,7 +528,7 @@ rt_src_top = $(wildcard $(rt_lib)/*.c) src/apps/moon/lib/mksys.l
 rt_src = $(if $(rt_src_$(1)),$(rt_src_$(1)),$(wildcard $(rt_lib)/$(1)/*.c))
 # the 32-bit isas have no 64-bit divide: their rosters carry rt.c's helpers too
 rt_src_rt = src/apps/moon/lib/rt.c
-$(foreach i,i386 arm rv32 thumb1 thumb2 thumb2sp xtensa,$(eval rt_groups_$i = $$(rt_groups) rt))
+$(foreach i,i386 arm rv32 mips thumb1 thumb2 thumb2sp xtensa,$(eval rt_groups_$i = $$(rt_groups) rt))
 rt_gs = $(if $(rt_groups_$(1)),$(rt_groups_$(1)),$(rt_groups))
 rt_a = $(foreach i,$(rt_isas),$(foreach g,$(call rt_gs,$i),out/rt/$i/$g.a))
 define rtgroup

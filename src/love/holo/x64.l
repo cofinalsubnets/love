@@ -81,12 +81,17 @@
 ;; one-byte map, 1 0F, 2 0F 38, 3 0F 3A. kinds in Intel order (dest first), a role and a width:
 ;; G the modrm reg field, E its r/m, V and W the same as xmm, Z a register in the opcode's low
 ;; bits, A the accumulator, CL, S a segment register, C D a control or debug register, N an
-;; indirect r/m; I a signed immediate kept with its size, U an unsigned one, ub a bare byte, J
-;; a relative target. widths: b w d q 1 2 4 8, v the operand size (66, REX.W), p a push's
-;; (64 unless 66), y 4 or 8 by REX.W, z an immediate's 2 or 4. attrs: p the mandatory prefix
-;; (none 66 f3 f2), d the modrm digit, mod r or m, rm the whole modrm byte, b REX.B, w REX.W,
-;; ow the operand size, iw the item's width when not its first register's, x rep and repne go
-;; to a mandatory f3 or f2, ate the rep it reads, fw a wait that may lead an escape
+;; indirect r/m, T an x87 st(i) in r/m and K the stack's top, Q the segment register sr names,
+;; O an absolute address (moffs), DX the port register; under VEX, H the vvvv register, B
+;; a general one there, L one in an immediate's high nibble; I a signed immediate kept with its
+;; size, U an unsigned one, ub a bare byte, J a relative target. widths: b w d q 1 2 4 8, v the
+;; operand size (66, REX.W), p a push's (64 unless 66), y 4 or 8 by REX.W, z an immediate's 2 or
+;; 4; a bare V W H L the row's vector, x an xmm, y a ymm. attrs: p the mandatory prefix (none 66
+;; f3 f2), d the modrm digit, mod r or m, rm the whole modrm byte, b REX.B, w REX.W (VEX.W), ow
+;; the operand size, iw the item's width when not its first register's (p a push's, o the
+;; operand size), i64 a row a 64-bit segment refuses, sr Q's register, x rep and repne go to
+;; a mandatory f3 or f2, ate the rep it reads, fw a wait that may lead an escape, vex or evex
+;; its length L (0 xmm, 1 ymm, 2 zmm), n the bytes an EVEX disp8 counts in
 (: x6t-cc '(o no b ae e ne be a s ns p np l ge le g)
    (x6t-ccn pre k) (name (pre + show (x6t-cc k)))
    x6t-alu '(add or adc sbb and sub xor cmp)
@@ -99,6 +104,24 @@
    (x6t-lane base op ks)
     (map (l \ x6t-r (name (base + l 1)) 1 op ks [['p <l] '(x 1)]) '((none "ps") (66 "pd") (f3 "ss") (f2 "sd")))
    (x6t-px op ks l x) (map (e \ x6t-r (e 1) 1 op ks ((<e = 'any ? () [['p <e]]) + (x ? '((x 1)) ()))) l)
+   ;; VEX and EVEX rows, one a length of ls; a v-twin is its legacy row's name after v
+   (x6t-v nm mp op ks at ls) (map (l \ x6t-r nm mp op ks ([['vex l]] + at)) ls)
+   (x6t-e nm mp op ks at ls) (map (l \ x6t-r nm mp op ks ([['evex l]] + at)) ls)
+   (x6t-vn nm) (name ("v" + show nm))
+   x6t-l01 '(0 1)
+   ; the three-byte SSE rows under 66: 0F 38 xx, 0F 3A xx ib
+   x6t-s38 '((1 phaddw) (2 phaddd) (3 phaddsw) (4 pmaddubsw) (5 phsubw) (6 phsubd) (7 phsubsw) (8 psignb)
+             (9 psignw) (10 psignd) (11 pmulhrsw) (40 pmuldq) (41 pcmpeqq) (43 packusdw) (55 pcmpgtq)
+             (56 pminsb) (57 pminsd) (58 pminuw) (59 pminud) (60 pmaxsb) (61 pmaxsd) (62 pmaxuw) (63 pmaxud)
+             (64 pmulld) (220 aesenc) (221 aesenclast) (222 aesdec) (223 aesdeclast))
+   x6t-s3a '((12 blendps) (13 blendpd) (68 pclmulqdq))
+   x6t-sx '((32 pmovsxbw) (33 pmovsxbd) (34 pmovsxbq) (35 pmovsxwd) (36 pmovsxwq) (37 pmovsxdq)
+            (48 pmovzxbw) (49 pmovzxbd) (50 pmovzxbq) (51 pmovzxwd) (52 pmovzxwq) (53 pmovzxdq))
+   ; the v-twins whose sources commute: clang lays the r/m one in vvvv when that drops VEX to C5
+   x6t-vcomm '(paddb paddw paddd paddq pand por pxor pmullw pmuludq pmulhw pmulhuw pmaddwd pcmpeqb pcmpeqw
+               pcmpeqd pminub pmaxub pminsw pmaxsw pavgb pavgw paddusb paddusw paddsb paddsw psadbw
+               addps addpd mulps mulpd andps andpd orps orpd xorps xorpd)
+   x6t-xsh '(psrlw psrld psrlq psraw psrad psllw pslld psllq)
    x6t-p66 '((96 punpcklbw) (97 punpcklwd) (98 punpckldq) (99 packsswb) (100 pcmpgtb) (101 pcmpgtw)
              (102 pcmpgtd) (103 packuswb) (104 punpckhbw) (105 punpckhwd) (106 punpckhdq) (107 packssdw)
              (108 punpcklqdq) (109 punpckhqdq) (116 pcmpeqb) (117 pcmpeqw) (118 pcmpeqd)
@@ -116,7 +139,7 @@
                       (x6t-r n 0 (b + 3) '(Gv Ev) ()) (x6t-r n 0 (b + 4) '(Ab Ib) ()) (x6t-r n 0 (b + 5) '(Av Iz) ())]))
              ^8)
      (map (r \ x6t-r 'push 0 (80 + r) '(Zp) ()) ^8) (map (r \ x6t-r 'pop 0 (88 + r) '(Zp) ()) ^8)
-     [(x6t-r 'movsl 0 99 '(Gv Ed) ()) (x6t-r 'push 0 104 '(Id) '((iw 8))) (x6t-r 'push 0 106 '(Ib) '((iw 8)))
+     [(x6t-r 'movsl 0 99 '(Gv Ed) ()) (x6t-r 'push 0 104 '(Iz) '((iw p))) (x6t-r 'push 0 106 '(Ib) '((iw p)))
       (x6t-r 'imul 0 105 '(Gv Ev Iz) ()) (x6t-r 'imul 0 107 '(Gv Ev Ib) ())]
      (map (k \ x6t-r (x6t-ccn "j" k) 0 (112 + k) '(Jb) ()) ^16)
      (x6t-dig 0 128 '(Eb Ib) () x6t-alu) (x6t-dig 0 129 '(Ev Iz) () x6t-alu) (x6t-dig 0 131 '(Ev Ib) () x6t-alu)
@@ -129,19 +152,46 @@
       (x6t-r 'xchg 0 144 '(Aw Aw) '((p 66)))                    ; 66 90: the two-byte nop's spelling
       (x6t-r 'nop 0 144 () ())]
      (map (r \ x6t-r 'xchg 0 (145 + r) '(Zv Av) ()) ^7)
-     [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () ())
-      (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () ())
-      (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))
-      ; the x87 escapes: fninit and fnclex, the state doors over memory
-      (x6t-r 'fninit 0 219 () '((rm 227))) (x6t-r 'fnclex 0 219 () '((rm 226)))]
-     (x6t-dig 0 217 '(Ed) '((mod m) (iw 0)) '(() () () () () fldcw () fnstcw))
-     (x6t-dig 0 219 '(Ed) '((mod m) (iw 0)) '(fildl))
-     (x6t-dig 0 221 '(Ed) '((mod m) (iw 0)) '(() () () () frstor () fnsave fnstsw))
-     (x6t-dig 0 223 '(Ed) '((mod m) (iw 0)) '(filds () () () () fildll))
+     ; ..the accumulator or the register written first, the same bytes; after, so a decode reads its own
+     [(x6t-r 'xchg 0 144 '(Av Zv) '((b 1)))] (map (r \ x6t-r 'xchg 0 (145 + r) '(Av Zv) ()) ^7)
+     [(x6t-r 'xchg 0 134 '(Gb Eb) ()) (x6t-r 'xchg 0 135 '(Gv Ev) ())]
+     [(x6t-r 'cbw 0 152 () '((ow 2))) (x6t-r 'cdqe 0 152 () '((ow 8))) (x6t-r 'cwde 0 152 () '((ow 4)))
+      (x6t-r 'cwd 0 153 () '((ow 2))) (x6t-r 'cqo 0 153 () '((ow 8))) (x6t-r 'cdq 0 153 () '((ow 4)))
+      (x6t-r 'sahf 0 158 () ()) (x6t-r 'lahf 0 159 () ()) (x6t-r 'fwait 0 155 () '((fw 1)))]
+     ;; the x87 escapes d8..df: memory by the digit, at&t's names carrying the width
+     (catmap (e \ x6t-dig 0 (216 + <e) '(Ed) '((mod m) (iw 0)) (e 1))
+             '((0 (fadds fmuls fcoms fcomps fsubs fsubrs fdivs fdivrs))
+               (1 (flds () fsts fstps fldenv fldcw fnstenv fnstcw))
+               (2 (fiaddl fimull ficoml ficompl fisubl fisubrl fidivl fidivrl))
+               (3 (fildl fisttpl fistl fistpl () fldt () fstpt))
+               (4 (faddl fmull fcoml fcompl fsubl fsubrl fdivl fdivrl))
+               (5 (fldl fisttpll fstl fstpl frstor () fnsave fnstsw))
+               (6 (fiadds fimuls ficoms ficomps fisubs fisubrs fidivs fidivrs))
+               (7 (filds fisttps fists fistps fbld fildll fbstp fistpll))))
+     ; ..over the stack: T st(i) in r/m, K the top. dc's sub and div are at&t's, as gas and llvm read them
+     (x6t-dig 0 216 '(K T) '((mod r)) '(fadd fmul () () fsub fsubr fdiv fdivr))
+     (x6t-dig 0 216 '(T) '((mod r)) '(() () fcom fcomp))
+     (x6t-dig 0 217 '(T) '((mod r)) '(fld fxch))
+     (x6t-dig 0 218 '(K T) '((mod r)) '(fcmovb fcmove fcmovbe fcmovu))
+     (x6t-dig 0 219 '(K T) '((mod r)) '(fcmovnb fcmovne fcmovnbe fcmovnu () fucomi fcomi))
+     (x6t-dig 0 220 '(T K) '((mod r)) '(fadd fmul () () fsub fsubr fdiv fdivr))
+     (x6t-dig 0 221 '(T) '((mod r)) '(ffree () fst fstp fucom fucomp))
+     (x6t-dig 0 222 '(T K) '((mod r)) '(faddp fmulp () () fsubp fsubrp fdivp fdivrp))
+     (x6t-dig 0 223 '(T) '((mod r)) '(ffreep))
+     (x6t-dig 0 223 '(K T) '((mod r)) '(() () () () () fucomip fcomip))
+     ; ..and the whole modrm byte
+     (map (e \ x6t-r (e 1) 0 <e () [['rm (e 2)]])
+          '((217 fnop 208) (217 fchs 224) (217 fabs 225) (217 ftst 228) (217 fxam 229) (217 fld1 232)
+            (217 fldl2t 233) (217 fldl2e 234) (217 fldpi 235) (217 fldlg2 236) (217 fldln2 237) (217 fldz 238)
+            (217 f2xm1 240) (217 fyl2x 241) (217 fptan 242) (217 fpatan 243) (217 fxtract 244) (217 fprem1 245)
+            (217 fdecstp 246) (217 fincstp 247) (217 fprem 248) (217 fyl2xp1 249) (217 fsqrt 250) (217 fsincos 251)
+            (217 frndint 252) (217 fscale 253) (217 fsin 254) (217 fcos 255) (218 fucompp 233)
+            (219 fnclex 226) (219 fninit 227) (222 fcompp 217)))
+     [(x6t-r 'fnstsw 0 223 '(Aw) '((rm 224)))]
      ;; the string ops, Intel's names (the AT&T shower respells movsd's)
      (catmap (e \ (: op <e b (e 1)
                      [(x6t-r (name (b + "b")) 0 op () ()) (x6t-r (name (b + "w")) 0 (op + 1) () '((ow 2)))
-                      (x6t-r (name (b + (e 2))) 0 (op + 1) () '((ow 8)))  (x6t-r (name (b + "d")) 0 (op + 1) () ())]))
+                      (x6t-r (name (b + (e 2))) 0 (op + 1) () '((ow 8)))  (x6t-r (name (b + "d")) 0 (op + 1) () '((ow 4)))]))
              '((164 "movs" "q") (166 "cmps" "q") (170 "stos" "q") (172 "lods" "q") (174 "scas" "q")
                (108 "ins" "d") (110 "outs" "d")))
      [(x6t-r 'test 0 168 '(Ab Ib) ()) (x6t-r 'test 0 169 '(Av Iz) ())]
@@ -149,29 +199,31 @@
      (x6t-dig 0 192 '(Eb Ib) () x6t-grp2) (x6t-dig 0 193 '(Ev Ib) () x6t-grp2)
      (x6t-dig 0 208 '(Eb) () x6t-grp2) (x6t-dig 0 209 '(Ev) () x6t-grp2)
      (x6t-dig 0 210 '(Eb CL) () x6t-grp2) (x6t-dig 0 211 '(Ev CL) () x6t-grp2)
-     [(x6t-r 'ret 0 195 () ()) (x6t-r 'ret 0 194 '(Uw) '((iw 0)))
+     [(x6t-r 'ret 0 195 () '((ow 2) (iw 2))) (x6t-r 'ret 0 195 () ()) (x6t-r 'ret 0 194 '(Uw) '((iw 0)))
       (x6t-r 'mov 0 198 '(Eb Ib) ()) (x6t-r 'mov 0 199 '(Ev Iz) ())
       (x6t-r 'leave 0 201 () ()) (x6t-r 'int3 0 204 () ()) (x6t-r 'int 0 205 '(ub) ()) (x6t-r 'xlat 0 215 () ())
       (x6t-r 'call 0 232 '(Jz) ()) (x6t-r 'jmp 0 233 '(Jz) ()) (x6t-r 'jmp 0 235 '(Jb) ())
+      (x6t-r 'loopne 0 224 '(Jb) ()) (x6t-r 'loope 0 225 '(Jb) ()) (x6t-r 'loop 0 226 '(Jb) ()) (x6t-r 'jrcxz 0 227 '(Jb) ())
       (x6t-r 'hlt 0 244 () ()) (x6t-r 'cmc 0 245 () ()) (x6t-r 'clc 0 248 () ()) (x6t-r 'stc 0 249 () ())
       (x6t-r 'cli 0 250 () ()) (x6t-r 'sti 0 251 () ()) (x6t-r 'cld 0 252 () ()) (x6t-r 'std 0 253 () ())
-      (x6t-r 'pushf 0 156 () ()) (x6t-r 'popf 0 157 () ())]
+      (x6t-r 'pushf 0 156 () '((ow 2) (iw 2))) (x6t-r 'pushf 0 156 () ()) (x6t-r 'pushf 0 156 () '((iw p)))
+      (x6t-r 'popf 0 157 () '((ow 2) (iw 2))) (x6t-r 'popf 0 157 () ()) (x6t-r 'popf 0 157 () '((iw p)))]
      (x6t-dig 0 246 '(Eb Ib) () '(test test)) (x6t-dig 0 246 '(Eb) () '(() () not neg mul imul div idiv))
      (x6t-dig 0 247 '(Ev Iz) () '(test test)) (x6t-dig 0 247 '(Ev) () '(() () not neg mul imul div idiv))
      (x6t-dig 0 254 '(Eb) () '(inc dec)) (x6t-dig 0 255 '(Ev) () '(inc dec))
      (x6t-dig 0 255 '(Nq) '((iw 0)) '(() () call () jmp)) (x6t-dig 0 255 '(Ep) () '(() () () () () () push))
      ;; the 0F map: the system lane
      (map (e \ x6t-r (e 1) 1 <e () ()) '((5 syscall) (11 ud2) (119 emms) (8 invd) (9 wbinvd) (51 rdpmc)
-                                       (48 wrmsr) (49 rdtsc) (50 rdmsr) (162 cpuid)))
-     [(x6t-r 'sysretq 1 7 () '((ow 8))) (x6t-r 'sysretl 1 7 () ())
+                                       (48 wrmsr) (49 rdtsc) (50 rdmsr) (162 cpuid) (52 sysenter) (53 sysexit) (6 clts)))
+     [(x6t-r 'sysretq 1 7 () '((ow 8))) (x6t-r 'sysretl 1 7 () '((ow 4))) (x6t-r 'sysret 1 7 () ())
       (x6t-r 'lar 1 2 '(Gv Ev) ()) (x6t-r 'lsl 1 3 '(Gv Ev) ())]
-     (x6t-dig 1 0 '(Ew) '((iw 0)) '(sldt str lldt () verr verw)) (x6t-dig 1 0 '(Ew) () '(() () () ltr))
+     (x6t-dig 1 0 '(Ew) '((iw 0) (mod m)) '(sldt str)) (x6t-dig 1 0 '(Ew) '((iw 0)) '(() () lldt () verr verw)) (x6t-dig 1 0 '(Ew) () '(() () () ltr))
      [(x6t-r 'nop 1 31 '(Ev) ())]                                       ; the long nops
      (x6t-dig 1 24 '(Eq) '((mod m) (iw 0)) '(prefetchnta prefetcht0 prefetcht1 prefetcht2))
      [(x6t-r 'endbr64 1 30 () '((p f3) (rm 250) (x 1))) (x6t-r 'endbr32 1 30 () '((p f3) (rm 251) (x 1)))]
      (map (e \ x6t-r (e 1) 1 1 () [['rm <e]])
           '((248 swapgs) (208 xgetbv) (209 xsetbv) (249 rdtscp) (202 clac) (200 monitor) (201 mwait)
-            (250 monitorx) (251 mwaitx) (203 stac) (238 rdpkru) (239 wrpkru)))
+            (250 monitorx) (251 mwaitx) (203 stac) (238 rdpkru) (239 wrpkru) (193 vmcall) (217 vmmcall)))
      (x6t-dig 1 1 '(Eq) '((mod m) (iw 0)) '(sgdt sidt lgdt lidt () () () invlpg))
      [(x6t-r 'mov 1 32 '(Eq C) ()) (x6t-r 'mov 1 34 '(C Eq) ()) (x6t-r 'mov 1 33 '(Eq D) ()) (x6t-r 'mov 1 35 '(D Eq) ())
       (x6t-r 'vmread 1 120 '(Eq Gq) ()) (x6t-r 'vmwrite 1 121 '(Gq Eq) ())]
@@ -243,13 +295,157 @@
      (x6t-px 112 '(V W ub) '((66 pshufd) (f3 pshufhw) (f2 pshuflw)) 1)
      (x6t-px 198 '(V W ub) '((66 shufpd) (any shufps)) 1)
      [(x6t-r 'pmovmskb 1 215 '(Gd W) '((p 66) (x 1)))]
-     (catmap (l \ [(x6t-r (name ("cmp" + l 1)) 1 194 '(V W ub) [['p <l] '(x 1)])]) '((none "ps") (66 "pd") (f3 "ss") (f2 "sd")))])
+     (catmap (l \ [(x6t-r (name ("cmp" + l 1)) 1 194 '(V W ub) [['p <l] '(x 1)])]) '((none "ps") (66 "pd") (f3 "ss") (f2 "sd")))
+     ;; SSSE3 SSE4 AES PCLMUL GFNI SHA1: 0F 38 and 0F 3A, the blends' xmm0 implied
+     (map (e \ x6t-r (e 1) 2 <e '(V W) '((p 66) (x 1))) (x6t-s38 + x6t-sx + '((23 ptest) (28 pabsb) (29 pabsw) (30 pabsd)
+                                                         (16 pblendvb) (20 blendvps) (21 blendvpd) (219 aesimc) (207 gf2p8mulb))))
+     (map (e \ x6t-r (e 1) 3 <e '(V W ub) '((p 66) (x 1))) (x6t-s3a + '((223 aeskeygenassist) (206 gf2p8affineqb) (207 gf2p8affineinvqb))))
+     [(x6t-r 'movntdqa 2 42 '(V W) '((p 66) (mod m) (x 1)))
+      (x6t-r 'sha1nexte 2 200 '(V W) '((p none) (x 1))) (x6t-r 'sha1msg1 2 201 '(V W) '((p none) (x 1)))
+      (x6t-r 'sha1msg2 2 202 '(V W) '((p none) (x 1))) (x6t-r 'sha1rnds4 3 204 '(V W ub) '((p none) (x 1)))
+      (x6t-r 'pinsrw 1 196 '(V Ed ub) '((p 66) (x 1))) (x6t-r 'pextrw 1 197 '(Gd W ub) '((p 66) (mod r) (x 1)))
+      (x6t-r 'pinsrb 3 32 '(V Ed ub) '((p 66) (x 1))) (x6t-r 'pinsrq 3 34 '(V Eq ub) '((p 66) (w 1) (x 1)))
+      (x6t-r 'pinsrd 3 34 '(V Ed ub) '((p 66) (x 1))) (x6t-r 'pextrb 3 20 '(Ed V ub) '((p 66) (x 1)))
+      (x6t-r 'pextrw 3 21 '(Ed V ub) '((p 66) (x 1))) (x6t-r 'pextrq 3 22 '(Eq V ub) '((p 66) (w 1) (x 1)))
+      (x6t-r 'pextrd 3 22 '(Ed V ub) '((p 66) (x 1)))]
+     ;; VEX: the v-twins, a second source in vvvv (H); packed at both lengths, a scalar's at L0
+     (catmap (e \ (: nm (e 1) vn (x6t-vn nm)
+                     ks (elem nm x6t-xsh ? '(V H Wx) '(V H W))
+                     (x6t-v vn 1 <e ks '((p 66)) x6t-l01
+                      + (elem nm x6t-vcomm ? (x6t-v vn 1 <e '(V W H) '((p 66)) x6t-l01) ()))))
+             x6t-p66)
+     (catmap (e \ (: op <e b (e 1)
+                     (catmap (l \ (: vn (name ("v" + b + l 1)) sc (elem (l 1) '("ss" "sd"))
+                                    (x6t-v vn 1 op '(V H W) [['p <l]] (sc ? '(0) x6t-l01)
+                                     + (elem (name (b + l 1)) x6t-vcomm ? (x6t-v vn 1 op '(V W H) [['p <l]] x6t-l01) ()))))
+                             (b = "sqrt" ? '((f3 "ss") (f2 "sd")) '((none "ps") (66 "pd") (f3 "ss") (f2 "sd"))))))
+             '((84 "and") (85 "andn") (86 "or") (87 "xor") (88 "add") (89 "mul") (92 "sub") (93 "min") (94 "div") (95 "max")
+               (81 "sqrt")))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 1 <e '(V H W) [['p (e 2)]] x6t-l01)
+          '((20 unpcklps none) (20 unpcklpd 66) (21 unpckhps none) (21 unpckhpd 66)))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 1 <e '(V H W ub) [['p (e 2)]] x6t-l01) '((198 shufps none) (198 shufpd 66)))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 2 <e '(V H W) '((p 66)) x6t-l01) ('((0 pshufb)) + x6t-s38))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 3 <e '(V H W ub) '((p 66)) x6t-l01) ('((15 palignr) (14 pblendw)) + x6t-s3a))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 3 <e '(V H W ub) '((p 66) (w 1)) x6t-l01) '((206 gf2p8affineqb) (207 gf2p8affineinvqb)))
+     (x6t-v 'vgf2p8mulb 2 207 '(V H W) '((p 66) (w 0)) x6t-l01)
+     ; ..two operands: the moves, a store row to memory, and the one-source ops
+     (catmap (e \ x6t-v (x6t-vn (e 2)) 1 <e (e 3) [['p (e 1)]] x6t-l01)
+          '((16 none movups (V W)) (17 none movups (W V)) (16 66 movupd (V W)) (17 66 movupd (W V))
+            (40 none movaps (V W)) (41 none movaps (W V)) (40 66 movapd (V W)) (41 66 movapd (W V))
+            (111 66 movdqa (V W)) (127 66 movdqa (W V)) (111 f3 movdqu (V W)) (127 f3 movdqu (W V))
+            (81 none sqrtps (V W)) (81 66 sqrtpd (V W)) (82 none rsqrtps (V W)) (83 none rcpps (V W))
+            (80 none movmskps (Gd W)) (80 66 movmskpd (Gd W)) (215 66 pmovmskb (Gd W))))
+     (catmap (e \ x6t-v (x6t-vn (e 2)) 1 <e '(V W) [['p (e 1)]] '(0)) '((46 66 ucomisd) (46 none ucomiss) (47 66 comisd) (47 none comiss)))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 1 112 '(V W ub) [['p <e]] x6t-l01) '((66 pshufd) (f3 pshufhw) (f2 pshuflw)))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 2 <e '(V W) '((p 66)) x6t-l01) '((23 ptest) (28 pabsb) (29 pabsw) (30 pabsd)))
+     (catmap (e \ x6t-v (x6t-vn (e 1)) 2 <e '(V Wx) '((p 66)) x6t-l01) x6t-sx)
+     (catall [(x6t-v 'vmovntdqa 2 42 '(V W) '((p 66) (mod m)) x6t-l01) (x6t-v 'vaesimc 2 219 '(V W) '((p 66)) '(0))
+      (x6t-v 'vaeskeygenassist 3 223 '(V W ub) '((p 66)) '(0))])
+     ; ..the shifts by an immediate: vvvv the destination, reg the digit
+     (catmap (e \ catmap (d \ (e 1 d) @ () () nm (x6t-v (x6t-vn nm) 1 <e '(H W ub) [['p 66] ['d d] ['mod 'r]] x6t-l01)) ^8)
+             '((113 (() () psrlw () psraw () psllw ())) (114 (() () psrld () psrad () pslld ()))
+               (115 (() () psrlq psrldq () () psllq pslldq))))
+     ; ..moves to and from a general register, and xmm <-> m64
+     (catall [(x6t-v 'vmovq 1 110 '(V Eq) '((p 66) (w 1)) '(0)) (x6t-v 'vmovd 1 110 '(V Ed) '((p 66) (w 0)) '(0))
+      (x6t-v 'vmovq 1 126 '(Eq V) '((p 66) (w 1)) '(0)) (x6t-v 'vmovd 1 126 '(Ed V) '((p 66) (w 0)) '(0))
+      (x6t-v 'vmovq 1 126 '(V Wx) '((p f3)) '(0)) (x6t-v 'vmovq 1 214 '(Wx V) '((p 66)) '(0))
+      (x6t-v 'vpinsrb 3 32 '(V H Ed ub) '((p 66) (w 0)) '(0)) (x6t-v 'vpinsrq 3 34 '(V H Eq ub) '((p 66) (w 1)) '(0))
+      (x6t-v 'vpinsrd 3 34 '(V H Ed ub) '((p 66) (w 0)) '(0)) (x6t-v 'vpinsrw 1 196 '(V H Ed ub) '((p 66)) '(0))
+      (x6t-v 'vpextrb 3 20 '(Ed V ub) '((p 66) (w 0)) '(0)) (x6t-v 'vpextrq 3 22 '(Eq V ub) '((p 66) (w 1)) '(0))
+      (x6t-v 'vpextrd 3 22 '(Ed V ub) '((p 66) (w 0)) '(0)) (x6t-v 'vpextrw 1 197 '(Gd W ub) '((p 66) (mod r)) '(0))
+      (x6t-v 'vpextrw 3 21 '(Ed V ub) '((p 66)) '(0))])
+     ;; AVX's own: broadcasts, the 128-bit lanes, permutes, blends by register, the shifts by vector
+     (catmap (e \ x6t-v (e 1) (e 2) <e (e 3) [['p 66] ['w (e 4)]] (e 5))
+          '((24 vbroadcastss 2 (V Wx) 0 (0 1)) (25 vbroadcastsd 2 (V Wx) 0 (1)) (90 vbroadcasti128 2 (V Wx) 0 (1))
+            (26 vbroadcastf128 2 (V Wx) 0 (1)) (120 vpbroadcastb 2 (V Wx) 0 (0 1)) (121 vpbroadcastw 2 (V Wx) 0 (0 1))
+            (88 vpbroadcastd 2 (V Wx) 0 (0 1)) (89 vpbroadcastq 2 (V Wx) 0 (0 1))
+            (24 vinsertf128 3 (V H Wx ub) 0 (1)) (56 vinserti128 3 (V H Wx ub) 0 (1))
+            (25 vextractf128 3 (Wx V ub) 0 (1)) (57 vextracti128 3 (Wx V ub) 0 (1))
+            (6 vperm2f128 3 (V H W ub) 0 (1)) (70 vperm2i128 3 (V H W ub) 0 (1)) (54 vpermd 2 (V H W) 0 (1))
+            (22 vpermps 2 (V H W) 0 (1)) (0 vpermq 3 (V W ub) 1 (1)) (1 vpermpd 3 (V W ub) 1 (1))
+            (2 vpblendd 3 (V H W ub) 0 (0 1)) (76 vpblendvb 3 (V H W L) 0 (0 1))
+            (74 vblendvps 3 (V H W L) 0 (0 1)) (75 vblendvpd 3 (V H W L) 0 (0 1))
+            (71 vpsllvd 2 (V H W) 0 (0 1)) (71 vpsllvq 2 (V H W) 1 (0 1)) (69 vpsrlvd 2 (V H W) 0 (0 1))
+            (69 vpsrlvq 2 (V H W) 1 (0 1)) (70 vpsravd 2 (V H W) 0 (0 1))))
+     [(x6t-r 'vzeroupper 1 119 () '((vex 0) (p none))) (x6t-r 'vzeroall 1 119 () '((vex 1) (p none)))]
+     ;; BMI's general-register ops under VEX, B a general register in vvvv
+     (map (e \ x6t-r (e 1) (e 2) <e (e 3) [['vex 0] ['p (e 4)]])
+          '((242 andn 2 (Gy By Ey) none) (245 bzhi 2 (Gy Ey By) none) (247 bextr 2 (Gy Ey By) none)
+            (245 pdep 2 (Gy By Ey) f2) (245 pext 2 (Gy By Ey) f3) (246 mulx 2 (Gy By Ey) f2)
+            (247 sarx 2 (Gy Ey By) f3) (247 shlx 2 (Gy Ey By) 66) (247 shrx 2 (Gy Ey By) f2) (240 rorx 3 (Gy Ey ub) f2)))
+     (x6t-dig 2 243 '(By Ey) '((vex 0) (p none)) '(() blsr blsmsk blsi))
+     ;; EVEX, AVX-512's: the d and q rows by W, a zmm's twins of the VEX rows above. n the bytes
+     ;; a disp8 counts in, where not the whole vector
+     (catmap (e \ (: b (e 1)
+                     (x6t-e (name (b + "d")) (e 2) <e (e 3) [['p 66] '(w 0)] '(0 1 2)
+                      + x6t-e (name (b + "q")) (e 2) <e (e 3) [['p 66] '(w 1)] '(0 1 2))))
+             '((37 "vpternlog" 3 (V H W ub)) (118 "vpermi2" 2 (V H W)) (126 "vpermt2" 2 (V H W))
+               (239 "vpxor" 1 (V H W)) (219 "vpand" 1 (V H W)) (235 "vpor" 1 (V H W)) (223 "vpandn" 1 (V H W))))
+     (catmap (d \ x6t-e (name ("vpro" + d 1 + "d")) 1 114 '(H W ub) [['p 66] ['d <d] '(w 0)] '(0 1 2)
+                  + x6t-e (name ("vpro" + d 1 + "q")) 1 114 '(H W ub) [['p 66] ['d <d] '(w 1)] '(0 1 2))
+             '((0 "r") (1 "l")))
+     (catmap (e \ x6t-e <e 1 111 '(V W) [['p (e 1)] ['w (e 2)]] '(0 1 2) + x6t-e <e 1 127 '(W V) [['p (e 1)] ['w (e 2)]] '(0 1 2))
+             '((vmovdqu8 f2 0) (vmovdqu16 f2 1) (vmovdqu32 f3 0) (vmovdqu64 f3 1) (vmovdqa32 66 0) (vmovdqa64 66 1)))
+     (catmap (e \ x6t-e (e 1) (e 2) <e (e 3) [['p 66] ['w (e 4)] ['n (e 6)]] (e 5))
+          '((90 vbroadcasti32x4 2 (V Wx) 0 (1 2) 16) (90 vbroadcasti64x2 2 (V Wx) 1 (1 2) 16)
+            (91 vbroadcasti32x8 2 (V Wy) 0 (2) 32) (91 vbroadcasti64x4 2 (V Wy) 1 (2) 32)
+            (57 vextracti32x4 3 (Wx V ub) 0 (1 2) 16) (57 vextracti64x2 3 (Wx V ub) 1 (1 2) 16)
+            (59 vextracti32x8 3 (Wy V ub) 0 (2) 32) (59 vextracti64x4 3 (Wy V ub) 1 (2) 32)
+            (56 vinserti32x4 3 (V H Wx ub) 0 (1 2) 16) (56 vinserti64x2 3 (V H Wx ub) 1 (1 2) 16)
+            (58 vinserti32x8 3 (V H Wy ub) 0 (2) 32) (58 vinserti64x4 3 (V H Wy ub) 1 (2) 32)))
+     (catmap (e \ x6t-e (e 1) (e 2) <e (e 3) [['p 66] ['w (e 4)]] '(2))
+          '((254 vpaddd 1 (V H W) 0) (212 vpaddq 1 (V H W) 1) (0 vpshufb 2 (V H W) 0) (68 vpclmulqdq 3 (V H W ub) 0)
+            (220 vaesenc 2 (V H W) 0) (221 vaesenclast 2 (V H W) 0) (222 vaesdec 2 (V H W) 0) (223 vaesdeclast 2 (V H W) 0)
+            (206 vgf2p8affineqb 3 (V H W ub) 1) (207 vgf2p8affineinvqb 3 (V H W ub) 1) (207 vgf2p8mulb 2 (V H W) 0)
+            (98 vpunpckldq 1 (V H W) 0) (106 vpunpckhdq 1 (V H W) 0) (108 vpunpcklqdq 1 (V H W) 1)
+            (109 vpunpckhqdq 1 (V H W) 1) (112 vpshufd 1 (V W ub) 0) (71 vpsllvq 2 (V H W) 1) (69 vpsrlvq 2 (V H W) 1)
+            (124 vpbroadcastq 2 (V Eq) 1) (67 vshufi64x2 3 (V H W ub) 1)))
+     (catmap (e \ x6t-e (e 1) 1 115 '(H W ub) [['p 66] ['d <e] ['w (e 2)] '(mod r)] '(2))
+             '((7 vpslldq 0) (3 vpsrldq 0) (6 vpsllq 1) (2 vpsrlq 1)))
+     ;; the system rows by mode, i64 those a 64-bit segment refuses. a segment register: to it
+     ;; never 66, from it 66 only into a register; the control and debug registers whole
+     [(x6t-r 'mov 0 140 '(Ew S) '((mod m))) (x6t-r 'mov 0 140 '(Ev S) '((mod r))) (x6t-r 'mov 0 142 '(S Ew) ())
+      (x6t-r 'mov 0 142 '(S Ed) '((mod r))) (x6t-r 'mov 0 142 '(S Eq) '((mod r) (w 1)))
+      (x6t-r 'mov 1 32 '(Ed C) '((i64 1))) (x6t-r 'mov 1 34 '(C Ed) '((i64 1)))
+      (x6t-r 'mov 1 33 '(Ed D) '((i64 1))) (x6t-r 'mov 1 35 '(D Ed) '((i64 1)))]
+     ; ..pushed and popped, Q the one the row's sr names
+     (map (e \ x6t-r (e 1) (e 2) <e '(Qp) [['sr (e 3)] '(iw p) (e 4 ? '(i64 1) '(i64 ()))])
+          '((6 push 0 0 1) (7 pop 0 0 1) (14 push 0 1 1) (22 push 0 2 1) (23 pop 0 2 1) (30 push 0 3 1) (31 pop 0 3 1)
+            (160 push 1 4 0) (161 pop 1 4 0) (168 push 1 5 0) (169 pop 1 5 0)))
+     ; the far transfers: to a segment:offset, the offset's width the operand size, or through memory
+     [(x6t-r 'ljmp 0 234 '(Iz Uw) '((i64 1) (iw o))) (x6t-r 'lcall 0 154 '(Iz Uw) '((i64 1) (iw o)))]
+     (x6t-dig 0 255 '(Nv) '((mod m) (iw o)) '(() () () lcall () ljmp))
+     ; the descriptor tables at a suffix's operand size; a word's register forms
+     (x6t-dig 1 1 '(Ev) '((mod m) (iw o) (i64 1)) '(sgdt sidt lgdt lidt))
+     (x6t-dig 1 0 '(Ev) '((mod r)) '(sldt str)) (x6t-dig 1 0 '(Ew) '((mod r)) '(() () lldt ltr verr verw))
+     (x6t-dig 1 1 '(Ew) '((iw 0) (mod m)) '(() () () () smsw () lmsw)) (x6t-dig 1 1 '(Ev) '((mod r)) '(() () () () smsw))
+     (x6t-dig 1 1 '(Ew) '((mod r)) '(() () () () () () lmsw))
+     ; the ports, by an imm8 or by DX, at the accumulator's width
+     [(x6t-r 'in 0 228 '(Ab ub) ()) (x6t-r 'in 0 229 '(Av ub) '((w 0))) (x6t-r 'in 0 236 '(Ab DX) ()) (x6t-r 'in 0 237 '(Av DX) '((w 0)))
+      (x6t-r 'out 0 230 '(ub Ab) ()) (x6t-r 'out 0 231 '(ub Av) '((w 0))) (x6t-r 'out 0 238 '(DX Ab) ()) (x6t-r 'out 0 239 '(DX Av) '((w 0)))]
+     ; inc and dec 40+r and 48+r, REX in 64; mov's accumulator to and from an absolute address
+     (map (r \ x6t-r 'inc 0 (64 + r) '(Zv) '((i64 1))) ^8) (map (r \ x6t-r 'dec 0 (72 + r) '(Zv) '((i64 1))) ^8)
+     [(x6t-r 'mov 0 160 '(Ab Ob) '((i64 1))) (x6t-r 'mov 0 161 '(Av Ov) '((i64 1)))
+      (x6t-r 'mov 0 162 '(Ob Ab) '((i64 1))) (x6t-r 'mov 0 163 '(Ov Av) '((i64 1)))]
+     ;; the far returns and pusha at a suffix's operand size; the prefixes as instructions, as
+     ;; gas reads `rep; movsb` (the decoder reads them as prefixes first)
+     [(x6t-r 'lret 0 203 () '((iw o))) (x6t-r 'iret 0 207 () '((iw o))) (x6t-r 'ret 0 195 () '((iw o) (i64 1)))
+      (x6t-r 'pusha 0 96 () '((iw o) (i64 1))) (x6t-r 'popa 0 97 () '((iw o) (i64 1)))
+      (x6t-r 'lock 0 240 () ()) (x6t-r 'rep 0 243 () ()) (x6t-r 'repe 0 243 () ()) (x6t-r 'repz 0 243 () ())
+      (x6t-r 'repne 0 242 () ()) (x6t-r 'repnz 0 242 () ())
+      ; crc32 by its source's width, the item's; rdpid's register whole, no REX.W; ud1
+      (x6t-r 'crc32 2 240 '(Gd Eb) '((p f2) (w 0) (iw 1) (x 1))) (x6t-r 'crc32 2 240 '(Gq Eb) '((p f2) (w 1) (iw 1) (x 1)))
+      (x6t-r 'crc32 2 241 '(Gd Ev) '((p f2) (ow 2) (iw o) (x 1))) (x6t-r 'crc32 2 241 '(Gd Ev) '((p f2) (ow 4) (iw o) (x 1)))
+      (x6t-r 'crc32 2 241 '(Gq Eq) '((p f2) (w 1) (iw o) (x 1)))
+      (x6t-r 'ud1 1 185 '(Gv Ev) ())]
+     (x6t-dig 1 199 '(Eq) '((mod r) (p f3) (x 1)) '(() () () () () () () rdpid))
+     (x6t-dig 1 199 '(Ed) '((mod r) (p f3) (x 1) (i64 1)) '(() () () () () () () rdpid))])
    ;; the rows by map and opcode, in table order
    x64-tabix (foldl (\ t r (: k (r 1 * 256 + r 2) (pin t k (peep t k () + [r])))) {} x64-tab)
    ;; the encoder: a row lays operands written as the decoder's (decode.l), Intel order; of the
    ;; rows of a name that take them, the shortest, the first on a tie
-   (x64-role k) (show k @ t (? (t = "CL" || t = "ub") t (#t = 1) t (snip t 0 1)))
-   (x64-wl k) (show k @ t (#t = 2 && t != "CL" && t != "ub" ? (snip t 1 2) ""))
+   (x64-role k) (show k @ t (? (elem t ["CL" "ub" "DX"]) t (#t = 1) t (snip t 0 1)))
+   (x64-wl k) (show k @ t (#t = 2 && nelem t ["CL" "ub" "DX"] ? (snip t 1 2) ""))
    (x6e-rg? o) (two? o && <o = 'rg)
    (x6e-mem? o) (two? o && elem <o '(mem rip seg))
    ;; a memory operand's modrm, sib and displacement with reg field rf -> [bytes X B], or ()
@@ -265,6 +461,44 @@
                       [(x86-modrm md rf b)])
                 [(hd + dsp) (ix < 0 ? 0 (ix >> 3)) (b >> 3)]))
          ())
+   ;; ..in a segment of md bits, as gas lays it -> [bytes X B 67]: 16-bit addressing (registers 32
+   ;; up), 67 where the address is not the segment's width (a 32-bit one in 64 marks field 6
+   ;; 'a32), a bare address by the segment's form, a symbol in field 5 the displacement's fix
+   (x6e-memm md rf o) (x6e-memmn md rf o 1)
+   ;; ..its disp8 counted in units of n bytes (EVEX's), 1 elsewhere
+   (x6e-memmn md rf o n)
+    (o @ ('seg _ m) (x6e-memmn md rf m n)
+         ('rip _ _) (md = 64 ? (x6e-mem rf o @ () () m (m + [()])) ())
+         ('mem . b . ix . sc . d . more)
+          (: sy (two? more ? <more ()) a32 (#more > 1 && more 1 = 'a32)
+             (? (b >= 32 || ix >= 32) (md = 64 ? () (x6e-m16 rf b ix sc d sy @ () () m (m + [(md = 32 ? [103] ())])))
+                (sy = () && md = 64 && !a32 && n = 1) (x6e-mem rf o @ () () m (m + [()]))
+                (: d4 (sy ? [(fix 4 (md = 64 ? 'abs32s 'abs32d) sy d)] (charm? d && fits32 d ? (le32 d) ()))
+                   a67 (? (md = 64) (a32 ? [103] ()) (md = 16) [103] ())
+                   (? (d4 = () || ix = 4) ()
+                      (md = 16 && b < 0 && ix < 0) [([(x86-modrm 0 rf 6)] + (sy ? [(fix 2 'abs16 sy d)] (le16 d))) 0 0 ()]
+                      (md = 32 && b < 0 && ix < 0) [([(x86-modrm 0 rf 5)] + (sy ? [(fix 4 'abs32 sy d)] (le32 d))) 0 0 ()]
+                      (b < 0) [([(x86-modrm 0 rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) 5)] + d4) (ix < 0 ? 0 (ix >> 3)) 0 a67]
+                      (: m (? sy 2 (d = 0 && (b & 7) != 5) 0 (d % n = 0 && fits8 (d // n)) 1 2)
+                         hd (? (ix >= 0 || (b & 7) = 4) [(x86-modrm m rf 4) (x86-sib (x86-scale sc) (ix < 0 ? 4 ix) b)]
+                               [(x86-modrm m rf b)])
+                         [(hd + (m @ 0 () 1 [(byte (d // n))] d4)) (ix < 0 ? 0 (ix >> 3)) (b >> 3) a67])))))
+         ())
+   ;; 16-bit addressing: a base and an index (either order) -> rm by their numbers (bx 3 bp 5 si 6
+   ;; di 7), -1 for no row; bp alone has no disp-less form
+   (x6e-a16rm b ix) (: x (b < ix ? ix b) y (b < ix ? b ix)
+                       (? (y < 0) (x @ 6 4 7 5 5 6 3 7 -1)
+                          (y = 3) (x @ 6 0 7 1 -1)
+                          (y = 5) (x @ 6 2 7 3 -1)
+                          -1))
+   (x6e-m16 rf b0 ix0 sc d sy)
+    (: rm (x6e-a16rm (b0 < 0 ? -1 (b0 - 32)) (ix0 < 0 ? -1 (ix0 - 32)))
+       (? (rm < 0 || sc != 1) ()
+          sy [[(x86-modrm 2 rf rm) (fix 2 'abs16 sy d)] 0 0]
+          !(charm? d) ()
+          (d = 0 && rm != 6) [[(x86-modrm 0 rf rm)] 0 0]
+          (fits8 d) [[(x86-modrm 1 rf rm) (byte d)] 0 0]
+          [([(x86-modrm 2 rf rm)] + le16 d) 0 0]))
    ;; an immediate's bytes by kind, or () when it does not fit
    (x6e-in lo v hi) ((lo <= v) && (v <= hi))
    ;; [b+d]'s mod: none, a byte, a dword
@@ -292,37 +526,52 @@
        (idx role) (filter (i \ elem (rl i) role) ^n @ (i . _) i _ -1)
        [r n rl wl
         (filter (i \ elem (wl i) '(v p y) && elem (rl i) '(G E Z A)) ^n)
-        (any (i \ elem (wl i) '(v p y z)) ^n || a 'ow != ())
+        (any (i \ elem (wl i) '(v p y z) && nelem (rl i) '(V W H L)) ^n || a 'ow != () || elem (a 'iw) '(p o))
         (any (i \ wl i = 'b && nelem (rl i) '(I U J)) ^n)
-        (idx '(G V S C D)) (idx '(E W N)) (idx '(Z))
+        (idx '(G V S C D)) (idx '(E W N T)) (idx '(Z))
         (catmap (ro \ filter (i \ rl i = ro) ^n) '(G E Z A) @ (i . _) i _ -1)
         (a 'ow) (a 'iw) (a 'p) (a 'mod) (a 'rm) (a 'd) (a 'w) (a 'b)
-        ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl)
-        (filter (i \ elem (rl i) '(I U ub J)) ^n @ is (map (i \ [i (show (ks i))]) is))
-        (r 2)])
+        ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl || a 'iw = 'p)
+        (filter (i \ elem (rl i) '(I U ub J L O)) ^n @ is (map (i \ [i (show (ks i))]) is))
+        (r 2) (a 'vex) (a 'evex) (a 'n) (idx '(H B)) (r 1) (a 'i64) (a 'sr)])
    ;; a row's lay for operands of this shape, or (): all the shape decides, once, and a
-   ;; (\ ops pc) for the rest, a memory operand, the immediates and targets -> bytes or ()
-   (x6e-stage p w ops)
-    (p @ [_ n rl wl szc vsz byte? gi ei zi gwi ow iw0 ap mod rm ad aw ab opb pfx hasp ims oc]
+   ;; (\ ops pc) for the rest, a memory operand, the immediates and targets -> bytes or ().
+   ;; md the segment's bits: outside 64 no REX, and 66 names the width that is not its own
+   (x6e-stage p w ops) (x6e-stagem 64 p w ops)
+   (x6e-stagem md p w ops)
+    (p @ [_ n rl wl szc vsz byte? gi ei zi gwi ow iw0 ap mod rm ad aw ab opb pfx hasp ims oc vl el nn hi mp i6 sk]
      (: ; the operand size: ow, else a sized register's, else the item's
        sized (filter (i \ x6e-rg? (ops i) && ops i 2 >= 2) szc)
-       osz (? (ow != ()) ow (two? sized) (ops <sized 2) (w > 1) w 4)
+       dsz (md = 16 ? 2 4)
+       osz (? (ow != ()) ow (two? sized) (ops <sized 2) (w > 1) w dsz)
+       o66 (osz != dsz && (osz = 2 || osz = 4))
        (wd l) (l @ 'b 1 'w 2 'd 4 'q 8 'v osz 'p osz 'y osz 0)
+       ; VEX and EVEX: L the vector's length, a bare V W H or L its width, x an xmm, y a ymm
+       vx (vl != () || el != ()) L (vl != () ? vl (el != () ? el 0)) vw (16 << L)
+       (vwd l) (l @ 'x 16 'y 32 vw)
+       (vec? o l) (x6e-rg? o && o 2 = vwd l && o 1 < 16)
        ; a field's width, for a fix laid in it
-       (fw l) (l @ ("Jb" || "Ib" || "ub") 1 "Jz" 4 "Id" 4 "Uw" 2 ("Iz" || "Uv") (osz = 2 ? 2 (l = "Uv" && osz = 8 ? 8 4)) 0)
+       (fw l) (l @ ("Jb" || "Ib" || "ub") 1 "Jz" (osz = 2 ? 2 4) "Id" 4 "Uw" 2 ("Iz" || "Uv") (osz = 2 ? 2 (l = "Uv" && osz = 8 ? 8 4)) 0)
        (gpr? o l) (x6e-rg? o && (o 2 = wd l) && ((o 1 < 16) || (wd l = 1 && (o 1 < 24))))
        (ok o r l)
         (r @ 'G (gpr? o l) 'Z (gpr? o l && (o 1 & 7) = (oc & 7))
              'A (gpr? o l && o 1 = 0) 'CL (o = ['rg 1 1])
-             'E (gpr? o l || x6e-mem? o) 'V (x6e-rg? o && o 2 = 16) 'W (x6e-rg? o && o 2 = 16 || x6e-mem? o)
-             'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = 8 || x6e-mem? (o 1)))
+             'E (gpr? o l || x6e-mem? o) ('V || 'H || 'L) (vec? o l) 'W (vec? o l || x6e-mem? o) 'B (gpr? o l)
+             'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = (md = 64 ? 8 osz) || x6e-mem? (o 1)))
              'S (two? o && <o = 'sr) 'C (two? o && <o = 'cr) 'D (two? o && <o = 'dr)
+             'T (two? o && <o = 'st && charm? (o 1)) 'K (o = ['st] || o = ['st 0])
+             'Q (o = ['sr sk]) 'DX (o = ['rg 2 2])
+             'O (two? o && <o = 'mem && o 1 < 0 && o 2 < 0 && #o < 7)
              (two? o && elem <o '(im lbl)))
        (oks os rs ls) (? !(two? os) 1 (ok <os <rs <ls) (oks >os >rs >ls) 0)
-       ; the item's width as the decoder names it: iw, else the first general register kind's
-       iw (iw0 != () ? iw0 (gwi < 0 ? 0 (wd (wl gwi))))
-       (? (#ops != n || iw != w || !(oks ops rl wl) || (ow != () && w > 0 && vsz && w != ow)
-           || (osz = 2 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
+       ; the item's width as the decoder names it: iw, else the first general register kind's.
+       ; outside 64 a target's or an indirect one's is the operand size it names
+       iw (? (iw0 = 'p) (md = 64 ? (osz = 2 ? 2 8) osz) (iw0 = 'o) w (iw0 != ()) iw0 (gwi < 0 ? 0 (wd (wl gwi))))
+       jn (any (r \ elem r '(J N)) rl)
+       ; outside 64 no 64-bit register, and no 64-bit push
+       (? (#ops != n || (i6 && md = 64) || (md != 64 && (any (o \ x6e-rg? o && o 2 = 8) ops || hasp && osz = 8)) || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
+           || (ow != () && w > 0 && vsz && w != ow) || (hasp && md = 64 && osz = 4)
+           || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'st || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
            ()
           (: eo (ei < 0 ? () (ops ei @ ('ind x) x x x))
@@ -333,7 +582,8 @@
              mk (? (rm != ()) [[rm] 0 0]
                    (eo = ()) (gi >= 0 || ad != () ? () [() 0 0])
                    (x6e-rg? eo) [[(x86-modrm 3 rf (eo 1))] 0 (eo 1 >> 3 & 1)]
-                   (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0) 'base
+                   (<eo = 'st) [[(x86-modrm 3 rf (eo 1))] 0 0]
+                   (md = 64 && el = () && (eo @ ('mem b ix sc d) (ix < 0 && sc = 1 && charm? b && 0 <= b && b < 32 && charm? d && fits32 d) 0)) 'base
                    'mem)
              ; [b+d]: all but the displacement, laid once
              mb (mk = 'base ? (eo @ ('mem b _ _ d) (: md (x6md b d) [md [((b & 7) = 4 ? [(x86-modrm md rf 4) (x86-sib 0 4 b)] [(x86-modrm md rf b)]) 0 (b >> 3)]])) ())
@@ -343,25 +593,42 @@
              W ((aw = 1) || (vsz && (osz = 8) && !hasp))
              R (rf >> 3 & 1)
              zb (zi >= 0 ? (ops zi 1 >> 3 & 1) ())
-             pre0 (catall [(eo @ ('seg s _) (x86-seg s) _ ()) (osz = 2 && vsz || ap = 66 ? [102] ()) pfx])
+             sg (eo @ ('seg s _) (x86-seg s) _ ())
+             pre1 (catall [(o66 && (vsz || jn) || ap = 66 ? [102] ()) pfx])
+             ; VEX's C5 when the map is 0F and W X B are clear, else C4; EVEX's 62 (no masks, no
+             ; registers past 15). R X B and vvvv ride inverted, the mandatory prefix as pp
+             hv (hi < 0 ? 0 (ops hi 1)) vv ((15 - hv) & 15) pp (ap @ 66 1 'f3 2 'f2 3 0) Wb (W ? 1 0)
+             en (el != () ? (nn != () ? nn vw) 1)
+             (vexb X B)
+              (? (el != ()) [98 ((1 - R) << 7 | (1 - X) << 6 | (1 - B) << 5 | 16 | mp) (Wb << 7 | vv << 3 | 4 | pp) (L << 5 | 8)]
+                 (mp = 1 && Wb = 0 && X = 0 && B = 0) [197 ((1 - R) << 7 | vv << 3 | L << 2 | pp)]
+                 [196 ((1 - R) << 7 | (1 - X) << 6 | (1 - B) << 5 | mp) (Wb << 7 | vv << 3 | L << 2 | pp)])
              (? (mk = () || (aw = 0 && W)) ()
                 (: ; the head before the immediates, of a modrm laid
                    (head mrm) (: X (two? mrm ? (mrm 1) 0)
                                  B (? (zb != ()) zb (two? mrm) (mrm 2) 0)
                                  rex? (W || R || X || B || frc)
-                                 (? (!(two? mrm) || (rex? && hib) || (ab = 1 && B = 0)) ()
-                                    (pre0 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
+                                 (? !(two? mrm) ()
+                                    vx (md != 64 && (R || X || B || hv > 7) ? () (sg + (#mrm > 3 ? (mrm 3) ()) + vexb X B + [oc] + <mrm))
+                                    ((rex? && (hib || md != 64)) || (ab = 1 && B = 0)) ()
+                                    (sg + (#mrm > 3 ? (mrm 3) ()) + pre1 + (rex? ? [(64 | (W ? 8 0) | R << 2 | X << 1 | B)] ()) + opb + <mrm)))
                    ; ..once, where no memory operand lays it
                    hd0 (? (mk = 'mem) () (mk = 'base) (head (mb 1)) (head mk))
                    ; each immediate or target's lay, of the operand and where its field starts
                    (lay1 l)
-                    (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") 4 0) im (x6e-immf l osz byte?)
+                    (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") w 0) im (x6e-immf l osz byte?)
+                       (? (l = "L") (\ o at [(o 1 << 4)])
+                          ; an absolute address at the segment's address width
+                          (starts? l "O")
+                           (\ o at (: d (o 4) sy (#o > 5 ? (o 5) ()) k (md = 16 ? 2 4)
+                                      (? (nom? sy) [(fix k (k = 2 ? 'abs16 'abs32) sy d)]
+                                         (k = 2) (0 <= d && d < 65536 ? (le16 d) ()) (fits32 d || 0 <= d && d < 1 << 32) (le32 d) ())))
                        (\ o at
                           (: v (o 1)
                              (? (fix? v) (v 1 = w ? [v] ())
                                 (z = 1) (: d (v - (at + 1)) (fits8 d ? [(byte d)] ()))
                                 (z = 4) (: d (v - (at + 4)) (fits32 d ? (le32 d) ()))
-                                (im v @ b ((two? b && (#o < 3 || o 2 = #b)) ? b ()))))))
+                                (im v @ b ((two? b && (#o < 3 || o 2 = #b)) ? b ())))))))
                    lays (map (q \ [(q 0) (lay1 (q 1))]) ims)
                    ; the immediates and targets, in order, after hd
                    (tail hd pc is acc ops)
@@ -373,18 +640,19 @@
                       (!(two? ims) && mk = 'base) (mb 0 @ 0 (\ ops pc hd0)
                                                         1 (\ ops pc (hd0 + [(byte (eo-of ops 4))]))
                                                         (\ ops pc (hd0 + le32 (eo-of ops 4))))
-                      !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-mem rf (eo-of ops)))) (\ ops pc hd0))
+                      !(two? ims) (mk = 'mem ? (\ ops pc (head (x6e-memmn md rf (eo-of ops) en))) (\ ops pc hd0))
                       ; a head laid once and one immediate or target, at a known offset
                       (mk != 'mem && mk != 'base && #lays = 1)
                        (: i (lays 0 0) f (lays 0 1) nh #hd0
                           (\ ops pc (f (ops i) (pc + nh) @ () () b (hd0 + b))))
                       (\ ops pc
-                         (: hd (? (mk = 'mem) (head (x6e-mem rf (eo-of ops)))
+                         (: hd (? (mk = 'mem) (head (x6e-memmn md rf (eo-of ops) en))
                                   (mk = 'base) (hd0 + x6e-dsp (mb 0) (eo-of ops 4))
                                   hd0)
                             (? (hd = ()) () (tail hd pc lays () ops @ t (t = () ? () (hd + t)))))))))))) _ ())
    ;; a row's bytes for the operands, pc where the instruction starts (a target is absolute), or ()
    (x6e-lay p w ops pc) (x6e-stage p w ops @ () () f (f ops pc))
+   (x6e-laym md p w ops pc) (x6e-stagem md p w ops @ () () f (f ops pc))
 
    ;; each name's rows as plans, in table order
    x64-byname (foldl (\ t r (pin t <r (peep t <r () + [(x6e-plan r)]))) {} x64-tab)
@@ -394,6 +662,14 @@
     (: bs (filter two? (map (p \ x6e-lay p w ops pc) (peep x64-byname mn ())))
        (? !(two? bs) (scare 'x64-enc [mn w ops])
           (foldl (\ b x (#x < #b ? x b)) <bs >bs)))
+   ;; ..in a segment of md bits, or (); on a tie the row without the accumulator's, as gas
+   (x64-encm md mn w ops pc)
+    (: ls (filter (l \ two? (l 1)) (map (p \ [(elem 'A (p 2)) (x6e-laym md p w ops pc)]) (peep x64-byname mn ())))
+       (two? ls ? (foldl (\ b x (#(x 1) < #(b 1) || (#(x 1) = #(b 1) && b 0 && !(x 0)) ? x b)) <ls >ls 1) ()))
+   ;; a rip operand's rel32 measures from its own field's end: its addend steps back over the
+   ;; bytes laid after it, an immediate's, a fix counting its width
+   (riptail bs) (bs @ (b . r) (fix? b && fix-k b = 'rel32 ? (fix 4 'rel32 (b 3) (b 4 - x6blen r) . r) (b . riptail r)) _ ())
+   (x6blen l) (foldl (\ n x (n + (fix? x ? (x 1) 1))) 0 l)
    ;; the lowering's: by name, or the row of opcode k (map * 256 + opcode) when the form matters.
    ;; each takes the row chosen once for its operands' shape, an integer: a register itself, a
    ;; memory operand's kind, the ranges an immediate fits, a fix's width. a number laid as a
@@ -499,7 +775,6 @@
    (x6i v) ['im v]
    (x6j f) ['lbl f]
    ;; a rip displacement measures from the instruction's end: the bytes after its field come off
-   (riptail bs) (bs @ (b . r) (fix? b && fix-k b = 'rel32 ? (fix 4 'rel32 (b 3) (b 4 - #r) . r) (b . riptail r)) _ ())
    (x6r mn w ops) (riptail (x6 mn w ops))
 
    ;; reg <- reg by the r/m-destination row (89, 01+8k), as the old hand did
