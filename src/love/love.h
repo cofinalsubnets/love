@@ -583,7 +583,7 @@ extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
 uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
-intptr_t nclock(void); // ns; the null seat degrades to ms
+int64_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
 void love_sleep(uintptr_t ticks); // at most ticks (0 forever), no input wakeup; default no-op
@@ -1211,8 +1211,10 @@ static love_inline size_t llen(word l) {
  size_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
+// a failed g keeps its stack: a scare's words are what the exit face reads
 static love_inline struct g*pop(struct g*g, uintptr_t n) {
- return core_of(g)->sp += n, g; }
+ if (ok(g)) g->sp += n;
+ return g; }
 #define avm_unit(a, b) \
  if (mintp(a) || mintp(b)) love_musttail return Push(ZeroPoint)
 #define cmp_lt(nom, vop) lvm(nom) { \

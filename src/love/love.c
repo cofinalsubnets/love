@@ -329,8 +329,10 @@ lvm(lvm_clock) {                                   // epoch ms less t, a bignum 
  Sp[0] = mk_i64(&Hp, (int64_t) love_clock() - (intp(Sp[0]) ? toi64(Sp[0]) : 0));
  Ip++; love_musttail return Continue(); }
 
-// monotonic ns, for differences; clock stays ms, since ns wraps 32 bits every 4.3s
-op11(lvm_nclock, putcharm(nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
+lvm(lvm_nclock) {                                  // monotonic ns less t, a bignum past a 32-bit word's charms
+ Have(i64_req);
+ Sp[0] = mk_i64(&Hp, nclock() - (intp(Sp[0]) ? toi64(Sp[0]) : 0));
+ Ip++; love_musttail return Continue(); }
 
 // (please x): () a minor, a positive charm a major; answers n_gc. force leaves the nursery be
 static lvm(lvm_please) {

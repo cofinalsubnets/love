@@ -539,16 +539,14 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
  h->pn = n, h->primed = 1;
  return out; }
 
-static love_inline struct g *host_vorbis_size(struct g *g) {
+static lvm(lvm_vorbis_size) {
  word r = putcharm(-3);
- if (strp(g->sp[0]) && strp(g->sp[1])) {
-  struct str *i = str(g->sp[0]), *s = str(g->sp[1]);
+ if (strp(Sp[0]) && strp(Sp[1])) {
+  struct str *i = str(Sp[0]), *s = str(Sp[1]);
   struct va a = {NULL, 0, 0, 0};
   int e = vb_setup(&a, (const uint8_t*) i->bytes, (uint32_t) i->len, (const uint8_t*) s->bytes, (uint32_t) s->len);
   r = putcharm(e ? -e : a.bad || a.used > (64u << 20) ? -3 : (intptr_t) a.used + 8); }
- return g->sp[1] = r, g->sp += 1, g; }
-static lvm(lvm_vorbis_size) LvmCall(g, host_vorbis_size)
-
+ love_musttail return Answerp(1, r); }
 static int vb_heads(struct g *g, struct va *a) {
  return vb_setup(a, (const uint8_t*) txt(g->sp[0]), (uint32_t) len(g->sp[0]), (const uint8_t*) txt(g->sp[1]), (uint32_t) len(g->sp[1])); }
 love_noinline static struct g *host_vorbis_new(struct g *g) {

@@ -21,11 +21,11 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
-// the fine clock; love.c's weak default degrades to ms*1e6
-love_noinline intptr_t nclock(void) {
+// the fine clock; where there is no monotonic one (inle's kernels), the coarse one in ns
+love_noinline int64_t nclock(void) {
  struct timespec ts;
- return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
-  : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+ return clock_gettime(CLOCK_MONOTONIC, &ts) ? (int64_t) love_clock() * 1000000
+  : (int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
  if (love_inflag)                                        // the blocking bit was ours, a scare or not

@@ -435,6 +435,92 @@
          (label tp-none)
          (ret))
 
+         ; -- the bare isas: no kernel, so no mask; the jump alone, the rest nosys.c's.
+         ;    thumb2 (and its sp fpu, whose d8-d15 are s16-s31) as arm's jmp_buf, with CONTROL
+         ;    where the mask was: d8-d15 go only when FPCA says an fp instruction ran here, so
+         ;    a core whose fpu is off (or absent) never meets one
+         (elem arch '(thumb2 thumb2sp))
+         '(
+         (label __sigsetjmp)
+         (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
+         (st r0 16 r8) (st r0 20 r9) (st r0 24 r10) (st r0 28 r11)
+         (mov r12 sp)
+         (st r0 32 r12)
+         (st r0 36 lr)
+         (raw (239 243 20 140))      ; mrs r12, CONTROL
+         (st r0 104 r12)
+         (test r12 4)                ; FPCA
+         (br eq sj-nofp)
+         (lea r12 r0 40)
+         (raw (140 236 16 139))      ; vstmia r12, {d8-d15}
+         (label sj-nofp)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld r12 r0 104)
+         (test r12 4)
+         (br eq lj-nofp)
+         (lea r12 r0 40)
+         (raw (156 236 16 139))      ; vldmia r12, {d8-d15}
+         (label lj-nofp)
+         (ld r4 r0 0) (ld r5 r0 4) (ld r6 r0 8) (ld r7 r0 12)
+         (ld r8 r0 16) (ld r9 r0 20) (ld r10 r0 24) (ld r11 r0 28)
+         (ld r12 r0 32)
+         (mov sp r12)
+         (ld lr r0 36)
+         (mov r0 r1)
+         (jmpr lr))
+
+         ; v6-m stores low registers alone: r8-r11, sp and lr pass through r1
+         (arch = 'thumb1)
+         '(
+         (label __sigsetjmp)
+         (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
+         (mov r1 r8) (st r0 16 r1)
+         (mov r1 r9) (st r0 20 r1)
+         (mov r1 r10) (st r0 24 r1)
+         (mov r1 r11) (st r0 28 r1)
+         (mov r1 sp) (st r0 32 r1)
+         (mov r1 lr) (st r0 36 r1)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld r2 r0 16) (mov r8 r2)
+         (ld r2 r0 20) (mov r9 r2)
+         (ld r2 r0 24) (mov r10 r2)
+         (ld r2 r0 28) (mov r11 r2)
+         (ld r2 r0 32) (mov sp r2)
+         (ld r2 r0 36) (mov lr r2)
+         (ld r4 r0 0) (ld r5 r0 4) (ld r6 r0 8) (ld r7 r0 12)
+         (mov r0 r1)
+         (jmpr lr))
+
+         ; xtensa call0: a0 the return, a1 sp, a12-a15 callee-saved (holo's r9 r10 r11 fp)
+         (arch = 'xtensa)
+         '(
+         (label __sigsetjmp)
+         (st r0 0 lr) (st r0 4 sp)
+         (st r0 8 r9) (st r0 12 r10) (st r0 16 r11) (st r0 20 fp)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld lr r0 0) (ld sp r0 4)
+         (ld r9 r0 8) (ld r10 r0 12) (ld r11 r0 16) (ld fp r0 20)
+         (mov r0 r1)
+         (ret))
+
          (arch = 'arm)
          ; arm: linux reads r0-r5, number in r7; freebsd r0-r3 + the stack, number in r7;
          ; netbsd number in r0, first arg in ip, svc #255. a BSD errors by carry, linux keeps
@@ -1248,6 +1334,8 @@
                   '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   (arch = 'rv32)
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp" "__love_fencei")
+                  (elem arch '(thumb1 thumb2 thumb2sp xtensa))
+                  '("__sigsetjmp" "siglongjmp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp" "__love_fencei"))
                () () () () () () ())))
