@@ -315,6 +315,7 @@
    r5 (hark [(d + "/-echo") "hi"])
    _ (setenv "HOME" home0)
    r3 (hark ["out/love" "out/lush" "-c" ". out/.lush-t4/rr.sh; echo rc=$?"])
+   _ (hark ["rm" "-rf" d])
    (test ("p=prof\n" = >r1)
            ("p=[]\n" = >r2)
            ("one\nrc=5\n" = >r3)
@@ -768,6 +769,7 @@
 
 ; PATH unset searches the default path, never the cwd
 (: r (hark ["out/love" "out/lush" "-c" "d=out/.lush-t9; mkdir -p $d; printf '#!/bin/sh\\necho planted\\n' > $d/zz-qq-plant; chmod 755 $d/zz-qq-plant; cd $d; unset PATH; zz-qq-plant; echo st=$?"])
+   _ (hark ["rm" "-rf" "out/.lush-t9"])
    (test ("st=127\n" = >r)))
 ; the prompt shows a control byte as ^X
 (test ("a^[^Gb^?" = sh-vis ("a" + string 27 + string 7 + "b" + string 127))
@@ -805,6 +807,7 @@
    s (slurp sink)
    _ (still <r 9)
    _ (landed? t ? (catch t) (freeze t))
+   _ (hark ["rm" "-f" f])
    (test !early late (has? s "pasted-ran") (has? s (e + "[?2004h"))))
 
 ; a redirect onto a fifo opens in the child, so the shell can open the other end;
@@ -822,6 +825,7 @@
    no ("lush: " + d + "/f: cannot open\n")
    ; a builtin's redirect inside $( ) lands on the fd, not the capture
    r7 (fl "x=$(exec 3> $d/o; printf 'p\\n' >&3; echo e > $d/s; { echo g; } > $d/t; echo body); echo \"[$x] $(cat $d/o $d/s $d/t)\"")
+   _ (hark ["rm" "-rf" d])
    (test ("r hi\n" = >r1) ("w x\n" = >r2) ("g grp\n" = >r3) ("v warm\n" = >r4)
          (("lush: " + d + "/nope: cannot open\nst=1\n") = >r5)
          (getuid 0 = 0 || (no + "st=1\n" + no + "st=1\n") = >r6)
@@ -840,12 +844,14 @@
 
 ; the shell's own fds sit at 10 and up; 3 to 9 are the user's
 (: d "out/.lush-t12"
+   _ (mkdir d 493)
    p (open (d + "/fd.sh") "w")
    _ (say p "a=$(ls /proc/$$/fd); b=$(x=$(ls /proc/$$/fd); echo $x); echo $a $b\n")
    _ (close p)
    ; /bin/sh sheds the gate's own fds first
    r (hark ["/bin/sh" "-c" "exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&-; exec out/love timeout 20 out/love out/lush \"$0\""
             (d + "/fd.sh")])
+   _ (hark ["rm" "-rf" d])
    s (" " + snip >r 0 (#>r - 1) + " ")
    (test (has? s " 0 ") (has? s " 2 ") (all (w \ !(has? s (" " + w + " "))) ["3" "4" "5" "6" "7" "8" "9"])))
 
