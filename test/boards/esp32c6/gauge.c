@@ -92,8 +92,6 @@ void gauge(int green) {
     uint8_t const red[3] = { 0, 64, 0 }, off[3] = { 0, 0, 0 };
     for (;;) show(red), ms(500), show(off), ms(500); }
   tsens_init();
-  show(gauge_grb[0]);
-  puts_("; rmt sys "), putd((int32_t) (R(RMT + 0x68u) >> 24)), puts_(", tx end "), putd((int32_t) (R(RMT + 0x38u) & 1u)), serial_putc('\n');
   for (;;) {
     uint32_t raw;
     int32_t const t = tenths(&raw);
