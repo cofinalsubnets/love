@@ -3,8 +3,8 @@
 
 int __love_rlres(int r);
 int setrlimit(int r, const struct rlimit *l) {
-#if defined(__riscv) && defined(__ILP32__)
-  unsigned long long k[2] = { l->rlim_cur == RLIM_INFINITY ? ~0ULL : l->rlim_cur,   /* rv32: prlimit64 */
+#if defined(__riscv) && defined(__ILP32__) || defined(__mips__)
+  unsigned long long k[2] = { l->rlim_cur == RLIM_INFINITY ? ~0ULL : l->rlim_cur,   /* rv32 and mips: prlimit64 */
                               l->rlim_max == RLIM_INFINITY ? ~0ULL : l->rlim_max };
   return (int) er(sc4(NR_prlimit64, 0, r, (long) k, 0));
 #endif

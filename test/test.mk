@@ -5,7 +5,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_mips test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -53,9 +53,9 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
@@ -450,7 +450,7 @@ test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
 # every test/cc/*.c by `mooncc -t $*`, plain and -Os, held to its references; the table is in ccbat.sh
-test_cca64 test_ccrv64 test_ccrv32 test_ccxtensa test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
+test_cca64 test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
 	@$(gsh) test/gate/ccbat.sh $* $(ho) $m
 # c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
@@ -595,6 +595,9 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
+# holo's mips backend: its law as one big-endian linux program on qemu-mips, its table against llvm
+test_mips: host
+	@$(gsh) test/gate/mips.sh "$m" $(ho)
 # lane j links the leaves and longjmp out of the isa's own archives
 test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
@@ -769,7 +772,8 @@ gate_love += test_caja
 test_gpic test_grap test_chem: test_%: host
 	@echo TEST test/gate/pictool.sh $*
 	@$(gsh) test/gate/pictool.sh $* $(ho)/love
-# holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
+# holo's encoder goldens, objdump-checked (every backend catted in: the host bakes only its own),
+# the kernel link's laws, and the ELF byte order (beorder.sh)
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
@@ -777,6 +781,7 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
+	@$(gsh) test/gate/beorder.sh $m $(ho)
 # as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
 # riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
 # last two against llvm-mc (rvgas, a64gas) alongside

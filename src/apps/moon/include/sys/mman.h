@@ -8,9 +8,15 @@
 #define MAP_PRIVATE   2
 #define MAP_FILE      0
 #define MAP_FIXED     16
+#ifdef __mips__
+#define MAP_ANONYMOUS 2048
+#define MAP_ANON      2048
+#define MAP_POPULATE  65536
+#else
 #define MAP_ANONYMOUS 32
 #define MAP_ANON      32
 #define MAP_POPULATE  32768
+#endif
 #define MAP_FAILED ((void*)(-1))
 #define MADV_NORMAL    0
 #define MADV_DONTFORK 10

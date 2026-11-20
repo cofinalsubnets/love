@@ -37,6 +37,12 @@
    ; ... xtensa: slot0 is a j's or call0's offset, whichever opcode holds the field
    xr-32    1                                       ; R_XTENSA_32       S + A  in four bytes
    xr-slot0 20                                      ; R_XTENSA_SLOT0_OP S + A into slot 0's pc-relative offset
+   ; ... mips: each field ored into the big-endian word its object holds
+   mr-32    2                                       ; R_MIPS_32         S + A  in four bytes
+   mr-26    4                                       ; R_MIPS_26         (S + A) >> 2 into j's or jal's index
+   mr-hi16  5                                       ; R_MIPS_HI16       S + A's high half, carried for lo16's sign
+   mr-lo16  6                                       ; R_MIPS_LO16       S + A's low half
+   mr-pc16  10                                      ; R_MIPS_PC16       (S + A - P) >> 2 into a branch's offset
 
    (o-has? tab k) (peep tab k 'no !== 'no)
    ; a lane's file size; an item may be a blob of many bytes
@@ -81,6 +87,8 @@
                                (elem k '(b14 j21)) (le32 (fix-a x))
                                ; xtensa: a j or call0 with a zero offset, its opcode telling slot0 which
                                (k == 'j18) [6 0 0]  (k == 'call0) [5 0 0]
+                               ; mips: the instruction's word, its field zero
+                               (elem k '(mb16 mj26 mhi16 mlo16)) (be32 (fix-a x))
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -419,11 +427,12 @@
              (le32 (x86 ? 0 83886080)) (le16 52) (le16 0)                 ; e_flags=eabi_ver5 on arm, e_ehsize=52, e_phentsize=0
              (le16 0) (le16 40) (le16 nsh)                                ; e_phnum=0, e_shentsize=40, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
-       (catall ([hdr]
-                + o-mapi (i \ l \ ln-ty l != 8 && lbytes i) lanes       ; a NOBITS lane writes nothing
-                + [symbytes strblob]
-                + rels
-                + [shstrblob sht])))
+       (elf-order machine
+        (catall ([hdr]
+                 + o-mapi (i \ l \ ln-ty l != 8 && lbytes i) lanes       ; a NOBITS lane writes nothing
+                 + [symbytes strblob]
+                 + rels
+                 + [shstrblob sht]))))
 
    ; a section's sh_addralign: the floor a0, or the widest ('align n) its forms ask, else an
    ; inner pad aligns nothing.
@@ -837,15 +846,17 @@
        adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
-       ; rv32 and xtensa lay this same RELA shape in the ELF32 class
+       ; rv32, xtensa and mips lay this same RELA shape in the ELF32 class
        xt (target = 'xtensa)
-       w32 (target = 'rv32 || xt)
+       mp (target = 'mips)
+       w32 (target = 'rv32 || xt || mp)
        rv (target = 'rv64 || target = 'rv32)
-       _ (target = 'x64 || a64 || rv || xt ? 0 (scare 'obj-target target))
+       _ (target = 'x64 || a64 || rv || xt || mp ? 0 (scare 'obj-target target))
        esym (w32 ? elf-sym32 elf-sym)  eshdr (w32 ? elf-shdr32 elf-shdr)  erela (w32 ? o-rela32 o-rela)
        symz (w32 ? 16 24)  rlz (w32 ? 12 24)  shz (w32 ? 40 64)  wa (w32 ? 4 8)
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
-       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) xt '(j18 call0 l32r) '(rel32 pc32 rel8 rel16 pc8))
+       rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) xt '(j18 call0 l32r) mp '(mb16)
+                '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
        ; a cross backend joins at runtime; unregistered, lay would lower nothing, silently
@@ -960,7 +971,7 @@
               (k @
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (erela off si rabs (sa + aux))
-                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 r-32) (sa + aux))
+                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 r-32) (sa + aux))
                  ('abs32s || 'abs32d) (erela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
                  'abs16 (erela off si r-16 (sa + aux))
                  'abs8 (erela off si r-8 (sa + aux))
@@ -992,6 +1003,9 @@
                  'pcrel (erela off si rr-call sa)
                  'j21 (erela off si rr-jal sa)
                  ('j18 || 'call0) (erela off si xr-slot0 sa)
+                 ; a branch's field counts from its delay slot, P + 4
+                 'mb16 (erela off si mr-pc16 (sa - 4))
+                 'mj26 (erela off si mr-26 sa) 'mhi16 (erela off si mr-hi16 sa) 'mlo16 (erela off si mr-lo16 sa)
                  (scare 'obj-fix k))))
            rs))
        relas (map (o-rels * ln-rl) lanes)
@@ -1043,12 +1057,13 @@
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
              (w32 ? (le32 0 + le32 0 + le32 sht-off)                      ; e_entry=0, e_phoff=0, e_shoff
                  (le64 0 + le64 0 + le64 sht-off))
-             (le32 (? xt 768 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit), e_ehsize, e_phentsize=0
+             (le32 (? xt 768 mp 0x70001001 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit; mips32r2 o32 noreorder), e_ehsize, e_phentsize=0
              (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
-       (catall ([hdr]
-                + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
-                + [symbytes strblob]
-                + relas
-                + [shstrblob sht]))))
+       (elf-order machine
+        (catall ([hdr]
+                 + map (l \ (ln-ty l = 8 ? () (ln-bs l))) lanes           ; a NOBITS lane writes nothing
+                 + [symbytes strblob]
+                 + relas
+                 + [shstrblob sht])))))
 ) ; module 'holo
