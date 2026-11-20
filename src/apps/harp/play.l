@@ -144,7 +144,7 @@
    ; sums and cv its twin echoed alike. for a mixdown with mixall or tones-mix, whose chunks
    ; are all one length; fn is the voice unechoed
    (echoed v taps)
-    (: end (v 0) fn (v 1) gl (v 2) gr (v 3) raw (v 4) cv (#v > 5 ? v 5 ())
+    (: end (v 0) fn (v 1) gl (v 2) gr (v 3) raw (v 4) cv (#v > 5 ? (v 5) ())
        mx (foldl max 0 (map cap taps)) box {'past ()}
        (tp ix) (: f0 (peep ix 0 0) n #ix
                   r (f0 < end ? (raw ix))
