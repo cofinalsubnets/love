@@ -112,25 +112,7 @@ intptr_t k_horn_write(unsigned char const *src, uintptr_t n) {
 uintptr_t k_horn_lag(void) { return (uintptr_t) pdg_horn_lag(); }
 void k_horn_close(void) { pdg_horn_close(); }
 
-// (pd-meter song draw) -- the trial's meter: this frame's ms feeding the song, and drawing after
-// (pd-mark _) between the two, so the collector's time splits between them
-static struct { uint32_t n, sum, max, short0, ss, sm, ds, dm, g0, gs; } K_m;
-unsigned love_m_tn, love_m_mx, love_m_gc, love_m_gn, love_m_gx;
-static lvm(pd_mark) {
-  K_m.gs += love_m_gc - K_m.g0;
-  Sp[0] = zero;
-  Ip += 1;
-  return Continue(); }
-static lvm(pd_meter) {
-  uint32_t s = (uint32_t) getcharm(Sp[0]), d = (uint32_t) getcharm(Sp[1]);
-  K_m.ss += s, K_m.sm = s > K_m.sm ? s : K_m.sm, K_m.ds += d, K_m.dm = d > K_m.dm ? d : K_m.dm;
-  Sp += 1;
-  Ip += 1;
-  return Continue(); }
-
 static union u const
-  nif_pd_meter[] = {{lvm_cur}, {.x = putcharm(2)}, {pd_meter}, {lvm_ret0}},
-  nif_pd_mark[] = {{pd_mark}, {lvm_ret0}},
   nif_crank[]   = {{crank}, {lvm_ret0}},
   nif_pushed[]  = {{pushed}, {lvm_ret0}},
   nif_cur_set[] = {{lvm_cur}, {.x = putcharm(2)}, {cur_set}, {lvm_ret0}},
@@ -142,8 +124,6 @@ static struct def defs[] = {
   {"cur_set", {.k = nif_cur_set}},
   {"held",    {.k = nif_held}},
   {"lcd",     {.k = nif_lcd}},
-  {"pd-meter", {.k = nif_pd_meter}},
-  {"pd-mark", {.k = nif_pd_mark}},
   };
 
 // the console over the frame: the written cells, white on black; a dead session's every cell
@@ -158,32 +138,7 @@ static void blit(void) {
         frame[PDG_ROWSIZE * (8 * i + b) + j] = (uint8_t) ~bmp[b]; }
   pdg_mark_updated(); }
 
-// the trial's meter: each 60 updates, their mean and worst ms, pd-meter's song and draw likewise,
-// the frames the song came up short
-static void meter(uint32_t ms) {
-  K_m.n++, K_m.sum += ms, K_m.max = ms > K_m.max ? ms : K_m.max;
-  if (K_m.n < 60) return;
-  unsigned sh = pdg_horn_short();
-  char line[320], *p = line;
-  uint32_t v[16] = { K_m.sum / K_m.n, K_m.max, K_m.ss / K_m.n, K_m.sm, K_m.ds / K_m.n, K_m.dm,
-                    sh - K_m.short0, (uint32_t) pdg_horn_lag(), K_m.sum,
-                    love_m_tn / 1000 / K_m.n, love_m_mx / 1000 / K_m.n, K_m.gs / 1000 / K_m.n,
-                    love_m_gc / 1000 / K_m.n, love_m_gn, love_m_gx / 1000, love_m_gc / 1000 };
-  char const *tag[16] = { "pd: frame ms mean ", " max ", " song ", " max ", " draw ", " max ", " short ", " lag ", " of ",
-                          "\npd: per frame ms tones ", " mixall ", " gc in song ", " gc all ", " gcs ", " worst ", " gc of " };
-  for (int k = 0; k < 16; k++) {
-    for (char const *s = tag[k]; *s; s++) *p++ = *s;
-    char d[10]; int m = 0; uint32_t x = v[k];
-    do d[m++] = (char) ('0' + x % 10); while (x /= 10);
-    while (m) *p++ = d[--m]; }
-  *p = 0;
-  pdg_log(line);
-  K_m.n = K_m.sum = K_m.max = K_m.ss = K_m.sm = K_m.ds = K_m.dm = K_m.gs = 0, K_m.short0 = sh;
-  love_m_tn = love_m_mx = love_m_gc = love_m_gn = love_m_gx = 0;
-  pdg_us_reset(); }
 static int k_update(void *_) {
-  uint32_t t0 = (uint32_t) love_clock();
-  K_m.g0 = love_m_gc;
   pdg_poll_buttons();
   if (!K.dead) {
     cb_cur(kcb, 0, 0);
@@ -194,7 +149,6 @@ static int k_update(void *_) {
       if (code_of(K.g) == status_scare) scare_face(K.g);
       K.dead = 1; } }
   blit();
-  meter((uint32_t) love_clock() - t0);
   return 1; }
 
 // the console's written rows into the log, where the simulator shows them

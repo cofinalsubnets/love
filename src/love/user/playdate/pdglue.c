@@ -18,8 +18,6 @@ unsigned pdg_pushed(void) { return (unsigned) b_pushed; }
 unsigned pdg_held(void) { return (unsigned) b_current; }
 void *pdg_realloc(void *p, size_t n) { return PD->system->realloc(p, n); }
 unsigned pdg_ms(void) { return PD->system->getCurrentTimeMilliseconds(); }
-unsigned pdg_us(void) { return (unsigned) (PD->system->getElapsedTime() * 1000000.0f); }
-void pdg_us_reset(void) { PD->system->resetElapsedTime(); }
 void pdg_log(const char *s) { PD->system->logToConsole("%s", s); }
 unsigned char *pdg_frame(void) { return PD->graphics->getFrame(); }
 void pdg_mark_updated(void) { PD->graphics->markUpdatedRows(0, LCD_ROWS); }
@@ -45,16 +43,13 @@ static SoundSource *h_src;
 // the one before
 static struct { int step; int16_t l, r; } h_up;
 
-// the trial's meter: frames the pull padded with silence, at the device's rate
-static unsigned h_short;
-unsigned pdg_horn_short(void) { return h_short; }
 static int pdg_horn_pull(void *ctx, int16_t *l, int16_t *r, int len) {
-  if (h_up.step == 1) return h_short += (unsigned) (len - hring_pull(&h_ring, l, r, len)), 1;
+  if (h_up.step == 1) return hring_pull(&h_ring, l, r, len), 1;
   int const s = h_up.step;
   int16_t sl[64], sr[64];
   for (int o = 0; o < len; o += 64 * s) {
     int m = len - o < 64 * s ? (len - o + s - 1) / s : 64;
-    h_short += (unsigned) (s * (m - hring_pull(&h_ring, sl, sr, m)));
+    hring_pull(&h_ring, sl, sr, m);
     for (int i = 0, j = o; i < m; i++) {
       int const l0 = h_up.l, r0 = h_up.r, dl = sl[i] - l0, dr = sr[i] - r0;
       for (int k = 1; k <= s; k++, j++)

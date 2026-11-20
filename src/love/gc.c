@@ -377,18 +377,8 @@ static uintptr_t sv_size(struct g *g) {
 // the collector, asked for req0 words: a minor unless the rem set missed or the major lacks
 // headroom. a refusal leaves its ask as the scare's reason
 static struct g *please_(struct g *g, uintptr_t req0);
-#if TARGET_PLAYDATE
-extern unsigned pdg_us(void), love_m_gc, love_m_gn, love_m_gx;   // the playdate trial's meter
-#endif
 love_noinline struct g *please(struct g *g, uintptr_t req0) {
-#if TARGET_PLAYDATE
- unsigned t = pdg_us();
- g = please_(g, req0), t = pdg_us() - t;
- love_m_gc += t, love_m_gn++, love_m_gx = t > love_m_gx ? t : love_m_gx;
- if (ok(g)) return g;
-#else
  if (ok(g = please_(g, req0))) return g;
-#endif
  core_of(g)->scare = (intptr_t) (req0 > words_max ? words_max : req0);
  return g; }
 static struct g *please_(struct g *g, uintptr_t req0) {
