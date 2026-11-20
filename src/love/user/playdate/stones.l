@@ -57,7 +57,7 @@
      _ (pin st 'sim sim)
      d (pd-dims (pd-scales (pd-at 'i)))
      _ (lcd (stones-pens st) (d 0) (d 1))
-     _ (split (t1 - t0) (clock t1))
+     _ (pd-meter (t1 - t0) (clock t1))
      j (view-gauged (pd-at 'gauge) (clock 0 - t1) (t1 - t0) lw (clock 0))
      _ (j != pd-at 'i ? (pd-size st j))
      (? (charm? (st 'dlg)) (each ^#acts (i \ (cur_set (10 + i) 17, puts ((i = st 'dlg ? " > " "   ") + acts i + "  "))))
