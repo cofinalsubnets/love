@@ -164,7 +164,7 @@ int main(void) {
   if (ok(g)) g->budget = (10u << 20) / sizeof(word);
   if (ok(g) && ok(g = gen_major(g, 0, NULL))) g->major_live0 = (uintptr_t) (g->major_hp - g->major_base);
   // the device's nifs, stood in for: up held, the crank turning, the picture only counted
-  g = evals_(g, "(: (held _) 4 (pushed _) 0 (crank _) 10 (lcd f w h) (#f = w * h) (cur_set r c) 0 (pd-meter s d) 0)");
+  g = evals_(g, "(: (held _) 4 (pushed _) 0 (crank _) 10 (lcd f w h) (#f = w * h) (cur_set r c) 0 (pd-meter s d) 0 (pd-mark _) 0)");
   // the device's stack is far smaller than this board's: ten frames' depth, by a painted window
   { enum { sk_window = 64u << 10, sk_limit = 10u << 10 };
     uint8_t volatile here = 0;

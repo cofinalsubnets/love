@@ -154,7 +154,7 @@ love_noinline static struct g *host_tones_ws(struct g *g) {
  return g; }
 static lvm(lvm_tones_ws) { LvmCallp(g, 0, host_tones_ws) }
 
-love_noinline static struct g *host_tones(struct g *g) {
+love_noinline static struct g *host_tones_(struct g *g) {
  word *a = g->sp;
  // (tones ops st n f0 rate ws)
  if (!galaxyp(a[0]) || tray(a[0])->type != love_R || !(a[2] & 1) || !isnum(a[3]) || !isnum(a[4])) { a[0] = ZeroPoint; return g; }
@@ -184,12 +184,19 @@ love_noinline static struct g *host_tones(struct g *g) {
         st + 2 * j, st + 2 * j + 1); }
  a[0] = word(out);
  return g; }
+#if TARGET_PLAYDATE
+// the playdate trial's meter: microseconds in the kernel and the mix
+extern unsigned pdg_us(void), love_m_tn, love_m_mx;
+love_noinline static struct g *host_tones(struct g *g) { unsigned t = pdg_us(); g = host_tones_(g); love_m_tn += pdg_us() - t; return g; }
+#else
+#define host_tones host_tones_
+#endif
 static lvm(lvm_tones) { LvmCallp(g, 5, host_tones) }
 
 // (mixall ps n): 2n frames, left then right, the sum of each piece [y gl gr o] of the list ps in
 // order: y's frame o + i at i where it falls in y's first n, at gl and gr. a side whose gain
 // is 0 is not touched; a piece that is not one is skipped
-love_noinline static struct g *host_mixall(struct g *g) {
+love_noinline static struct g *host_mixall_(struct g *g) {
  word *a = g->sp;
  if (!(a[1] & 1)) { a[0] = ZeroPoint; return g; }
  intptr_t const n = getcharm(a[1]);
@@ -215,6 +222,11 @@ love_noinline static struct g *host_mixall(struct g *g) {
   if (fr != 0) for (intptr_t i = i0; i < i1; i++) R[i] += ys[i] * fr; }
  a[0] = word(out);
  return g; }
+#if TARGET_PLAYDATE
+love_noinline static struct g *host_mixall(struct g *g) { unsigned t = pdg_us(); g = host_mixall_(g); love_m_mx += pdg_us() - t; return g; }
+#else
+#define host_mixall host_mixall_
+#endif
 static lvm(lvm_mixall) { LvmCallp(g, 1, host_mixall) }
 
 LvDef("tones", tones, 6, "dsp");

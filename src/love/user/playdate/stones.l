@@ -47,7 +47,7 @@
    ; ..sized again for step i: the kept sky is the old size's
    (pd-size st i) (: d (pd-dims (pd-scales i))
      (pin pd-at 'i i, stones-size (pins st 'sky-kept () 'sky-memo ()) (d 0) (d 1 // 2)))
-   (pd-frame _) (: t0 (clock 0) lw (song! ()) t1 (clock 0) st (pd-at 'st) h (held ()) p (pushed ()) dlg (charm? (st 'dlg)) sim (st 'sim)
+   (pd-frame _) (: t0 (clock 0) lw (song! ()) _ (pd-mark 0) t1 (clock 0) st (pd-at 'st) h (held ()) p (pushed ()) dlg (charm? (st 'dlg)) sim (st 'sim)
      dc (turned (crank ()))
      go (? dlg (bits p dlg-acts) (cat (bits h walk-acts) (p & 48 ? ['kneel] ())))
      _ (walk-dt st)

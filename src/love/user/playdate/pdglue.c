@@ -18,6 +18,8 @@ unsigned pdg_pushed(void) { return (unsigned) b_pushed; }
 unsigned pdg_held(void) { return (unsigned) b_current; }
 void *pdg_realloc(void *p, size_t n) { return PD->system->realloc(p, n); }
 unsigned pdg_ms(void) { return PD->system->getCurrentTimeMilliseconds(); }
+unsigned pdg_us(void) { return (unsigned) (PD->system->getElapsedTime() * 1000000.0f); }
+void pdg_us_reset(void) { PD->system->resetElapsedTime(); }
 void pdg_log(const char *s) { PD->system->logToConsole("%s", s); }
 unsigned char *pdg_frame(void) { return PD->graphics->getFrame(); }
 void pdg_mark_updated(void) { PD->graphics->markUpdatedRows(0, LCD_ROWS); }
