@@ -79,7 +79,7 @@ void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
+// the metal image's far edge, patched in by transpose.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for an arch's proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
@@ -108,9 +108,6 @@ struct k_boot kboot;
 
 // the source table: each fd's row of methods, a NULL one skipped (writes discard, reads
 // the end, ready false); state is per row. grows through k_source_open to k_fd_most
-void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-void kfree(void *p), k_drop(void *p);
-
 struct k_source {
   // love.h's readn, one fd deeper: >0 bytes, 0 nothing, -1 end
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n),
@@ -970,7 +967,6 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 
 // (stat path) -> (size mtime-ms mode ns) | (); ns is the ms date times a million. ino, nlink,
 // uid and dev are sys.c's to invent
-struct k_st { uintptr_t size, ms, mode; };
 
 // -> 0 | -ENOENT. fills a struct, not an index: a synthesized directory (the root, a bare
 // prefix) has no row
@@ -2285,7 +2281,7 @@ void kmain(void) {
   if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
- // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
+ // baked_pick reads the transpose's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;

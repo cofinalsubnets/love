@@ -554,9 +554,10 @@
    l (trap (_ \ gpio-wire-on {'open (p \ 3) 'ioctl (\ fd rq s 'ebusy)} "/dev/gpiochip9" 5 6 7) 0 (a \ b \ [a b]))
    (test (e = 'eperm) (z = 'einval) (o = ['gpio-open 'enoent]) (l = ['gpio-lines 'ebusy])))
 
-; the device's own io: /dev/null opens, and refuses the line request as no gpio chip
+; the device's own io: /dev/null is no gpio chip. a host opens it and refuses the line request
+; (enotty); inle's openat has no read-write door, so the wire's open is refused first
 (: e (trap (_ \ gpio-wire "/dev/null" 5 6 7) 0 (a \ b \ [a b]))
-   (test (e = ['gpio-lines 'enotty])))
+   (test (love-os = 'inle ? (e = ['gpio-open 'einval]) (<e = 'gpio-lines)) (e 1 != ())))
 
 ; what electra's first run did, debug turned on and the halt asked in one write under reset:
 ; undefined, the catch lost, the core let go runs, and the halt is never seen

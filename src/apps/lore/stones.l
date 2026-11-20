@@ -617,9 +617,9 @@
                                st (stones-size (pins (stones-new w h now sd) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                                      'win (o 'win) 'scale (peep o 'scale 2))
                                                w (h // 2))
-                               ; ..the land built and lit before the first frame, which the song's
-                               ; pace would otherwise take for the frames' and run far ahead
-                               (scene st, st)))
+                               ; ..the land built and lit before the first frame, and the gpu's helper,
+                               ; which the song's pace and the gauge would otherwise take for the frames'
+                               (scene st, mesh-gpu st, st)))
                'stick [119 115 97 100 87] 'tap stones-tap
                'size stones-size 'frame stones-frame 'key stones-step 'look stones-look
                'binds (view-bind view-binds stones-binds) 'listed (view-listed ['sprint 'strafe-left 'strafe-right 'kneel 'finer 'coarser 'more 'less])

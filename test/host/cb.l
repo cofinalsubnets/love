@@ -580,8 +580,8 @@
    _ (scribe s "\e_Ga=d\e\\")
    _ (test !(pic? s 0) !(pic? s 20)))
 
-; regrid: rows kept as far as the cursor needs, clipped, a cut wide char blanked, clusters
-; and pictures carried, the old screen left as it was
+; regrid: lines reflowed, scrolled only as far as the cursor needs, a wide char wrapped whole,
+; clusters and pictures carried, the old screen left as it was
 (: (rmarks s i) (filter (< 0) (map (glass s i) [3 4 5]))
    (rpic? s i) (1 = (glass s i 0 >> 23 & 1))
    (rwide s i) (glass s i 0 >> 21 & 3)
@@ -590,9 +590,10 @@
    _ (scribe s "\e[1;1Habcdefgh\e[2;1Hx\u{301}\e[2;5H\u{4e16}\e[3;3H")
    t (re s 4 5)
    _ (test (4 = gaze t 1) (5 = gaze t 2)
-           (101 = chat t 4) (120 = chat t 5) ([769] = rmarks t 5)
-           (0 = chat t 9) (0 = rwide t 9)          ; 世's lead, its tail cut away
-           (12 = cur t)
+           (97 = chat t -5) (101 = chat t -1)      ; abcde wrapped into the history
+           (102 = chat t 0) (120 = chat t 5) ([769] = rmarks t 5)
+           (19990 = chat t 10) (1 = rwide t 10)    ; 世 past the edge, onto its own row
+           (17 = cur t)
            (104 = chat s 7) (19990 = chat s 14) (22 = cur s))
    u (re s 2 10)                                   ; shorter: up only as far as the cursor's row
    _ (test (120 = chat u 0) ([769] = rmarks u 0) (19990 = chat u 4) (1 = rwide u 4)
@@ -611,6 +612,44 @@
    x (re b 1 1)
    _ (test (rpic? b 0) !(rpic? x 0) (0 = chat x 0))
    _ (test !(regrid s s 4 5) (0 < regrid s () 4 5) !(regrid s (cask 10) 4 5)))
+
+; reflow: a soft-wrapped run of rows is one line, laid again at the new width; hard lines
+; stay apart, the cursor and the saved one keep their cells, the alternate screen clips
+(: (re s r c) (regrid s (cask (screen () r c)) r c)
+   s (h-mkscr 3 5)
+   _ (scribe s "abcdefgh")                          ; wraps after e
+   w (re s 3 10)
+   _ (test ("abcdefgh  " = rowtx w 0) ("          " = rowtx w 1) (8 = cur w))
+   n (re s 3 3)
+   _ (test ("abc" = rowtx n 0) ("def" = rowtx n 1) ("gh " = rowtx n 2) (8 = cur n))
+   b (re n 3 5)                                     ; and back
+   _ (test ("abcde" = rowtx b 0) ("fgh  " = rowtx b 1) (8 = cur b))
+   h (h-mkscr 3 5)
+   _ (scribe h "ab\r\ncd\e7\r\nxyz")              ; two hard breaks; the cursor saved after cd
+   v (re h 3 10)
+   _ (test ("ab        " = rowtx v 0) ("cd        " = rowtx v 1) ("xyz       " = rowtx v 2) (23 = cur v))
+   _ (scribe v "\e8!")
+   _ (test ("cd!       " = rowtx v 1))
+   k (h-mkscr 2 5)
+   _ (scribe k "abcd\u{4e16}")                      ; 世 wraps whole, a blank left behind
+   _ (test (0 = chat k 4) (19990 = chat k 5))
+   l (re k 2 10)
+   _ (test (19990 = chat l 4) (1 = (glass l 4 0 >> 21 & 3)) (6 = cur l))
+   f (h-mkscr 3 10)
+   _ (scribe f "abcde")                             ; a line filling the new width: the cursor waits
+   g (re f 3 5)
+   _ (test (4 = cur g) ("abcde" = rowtx g 0))
+   _ (scribe g "\r\nZ")
+   _ (test ("abcde" = rowtx g 0) ("Z    " = rowtx g 1))
+   p (h-mkscr 3 5)
+   _ (scribe p "abcde")                             ; old's cursor waiting past e
+   q (re p 3 10)
+   _ (scribe q "f")
+   _ (test ("abcdef    " = rowtx q 0))
+   a (h-mkscr 3 5)
+   _ (scribe a "\e[?1049habcdefgh")
+   c (re a 3 10)
+   _ (test ("abcde     " = rowtx c 0) ("fgh       " = rowtx c 1)))
 
 ; history: rows scrolled off the top, at negative glass indices (-cols the newest);
 ; peer looks back, and more output keeps the view on the same lines

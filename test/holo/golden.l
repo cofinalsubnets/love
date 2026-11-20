@@ -979,6 +979,13 @@
    _ (hear (a \ b \ a = 'thumb-refix-addend ? (pin rfcaught 0 1, ()) (welp a b)))
    _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
+   ;; a branch past its reach answers () for the linker to refuse, never a wrapped field: bl and
+   ;; b.w reach +-16 MiB from pc (site + 4), and laying one further scares
+   _ (chk-eq "refix.bl.reach" [1 1 0 0]
+        (map (t \ two? (refix-with t2be 'bl base-bl t 256 4)) [(260 + 16777214) (260 - 16777216) (260 + 16777216) (260 - 16777218)]))
+   _ (chk-eq "refix.b.far" () (refix-with t2be 'b base-b (256 + 268435456) 256 4))
+   _ (chk-eq "patch.bl.far" 'thumb-branch-reach (trap (_ \ patch-with t2be 'bl 268435456 256 4 0) 0 (a \ b \ a)))
+   _ (chk-eq "patch.b26.far" 'a64-branch-range (trap (_ \ patch-with (peep backends 'a64 ()) 'b26 268435456 0 4 0x94000000) 0 (a \ b \ a)))
 
    ;; -- the a64 backend: 32-bit little-endian words, checked vs llvm-mc / llvm-objdump --
    a64tests '(

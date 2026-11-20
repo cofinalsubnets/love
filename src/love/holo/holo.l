@@ -77,9 +77,11 @@
    ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian
    (t32 w) (le16 (w >> 16) + le16 (w & 65535))
    ;; the wide thumb branch, byte offset o: S:J1:J2:imm10:imm11 with i1=~(J1^S), i2=~(J2^S);
-   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W
+   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W; it reaches +-16 MiB
+   (tbw-reach? o) (-16777216 <= o && o <= 16777214)
    (tbw o base)
-      (: imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
+      (: _ (tbw-reach? o ? 0 (scare 'thumb-branch-reach o))
+         imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
          i2 (o >> 22 & 1)  i1 (o >> 23 & 1)  s (o >> 24 & 1)
          j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
          (t32 ((0xF000 | (s << 10 | imm10)) << 16 | (base | (j1 << 13 | (j2 << 11 | imm11))))))

@@ -396,7 +396,7 @@ test_moon: host $(love0) $(ho)/mooncc0.image
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
 mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:kinds-h:mx-ok src/love/nifs.h:src/love/nifs.l:nifs-h:nifs-ok \
-         src/love/quay/xterm256.h:src/love/quay/quay.l:q-c:q-ok src/love/quay/cp437.h:src/love/quay/quay.l:q-437:q-437-ok src/love/love_data.ld:src/love/mx.l:mx-ld:mx-ok \
+         src/love/quay/cp437.h:src/love/quay/quay.l:q-437:q-437-ok src/love/love_data.ld:src/love/mx.l:mx-ld:mx-ok \
          src/love/compress/inf_gen.h:src/love/compress/inf.l:inf-h:inf-ok src/love/compress/inf_run_gen.h:src/love/compress/inf.l:inf-rh:inf-ok src/love/compress/inf_st_gen.h:src/love/compress/inf.l:inf-sh:inf-ok \
          test/uuinfvc.l:src/love/compress/inf.l:inf-vc:inf-ok \
          src/love/compress/bz_gen.h:src/love/compress/bz.l:bz-h:bz-ok test/uuzbvc.l:src/love/compress/bz.l:bz-vc:bz-ok \
@@ -408,7 +408,7 @@ mxsplit = d=$${s%%:*}; r=$${s\#*:}; l=$${r%%:*}; r=$${r\#*:}; v=$${r%%:*}; k=$${
 # the egg lane: the crew in the warm book shadows names these generators use
 mxlay   = LOVE_NO_IMAGE=1 $m -l $$l -e "(: _ (? $$k 0 (quit 1)) _ (puts $$v) (quit 0))"
 mx: host
-	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h xterm256.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l gpark_gen.h "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l + gpark.l on $m)"
+	@echo 'LOVE	'src/love/mx.h src/love/kinds.h src/love/nifs.h cp437.h src/love/love_data.ld inf_gen.h inf_run_gen.h inf_st_gen.h uuinfvc.l bz_gen.h uuzbvc.l lz_gen.h uuzxvc.l mag_gen.h uumagvc.l gpark_gen.h "(src/love/mx.l + src/love/nifs.l + quay.l + inf.l + bz.l + lz.l + mag.l + gpark.l on $m)"
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o || exit 1; done
 	@for s in $(mx_gen); do $(mxsplit); mv $$o $$d; done
 # each header depends on its table alone ($(m) would close a loop); with no love it stands
@@ -432,7 +432,7 @@ test_clay: host
 	@for s in $(mx_gen); do $(mxsplit); $(mxlay) > $$o; \
 	   cmp -s $$o $$d || { echo "FAIL $$d is not what $$l lays -- run: make mx"; \
 	                       diff -u $$d $$o | head -20; exit 1; }; done
-	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, xterm256.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h, uumagvc.l and gpark_gen.h regenerate identically"
+	@echo "clay-mx: src/love/mx.h, src/love/kinds.h, src/love/nifs.h, cp437.h, src/love/love_data.ld, inf_gen.h, inf_run_gen.h, inf_st_gen.h, uuinfvc.l, bz_gen.h, uuzbvc.l, lz_gen.h, uuzxvc.l, mag_gen.h, uumagvc.l and gpark_gen.h regenerate identically"
 	@for s in $(mx_gen); do $(mxsplit); rm -f $$o; done
 	@echo TEST test/gate/clayeq.l "(moon-uu rung 1: mooncc's parse of gz.c, bz2.c, xz.c and num.c holds the clay vc.l laid)"
 	@$m -l src/love/compress/inf.l -l test/gate/clayeq.l -e '(ceq-run "inf" "src/love/compress/gz.c" ["inf_gen.h" "inf_run_gen.h" "inf_st_gen.h"] inf-specs)' < /dev/null
@@ -517,11 +517,11 @@ test_rvboot: host
 	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
-# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else $(ko).
-# two ifeqs, never an else-ifeq
-kvec_x64  = $(ko)/x64/x64/vec.o
-kvec_a64 = $(ko)/a64/a64/vec.o
-kvec_rv64 = $(ko)/rv64/rv64/vec.o
+# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else the
+# cross lane's. two ifeqs, never an else-ifeq
+kvec_x64  = out/x-x64/o/kvec.o
+kvec_a64 = out/x-a64/o/kvec.o
+kvec_rv64 = out/x-rv64/o/kvec.o
 ifeq ($(hosta),x64)
 kvec_x64  = $(moon_d)/kvec.o
 endif
@@ -772,8 +772,9 @@ test_holo: host
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump and the riscv
-# and aarch64 tables both ways (rvcodec, a64codec) alongside
+# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
+# riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
+# last two against llvm-mc (rvgas, a64gas) alongside
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
@@ -781,9 +782,12 @@ test_as: host
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
 	@$(gsh) test/gate/decode.sh "$m" $(ho)
+	@$(gsh) test/gate/x64codec.sh "$m" $(ho)
 	@$(gsh) test/gate/objdump.sh "$m" $(ho)
 	@$(gsh) test/gate/rvcodec.sh "$m" $(ho)
 	@$(gsh) test/gate/a64codec.sh "$m" $(ho)
+	@$(gsh) test/gate/rvgas.sh "$m" $(ho)
+	@$(gsh) test/gate/a64gas.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 writer judged by Linux under qemu-arm: thumb write+exit returns 42
 gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l byte-compared with objcopy, both formats; skips without
@@ -948,8 +952,8 @@ test_uulean: host
 	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
-# random IR via holo against objdump and llvm-mc; a missing disassembler skips its lane.
-# peaks ~120 MB, rvc ~310 MB and ~13 min; the disassemblers are not love and take no budget
+# random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
+# (x64enc); a missing disassembler skips its lane. peaks ~120 MB, rvc ~310 MB and ~13 min; the disassemblers are not love and take no budget
 test_holofuzz: host
 	@echo TEST test/holo/fuzz/fuzz.l "(holo x64+a64+riscv encoder differential fuzz)"
 	@FUZZ_N=8 FUZZ_SEED=20250717 LOVE_BUDGET_MB=400 timeout 300 $m test/holo/fuzz/fuzz.l \
@@ -960,6 +964,12 @@ test_holofuzz: host
 	 else . test/gate/skip.sh; gate_partly "  (sysdiff skipped: no llvm-mc)"; fi
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
+	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
+	@for p in order targets cached keyed; do \
+	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
+	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
+	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \
+	 done
 # generated uu corpora: a design's code as uu terms for its *law.l. `make <stem>` refreshes,
 # test_<stem> diffs
 # $1 the stem, $2 its generator under src/tools/, $3 the source it reads
@@ -1029,7 +1039,7 @@ test_doomx-run: $(R)/test/host/doomx.l
 
 test_kverb: host
 	@$(MAKE) -s $(k_elf)
-	@echo TEST love seed kernel "(the projection; byte-identical to make's)"
+	@echo TEST love seed kernel "(the transpose; byte-identical to make's)"
 	@rm -rf $(ko)/.kverb
 	@cd $(ko) && $(abspath $m) seed kernel .kverb > /dev/null
 	@cmp $(ko)/.kverb/love-$a.elf $(k_elf)

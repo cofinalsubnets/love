@@ -193,7 +193,7 @@
                         (256 4 mlo16) (257 4 mabs32) (258 4 mhi16) (259 4 mlo16) (260 4 mgotlui)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
-            40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc) (96 4 gotprel)))
+            40 (ld-cls '((2 4 w32) (3 4 r32) (42 4 p31) (28 4 acall) (29 4 a24) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc) (96 4 gotprel)))
             ; gotoff S+A-GOT and gotpc GOT+A-P, laid by ld.l alone
             3 (ld-cls '((1 4 w32) (2 4 r32) (4 4 r32) (9 4 gotoff) (10 4 gotpc) (20 2 w16) (21 2 r16) (22 1 w8) (23 1 r8)))}
    ; a64's thread-pointer kinds -> (how shift): an add's imm12 (hi or lo, the lo checked or
@@ -223,6 +223,9 @@
                     (0 - h // 2 <= v && v < h))
               u ((v % h + h) % h)
               (ok ? (w @ 4 (le32 u) 2 (le16 u) [u])))
+          ; arm's prel31, an unwind table's: 31 bits of S+A-P, the field's top bit kept
+          (k == 'p31) (: v (s64 (ld-u64 (sa - p)))
+                         (-1073741824 <= v && v < 1073741824 ? (le32 ((bs 3 & 128) << 24 | v & 2147483647))))
           (refix-with be k bs sa p <r)))
    ; a REL field: S+A whole, or less P, or the backend's
    (ld386 s off sv kind site)
@@ -231,11 +234,14 @@
        sa (sv + rdle s off w)
        v (elem k '(w32 w16 w8) ? sa (sa - site))
        (w @ 4 (le32 (ld-u32 v)) 2 (le16 (ld-u32 v)) [(ld-u32 v & 255)]))
-   (ldarm be s off sv kind site)
+   (ld-hex v) ("0x" + radix v 16)
+   ; a field past its reach refuses, naming the symbol, the site and the target
+   (ldarm be s off sv kind site nm)
     (: r (ld-rk 40 kind) k (r 1) sa (sv + rle32 s off)
        (? (k == 'w32) (le32 (ld-u32 sa))
           (k == 'r32) (le32 (ld-u32 (sa - site)))
-          (refix-with be k (map (i \ s (off + i)) ^4) sv site 4)))
+          (refix-with be k (map (i \ s (off + i)) ^4) sv site 4 @ f
+             (two? f ? f (scare 'link-range [nm (ld-hex site) (ld-hex sv)])))))
 
    ; R_ARM_GOT_PREL, the word thumb's got load pools: lapool's word, then add rD, pc and
    ; ldr rD, [rD] -> (end pieces), the pieces last first. an import's word reaches its got
@@ -395,10 +401,10 @@
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
              "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
              "__preinit_array_start" "__preinit_array_end" "_gp" "_gp_disp" "__gnu_local_gp")
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs), global noms
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs ctor?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us ss)
-        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss]
+        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss (any (l \ ld-arr l = 1) (keys (peep ob 'lanes {})))]
            (: sy (sy9 i) bind (sy 1)
               (? !(elem bind '(1 2)) (go (i + 1) ds us ss)
                  (0 < sy 3) (go (i + 1) (<sy . ds) us (bind = 1 ? (<sy . ss) ss))
@@ -455,9 +461,10 @@
        (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
          + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
-   ; a set of objects -> (dt owed tls? sd): dt every nom defined or synthesized, a tablet the
+   ; a set of objects -> (dt owed tls? sd ctor?): dt every nom defined or synthesized, a tablet the
    ; caller pins into; owed the strong undefineds left; tls? whether one carries a thread
-   ; template; sd the noms one defines strongly. __start_X/__stop_X are ldres's to answer.
+   ; template; sd the noms one defines strongly; ctor? whether one lays a constructor.
+   ; __start_X/__stop_X are ldres's to answer.
    (ld-bracket? nm)
     (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
@@ -470,7 +477,8 @@
                                   a <>du))
                    () duos)
          (any (du \ du 2) duos)
-         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)]))
+         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)
+         (any (du \ du 4) duos)]))
    ; pull the members the index names for owed noms, each pull's undefineds joining the owed,
    ; until none hits -> (picked-srcs owed); `dt` grows in place.
    (arpull path s dt owed mach)
@@ -704,7 +712,7 @@
                   (kind = 96 ? (ldarmgot s (off0 + ro) (charm? ix ? (peep relbox 'got 0 + 4 * (ix - 1))) sv (base + ro) <sy @ [np bs]
                                   (go np >es (bs + (snip s pos (off0 + ro) . acc))))
                      (go (off0 + ro + 4) >es
-                        (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro)
+                        (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro) <sy
                          . (snip s pos (off0 + ro) . acc)))))
                  (: ; ld-mgot's mips kinds: S + A less _gp, or less the site (_gp_disp's lo four back)
                     mk (? (peep ob 'mach 0 != 8 || kind < 256) 0
@@ -769,7 +777,7 @@
                               (fits32 v ? 0 (scare 'link-range <sy),
                                le32 (ld-u32 v)))
                           (: r (ld-fix be row (map (i \ s (off0 + ro + i)) ^w) sg (base + ro))
-                             (two? r ? r (scare 'link-range <sy))))
+                             (two? r ? r (scare 'link-range [<sy (ld-hex (base + ro)) (ld-hex sg)]))))
                     g3 (two? gx ? gx dx)
                     (go (off0 + ro + w) >es
                         (? (two? g3) (bs . g3 . snip s pos (off0 + ro - 3) . acc)
@@ -1089,7 +1097,7 @@
                               fl)))))
                 0 flat)
        env {'dot 0 'sv {} 'osv {} 'isa {} 'msa {} 'undef 0 'osof osof 'mof mof 'ssec {} 'stype {} 'cur ()
-            'hdrs (? (two? phr) (? (peep cx 'w32 0) (52 + 32 * #phr) (64 + 56 * #phr)) ())}
+            'hdrs (? (two? phr) (? (peep cx 'w32 0) (52 + 32 * (#phr + peep cx 'exidx 0)) (64 + 56 * #phr)) ())}
        isa (env 'isa) msa (env 'msa) sv (env 'sv) ssec (env 'ssec) stype (env 'stype)
        ; the address of byte off of input section si of object oi, or () if not laid
        (at oi si off)

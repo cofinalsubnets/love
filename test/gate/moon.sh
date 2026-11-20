@@ -527,6 +527,17 @@ printf 'int h(int *p, int n);\nint k(int *a, int n) { int t[100]; for (int i = 0
 moonrun -t thumb2 -c -o "$ho/.t2x.o" "$ho/.t2x.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 a frame array by index"
 [ "$(readelf -x .text "$ho/.t2x.o" | awk '/^  0x/ {print $2; exit}')" != "4df804ed" ] || fail "thumb2: a frame array by index keeps the old frame"
 
+# a bl past its reach refuses the link, naming the callee: flash at 0x10000000 calling a function
+# kept in ram at 0x20000000, as a board's xlink lays them, on both thumb cores
+printf 'int far(void);\nint f(void) { return far() + 1; }\n' > "$ho/.farbl.c"
+printf '__attribute__((section(".data"))) int far(void) { return 7; }\n' > "$ho/.farbr.c"
+for t in thumb1 thumb2; do
+  moonrun -t $t -c -o "$ho/.farbl.o" "$ho/.farbl.c" > /dev/null 2>&1 && moonrun -t $t -c -o "$ho/.farbr.o" "$ho/.farbr.c" > /dev/null 2>&1 \
+    || fail "mooncc -t $t the far call"
+  r=$(echo "(borrow 'holo) (: ps [\"$ho/.farbl.o\" \"$ho/.farbr.o\"] (puts (show (trap (_ \\ ldbare32 '$t [['at 0x10000000 'text 'rodata] ['at 0x20000000 'data 'bss]] (map (p \\ [p <>(uread p)]) ps) () () @ _ 'linked) 0 (a \\ b \\ [a b])))))" | "$m" 2>&1)
+  case "$r" in *link-range*far*) ;; *) fail "$t: a bl past its reach linked: $r" ;; esac
+done
+
 # a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
 cat > "$ho/.isite.c" <<'EOF'
 int t[9];
@@ -1604,6 +1615,13 @@ grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member mus
 printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
 moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
 grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
+# a member named twice, directly or through an anonymous member, is refused
+printf 'struct s { int a; int a; };\nint main(void) { return 0; }\n' > "$ho/.cc7d.c"
+moonrun "$ho/.cc7d.c" "$ho/.ccx" > "$ho/.cc7d.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7d.out" || fail "mooncc duplicate member must refuse: $(head -1 "$ho/.cc7d.out")"
+printf 'struct s { int a; struct { int b, a; }; };\nint main(void) { return 0; }\n' > "$ho/.cc7e.c"
+moonrun "$ho/.cc7e.c" "$ho/.ccx" > "$ho/.cc7e.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7e.out" || fail "mooncc duplicate anonymous member must refuse: $(head -1 "$ho/.cc7e.out")"
 # sizeof an incomplete struct is no size
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1

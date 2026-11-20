@@ -543,7 +543,8 @@
                     ^n)
              (pin g 'rasls (map sl ok + g 'rasls), ok) sl]))
    ; a spill slot a register still holds: its reload into that register, or its store back from it,
-   ; goes. a label forgets them all; a store near the slot, or into the frame by an index, the slot;
+   ; goes. a label forgets them all, and a divide, whose fix rasub has dropped (holo's owns
+   ; r0..r3 on v6-M, rdx on x86); a store near the slot, or into the frame by an index, the slot;
    ; a write the register
    (rakeep g fs)
     (: sls (foldl (t \ o \ pin t o 1) {} (g 'rasls))
@@ -556,6 +557,7 @@
                    (['ld r 'r4 o] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o && <>e != r) k))
                    (['st 'r4 o r] && sls o && raok? g r) (f . go u ([o r] . filter (e \ <e != o) k))
                    ('label . _) (f . go u ())
+                   ((op . _) && elem op divops) (f . go u ())
                    _ (fst? f ? (f . go u (charm? (f 2) && elem <f stops9 ? (filter (e \ abs (<e - f 2) >= 8) k) ()))
                         (raops g f @ [_ d] (f . go u (filter (e \ nelem <>e d) k)) _ (f . go u ()))))
               _ ())
