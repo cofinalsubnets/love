@@ -104,6 +104,22 @@
        (go i acc) (: p (#acc < hits ? (find K pat i) -1) e (p < 0 ? -1 (find K "\n" (p + 1)))
                      (? (e < 0) (rev acc) (ok? K p e ? (go e (dict-num (snip K (e - 7) e) . acc)) (go (p + 1) acc))))
        (filter (f \ 0 < #f) (map (o \ line-at db o @ [l _] (fields l) _ ()) (go 0 ()))))
+   ; every headword, laid once a line each, with each line's start and its index line's offset
+   (headline db)
+    (: o (jug 0)
+       (one l [n ss os] at) (: k (find l "\t" 0)
+                              (0 < k ? (say o (snip l 0 k), say o "\n", [(n + k + 1) (n . ss) (at . os)]) [n ss os]))
+       (peep db 'heads () @ () (lines-of db one [0 () ()] (_ \ 0) @ [_ ss os]
+                                 (: h [(slurp o) (star-tray #ss (rev ss)) (star-tray #os (rev os))] (pin db 'heads h, h)))
+                             h h))
+   ; the entries whose headwords m, caseless and kept to a line, hits: one search through them all
+   (rfind db m)
+    (headline db @ [H S O]
+     (: n (tally S)
+       (at a lo hi) (hi - lo < 2 ? lo (: mid ((lo + hi) // 2) (S mid <= a ? (at a mid hi) (at a lo mid))))
+       (go i acc) (? (#H <= i || hits <= #acc) (rev acc)
+                     (refind m H i @ ([_ a _ _] && a < #H) (: j (at a 0 n) (go (j + 1 < n ? (S (j + 1)) #H) (O j . acc))) _ (rev acc)))
+       (filter (f \ 0 < #f) (map (o \ line-at db o @ [l _] (fields l) _ ()) (go 0 ())))))
 
    ; --- the strategies ----------------------------------------------------------
    ; soundex as dictd's: past what is no ascii letter or digit, the first kept, upper cased;
@@ -151,7 +167,8 @@
        one (find q " " 0 < 0)
        (edge c) (c = 32 || c = 9 || c = 10)
        (word f g) (? !one () plain (f 0) (keyed g))
-       (pat mk) (mk w @ [1 m _] (: f (refold m) (scan db (h \ rehas f h))) _ ())
+       ; caseless, and REG_NEWLINE: each headword a line of its own
+       (pat mk) (mk w @ [1 [p fl _] _] ((cite 'posix 'regcomp) p (fl | 6) @ [b _] (rfind db [p (fl | 6) b]) _ ()) _ ())
        (s @ 'exact (walk db q (= q))
             'prefix (walk db q (k \ starts? k q))
             'substring (plain ? (kfind db q (\ K p e (p + #q <= e - 8))) (keyed (k \ 0 <= find k q 0)))
