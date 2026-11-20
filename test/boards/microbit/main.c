@@ -2,10 +2,11 @@
 // not love (128 KB SRAM): the toolchain on silicon, the boards' battery over the daplink's
 // vcp; the matrix after it is lore's savers, slop's drift all green, matrix rain a miss, and a
 // ble beacon names the result and the die's temperature. held, button A shows the moon's
-// phases and B the game of life; a finger on the logo, or both buttons, turns the matrix to
+// phases to the stones song (song.c) and B the game of life; a finger on the logo, or both buttons, turns the matrix to
 // static and the speaker to white noise
 #include <stdint.h>
 #include "microbit.h"
+#include "song.h"
 #include "../battery.h"
 
 // a cell's own dice, saver.l's h32
@@ -142,6 +143,13 @@ int main(void) {
   int touched = 0;
   uint32_t gl[3] = { 0, 0, 0 };   // life: the board, the one before, its clock (0: seed anew)
   int was = 0;                    // the last pass's mode, b's value or 3 for the static
+  // the song plays while the moon is shown, half a buffer laid while the other half plays, and
+  // takes up where it left off
+  enum { half = 2 * sg_chunk };
+  struct song sg;
+  uint16_t pa[2][half];
+  song_init(&sg, z);
+  int sing = 0;
   puts_("; logo "), putu(base), puts_(" us\n");
   led_put(0);
   // the beacon every tenth pass, ~100 ms; the temperature read again each second
@@ -151,6 +159,14 @@ int main(void) {
     int b = buttons(), hiss = touched || b == 3, mode = hiss ? 3 : b;
     if (mode == 2 && was != 2) gl[2] = 0;
     was = mode;
+    if (mode == 1 && !sing) {
+      uint32_t t0 = clock_us();
+      song_fill(&sg, pa[0], half, PWM_TOP);
+      if (sg.pos == half) puts_("; song "), putu(clock_us() - t0), puts_(" us a half\n");
+      song_fill(&sg, pa[1], half, PWM_TOP);
+      pwm_start(pa[0], pa[1], half), sing = 1; }
+    else if (mode != 1 && sing) pwm_stop(), sing = 0;
+    if (sing) for (int i = 0; i < 2; i++) if (pwm_ended(i)) song_fill(&sg, pa[i], half, PWM_TOP);
     if (hiss) snow(lv, &z);
     else if (b == 1) moon(lv, t, sn, nx, nz);
     else if (b == 2) life(lv, t, gl, &z);

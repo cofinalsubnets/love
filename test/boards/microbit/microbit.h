@@ -109,6 +109,28 @@ void arm_irq_off(void);
 #define FICR_DEVICEADDR1  0x100000A8u
 #define ADV_PDU_MAX 39   // header, length, the 6-byte address and 31 bytes of ad data
 
+// --- PWM0, the speaker's samples: two sequences of duties by EasyDMA, ping-ponged ---
+#define PWM0 0x4001C000u
+#define PWM_TASKS_STOP       (PWM0 + 0x004u)
+#define PWM_TASKS_SEQSTART0  (PWM0 + 0x008u)
+#define PWM_EVENTS_STOPPED   (PWM0 + 0x104u)
+#define PWM_EVENTS_SEQEND(i) (PWM0 + 0x110u + 4u * (i))
+#define PWM_EVENTS_LOOPSDONE (PWM0 + 0x11Cu)
+#define PWM_SHORTS           (PWM0 + 0x200u)
+#define PWM_ENABLE           (PWM0 + 0x500u)
+#define PWM_MODE             (PWM0 + 0x504u)
+#define PWM_COUNTERTOP       (PWM0 + 0x508u)
+#define PWM_PRESCALER        (PWM0 + 0x50Cu)
+#define PWM_DECODER          (PWM0 + 0x510u)
+#define PWM_LOOP             (PWM0 + 0x514u)
+#define PWM_SEQ_PTR(i)       (PWM0 + 0x520u + 0x20u * (i))
+#define PWM_SEQ_CNT(i)       (PWM0 + 0x524u + 0x20u * (i))
+#define PWM_SEQ_REFRESH(i)   (PWM0 + 0x528u + 0x20u * (i))
+#define PWM_SEQ_ENDDELAY(i)  (PWM0 + 0x52Cu + 0x20u * (i))
+#define PWM_PSEL_OUT0        (PWM0 + 0x560u)
+#define PWM_TOP 500u     // 16 MHz over 500: a 32 kHz carrier
+#define PWM_RATE 16000u  // each duty held two periods: 16 kHz samples
+
 // microbit.c
 void clocks_init(void);
 int  clock_xtal(void);
@@ -128,3 +150,6 @@ int32_t temp_read(void);
 void ble_init(void);
 void ble_addr(uint8_t *a);
 void ble_adv(uint8_t const *pdu);
+void pwm_start(uint16_t const *a, uint16_t const *b, uint32_t n);
+int  pwm_ended(int i);
+void pwm_stop(void);
