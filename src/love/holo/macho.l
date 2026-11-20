@@ -84,7 +84,31 @@
    ; link ((id bytes)..), crt0 first, into a mach-o's piece list. dyn? lays a dyld exe loading
    ; libSystem and dylibs, signed ad hoc as ident; else static. pie (dyn? only): mh_pie, dyld
    ; slides every abs64 site
-   (macholink target srcs dyn? dylibs pie ident)
+   ; the symbols as nlist_64s and their strings: each name an underscore before C's, the rows'
+   ; order (locals first). past the names, what the ELF has and a mach-o no place for, so the
+   ; way back is exact: its entry, the data, nifs and table ends, its .comment, and each
+   ; symbol's size, ELF type and bind, and section. -> (nlists strings nlocals)
+   macho-elfsec {1 1 2 3 3 5 4 5 6 6 7 7}      ; an ELF section's mach-o ordinal
+   (macho-syms rows E)
+    (: str (o-strtab (map (r \ "_" + <r) rows))
+       nl (catall (o-mapi (\ i r (catall [(le32 (<>str i)) [(0 < r 1 ? 15 14) (macho-elfsec (r 3))]
+                                          (le16 (r 1 = 2 ? 128 0)) (le64 (r 4))]))   ; n_weak_def
+                          rows))
+       (pad l) (l + ld-zeros (ld-align 8 #l - #l))
+       e <E
+       elf (two? E ? (catall ([(o-strbytes "love.elf")] + map (k \ le64 (e k)) '(ent ed n0 en r1)
+                              + [(le64 #(e 'cmt)) (pad (e 'cmt))]
+                              + map (r \ catall [(le64 (r 5)) [(r 1 * 16 + r 2) (r 3)]]) rows)))
+       [nl (pad <str + elf) #(filter (r \ r 1 = 0) rows)])
+   ; n bytes of s at file offset off, holding addresses a0.., each pointer at a site moved by d
+   (macho-moved s sites a0 off n d)
+    (: in (sort (filter (x \ a0 <= x && x < a0 + n) sites))
+       (:- (go in off ())
+          (go l o acc) (atom? l ? (rev (snip s o (off + n) . acc))
+                          (: k (off + <l - a0)
+                             (go >l (k + 8) (le64 (rle64 s k + d) . snip s o k . acc))))))
+
+   (macholink target srcs dyn? dylibs pie ident prod)
     (: cpu (macho-cpus target)
        _ (two? cpu || scare 'macho-target target)
        objs0 (map (p \ ld-read <p <>p (peep elf-machines target 0)) srcs)
@@ -125,6 +149,9 @@
               o1 <objs
               (two? e ? <e
                  (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
+       ; the ELF of this lay enters where ldlink's would
+       start (: e (glo "_start") o1 <objs
+                (two? e ? <e (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)))
        relbox {0 ()}                      ; abs64 sites
        cx [glo n0 end r0 r1 relbox () () (backends target) (ld-extents objs) ()]
        et (ldemitn cx 'text objs (ldemit cx 'text (base + hdrsz) objs ()))
@@ -136,7 +163,11 @@
                     'lsw (map (n \ [n <(glo n)]) lsw) 'hdrsz hdrsz 't0 (base + ths) 't1 t1
                     'o0 o0 'o1 o1 'd0 d0 'r0 r0 'r1 r1 'dend dend 'gend gend 'bend bend
                     'img? img? 'i0 i0 'iaddr iaddr 'iend iend 'ent ent 'sites (rev (relbox 0))
-                    'body >en 'end <en 'image >ei}))
+                    'body >en 'end <en 'image >ei
+                    'rows (ldsyrows objs glo {'text 1 'rodata 2 'data 3 'nifs 4 'bss 6 'image 7})
+                    ; with imports there is no ELF of the set to go back to
+                    'elf (dyn? && pie && ni = 0 ?
+                          [{'ent start 'ed <ed 'n0 (min n0 <en) 'en <en 'r1 r1 'cmt (ld-comment objs prod)}])}))
 
    ; the file from a lay: its addresses, its bytes from past the header to the nifs' end (body)
    ; and from iaddr (image), the pointer sites in their table's order, and lsw's (name addr)
@@ -170,8 +201,11 @@
        rtab ((pie ? (catall (map le64 sites))) + ld-zeros (gend - r1))
        rsz (ld-align 8 #rbs)
        bsz (ld-align 8 #binds)
-       lesz (rsz + bsz + 8)               ; rebases, binds, and an empty string table after
-       le (catall [rbs (ld-zeros (rsz - #rbs)) binds (ld-zeros (bsz - #binds + 8))])
+       sy (macho-syms (L 'rows) (L 'elf))
+       nsym #(L 'rows) nloc (sy 2)
+       symo (loff + rsz + bsz) stro (symo + #<sy) strz #<>sy
+       lesz (rsz + bsz + #<sy + strz)     ; rebases, binds, the symbols and their strings
+       le (catall [rbs (ld-zeros (rsz - #rbs)) binds (ld-zeros (bsz - #binds)) <sy <>sy])
        soff (ld-align 16 (loff + lesz))   ; the signature, past the rest of __LINKEDIT
        ssz (ld-align 16 (20 + 88 + #ident + 1 + 32 * ((soff + pg - 1) // pg)))
        lfsz (soff - loff + ssz)
@@ -192,9 +226,9 @@
                      + (dyn? ? [(macho-seg "__LINKEDIT" laddr (up lfsz) loff lfsz 1 ())])
                      + (dyn? ? [(catall [(le32 2147483682) (le32 48) (le32 (#rbs && loff)) (le32 #rbs)   ; lc_dyld_info_only
                                          (le32 (loff + rsz)) (le32 #binds) (ld-zeros 24)])
-                                (catall [(le32 2) (le32 24) (le32 loff) (le32 0)       ; lc_symtab: none
-                                         (le32 (loff + rsz + bsz)) (le32 8)])
-                                (catall [(le32 11) (le32 80) (ld-zeros 72)])          ; lc_dysymtab: none
+                                (catall [(le32 2) (le32 24) (le32 symo) (le32 nsym) (le32 stro) (le32 strz)])   ; lc_symtab
+                                (catall [(le32 11) (le32 80) (le32 0) (le32 nloc) (le32 nloc)   ; lc_dysymtab: locals, then
+                                         (le32 (nsym - nloc)) (le32 nsym) (le32 0) (ld-zeros 48)])   ; the defined globals
                                 (catall [(le32 29) (le32 16) (le32 soff) (le32 ssz)])  ; lc_code_signature
                                 dycmds])
                      + [(dyn? ? (macho-main (ent - base)) (macho-thread ent))]))
@@ -226,10 +260,11 @@
        (sec n) (tab n @ r (two? r ? r (scare 'macho-of-elf-section n)))
        tx (sec ".text") ro (sec ".rodata") da (sec ".data") nf (sec ".love.nifs")
        rl (sec ".love.rela") bs (sec ".bss") im (tab ".love.image") sy (sec ".symtab") sn (sec ".strtab")
-       ; (name value shndx)
-       syms (map (k \ (: o (sy 1 + 24 * k) [(ld-cstr s (sn 1 + rle32 s o)) (rle64 s (o + 8)) (rle16 s (o + 6))]))
-                 ^(sy 2 // 24))
-       _ (any (y \ y 2 = 0 && 0 < #(<y)) syms ? (scare 'macho-of-elf-imports ident))   ; a stub it never laid
+       ; (name value shndx info size), past the null entry
+       syms (map (k \ (: o (sy 1 + 24 * k)
+                         [(ld-cstr s (sn 1 + rle32 s o)) (rle64 s (o + 8)) (rle16 s (o + 6)) (s (o + 4)) (rle64 s (o + 16))]))
+                 >(^(sy 2 // 24)))
+       _ (any (y \ y 2 = 0) syms ? (scare 'macho-of-elf-imports ident))   ; a stub it never laid
        pg 4096
        base elf-base
        img? (two? im && 0 < im 2)          ; an image with bytes, as macholink counts one
@@ -238,13 +273,7 @@
        S (base + ths - <tx)
        (at a) (a + S)
        sites0 (map (k \ rle64 s (rl 1 + 8 * k)) ^(rl 2 // 8))
-       ; n bytes at the ELF's address a0, file offset off, each pointer at a site moved
-       (span a0 off n)
-        (: in (sort (filter (x \ a0 <= x && x < a0 + n) sites0))
-           (:- (go in off ())
-              (go l o acc) (atom? l ? (rev (snip s o (off + n) . acc))
-                              (: k (off + <l - a0)
-                                 (go >l (k + 8) (le64 (rle64 s k + S) . snip s o k . acc))))))
+       (span a0 off n) (macho-moved s sites0 a0 off n S)
        t0 (at <tx) t1 (t0 + tx 2) o0 (at <ro) o1 (o0 + ro 2) d0 (at <da)
        end (at (<nf + nf 2)) r0 (at <rl) r1 (r0 + rl 2)
        dend (ld-align 16 r1) bend (at (<bs + bs 2))
@@ -257,9 +286,69 @@
        ent (filter (y \ <y = "__love_main") syms @ e (two? e ? (at (<e 1)) (scare 'macho-of-elf-entry ident)))
        body ([(ld-zeros (t0 - base - hdrsz)) (snip s (tx 1) (tx 1 + tx 2)) (ld-zeros (o0 - t1))]
              + span <ro (ro 1) (ro 2) + [(ld-zeros (d0 - o1))] + span <da (da 1) (end - d0))
-       (macho-pack {'cpu (macho-cpus 'x64) 'dyn? 1 'pie 1 'ident ident 'dylibs () 'imps () 'wimps ()
+       cm (sec ".comment")
+       (macho-pack {'rows (map (y \ [<y (y 3 >> 4) (y 3 & 15) (y 2) (at (y 1)) (y 4)]) syms)
+                    'elf [{'ent (at (ld-f fs s 0 'e-entry)) 'ed (d0 + da 2) 'n0 (at <nf) 'en end 'r1 r1
+                           'cmt (map (k \ s (cm 1 + k)) ^(cm 2))}]
+                    'cpu (macho-cpus 'x64) 'dyn? 1 'pie 1 'ident ident 'dylibs () 'imps () 'wimps ()
                     'lsw lsw 'hdrsz hdrsz 't0 t0 't1 t1 'o0 o0 'o1 o1 'd0 d0 'r0 r0 'r1 r1
                     'dend dend 'gend dend 'bend bend 'img? img? 'i0 i0 'iaddr iaddr 'iend iend 'ent ent
                     'sites (map at sites0) 'body body 'end end
-                    'image (img? ? [(snip s (im 1) (im 1 + im 2))] ())})))
+                    'image (img? ? [(snip s (im 1) (im 1 + im 2))] ())}))
+
+   ; the way back: a mach-o macho-of-elf or macholink wrote, as the ELF ldlink lays for the
+   ; same set. every address moves back by the one shift, and the symbols, their sizes and
+   ; types, the .comment and the ELF's own ends come out of the string table's tail
+   (elf-of-macho m)
+    (: _ (rle32 m 0 = 4277009103 && rle32 m 4 = <(macho-cpus 'x64) || scare 'elf-of-macho-target)
+       ncmd (rle32 m 16)
+       sx {} cx {}
+       ; each section by name (addr size off), each command by number its offset
+       (walk i at) (i < ncmd ?
+                    (: c (rle32 m at) z (rle32 m (at + 4))
+                       _ (pin cx c at)
+                       _ (c = 25 ? (each ^(rle32 m (at + 64))
+                                         (j \ (: h (at + 72 + 80 * j)
+                                                 (pin sx (ld-cstr (snip m h (h + 16) + "\0") 0)
+                                                      [(rle64 m (h + 32)) (rle64 m (h + 40)) (rle32 m (h + 48))])))))
+                       (walk (i + 1) (at + z))))
+       _ (walk 0 32)
+       (sec n) (sx n @ r (two? r ? r (scare 'elf-of-macho-section n)))
+       tx (sec "__text") ro (sec "__const") da (sec "__data") bs (sec "__bss") im (sx "__image")
+       st (cx 2) _ (charm? st || scare 'elf-of-macho-symbols)
+       symo (rle32 m (st + 8)) nsym (rle32 m (st + 12)) stro (rle32 m (st + 16))
+       (nm k) (ld-cstr m (stro + rle32 m (symo + 16 * k)))
+       names (map nm ^nsym)
+       eo (stro + ld-align 8 (1 + foldl (\ a n (a + #n + 1)) 0 names))
+       _ (snip m eo (eo + 8) = "love.elf" || scare 'elf-of-macho-no-elf)
+       (q k) (rle64 m (eo + 8 + 8 * k))
+       ncm (q 5) cmo (eo + 56)
+       ro0 (cmo + ld-align 8 ncm)
+       img? (two? im && 0 < im 1)
+       base 0
+       hdrsz (ld-ehsz 0 (4 + ?img? + 1) 1)
+       S (<tx - (base + hdrsz))
+       (back a) (a - S)
+       rows (map (k \ (: o (ro0 + 10 * k) i (m (o + 8))
+                         [(snip (names k) 1 #(names k)) (i >> 4) (i & 15) (m (o + 9))
+                          (back (rle64 m (symo + 16 * k + 8))) (rle64 m o)]))
+                 ^nsym)
+       en (q 3) r1 (q 4)
+       r0 (ld-align 16 en) dend (ld-align 16 r1)
+       ; the table's entries are the sites, in the mach-o's addresses
+       tof (da 2 + (r0 - <da))
+       sites (map (k \ rle64 m (tof + 8 * k)) ^((r1 - r0) // 8))
+       o1 (<ro + ro 1) t1 (<tx + tx 1) d0 <da
+       body ([(snip m (tx 2) (tx 2 + tx 1))]
+             + macho-moved m sites <ro (ro 2) (ro 1) (0 - S)
+             + macho-moved m sites d0 (da 2) (en - d0) (0 - S)
+             + [(ld-zeros (r0 - en)) (catall (map (a \ le64 (back a)) sites)) (ld-zeros (dend - r1))])
+       (elf-pack {'w32 0 'mach 62 'target 'x64 'sf 0 'pie 1 'tls? 0 'img? img? 'wx? 1 'bsd? 1 'nb? 1
+                  'pg 4096 'base base 'hdrsz hdrsz 'ent (back (q 0))
+                  't1 (back t1) 'o0 (back <ro) 'o1 (back o1) 'd0 (back d0) 'ed (back (q 1))
+                  'n0 (back (q 2)) 'en (back en) 'r0 (back r0) 'r1 (back r1) 'dend (back dend)
+                  'bend (back (<bs + bs 1)) 'iaddr (back (img? ? <im dend)) 'iend (back (img? ? (<im + im 1) dend))
+                  'tl0 0 'tl1 0 'tal 16 'readme ()
+                  'rows rows 'cmt (map (k \ m (cmo + k)) ^ncm)
+                  'body body 'image (img? ? [(snip m (im 2) (im 2 + im 1))] ())})))
 ) ; module 'holo
