@@ -4,7 +4,7 @@ static long __wall(int fd, unsigned char const *p, long n) {
   long i = 0;
   while (i < n) {
     long k = write(fd, p + i, n - i);
-    if (k < 0) { if (__errno_v == EINTR) continue; return -1; }
+    if (k < 0) { if (errno == EINTR) continue; return -1; }
     i += k; }
   return i; }
 /* a memory stream's write: buf keeps room for the nul past len */

@@ -481,6 +481,7 @@ for o in 0 2; do
   "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
 done
 readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+readelf -lW "$ho/.tls2" | grep -q 'GNU_STACK .* RW  ' || fail "the link laid no PT_GNU_STACK rw"
 # ..and with no libc call to pull the startup in, the template does
 moonrun -o "$ho/.tlsb" test/cc/tls/bare.c "$ho/.tlsp2.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
   || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
@@ -1059,12 +1060,14 @@ moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 ||
 readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
 moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
 objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
-# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute;
+# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute,
+# a hidden name's too; one the module may not bind loads through the got;
 # the arm asks lay on arm alone, and a soft float abi refuses float code as -msoft-float does
 # and tells the linker base aapcs (a vfp one makes ld.lld mark the link hard-float)
-printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\n' > "$ho/.apic.c"
+printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\nextern int e;\nint *k(void) { return &e; }\n' > "$ho/.apic.c"
 moonrun -t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft -c -o "$ho/.apic.o" "$ho/.apic.c" > /dev/null 2>&1 || fail "-t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft compile"
 [ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_THM_MOV[WT]_PREL')" = 4 ] || fail "-t arm -fPIC: an address is not a movw/movt PREL pair"
+[ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_GOT_PREL .* e$')" = 1 ] || fail "-t arm -fPIC: an extern's address is not a got load"
 readelf -rW "$ho/.apic.o" | grep -q 'R_ARM_THM_MOV[WT]_ABS' && fail "-t arm -fPIC laid an absolute movw/movt"
 readelf -A "$ho/.apic.o" | grep -q 'Tag_ABI_VFP_args: VFP registers' && fail "-mfloat-abi=soft still says Tag_ABI_VFP_args: VFP registers"
 printf 'double m(double a) { return a * 2; }\n' > "$ho/.asf.c"
@@ -1931,6 +1934,12 @@ else
   gate_partly "  (-dynamic-linker and -shared on rv64 skipped: no qemu-riscv64 or /usr/riscv64-linux-gnu)"
 fi
 moonrun -shared -dynamic-linker /lib64/ld-linux-x86-64.so.2 -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "no -shared" || fail "-dynamic-linker with -shared was not refused"
+# -rdynamic and -rpath: nothing to a static link (jimsh's line), refused where a loader would read them
+moonrun -Wl,-rpath -Wl,/usr/local/lib -rdynamic -Wl,-rpath,/opt -o "$ho/.rdyn" "$ho/.dyn.c" > /dev/null 2>&1 \
+  || fail "-rdynamic and -rpath on a static link were not taken as no-ops"
+moonrun -shared -rdynamic -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" || fail "-rdynamic with -shared was not refused"
+moonrun -dynamic-linker /lib64/ld-linux-x86-64.so.2 -Wl,-rpath=/opt -o /dev/null "$ho/.dyn.c" 2>&1 | grep -q "wants a loader" \
+  || fail "-rpath with -dynamic-linker was not refused"
 
 # -- constructors and destructors: priorities first in order, the plain last; destructors
 # the other way about, after atexit's; static, -pie, a gcc object, every libc, a dlopened object
@@ -2408,14 +2417,26 @@ cmp -s "$ho/.wa-cold.o" "$ho/.wa-warm.o" \
 echo "mooncc: the warm compiler (moon-run answers, the image compiles on past a failure) ok"
 
 
+# -- a program that names nothing of libc's still gets the runtime's startup: crt0's
+# __love_start is weak, so the link must owe the real one, which runs the constructors
+printf 'static int hit;\n__attribute__((constructor)) static void c(void) { hit = 42; }\nint main(void) { return hit; }\n' > "$ho/.bare-start.c"
+for a in x64 i386 arm; do
+  case $a in x64) q=;; i386) q=qemu-i386;; arm) q=qemu-arm;; esac
+  [ -z "$q" ] || command -v $q > /dev/null || { gate_partly "  (the startup of a libc-free $a program skipped: no $q)"; continue; }
+  "$m" cc -t $a -o "$ho/.bare-start" "$ho/.bare-start.c" || fail "startup: a libc-free $a program does not link"
+  $q "$ho/.bare-start"; r=$?
+  [ $r -eq 42 ] || fail "startup: a libc-free $a program ran without the runtime's __love_start (its constructor answered $r, want 42)"
+done
+echo "mooncc: a program that names nothing of libc's starts through the runtime's __love_start ok"
+
 # -- the carried runtime is kernel-neutral
 # every hosted kernel takes the carried archive; a warm cache hides a refusal, so ask
 # the binary what it carries, then drop the cache so the clock means something
-for a in x64 a64 rv64; do
-  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-zst) \"$a\")))) 0)" | head -1)
+for a in x64 a64 rv64 i386 arm rv32 wasm; do
+  n=$(LOVE_NO_IMAGE= "$m" -q -e "(: _ (puts (show (tally (\"\" + cite (quote tree) (quote runtime-ar) \"$a\")))) 0)" | head -1)
   case $n in ''|*[!0-9]*) n=0;; esac
-  [ "$n" -gt 1000 ] \
-    || fail "carried runtime: this binary carries no $a archive (runtime-zst answered $n bytes)"
+  [ "$n" -gt 100000 ] \
+    || fail "carried runtime: this binary carries no $a archive (runtime-ar answered $n bytes)"
 done
 rm -f out/cache/moon/*.a                      # the clock below must measure the carried read
 printf '#include <stdio.h>\nint main(void){ printf("os lane\\n"); return 0; }\n' > "$ho/.os.c"
@@ -2438,6 +2459,15 @@ done
 # handing it the carried (linux-built) archive would link linux's numbers in silence.
 moonrun -t i386 "$ho/.os.c" -o "$ho/.os.i386" > /dev/null 2>&1 \
   || fail "carried runtime: -t i386 did not link"
+# rv32 is linux alone: its carried archive links, and runs where qemu can
+s0=$(date +%s)
+moonrun -t rv32 "$ho/.os.c" -o "$ho/.os.rv32" > /dev/null 2>&1 \
+  || fail "carried runtime: -t rv32 did not link"
+[ $(( $(date +%s) - s0 )) -lt 5 ] \
+  || fail "carried runtime: -t rv32 took the member-compile lane (it refused the carried archive)"
+if have qemu-riscv32; then
+  [ "$(qemu-riscv32 "$ho/.os.rv32")" = "os lane" ] || fail "carried runtime: the rv32 link did not run"
+fi
 moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
   && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"

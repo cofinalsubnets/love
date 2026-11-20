@@ -1,18 +1,25 @@
-/* espstub -- an esp32 or esp32-c6 flash reader and writer run from RAM by esprom -x: the rom's
- * slip frames, its console (the esp32's uart0, the c6's USB-Serial-JTAG) and SPI1 by register,
+/* espstub -- an esp32, esp32-s3 or esp32-c6 flash reader and writer run from RAM by esprom -x: the
+ * rom's slip frames, its console (the esp32's uart0, the s3's and c6's USB-Serial-JTAG) and SPI1 by register,
  * as the rom left them after spi_attach. op 0xD2 [off len]
  * answers len bytes and their crc32, off and len by 64, len at most 32K; op 0xD4 [off] + 4K,
  * the request's checksum their crc32, erases that sector and programs it.
  *   love mooncc -t xtensa -nostdlib -Ttext 0x40080000 -Tdata 0x3FFB0000 -o espstub.elf src/tools/espstub.c
+ *   love mooncc -t xtensa -nostdlib -D ESP32S3 -Ttext 0x40378000 -Tdata 0x3FCA0000 -o espstub-s3.elf src/tools/espstub.c
  *   love mooncc -t rv32 -os none -nostdlib -Ttext 0x40800000 -o espstub-c6.elf src/tools/espstub.c */
 typedef unsigned u32;
 typedef unsigned char u8;
 #define R(a) (*(volatile u32 *)(a))
-#ifdef __riscv
-/* the c6: endpoint 1's byte, its conf's bits 0 send, 1 room, 2 a byte waiting; flash words +0x58, status +0x2C */
+#if defined(__riscv) || defined(ESP32S3)
+/* the c6 and s3: endpoint 1's byte, its conf's bits 0 send, 1 room, 2 a byte waiting; flash words +0x58, status +0x2C */
+#ifdef ESP32S3
+#define EP1 0x60038000
+#define EPC 0x60038004
+#define SPI1 0x60002000
+#else
 #define EP1 0x6000F000
 #define EPC 0x6000F004
 #define SPI1 0x60003000
+#endif
 #define SPIW 0x58
 #define SPIST 0x2C
 static void tx(int c) { while (!(R(EPC) & 2)) ; R(EP1) = (u32)c; }

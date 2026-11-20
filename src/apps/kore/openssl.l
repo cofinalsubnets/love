@@ -1,5 +1,5 @@
 ; src/apps/kore/openssl.l -- openssl: a small face of the openssl command line (os-usage),
-; spelled and printed as openssl 3 does, so scripts carry over. the certificate is read here
+; spelled and printed as openssl 4 does, so scripts carry over. the certificate is read here
 ; (its own total der walk, for printing); trust is the tls module's (verify.l against tls-roots
 ; or -CAfile; client.l, tls 1.3 only); keys, requests and certificates are made by its cert.l.
 (module 'kore
@@ -72,7 +72,8 @@
             "1.2.840.10040.4.3" "dsaWithSHA1"}
    ; a curve: its name, its nist name, its bits
    os-curves {"1.2.840.10045.3.1.7" ["prime256v1" "P-256" 256] "1.3.132.0.34" ["secp384r1" "P-384" 384]
-              "1.3.132.0.35" ["secp521r1" "P-521" 521] "1.3.132.0.10" ["secp256k1" () 256]}
+              "1.3.132.0.35" ["secp521r1" "P-521" 521] "1.3.132.0.10" ["secp256k1" () 256]
+              "1.3.132.0.33" ["secp224r1" "P-224" 224]}
    (os-alg o) (peep os-algs o o)
    ; a code point as utf-8
    (os-utf8 c)
@@ -88,7 +89,7 @@
        (os-cat (c \ (? (c < 32 || c = 127) ("\\" + os-up (b2hex (string c))) (w = 1) (string c) (os-utf8 c))) cs))
    (os-ava a)
     (os-in a @ [o v] ((: d (os-oidof o) (peep os-attrs d d)) + "=" + os-str v) "?")
-   ; a Name -> "C=US, O=X, CN=Y", openssl 3's default face
+   ; a Name -> "C=US, O=X, CN=Y", openssl's default face
    (os-dn s)
     (: rs (os-in s)
        (? (atom? rs) ""
@@ -284,6 +285,8 @@
    ; --- the key ---
    (os-rsa k) (os-in k @ [n e] [(os-mag (os-body n)) (os-mag (os-body e))] ())
    (os-bits n) (: (go n k) (n < 1 ? k (go (n >> 1) (k + 1))) (go n 0))
+   ; a curve's strength by its size, openssl's table
+   (os-ecsec b) (? (512 <= b) 256 (384 <= b) 192 (256 <= b) 128 (224 <= b) 112 (160 <= b) 80 (b // 2))
    ; [kind bits curve]: 'rsa 'ec 'ed25519 or the dotted oid
    (os-keyof x)
     (: a (x 'kalg)
@@ -297,13 +300,14 @@
                      (? (two? r)
                         (: n <r e <>r
                            ([(i + "Public-Key: (" + show (k 1) + " bit)") (i + "Modulus:")]
-                            + os-dump (n 0 < 128 ? n (string 0 + n)) 15 20
+                            + os-dump n 16 20
                             + [(i + "Exponent: " + show (os-num e) + " (0x" + os-hexn (os-num e) + ")")]))
                         [(i + "Unable to load Public Key")]))
-             'ec ([(i + "Public-Key: (" + show (k 1) + " bit)") (i + "pub:")] + os-dump (x 'key) 15 20
+             'ec ([(i + "Public-Key: (" + show (k 1) + " bit field, " + show (os-ecsec (k 1)) + " bit security level)") (i + "pub:")]
+                  + os-dump (x 'key) 16 20
                   + (k 2 @ c (two? c ? ([(i + "ASN1 OID: " + <c)] + (string? (c 1) ? [(i + "NIST CURVE: " + c 1)])))))
-             'ed25519 ([(i + "ED25519 Public-Key:") (i + "pub:")] + os-dump (x 'key) 15 20)
-             ([(i + "pub:")] + os-dump (x 'key) 15 20)))
+             'ed25519 ([(i + "ED25519 Public-Key:") (i + "pub:")] + os-dump (x 'key) 16 20)
+             ([(i + "pub:")] + os-dump (x 'key) 16 20)))
 
    ; --- x509 -text ---
    (os-serial-text s)
@@ -327,7 +331,7 @@
          + os-keylines x
          + (two? es ? ("        X509v3 extensions:" . catmap (e \ os-extblock e 12 16) es))
          + [("    Signature Algorithm: " + os-alg (x 'oalg)) "    Signature Value:"]
-         + os-dump (x 'sig) 18 8))
+         + os-dump (x 'sig) 24 8))
 
    ; --- digests by name: [label-in-dgst label-in-fingerprint function] ---
    (os-mds _) {"md5" ["MD5" "md5" md5] "sha1" ["SHA1" "SHA1" sha1] "sha224" ["SHA2-224" "sha224" sha224]

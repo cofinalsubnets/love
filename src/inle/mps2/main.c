@@ -21,7 +21,7 @@ static void m7_exit(uintptr_t code) {
 
 static void sh_putc(int c) { char b = (char) c; sh_call(SH_WRITEC, (uintptr_t) &b); }
 
-uintptr_t love_clock(void) { return sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
+uint64_t love_clock(void) { return (uint64_t) sh_call(SH_CLOCK, 0) * 10; }   // cs -> ms
 
 // every fault vectors here (start.S): name the stacked pc/lr, exit 98
 static void sh_hex(uintptr_t v) { bput_x(sh_putc, v, 8); }

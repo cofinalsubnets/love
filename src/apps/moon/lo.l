@@ -758,10 +758,20 @@
    (lodivk g op a b)
     (b @ ([_ t0 [['li t1 n]]] && t0 = t1 && cint? n && 0 < n && !(abl? g 'divk))
           (: u (cmpu g (vty a) (vty b)) rt (rbin g (vty a) (vty b)) bw (8 * wsize g) rem (op = '%)
-             (? (u && pow2? n) 'no
+             q (lodivl g rem u a n rt bw)
+             (? (q != 'no) q
+                (u && pow2? n) 'no
                 (pow2? n) (loz g a b @ [_ x fx] (lodivp g rem x fx rt n bw))
                 (t32? g || wasm? g || xt? g || n < 3 || !(n < 1 << (u ? bw (bw - 1)))) 'no
                 (loz g a b @ [_ x fx] (lodivm g rem u x fx rt n bw))))
+         _ 'no)
+   ; a literal by a literal: C's answer, truncated toward zero; an unsigned negative one only at the word
+   (lodivl g rem u a n rt bw)
+    (a @ ([_ t [['li t2 k]]] && t = t2 && cint? k && (!u || 0 <= k || tsz g rt = wsize g))
+          (: W (bw 2)
+             x (u && k < 0 ? (k + W) k)
+             v (rem ? (x % n) (x // n))
+             (lomk g @ d [rt d [['li d (u && W // 2 <= v ? (v - W) v)]]]))
          _ 'no)
    ; C rounds toward zero and sar toward -inf: a negative dividend takes n - 1 first
    (lodivp g rem x fx rt n bw)
@@ -1528,7 +1538,7 @@
                    (sgo l o acc) (l @ (x . u) ((x @ ['w2 _ n] (aup o n) ['at _ _ f] f _ o) @ p (sgo u (p + x 2) (acc + stk x p))) [o acc])
                    so (sgo sk sh ()) sfs (so 1) blk (aup <so 16)
                    res (? (rt = 'void) ()
-                          (lofl? rt && soft? g) [(rt = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])]
+                          (lofl? rt && sfa? g) [(rt = 'float ? ['movdxr d 'r0] ['movqrr d 'r0 'r1])]
                           (lofl? rt) ((ia32? g ? [['fix () lokl [['raw (x87raw g (rt = 'float) 1)]]]]) + [['movapd d 'f0]])
                           (d128? rt) (lowmv d (lowabi g))
                           (pair? g rt) [['mov <d 'r0] ['mov <>d (ia32? g ? 'r2 'r1)]]
@@ -1625,8 +1635,8 @@
         (l @ () (rev acc)
              ((ty . u) && lonil? g ty) (go u gi m ov (['e] . acc))
              (ty . u)
-              (: hb (!va && t32f? g && stru? ty && t32hfa? g ty ? (hfab g ty))
-                 (? (hb || !va && t32f? g && lofl? ty)
+              (: hb (!va && t32vfp? g && stru? ty && t32hfa? g ty ? (hfab g ty))
+                 (? (hb || !va && t32vfp? g && lofl? ty)
                      (: b (hb || ty) w (tsz g b) n (hb ? (tsz g ty // w) 1) sl (w // 4 * n)
                         ((w = 8 ? (vfpn m sl 2) (vfpn m sl 1)) @ k
                            (0 <= k ? (go u gi (vfpm m k sl) ov (['f k n b] . acc))
@@ -1771,7 +1781,7 @@
     (: sz (tsz g ty)
        (? (ia32? g) (cxf32? g ty ? [['int 0 4] ['int 4 4]])   ; a float complex answers on edx:eax
           (t32? g)
-           (? (t32f? g && t32hfa? g ty) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
+           (? (t32vfp? g && t32hfa? g ty) (tsz g (hfab g ty) @ w (map (k \ ['sse (w * k) w]) ^(sz // w)))
               (sz <= 4) [['int 0 sz]]
               ())
           (a64? g)
@@ -1856,7 +1866,7 @@
                    ; an int's upper half is the caller's to extend; lp64 has it leave sign-extended, unsigned too
                    ([vt r fs] && pair? g rt && losv? vt)
                     (lotr g [vt r fs] rt @ [_ [l h] f2] (f2 + [['mov 'r0 l] ['mov (ia32? g ? 'r2 'r1) h]] + epj))
-                   ([vt r fs] && lofl? rt && losv? vt && soft? g)
+                   ([vt r fs] && lofl? rt && losv? vt && sfa? g)
                     (lotr g [vt r fs] rt @ [_ c f2] (f2 + [(rt = 'float ? ['movdrx 'r0 c] ['movrrq 'r0 'r1 c])] + epj))
                    ([vt r fs] && losv? rt && losv? vt)
                     (lotr g [vt r fs] (elem rt '(int uint) && losc? vt ? (g 'tgt = 'rv64 ? 'int 'long) rt) @ [_ c f2] (f2 + [(lomv (lofl? rt ? 'f0 'r0) c)]
@@ -2187,7 +2197,7 @@
           _ (rv? g || xt? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
           _ (pins g 'lotk (lotaken (f 3) (map cap (filter lovq? (f 2)))) 'lowhy () 'losret sr
-                  'loret (? (rt = 'void) () (lofl? rt) (soft? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) (lowabi g) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
+                  'loret (? (rt = 'void) () (lofl? rt) (sfa? g ? (rt = 'float ? '(r0) '(r0 r1)) '(f0)) (d128? rt) (lowabi g) (pair? g rt) (ia32? g ? '(r0 r2) '(r0 r1)) (stru? rt && !sret) (filter (x \ !(two? x)) (lorregs g (lopcs g rt))) '(r0)))
           ; the params, each file's registers in order, the rest above the link at ovb step 8
           ; ..past the a0-a7 block a riscv variadic fn pushes
           ovo (ovb g + (va && rv64? g ? 64 0))
@@ -2359,7 +2369,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ dlout g (rasub f2 loc) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ dlout g (raunmark (radrl g (rakeep g (rasubk f2 loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rv? g || xt? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))

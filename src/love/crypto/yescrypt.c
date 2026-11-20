@@ -236,7 +236,7 @@ static lvm(lvm_ykdf) LvmCall(g, host_ykdf)
 static lvm(lvm_yroom) {
  word n = Sp[0], r = Sp[1], p = Sp[2];
  Sp[2] = charmp(n) && charmp(r) && charmp(p) && getcharm(n) > 0 && getcharm(r) > 0 && getcharm(p) > 0
-         && getcharm(n) <= 1L << 40 && getcharm(r) < 1L << 20 && getcharm(p) <= YPmax
+         && getcharm(n) <= (int64_t) 1 << 40 && getcharm(r) < 1L << 20 && getcharm(p) <= YPmax
          ? putcharm((intptr_t) yroom((uint64_t) getcharm(n), (uint64_t) getcharm(r), (uint64_t) getcharm(p))) : ZeroPoint;
  love_musttail return Nextp(1, 2); }
 

@@ -26,7 +26,8 @@ mkdir -p "$d"
 rm -f "$d"/*.o
 thumb_board $tgt "$d"
 
-# one differential lane; libgcc rides every link for its __aeabi helpers
+# one differential lane; libgcc rides every link for its __aeabi helpers, and $lx's objects
+lx=
 lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   tag=$1; libsrc=$2; harsrc=$3; mflags=$4; want=$5; tmo=$6; msg=$7; tail=$8
   lb=$(basename "$libsrc" .c); hb=$(basename "$harsrc" .c)
@@ -34,7 +35,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
     || fail "mooncc -t $tgt -c $lb"
   arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$harsrc" -o "$d/$tag.har.o" \
     || fail "gcc $hb"
-  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" "$lg" \
+  # shellcheck disable=SC2086
+  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" $lx "$lg" \
     -o "$d/$prefix$tag.elf" || fail "ld $tag objects"
   timeout "$tmo" qemu-system-arm -M $mach -semihosting -nographic \
     -kernel "$d/$prefix$tag.elf" < /dev/null
@@ -97,6 +99,16 @@ if [ "$tgt" = thumb2 ]; then
 fi
 
 # ---------------------------------- the shared differential lanes ----------------
+# setjmp and longjmp: the leaves are mksys's, longjmp moonlibc's over them, the members the
+# carried runtime lays for this isa
+rt=$(pwd)/out/rt/$tgt
+(cd "$d" && rm -f mksys.o proc_longjmp.o && arm-none-eabi-ar x "$rt/top.a" mksys.o \
+  && arm-none-eabi-ar x "$rt/proc.a" proc_longjmp.o) || fail "no mksys.o or proc_longjmp.o in out/rt/$tgt"
+lx="$d/mksys.o $d/proc_longjmp.o"
+lane j test/thumb2/libj.c test/thumb2/harnessj.c "-Isrc/apps/moon/include" 2 30 "$tgt setjmp" \
+  " = a jump out of a nest, longjmp 0 answering 1, the callee-saved ints and doubles back, and s16-s31 kept across a jump from a frame that wrote them; 100+n names the first miss -- see test/thumb2/libj.c"
+lx=
+
 case $tgt in
 thumb1)
   lane v  test/thumb1/libv.c  test/thumb1/harnessv.c  "" 7  30 "thumb1 varargs" \
@@ -159,6 +171,10 @@ thumb2sp)
   printf 'struct va { float x, y, z, w, a[11]; };\nstatic float sd(struct va const *v, int k) { return k ? v->w - v->x : v->z + v->w; }\nint in(float x, float y, float z, float w) { struct va const v = { .x = x, .y = y, .z = z, .w = w }; int a = 1; for (int k = 0; k < 2; k++) a &= sd(&v, k) >= 0; return a; }\n' > "$d/sv.c"
   LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/sv.c" -o "$d/sv.o" || fail "mooncc sv.c"
   [ "$(arm-none-eabi-objdump -d "$d/sv.o" | grep -c '\[sp')" = 0 ] || fail "a braced local struct stays in memory"
+  # with every other callee-saved register taken, r4 holds a value too
+  printf 'int g(int);\nint f(int *p) { int a = p[0], b = p[1], c = p[2], d = p[3], e = p[4], h = p[5], i = p[6], j = p[7], k = p[8], l = p[9];\n int s = g(a); s += g(s); s += g(s); s += g(s);\n return s + a * b + c * d + e * h + i * j + k * l; }\n' > "$d/r4.c"
+  LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/r4.c" -o "$d/r4.o" || fail "mooncc r4.c"
+  arm-none-eabi-objdump -d "$d/r4.o" | grep -qE 'stmdb.*\{r4,' || fail "thumb2 leaves r4 idle under pressure"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
   for f in raster lamp poly swatch audio/tones; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"

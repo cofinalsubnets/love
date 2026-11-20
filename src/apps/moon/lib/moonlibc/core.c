@@ -1,11 +1,8 @@
-/* moonlibc's floor: the entry, auxv, -pie relocation, errno, stdio handles */
+/* moonlibc's floor: the entry, auxv, -pie relocation, stdio handles */
 #include "impl.h"
 
 char **environ;
 static long *__auxv;
-
-int __errno_v;   /* one int: love is single-threaded */
-int *__errno_location(void) { return &__errno_v; }
 
 typedef struct __mhdr { struct __mhdr *next; size_t size; } __mhdr;   /* size in 16-byte units */
 

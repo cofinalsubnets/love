@@ -98,7 +98,7 @@
        ; laid as ldlink lays the same set, so the code is the same bytes: text at its header
        ; room's place in a page, each cut lifting the address a page, the -pie table past the
        ; nifs, and the image's place in a page its data end's
-       ehs (ld-ehsz 0 (4 + ?img?) 1)
+       ehs (ld-ehsz 0 (5 + ?img?) 1)
        ths (hdrsz + (ehs - hdrsz) % pg @ h (h < hdrsz ? (h + pg) h))
        lay (ldlay objs base ths pg 2)
        end <lay n0 <>lay o0 <>>lay d0 <>>>lay t1 (lay 4) o1 (lay 5)

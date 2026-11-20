@@ -16,7 +16,7 @@ static int con_getc(void) { return uart_rx_ready() ? uart_getc() : usb_getc(); }
 static void con_putc(int c) { uart_putc(c); usb_putc(c); }
 
 uintptr_t te_ms(void);
-uintptr_t love_clock(void) { return te_ms(); }
+uint64_t love_clock(void) { return te_ms(); }
 
 // cooperative waits spin against love_clock (ms; 0 forever)
 void love_sleep(uintptr_t ms) {
@@ -108,17 +108,18 @@ static lvm(love_disk) {
   Sp[0] = putcharm((intptr_t) sd_sectors());
   love_musttail return Next(1); }
 
-love_noinline static struct g *sd_disk_read(struct g *g) {
-  word lw = g->sp[0], nw = g->sp[1];
+static lvm(love_disk_read) {
+  word lw = Sp[0], nw = Sp[1];
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
-  if (lba < 0 || n <= 0 || n > 1 << 16) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;
-  if (sd_rw((uint32_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0) g->sp[0] = ZeroPoint;
-  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+  if (lba < 0 || n <= 0 || n > 1 << 16) love_musttail return Answerp(1, ZeroPoint);
+  uintptr_t const req = str_width((uintptr_t) n * 512);
+  Have(req);
+  struct str *o = ini_str(str(Hp), (uintptr_t) n * 512);
+  Hp += req;
+  word const r = sd_rw((uint32_t) lba, (uint32_t) n, txt(o), 0) < 0 ? ZeroPoint : word(o);
+  love_musttail return Answerp(1, r); }
 
-static lvm(love_disk_read) {
- LvmCall(g, sd_disk_read) }
 
 love_noinline static word sd_disk_write(word lw, word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;

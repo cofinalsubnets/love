@@ -90,6 +90,8 @@
                                (elem k '(movw16 movt16)) (patch-with be k 0 off w (fix-a x))
                                ; movw16p/movt16p (thumb2 lap): the addend that counts P to the add's pc
                                (elem k '(movw16p movt16p)) (peep be 'lapa 0 k (fix-a x))
+                               ; gotprel: the word's addend, REL, counting P to the add's pc
+                               (k == 'gotprel) (le32 (fix-a x % 4294967296))
                                (o-zeros w))
                        ; carry the byte before the field, the x64 opcode that tells a call
                        ; (PLT32) from an address-of (PC32); a blob head is a string, so 0.
@@ -173,6 +175,7 @@
    r-thm-jump19 51                                  ; R_ARM_THM_JUMP19 same math      (a thumb2 Bcc.W)
    r-arm-abs32 2                                     ; R_ARM_ABS32      S + A           (la's pooled address word)
    r-arm-rel32 3                                     ; R_ARM_REL32      S + A - P       (a word over two labels)
+   r-arm-gotprel 96                                  ; R_ARM_GOT_PREL   GOT(S) + A - P  (a pie's address of an import)
    r-thm-movw 47                                    ; R_ARM_THM_MOVW_ABS_NC  (S+A)|T, low 16   (thumb2 la)
    r-thm-movt 48                                    ; R_ARM_THM_MOVT_ABS     S+A, high 16
    r-thm-movwp 49                                   ; R_ARM_THM_MOVW_PREL_NC ((S+A)|T) - P, low 16   (thumb2 lap)
@@ -359,6 +362,7 @@
                'rel16 (o-rel32 off <(xsl k lbl aux) r-386-pc16)
                'pc8 (o-rel32 off <(xsl k lbl aux) r-386-pc8)
                'bl (o-rel32 off (fnsym lbl) r-thm-call)
+               'gotprel (o-rel32 off (fnsym lbl) r-arm-gotprel)
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'bcc (o-rel32 off (fnsym lbl) r-thm-jump19)  ; a Bcc.W into another section
                ('abs32 || 'abs32d) (a32k k lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))

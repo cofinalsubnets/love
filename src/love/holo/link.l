@@ -161,7 +161,7 @@
             94 (ld-cls '((1 4 abs32) (20 3 slot0)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
-            40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc)))
+            40 (ld-cls '((2 4 w32) (3 4 r32) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc) (96 4 gotprel)))
             ; gotoff S+A-GOT and gotpc GOT+A-P, laid by ld.l alone
             3 (ld-cls '((1 4 w32) (2 4 r32) (4 4 r32) (9 4 gotoff) (10 4 gotpc) (20 2 w16) (21 2 r16) (22 1 w8) (23 1 r8)))}
    ; a64's thread-pointer kinds -> (how shift): an add's imm12 (hi or lo, the lo checked or
@@ -204,6 +204,18 @@
        (? (k == 'w32) (le32 (ld-u32 sa))
           (k == 'r32) (le32 (ld-u32 (sa - site)))
           (refix-with be k (map (i \ s (off + i)) ^4) sv site 4)))
+
+   ; R_ARM_GOT_PREL, the word thumb's got load pools: lapool's word, then add rD, pc and
+   ; ldr rD, [rD] -> (end pieces), the pieces last first. an import's word reaches its got
+   ; slot; a symbol the link defines, itself, and the ldr becomes a nop
+   (ldarmgot s off slot sv site sym)
+    (: a (rle32 s off) o (off + 6) h (s o | s (o + 1) << 8)
+       (field t) (le32 (ld-u32 (t + a - site)))
+       (? (charm? slot) [(off + 4) [(field slot)]]
+          ((h & 0xFFC0) = 0x6800 && (h & 7) = (h >> 3 & 7)) [(o + 2) [[0 191] (snip s (off + 4) o) (field sv)]]
+          ((h & 0xFFF0) = 0xF8D0 && ((s (o + 2) | s (o + 3) << 8) & 4095) = 0 && s (o + 3) >> 4 = (h & 15))
+           [(o + 4) [[175 243 0 128] (snip s (off + 4) o) (field sv)]]
+          (scare 'link-got-load sym)))
 
    ; --- archives: "!<arch>\n", GNU shape. only the "/" ranlib index is walked, so an
    ; archive without one refuses (`ranlib` repairs it). a header is 60 bytes of left-justified
@@ -347,16 +359,16 @@
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
              "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
              "__preinit_array_start" "__preinit_array_end")
-   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls?), global noms
+   (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs ctor?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
-       (go i ds us)
-        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob])]
+       (go i ds us ss)
+        (peep ob 'nsym 0 <= i ? [ds us (ld-tls? [ob]) ss (any (l \ ld-arr l = 1) (keys (peep ob 'lanes {})))]
            (: sy (sy9 i) bind (sy 1)
-              (? !(elem bind '(1 2)) (go (i + 1) ds us)
-                 (0 < sy 3) (go (i + 1) (<sy . ds) us)
-                 (bind = 1) (go (i + 1) ds (<sy . us))
-                 (go (i + 1) ds us))))    ; a weak undef resolves to 0, owing nothing
-       (go 1 () ()))
+              (? !(elem bind '(1 2)) (go (i + 1) ds us ss)
+                 (0 < sy 3) (go (i + 1) (<sy . ds) us (bind = 1 ? (<sy . ss) ss))
+                 (bind = 1) (go (i + 1) ds (<sy . us) ss)
+                 (go (i + 1) ds us ss))))    ; a weak undef resolves to 0, owing nothing
+       (go 1 () () ()))
    ; --- writing one: `ar rcs`, deterministic (date/uid/gid 0, mode 644) and always indexed.
    ; `ms` is ((name bytes)..), names unique: a repeated one is unreachable through the index.
    (ld-arp w s) (#s < w ? (ld-arp w (s + " ")) s)
@@ -407,9 +419,10 @@
        (((thin ? "!<thin>\n" "!<arch>\n") + (ix ? (ld-arhdr "/" "0" "0" "0" "0" isz + idx) "")
          + (#ltab ? (ld-arhdr "//" "" "" "" "" #ltab + ltab) ""))
         + body))
-   ; a set of objects -> (dt owed tls?): dt every nom defined or synthesized, a tablet the
+   ; a set of objects -> (dt owed tls? sd ctor?): dt every nom defined or synthesized, a tablet the
    ; caller pins into; owed the strong undefineds left; tls? whether one carries a thread
-   ; template. __start_X/__stop_X are ldres's to answer.
+   ; template; sd the noms one defines strongly; ctor? whether one lays a constructor.
+   ; __start_X/__stop_X are ldres's to answer.
    (ld-bracket? nm)
     (nm @ ("__start_" + (s && 0 < #s)) 1 ("__stop_" + (s && 0 < #s)) 1 0)
    (ldledger srcs mach)
@@ -421,7 +434,9 @@
                                             || ld-bracket? nm ? a2 (nm . a2)))
                                   a <>du))
                    () duos)
-         (any (du \ du 2) duos)]))
+         (any (du \ du 2) duos)
+         (foldl (\ t du (foldl (\ t nm (pin t nm 1)) t (du 3))) {} duos)
+         (any (du \ du 4) duos)]))
    ; pull the members the index names for owed noms, each pull's undefineds joining the owed,
    ; until none hits -> (picked-srcs owed); `dt` grows in place.
    (arpull path s dt owed mach)
@@ -651,9 +666,13 @@
                   ; ..a movw/movt pair's split immediates cannot be slid: `la` must use a
                   ; pooled abs32 word there
                   relbox && elem kind '(47 48) ? (scare 'link-abs-imm <sy),
-                  go (off0 + ro + 4) >es
-                     (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro)
-                      . (snip s pos (off0 + ro) . acc)))
+                  ; ..nor can a pc-relative pair reach an import: its address is its got slot's word
+                  charm? ix && elem kind '(47 48 49 50) ? (scare 'link-import-addr <sy),
+                  (kind = 96 ? (ldarmgot s (off0 + ro) (charm? ix ? (peep relbox 'got 0 + 4 * (ix - 1))) sv (base + ro) <sy @ [np bs]
+                                  (go np >es (bs + (snip s pos (off0 + ro) . acc))))
+                     (go (off0 + ro + 4) >es
+                        (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro)
+                         . (snip s pos (off0 + ro) . acc)))))
                  (: sa (ld-u64 (sv + ad))
                     row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
                     abs64? (k == 'abs)
@@ -1227,7 +1246,7 @@
                      (oi + 1)))
                 0 objs)
        (env 'sv))
-   (ldlink target pie org srcs prod readme)
+   (ldlink target pie org srcs prod readme sf)
     (: mach (peep elf-machines target 0)
        _ (0 < mach ? 0 (scare 'link-target target))
        objs (map (p \ ld-read <p <>p mach) srcs)
@@ -1252,7 +1271,7 @@
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
        bsd? (elem mach '(62 183 243 3) || target = 'arm)
        nb? (wx? && bsd?)
-       hdrsz (ld-ehsz w32 ((wx? ? 3 1) + ?img? + ?nb? + ?tls?) nb?)
+       hdrsz (ld-ehsz w32 ((wx? ? 4 1) + ?img? + ?nb? + ?tls?) nb?)
        nbo (hdrsz - 24)
        nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
                               '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
@@ -1328,7 +1347,7 @@
                     (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (<ed - base - sk) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 (min n0 <en) (min n0 <en - base - sk) (<en - min n0 <en) 0 0 16 0)   ; from the first row, if any
                     (shf (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; the -pie table (empty non-pie)
                     (shf (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)
                     (shf (snm 6) 1 3 ist isho iszr 0 0 16 0)
@@ -1349,8 +1368,11 @@
                  [(phf 1 7 0 base base (dend - base) (bend - base) pg)])
             + (img? ? [(phf 1 6 isho ist ist iszr iszr pg)])
             + (nb? ? [(phf 4 4 nbo (base + nbo) (base + nbo) 24 24 4)])
-            + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)]))
-       hdr (w32 ? (elf32-hdrn 2 ent mach (elf32-eflags target) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
+            + (tls? ? [(phf 7 4 (tl0 - base - sk) tl0 tl0 (tl1 - tl0) (tl1 - tl0) tal)])
+            ; ..and pt_gnu_stack rw: without it a 32-bit arm kernel reads every map as
+            ; executable, for the process and all it execs
+            + (wx? ? [(phf 0x6474e551 6 0 0 0 0 0 16)]))
+       hdr (w32 ? (elf32-hdrn 2 ent mach (sf ? 83886592 (elf32-eflags target)) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
@@ -1438,7 +1460,7 @@
            243 ['(19 17) 3 2 2 ld-plt-rv 4096]
            40 ['(10 30) 23 2 21 ld-plt-thm 4096]}
    ; ip names an exe's loader: a pie that loads needed and runs, else ()
-   (ldshared target soname needed srcs prod ip)
+   (ldshared target soname needed srcs prod ip sf)
     (: mach (peep elf-machines target 0)
        dm (ld-dyn mach)
        w32 (mach = 40) wz (w32 ? 4 8) symz (w32 ? 16 24) relz (w32 ? 8 24) dynz (w32 ? 8 16)
@@ -1525,7 +1547,7 @@
                     (shf (snm 0) 1 6 hdrsz hdrsz (t1 - hdrsz) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 t1 (o1 - o0) 0 0 16 0)
                     (shf (snm 2) 1 3 d0 (fo d0) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 <ed (fo <ed) (<en - <ed) 0 0 16 0)
+                    (shf (snm 3) 1 3 (min n0 <en) (fo (min n0 <en)) (<en - min n0 <en) 0 0 16 0)
                     (shf (snm 4) 6 3 dy0 (fo dy0) (dynz * ndy) 10 0 wz dynz)      ; link=.dynstr
                     (shf (snm 5) 1 3 got0 (fo got0) (wz * ni) 0 0 wz wz)
                     (shf (snm 6) (w32 ? 9 4) 2 ra0 (fo ra0) (relz * nr) 8 0 wz relz)        ; link=.dynsym
@@ -1546,7 +1568,8 @@
             (phf 0x6474e551 6 0 0 0 0 0 16)])
        ; a `_start` makes the object runnable too, through the system loader: its entry
        ent (glo "_start" @ e (two? e ? <e 0))
-       hdr (w32 ? (elf32-hdrn 3 ent mach (arm-eflags target) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
+       ; ..a softfp link says so: EF_ARM_ABI_FLOAT_SOFT for the hard bit
+       hdr (w32 ? (elf32-hdrn 3 ent mach (sf ? 83886592 (arm-eflags target)) [shto 16 14] phs) (elf64-hdrn 3 ent mach [shto 16 14] phs))
        ; ..the loader's path after the phdrs, then zeros out to the text
        ipb [((exe ? (chars ip) ()) + ld-zeros (hdrsz - ipo - (exe ? #ip 0)))]
        (hdr . (ipb + >en + pad + [dbytes]

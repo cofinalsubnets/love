@@ -39,9 +39,35 @@
 #include <netinet/in.h>
 
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
-/* the tables compile everywhere but wasm; without the sigtramp netbsd's sigaction refuses by name */
-#if !defined(__wasm__)   /* wasm's one kernel is the page's loader */
-# define LvOsTranslate 1        /* os.c's tables, and the leaves they call */
+/* no kernel: an isa with no syscall door (bare thumb, xtensa), or -os none. every call
+ * answers ENOSYS (os.c), and on a bare isa nosys.c lays the leaves mksys lays elsewhere */
+#if defined(__arm__) && !defined(__ARM_EABI__) || defined(__xtensa__)
+# define LvBare 1
+#endif
+#if defined(LvBare) || !defined(__unix__) && !defined(__APPLE__)
+# define LvOsNone 1
+#endif
+/* the read-modify-writes: plain where the core has none (v6-m, xtensa's lx6), whose one
+ * thread they serve; the order is the builtin's */
+#if defined(__ARM_ARCH_6M__) || defined(__xtensa__)
+static int __love_tas(int volatile *p, int v) { int o = *p; *p = v; return o; }
+static void __love_rel(int volatile *p) { *p = 0; }
+static int __love_xchg(int volatile *p, int v, int mo) { int o = *p; *p = v; return o; }
+static int __love_fadd(int volatile *p, int v, int mo) { int o = *p; *p = o + v; return o; }
+static int __love_cas(int volatile *p, int *e, int v, int mo) {
+  if (*p != *e) { *e = *p; return 0; }
+  *p = v;
+  return 1; }
+#else
+# define __love_tas(p, v) __sync_lock_test_and_set(p, v)
+# define __love_rel(p) __sync_lock_release(p)
+# define __love_xchg(p, v, mo) __atomic_exchange_n(p, v, mo)
+# define __love_fadd(p, v, mo) __atomic_fetch_add(p, v, mo)
+# define __love_cas(p, e, v, mo) __atomic_compare_exchange_n(p, e, v, 0, mo, mo)
+#endif
+/* the tables compile everywhere but wasm, rv32 and a kernel-less link; without the sigtramp netbsd's sigaction refuses by name */
+#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__)) && !defined(LvOsNone)   /* wasm's one kernel is the page's loader; rv32 has only linux */
+# define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
 #if defined(__x86_64__) && defined(LvOsTranslate)
@@ -142,6 +168,8 @@ struct _IO_FILE {
 #define NR_fb_getpriority   100   /* the nice itself, where linux answers 20 - nice */
 #define NR_fb_setpriority    96
 #define NR_fb_kill           37
+#define NR_fb_setitimer      83
+#define NR_fb_getitimer      86
 #define NR_fb_fcntl          92
 #define NR_fb_fsync          95
 #define NR_fb_fdatasync     550
@@ -243,9 +271,23 @@ struct _IO_FILE {
 #define NR_exit            93    /* this thread alone */
 #define NR_futex           98
 #define NR_sched_yield    124
+#define NR_accept4        242
+#define NR_flock          32
+#define NR_getrandom      278
+#define NR_rt_sigsuspend  133
+#define NR_tgkill         131
+#define NR_gettid         178
+#define NR_prctl          167
+#define NR_getsid         156
+#define NR_getpgid        155
+#ifndef __ILP32__
+#define NR_clock_nanosleep 115   /* rv32 names its time64 one */
+#endif
 #define NR_unshare         97
 #define NR_clock_gettime  113
 #define NR_kill           129
+#define NR_setitimer      103
+#define NR_getitimer      102
 #define NR_rt_sigaction   134
 #define NR_rt_sigprocmask 135
 #define NR_setpgid        154
@@ -297,9 +339,30 @@ struct _IO_FILE {
 #define NR_fstatfs         44
 #define NR_memfd_create   279
 #define NR_execveat       281
-#elif defined(__ARM_EABI__)
+#if defined(__riscv) && defined(__ILP32__)
+/* rv32: asm-generic's 32-bit names and only the *_time64 calls. it has no wait4, fstat or
+ * get/setrlimit: waitpid, statx and prlimit64 answer, and those keys stay for os.c's map */
+#undef NR_clock_gettime
+#undef NR_futex
+#undef NR_ppoll
+#undef NR_pselect6
+#undef NR_utimensat
+#define NR_clock_gettime  403   /* clock_gettime64 */
+#define NR_futex          422   /* futex_time64 */
+#define NR_ppoll          414   /* ppoll_time64 */
+#define NR_pselect6       413   /* pselect6_time64 */
+#define NR_utimensat      412   /* utimensat_time64 */
+#define NR_clock_nanosleep 407  /* clock_nanosleep_time64 */
+#define NR__llseek         62
+#define NR_statfs64        43
+#define NR_fstatfs64       44
+#define NR_waitid          95
+#define NR_prlimit64      261
+#endif
+#elif defined(__ARM_EABI__) || defined(LvBare)
 /* arm eabi: 64-bit off_t and time_t through the *64 and *_time64 calls; before linux 5.1
- * the 32-bit twins named beside them answer */
+ * the 32-bit twins named beside them answer. a bare isa takes these numbers too, which no
+ * kernel reads */
 #define NR_read             3
 #define NR_write            4
 #define NR_close            6
@@ -357,6 +420,8 @@ struct _IO_FILE {
 #define NR_setpriority     97
 #define NR_statx          397
 #define NR_kill            37
+#define NR_setitimer      104
+#define NR_getitimer      105
 #define NR_fcntl          221   /* fcntl64 */
 #define NR_fsync          118
 #define NR_fdatasync      148
@@ -387,6 +452,15 @@ struct _IO_FILE {
 #define NR_futex          422   /* futex_time64 */
 #define NR_futex_32       240
 #define NR_sched_yield    158
+#define NR_accept4        366
+#define NR_flock          143
+#define NR_getrandom      384
+#define NR_rt_sigsuspend  179
+#define NR_tgkill         268
+#define NR_gettid         224
+#define NR_prctl          172
+#define NR_getsid         147
+#define NR_getpgid        132
 #define NR_openat         322
 #define NR_mkdirat        323
 #define NR_mknodat        324
@@ -477,6 +551,8 @@ struct _IO_FILE {
 #define NR_setpriority     97
 #define NR_statx          383
 #define NR_kill            37
+#define NR_setitimer      104
+#define NR_getitimer      105
 #define NR_fcntl          221   /* fcntl64 */
 #define NR_fsync          118
 #define NR_fdatasync      148
@@ -505,6 +581,15 @@ struct _IO_FILE {
 #define NR_exit             1
 #define NR_futex          422   /* futex_time64 */
 #define NR_sched_yield    158
+#define NR_accept4        364
+#define NR_flock          143
+#define NR_getrandom      355
+#define NR_rt_sigsuspend  179
+#define NR_tgkill         270
+#define NR_gettid         224
+#define NR_prctl          172
+#define NR_getsid         147
+#define NR_getpgid        132
 #define NR_openat         295
 #define NR_mkdirat        296
 #define NR_mknodat        297
@@ -595,6 +680,8 @@ struct _IO_FILE {
 #define NR_statfs         137
 #define NR_fstatfs        138
 #define NR_kill            62
+#define NR_setitimer       38
+#define NR_getitimer       36
 #define NR_fcntl           72
 #define NR_fsync           74
 #define NR_fdatasync       75
@@ -623,6 +710,16 @@ struct _IO_FILE {
 #define NR_exit            60    /* this thread alone */
 #define NR_futex          202
 #define NR_sched_yield     24
+#define NR_accept4        288
+#define NR_flock          73
+#define NR_getrandom      318
+#define NR_rt_sigsuspend  130
+#define NR_tgkill         234
+#define NR_gettid         186
+#define NR_prctl          157
+#define NR_getsid         124
+#define NR_getpgid        121
+#define NR_clock_nanosleep 230
 #define NR_arch_prctl     158
 #define NR_openat         257
 #define NR_mkdirat        258
@@ -649,10 +746,11 @@ struct _IO_FILE {
 #define NR_inle_spawn  0x4100
 
 
-/* errno is one object, defined beside __errno_location */
-extern int __errno_v;
+/* errno and h_errno: the process's until a thread starts, then the hook's (errno.c) */
+extern int __errno_v, __h_errno_v;
+extern int *(*__love_errat)(int);
 static long er(long r) {
-  if ((unsigned long) r > (unsigned long) -4096L) { __errno_v = (int) -r; return -1; }
+  if ((unsigned long) r > (unsigned long) -4096L) { errno = (int) -r; return -1; }
   return r; }
 
 /* __love_sys parks a BSD carry answer below linux's band, as -(errno+4096).
@@ -663,19 +761,13 @@ extern long __love_osdetect(void);
 /* inle's door: it answers the canonical numbers, so a negative osv reads as linux */
 extern long __love_inle(long n, long a, long b, long c, long d, long e, long f);
 extern int __love_efault(void);
-extern long __love_nrfb(long n);
-extern long __love_errfb(long e);
-extern long __love_sigfb(long sig);
-extern long __love_sigcan(long sig);
+extern long __love_nrfb(long n), __love_errfb(long e), __love_sigfb(long sig),
+            __love_sigcan(long sig);
 /* a native siginfo -> the canonical one signal.h spells */
 extern void __love_sicanon(void const *native, siginfo_t *out);
-extern unsigned long __love_maskfb(unsigned long m);
-extern unsigned long __love_maskcan(unsigned long m);
-extern long __love_ofb(long fl);
-extern long __love_ocan(long fl);
-extern long __love_mapfb(long fl);
-extern long __love_safb(long fl);
-extern long __love_sacan(long fl);
+extern unsigned long __love_maskfb(unsigned long m), __love_maskcan(unsigned long m);
+extern long __love_ofb(long fl), __love_ocan(long fl), __love_mapfb(long fl), __love_safb(long fl),
+            __love_sacan(long fl);
 extern long __love_affb(long af);          /* socket family: inet6 moves, the rest agree */
 extern long __love_afcan(long af);
 extern long __love_sotype(long t);         /* SOCK_* flag bits move high */
@@ -714,8 +806,8 @@ extern long __love_macsigact(long sig, struct __mac_osigact const *a, struct __m
 #endif
 /* the syscall path, one copy in os.c: __love_call translates canonical numbers, __love_fb
  * takes a kernel's own; both answer a parked BSD error as its canonical errno */
-long __love_call(long n, long a, long b, long c, long d, long e, long f);
-long __love_fb(long n, long a, long b, long c, long d, long e, long f);
+long __love_call(long n, long a, long b, long c, long d, long e, long f),
+     __love_fb(long n, long a, long b, long c, long d, long e, long f);
 /* xnu's unix calls answer in their class: the BSD number with this bit */
 #define LvMacUnix 0x2000000L
 #if defined(__ARM_EABI__) || defined(__i386__)
@@ -868,9 +960,16 @@ struct __fb_termios {                 /* 44 bytes: 4 flag words, 20 chars, 2 spe
   unsigned int c_ispeed, c_ospeed;
 };
 extern void __love_fbstat(struct __fb_stat const *f, struct stat *st);   /* fstat.c's, shared by the stat trio */
-extern void __love_tiofb(struct termios const *t, struct __fb_termios *f);   /* os.c's termios rows */
-extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur);
-extern void __love_tiocan(struct __fb_termios const *f, struct termios *t);
+extern void __love_tiofb(struct termios const *t, struct __fb_termios *f);   /* ostio.c's rows */
+extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cur),
+            __love_tiocan(struct __fb_termios const *f, struct termios *t);
+extern unsigned int __love_bcode(speed_t);   /* signal/cfspeed.c: a rate as linux's CBAUD code */
+extern speed_t __love_bnum(unsigned int);
+struct __lx_termios2 {                /* TCGETS2's: the speeds a BOTHER code stands for */
+  unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
+  unsigned char c_line, c_cc[19];
+  unsigned int c_ispeed, c_ospeed;
+};
 
 /* netbsd reuses freebsd's classic numbers and tables; its own are these shapes, the
  * versioned numbers, the padded args and the sigtramp the kernel does not provide */
@@ -972,16 +1071,15 @@ extern void __love_mac_sigtramp(void);
 extern void __love_macstat(struct __mac_stat const *f, struct stat *st);
 extern void __love_macsofl(int fd, long t);   /* SOCK_CLOEXEC/NONBLOCK, by fcntl */
 extern int __love_macat(long n, long *w);   /* an *at call's args, made xnu's: 1 if it was one */
-extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m);
-extern void __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
+extern void __love_tiomac(struct __fb_termios const *f, struct __mac_termios *m),
+            __love_tiounmac(struct __mac_termios const *m, struct __fb_termios *f);
 
 #if defined(__aarch64__) || defined(__riscv)
 /* the probe's leaves: netbsd/aarch64 reads the svc immediate and SIGSYSes the register
  * form, so these set x8 and the immediate (a7 and t6 on riscv). freebsd, which SIGILLs
  * any nonzero immediate, is parted out by crt0 first */
 extern void __love_fencei(void);
-extern long __love_nbp20(long);
-extern long __love_nbp202(long, long, long, long, long, long);
+extern long __love_nbp20(long), __love_nbp202(long, long, long, long, long, long);
 #endif
 #define FfLeft 1
 #define FfZero 2
@@ -1007,9 +1105,8 @@ extern char const *__love_progname;
 void __fmtnum(void (*put)(void *, int), void *ctx, unsigned long long v, unsigned base,
               int neg, int prec, int width, int fl, int up);
 int __fmtsgn(int neg, int fl);
-void __pad(void (*put)(void *, int), void *ctx, int n, int ch);
-void __femit(void *ctx, int c);
-void __semit(void *ctx, int c);
+void __pad(void (*put)(void *, int), void *ctx, int n, int ch), __femit(void *ctx, int c),
+     __semit(void *ctx, int c);
 int (*__ctclass(char const *nm, size_t n))(int);
 int __ctname(char const *nm, size_t n);            /* wctype's index for a name not nul-ended */
 int __ctwide(int t, unsigned w);                    /* class t past ascii, whatever the locale */
@@ -1022,8 +1119,9 @@ extern unsigned char __obuf[8192];
 /* threads: the clone leaf starts the child calling sp[0](sp[1]); __love_tp reads the
  * thread pointer clone set */
 struct __love_mt { int threads, lock, klock, tls; void (*dtor[128])(void *); unsigned char key[128]; void *tsd[128];
-                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
+                   char const *tlsimg; unsigned long tlsfile, tlsblk, tlsalign; long tlsoff; void *mtp, *mself, *reap; int rlock; long mktid; };   /* klock guards the keys; tls is i386's GDT entry, 0 before the first thread */
 extern struct __love_mt __love_mt;
+extern void (*__love_forkhook)(int);   /* fork.c's, set by pthread_atfork */
 /* the pt_tls template (tlsimg 0 without one): a thread's copy lies tlsoff from its thread pointer */
 void __love_tlscopy(void *tp);
 long __love_clone(long flags, void *sp, int *ptid, int *ctid, void *tls);
@@ -1032,6 +1130,5 @@ extern unsigned char __ibuf[4096];
 /* the read side (stdio/rbuf.c): fill an empty read buffer -> bytes now ahead (0 at end, -1 on error);
  * how far the stream sits behind its fd; and putting the fd back at the stream's position */
 void __love_fopened(FILE *f);
-long __rfill(FILE *f);
-long __rahead(FILE *f);
+long __rfill(FILE *f), __rahead(FILE *f);
 int __rsync(FILE *f);

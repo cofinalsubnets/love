@@ -1,3 +1,7 @@
+; a test only ana finds constant, a global read past the first arm, still jumps to the join
+(: cpk-g 5)
+(: (cpk-f x) (: t (x == 'z ? 1 cpk-g 3) _ (show t + "!") t))
+
 ; cprop's kinds: a name bound to tally, show or a cons, or a local under a kind test's arm, has
 ; a certain kind, so a kind test on it folds. a compiler that
 ; folds nothing (love0's c0) answers the values alike, and the shape laws stand down
@@ -26,4 +30,5 @@
   (!cp || "(\\ a 5)" = show (x \ (? 0 x 1 5 9)))                      ; a constant test keeps its live arm
   ([() () 5] = [((x \ (? x 5)) 0) ((x \ (? (nil? x) 5)) 3) ((x \ (? (nil? x) 5)) ())])   ; no else: ()
   ([2 1 1] = [((x \ (? (nil? x) 1 2)) 3) ((x \ (? (nil? x) 1 2)) ())
-              ((x \ (: (nil? y) 7 (? (nil? x) 1 2))) 3)])))                  ; a local nil? is no flip
+              ((x \ (: (nil? y) 7 (? (nil? x) 1 2))) 3)])                   ; a local nil? is no flip
+  ([1 3] = [(cpk-f 'z) (cpk-f 'y)])))

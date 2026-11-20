@@ -154,7 +154,7 @@
    (t32? g) (elem (g 'tgt) '(thumb2 thumb2sp arm thumb1))   ; AAPCS32: armv7e-m, linux's arm, armv6-M
    (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an sp-only fpu: f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
-   (t32f? g) (t32? g && !(v6m? g))  ; with an fpu, hence AAPCS-VFP: floats ride s0..s15
+   (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
@@ -180,6 +180,10 @@
    (x86? g) (x64? g || ia32? g)
    (ilp32? g) (t32? g || ia32? g || w32s? g)      ; the 32-bit word: a long and a pointer one register, a long long the r0:r1 pair
    (soft? g) (v6m? g || w32s? g)                 ; no float file: every float op a helper call
+   ; where a float rides a call: the words with no float file or under -mfloat-abi=softfp (the
+   ; float file still computes), else AAPCS-VFP's s0..s15
+   (sfa? g) (soft? g || t32? g && xkask? g 'sfp)
+   (t32vfp? g) (t32f? g && !(xkask? g 'sfp))
    (m16? g) (g 'tgt = 'i386m16)
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
    (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
@@ -291,7 +295,7 @@
    (aslots g ty) (aup (tsz g ty) 8 >> 3)                              ; its eightbyte count
    ; a memory-class return: a hidden pointer as the first gp arg, filled and answered by the callee.
    ; AAPCS32 past 4 bytes (but a VFP seat's HFA, carried in s/d), SysV past 16
-   (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32f? g && t32hfa? g ty) || amem? g ty || refm? g ty))
+   (sretm? g ty) (stru? ty && !(cxf32? g ty) && (t32? g && 4 < tsz g ty && !(t32vfp? g && t32hfa? g ty) || amem? g ty || refm? g ty))
    ; the by-reference class: a composite past 16 bytes (AAPCS64: and no HFA; LP64 riscv and wasm: any) travels
    ; as the address of the caller's own copy, and returns through the buffer x8 (riscv: a0) points at
    (refm? g ty) (stru? ty && (rv32? g ? (8 < tsz g ty) (16 < tsz g ty && (rv64? g || (a64? g && !(hfab g ty @ b (flo? b && tsz g ty <= 4 * tsz g b)))))))
@@ -1035,14 +1039,17 @@
    (rdsp g f)                                         ; -> [reads defs pure?] | 'bar
     (: t (g 'rdarms @ () (: t9 (rdmk 0) _ (pin g 'rdarms t9) t9) t8 t8)
        (peep t <f 'bar @ 'bar 'bar a (a g f)))
-   ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp
+   ; a64 renames by position: x4 is also an arg register, so only the base slot's r4 becomes fp;
+   ; then thumb2's q4 is r4
    a4base (: t (foldl (t \ o \ pin t o 2) {} (ldops9 + fldops + xops + fxops + leaops + '(cmprm)))
            t (foldl (t \ o \ pin t o 1) t (stops9 + stxops + fstxops + siops + '(cmpm)))
          (pin t 'alurm 4))
    (a4ize fs)
     (: (go (f . u))
         (: bp (two? f ? (peep a4base <f -1) -1)
-         (. (0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) (go u)))
+         (. ((0 <= bp && f bp == 'r4 ? (reop f bp 'fp) f) @ f2 (q4? f2 ? (q4r f2) f2)) (go u)))
+        (q4? x) (? (atom? x) (x = 'q4) (any q4? x))
+        (q4r x) (? (atom? x) (x = 'q4 ? 'r4 x) (map q4r x))
      (go fs))
    ; v6-M: ld/st encode only positive immediates and sp moves around calls, so r4 is a second base
    ; at the frame bottom: an fp-negative slot becomes r4 + (frame + off). after a4ize
@@ -1613,19 +1620,21 @@
           r (go fs ())
           (any lone? r ? (nolane g "a frame record split\(ontgt g)") r))))
    ; thumb2's frame by register list: the saves and the frame record push as one, each exit pops them
-   ; with pc. the saves sit just under fp (r4 pads them to an even count), so every negative fp offset
+   ; with pc. the saves sit just under fp (a free one pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
    (t2pm g fs)
     (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
                       !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
        (: r0 (drop 4 fs)
+          cs '(r4 r5 r6 r7 r8 r9 r10)
           sb (<r0 @ ('sub 'sp 'sp n) (charm? n ? [<r0]) ())
-          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r (cspool g) && !(any (x \ <x = r) acc) ?
+          (svs l acc) (<l @ ('st 'fp k r) (charm? k && k < 0 && elem r cs && two? (cspool g) && !(any (x \ <x = r) acc) ?
                                              (svs >l ([r k] . acc)) [acc l])
                           [acc l])
           sv (two? sb ? (svs >r0 ()) [() r0])
           sl <sv
-          rs (filter (r \ any (x \ <x = r) sl || #sl % 2 = 1 && r = 'r4) '(r4 r5 r6 r7 r8 r9 r10))
+          pad (#sl % 2 = 1 ? (filter (r \ !(any (x \ <x = r) sl)) cs) ())
+          rs (filter (r \ any (x \ <x = r) sl || two? pad && r = <pad) cs)
           P (4 * #rs)
           (sh f) (? (elem <f (ldops9 + fldops + leaops) && f 2 = 'fp)
                      (charm? (f 3) && f 3 < 0 ? [<f <>f 'fp (f 3 - P)] (charm? (f 3) && 0 < f 3 ? f 'bad))
@@ -1661,8 +1670,10 @@
           ; a body that names neither sp nor fp past its pushes and exits keeps no frame below the saves
           (fr? x) (? (atom? x) (x = 'fp || x = 'sp) (any fr? x))
           sb2 (any (f \ (two? f && nelem <f '(push pop spfp) && fr? f)) body ? sb ())
+          ; an odd list, every one written, keeps sp's eight by four more below
+          sb3 (#rs % 2 = 0 ? sb2 [['sub 'sp 'sp (two? sb2 ? (<sb2 3 + 4) 4)]])
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb2 + t2sp body (P + (two? sb2 ? (<sb2 3) 0)))))))
+             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
    ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
    ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
    ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp

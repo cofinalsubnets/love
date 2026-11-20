@@ -324,7 +324,7 @@ static int __fmt(void (*put0)(void *, int), void *ctx0, char const *fmt, va_list
       else *(int *) p = (int) k.n; }
     else for (; at <= fmt; at++) put(ctx, *at); }   /* not a conversion: the text stands */
   va_end(A.ap);
-  if (k.bad) { __errno_v = EILSEQ; return -1; }
+  if (k.bad) { errno = EILSEQ; return -1; }
   return (int) k.n; }
 int fprintf(FILE *f, char const *fmt, ...) {
   va_list ap; va_start(ap, fmt);

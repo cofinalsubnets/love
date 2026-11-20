@@ -144,6 +144,39 @@ int big_cmp(word a, word b) {
  int c = mag_cmp(la, nla, lb, nlb);
  return aneg ? -c : c; }
 
+// an exact integer against a float, exactly: -1 0 1, 2 for a nan. under 2^mantissa the
+// conversion keeps the order; from there up the float is an integer, laid out as limbs
+int int_flo_cmp(word a, flo_t f) {
+ if (f != f) return 2;
+ flo_t const lim = (flo_t) (1ull << (Bits == 64 ? 53 : 24));
+ if (f > -lim && f < lim) {                               // a bignum is past lim either way
+  if (bigp(a)) return big(a)->slen < 0 ? -1 : 1;
+  flo_t const x = (flo_t) toint(a);
+  return x < f ? -1 : x > f; }
+ love_limb sa[wlimbs], lf[1024 / limb_bits + 2] = {0}; love_limb const *la; bool na;
+ int const nla = load_int_mag(a, sa, &la, &na);
+ bool const aneg = na && nla > 0, fneg = f < 0;
+ if (aneg != fneg) return aneg ? -1 : 1;
+ if (f - f != 0) return fneg ? 1 : -1;                     // an infinity
+ uint64_t m; int e;
+#if Bits == 64
+ uint64_t u; memcpy(&u, &f, sizeof u);
+ e = (int) (u >> 52 & 0x7ff) - 1075, m = (u & ((1ull << 52) - 1)) | 1ull << 52;
+#else
+ uint32_t u; memcpy(&u, &f, sizeof u);
+ e = (int) (u >> 23 & 0xff) - 150, m = (u & ((1u << 23) - 1)) | 1u << 23;
+#endif
+ int const q = e / limb_bits, r = e % limb_bits;             // e >= 0: |f| >= lim
+ uint64_t const lo = m << r, hi = r ? m >> (64 - r) : 0;
+ for (int i = 0; i < 128 / limb_bits; i++)
+  lf[q + i] = (love_limb) (i * limb_bits < 64 ? lo >> (i * limb_bits) : hi >> (i * limb_bits - 64));
+ int nf = q + 128 / limb_bits;
+ while (nf > 0 && !lf[nf - 1]) nf--;
+ int const c = mag_cmp(la, nla, lf, nf);
+ return aneg ? -c : c; }
+static love_inline intptr_t vcmp_c(int op, int c) { return c != 2 && vcmp_int(op, c, 0); }
+static love_inline int cmp_flip(int c) { return c == 2 ? 2 : -c; }
+
 // the smallest tier: the one sink that keeps the tiers disjoint, so eqv and keys hold
 word big_canon(word **hp, love_limb const *limb, int n, bool neg) {
  while (n > 0 && limb[n-1] == 0) n--;
@@ -1115,6 +1148,11 @@ flo_t vop_flo(int op, flo_t a, flo_t b) {
   case vop_rem: return b == 0 ? a : love_fmod(a, b);
   case vop_max: return a > b ? a : b; case vop_min: return a < b ? a : b;
   default: return a + b; } }                   // vop_add
+// a machine word: past the width it empties, never wraps; a negative count shifts the other way
+static love_inline intptr_t vshift(bool lf, intptr_t a, intptr_t b) {
+ intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
+ return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
+                  : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
 static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
   case vop_sub: return (intptr_t)((uintptr_t) a - (uintptr_t) b);
@@ -1126,11 +1164,7 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
-  case vop_bsl: case vop_bsr: {   // a machine word: past the width it empties, never wraps
-   int lf = op == vop_bsl;
-   intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
-   return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
-                    : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
+  case vop_bsl: case vop_bsr: return vshift(op == vop_bsl, a, b);
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 intptr_t vcmp_flo(int op, flo_t a, flo_t b) {
  switch (op) {
@@ -1247,7 +1281,7 @@ static love_inline intptr_t mint_cmp(struct g *g, word a, word b) {
  if (na != nb) return na ? 1 : -1;
  if (na) { struct str *sa = str(nom(a)->name), *sb = str(nom(b)->name);
   return bytes_cmp(txt(sa), len(sa), txt(sb), len(sb)); }
- uintptr_t ca = sym(a)->serial, cb = sym(b)->serial;
+ uint64_t ca = mint_serial(a), cb = mint_serial(b);
  return ca < cb ? -1 : ca > cb ? 1 : 0; }
 intptr_t love_mint_cmp(struct g *g, word a, word b) { return mint_cmp(g, a, b); }  // the point order, for +'s join
 // two galaxies of equal net, so cmp3 stays antisymmetric: rank, dims, then cells (re, im)
@@ -1294,7 +1328,7 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
    if (ar != br) return ar < br ? -1 : 1;
    flo_t ai = twinp(a) ? twin_im(a) : 0, bi = twinp(b) ? twin_im(b) : 0;
    return ai < bi ? -1 : ai > bi ? 1 : 0; }
-  if (gemp(a) || gemp(b)) { flo_t av = toflo(a), bv = toflo(b); return av < bv ? -1 : av > bv ? 1 : 0; }
+  if (gemp(a) || gemp(b)) { int c = numf_cmp(a, b); return c == 2 ? 0 : c; }
   return big_cmp(a, b); }
  if (strp(a)) return bytes_cmp(txt(a), len(a), txt(b), len(b));
  if (chainp(a)) return *go = CmpChain, 0;
@@ -1302,7 +1336,7 @@ static intptr_t cmp3leaf(struct g *g, word *pa, word *pb, int *go) {
   if (coin_kind(a) == coin_kind(b)) return *pa = coin_load(a), *pb = coin_load(b), *go = CmpCoin, 0;   // by payload
   word sa = kind_serial(g, a), sb = kind_serial(g, b);
   if (charmp(sa) && charmp(sb) && sa != sb) return getcharm(sa) < getcharm(sb) ? -1 : 1; }
- if (tabp(a) && tabp(b)) { uintptr_t sa = map_serial(a), sb = map_serial(b);   // mutable: its identity
+ if (tabp(a) && tabp(b)) { uint64_t sa = map_serial(a), sb = map_serial(b);    // mutable: its identity
   return sa < sb ? -1 : sa > sb ? 1 : 0; }                                        // orders it, never its contents
  uintptr_t ha = hash(g, a), hb = hash(g, b);
  return ha < hb ? -1 : ha > hb ? 1 : 0; }
@@ -1442,7 +1476,7 @@ static lvm(lvm_cmp_ord) {
   flo_t ar = twinp(a) ? twin_re(a) : toflo(a), br = twinp(b) ? twin_re(b) : toflo(b);
   r = ar != br ? vcmp_flo(op, ar, br)
               : vcmp_flo(op, twinp(a) ? twin_im(a) : 0, twinp(b) ? twin_im(b) : 0); }
- else if (gemp(a) || gemp(b)) r = vcmp_flo(op, toflo(a), toflo(b));
+ else if (gemp(a) || gemp(b)) { int c = numf_cmp(a, b); r = c != 2 && vcmp_int(op, c, 0); }
  else if (bigp(a) || bigp(b)) r = vcmp_int(op, big_cmp(a, b), 0);
  else r = vcmp_int(op, toint(a), toint(b));
  love_musttail return Push(r ? putcharm(1) : zero); }
@@ -1555,12 +1589,16 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
     else if (az) VBX((flo_t) ai[p], sb, BODY) \
     else if (af) VBX(af[p], (flo_t) bi[p], BODY) \
     else VBX(sa, (flo_t) bi[p], BODY) } while (0)
-   if (cmpf) { intptr_t *rp = (intptr_t*) tray_data(r);
-    #define VBF(E) VBM(rp[p] = (E) ? 1 : 0)
-    switch (op) { case vop_lt: VBF(av<bv); return; case vop_le: VBF(av<=bv); return;
-      case vop_gt: VBF(av>bv); return; case vop_ge: VBF(av>=bv); return;
-      case vop_eq: VBF(same_flo(av,bv)); return; }
-    #undef VBF
+   if (cmpf) {                     // an int against a float exactly, never through the float
+    intptr_t *rp = (intptr_t*) tray_data(r);
+    bool const xi = az || (!atray && !gemp(a)), yi = bz || (!btray && !gemp(b));
+    intptr_t const sia = !atray && xi ? toint(a) : 0, sib = !btray && yi ? toint(b) : 0;
+    for (uintptr_t p = 0; p < n; p++) {
+     intptr_t const x = ai ? ai[p] : sia, y = bi ? bi[p] : sib;
+     flo_t const xf = af ? af[p] : sa, yf = bf ? bf[p] : sb;
+     rp[p] = (xi && yi ? vcmp_int(op, x, y) : xi ? vcmp_c(op, zf_cmp(x, yf))
+            : yi ? vcmp_c(op, cmp_flip(zf_cmp(y, xf))) : vcmp_flo(op, xf, yf)) ? 1 : 0; }
+    return;
    } else { flo_t *rp = (flo_t*) tray_data(r);
     #define VBF(E) VBM(rp[p] = (E))
     switch (op) { case vop_add: VBF(av+bv); return; case vop_sub: VBF(av-bv); return;
@@ -1589,7 +1627,9 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
       case vop_mul: VBF((intptr_t)((uintptr_t)av*(uintptr_t)bv)); return;
       case vop_quot: case vop_fquot: VBF((bv==0||(av==INTPTR_MIN&&bv==-1))?0:av/bv); return;
       case vop_rem: VBF(bv==0?av:(av==INTPTR_MIN&&bv==-1)?0:av%bv); return;
-      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return; } } } }
+      case vop_max: VBF(av>bv?av:bv); return; case vop_min: VBF(av<bv?av:bv); return;
+      case vop_band: VBF(av&bv); return; case vop_bor: VBF(av|bv); return; case vop_bxor: VBF(av^bv); return;
+      case vop_bsl: VBF(vshift(1, av, bv)); return; case vop_bsr: VBF(vshift(0, av, bv)); return; } } } }
     #undef VBF
  #undef VBL
  struct bcast w; bc_open(&w, va, vb, R, r->shape);
@@ -1600,11 +1640,17 @@ static love_noinline void vbin_fill(struct tray *r, word a, word b, int op, bool
  bool abig = !atray && bigp(a), bbig = !btray && bigp(b);   // at most one
  int asign = abig ? (big(a)->slen < 0 ? -1 : 1) : 0,
      bsign = bbig ? (big(b)->slen < 0 ? -1 : 1) : 0;
+ // a side exact (an int element or scalar, or a bignum) against a float side compares exactly
+ bool const xi = atray ? va->type == love_Z : !gemp(a), yi = btray ? vb->type == love_Z : !gemp(b);
  for (uintptr_t p = 0; p < n; p++, bc_step(&w)) {
   intptr_t oa = w.oa, ob = w.ob;
   if (fdom) {
    flo_t av = atray ? tray_get_flo(va, oa) : sa, bv = btray ? tray_get_flo(vb, ob) : sb;
-   if (cmp) tray_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
+   if (cmp && xi != yi) {
+    int const c = xi ? (abig ? int_flo_cmp(a, bv) : zf_cmp(atray ? tray_get_int(va, oa) : ia, bv))
+                     : (bbig ? int_flo_cmp(b, av) : zf_cmp(btray ? tray_get_int(vb, ob) : ib, av));
+    tray_put_int(r, p, vcmp_c(op, xi ? c : cmp_flip(c)) ? 1 : 0); }
+   else if (cmp) tray_put_int(r, p, vcmp_flo(op, av, bv) ? 1 : 0);
    else tray_put_flo(r, p, vop_flo(op, av, bv)); }
   else {
    intptr_t av = atray ? tray_get_int(va, oa) : ia, bv = btray ? tray_get_int(vb, ob) : ib;

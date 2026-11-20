@@ -43,6 +43,33 @@ static inline uint64_t k_at_s1e1w_par(void *va) {
                 : "=r"(par) : "r"(va) : "memory");
   return par; }
 
+static inline uint64_t k_rd_ttbr0_el1(void) {
+  uint64_t v; asm volatile ("mrs %0, ttbr0_el1" : "=r"(v)); return v; }
+static inline uint64_t k_rd_tpidr_el1(void) {
+  uint64_t v; asm volatile ("mrs %0, tpidr_el1" : "=r"(v)); return v; }
+
+// a process's tables under the lower half; the stale translations go with the old
+static inline void k_wr_ttbr0_el1(uint64_t v) {
+  asm volatile ("msr ttbr0_el1, %0\n isb\n dsb ish\n tlbi vmalle1is\n dsb ish\n isb"
+                :: "r"(v) : "memory"); }
+static inline void k_wr_tpidr_el1(uint64_t v) {
+  asm volatile ("msr tpidr_el1, %0" :: "r"(v)); }
+// EL0 as linux leaves it: the cache type, dc zva and its own cache cleaning (SCTLR_EL1 UCT,
+// DZE, UCI), and both counters (CNTKCTL_EL1 EL0PCTEN, EL0VCTEN)
+static inline void k_el0_open(void) {
+  asm volatile ("mrs x9, sctlr_el1\n"
+                "orr x9, x9, #(3 << 14)\n"
+                "orr x9, x9, #(1 << 26)\n"
+                "msr sctlr_el1, x9\n"
+                "mrs x9, cntkctl_el1\n"
+                "orr x9, x9, #3\n"
+                "msr cntkctl_el1, x9\n"
+                "isb"
+                ::: "x9", "memory"); }
+// the instruction caches lose what a page written as data held
+static inline void k_ic_iallu(void) {
+  asm volatile ("dsb ish\n ic iallu\n dsb ish\n isb" ::: "memory"); }
+
 static inline void k_tlbi_all(void) {
   asm volatile ("dsb ish\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory"); }
 

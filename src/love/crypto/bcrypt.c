@@ -54,17 +54,15 @@ static void bc_hash(const uint8_t *pi, const uint8_t *pass, const uint8_t *salt,
   out[4*i] = (uint8_t) d[i], out[4*i+1] = (uint8_t) (d[i] >> 8),
   out[4*i+2] = (uint8_t) (d[i] >> 16), out[4*i+3] = (uint8_t) (d[i] >> 24); }
 
-love_noinline static struct g *host_bcrypt(struct g *g) {
- word pw = g->sp[0], kw = g->sp[1], sw = g->sp[2];
+static lvm(lvm_bcrypt) {
+ word const pw = Sp[0], kw = Sp[1], sw = Sp[2];
  if (!strp(pw) || !strp(kw) || !strp(sw)
      || len(pw) != 4168 || len(kw) != 64 || len(sw) != 64)
-  return g->sp[2] = ZeroPoint, g->sp += 2, g;
- uint8_t h[32];
- bc_hash((const uint8_t*) txt(pw), (const uint8_t*) txt(kw), (const uint8_t*) txt(sw), h);
- if (!ok(g = str0(g, 32))) return g;            // pushes: the hash over the three args
- memcpy(txt(g->sp[0]), h, 32);
- g->sp[3] = g->sp[0], g->sp += 3;
- return g; }
-static lvm(lvm_bcrypt) LvmCall(g, host_bcrypt)
-
+  love_musttail return Answerp(2, ZeroPoint);
+ uintptr_t const req = str_width(32);
+ Have(req);
+ struct str *o = ini_str(str(Hp), 32);
+ Hp += req;
+ bc_hash((const uint8_t*) txt(pw), (const uint8_t*) txt(kw), (const uint8_t*) txt(sw), (uint8_t*) txt(o));
+ love_musttail return Answerp(2, word(o)); }
 LvDef("bcrypt-hash", bcrypt, 3, "ssh");

@@ -118,16 +118,16 @@ static love_inline intptr_t rz_own(struct rz const *r, intptr_t y) {
 // edge on, facing the eye when culling, some pixel centre of this worker's in its box, and
 // nearer than all drawn on some tile it covers
 static int rz_may(struct rz const *r, struct rz_v const *const P[3]) {
- int64_t X[3], Y[3];
+ intptr_t X[3], Y[3];   // sixteenths inside the guard band, under 2^30 apart: only the area wants 64 bits
  for (int i = 0; i < 3; i++)
   X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);
- int64_t const A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ int64_t const A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0 || (A > 0 && (r->flags & rz_cull))) return 0;
- int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++)
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
   ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
- int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ intptr_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
  if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;
@@ -159,6 +159,27 @@ struct rz_plane {
  int64_t ex[3], ey[3], ec[3];
  intptr_t x0, x1, y0, y1;
  int nk, persp, shade, zo; };
+
+// the level of nlv where a pixel's step at u v crosses about a texel
+static love_inline int rz_lod(flo_t const *vx, flo_t const *vy, int persp, int nlv, flo_t s, flo_t u, flo_t v) {
+ int l = 0;
+ flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
+             uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
+ flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
+ r2 = ry > r2 ? ry : r2;
+ while (r2 > 2 && l + 1 < nlv) r2 /= 4, l++;
+ return l; }
+// the texel at u v, wrapped: by a mask where a side is a power of two
+static love_inline intptr_t rz_fetch(struct rz_tex const *tx, flo_t u, flo_t v) {
+ intptr_t iu = rz_ifloor(u), iv = rz_ifloor(v);
+ if (tx->mw) iu &= tx->mw;
+ else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
+ if (tx->mh) iv &= tx->mh;
+ else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
+ return tx->px[iv * tx->w + iu]; }
+
+// a pixel's channels, each 0..255 as it rounds
+static love_inline int32_t rz_rgb(flo_t r, flo_t g, flo_t b) { return (int32_t) (rz_ch(r, 0) << 16 | rz_ch(g, 0) << 8 | rz_ch(b, 0)); }
 
 // one row of a triangle: its run inside all three edges, each pixel shaded
 love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct rz_tex const *lv, int nlv, intptr_t y) {
@@ -195,6 +216,31 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
    else if (z < dz[x] && !(under && o[x] >= 0) && (!cls || (cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))
     dz[x] = z, td[x >> 3] = 1; }
   return; }
+ int const plain = !under && !cls && !glass && !add && !fs && !(tone > 0) && !dith && !shade;   // none of those asked a pixel
+ if (plain && !nlv) {
+  for (intptr_t x = xs; x < xe; x++) {
+   float const z = (float) a[0];
+   if (a[0] >= -1 && a[0] <= 1 && z < dz[x]) {
+    flo_t const s = persp ? 1 / a[1] : 1;
+    o[x] = rz_rgb((a[4] + a[7]) * s * 255, (a[5] + a[8]) * s * 255, (a[6] + a[9]) * s * 255), dz[x] = z, td[x >> 3] = 1; }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; }
+  return; }
+ if (plain) {
+  for (intptr_t x = xs; x < xe; x++) {
+   float const z = (float) a[0];
+   if (a[0] >= -1 && a[0] <= 1 && z < dz[x]) {
+    flo_t const s = persp ? 1 / a[1] : 1, u = a[2] * s, v = a[3] * s;
+    if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+    intptr_t const t = rz_fetch(lv + L, u * us, v * us);
+    if (t >= 0)
+     o[x] = rz_rgb((a[4] + a[7]) * s * 255 * u8[t >> 16 & 255], (a[5] + a[8]) * s * 255 * u8[t >> 8 & 255],
+                   (a[6] + a[9]) * s * 255 * u8[t & 255]), dz[x] = z, td[x >> 3] = 1; }
+   for (int k = 0; k < 7; k++) a[k] += vx[k];
+   if (nk > 7) for (int k = 7; k < 10; k++) a[k] += vx[k];
+   if (nk > 10) for (int k = 10; k < 2 + rz_na; k++) a[k] += vx[k]; }
+  return; }
  for (intptr_t x = xs; x < xe; x++) {
   float const z = (float) a[0];
   if (a[0] >= -1 && a[0] <= 1   // inside all three edges: the run is exact
@@ -204,23 +250,10 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
   flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
   int hole = 0;
   flo_t tint[3] = { 1, 1, 1 };
-  if (nlv) {   // the level where a pixel's step crosses about a texel
+  if (nlv) {
    flo_t const u = a[2] * s, v = a[3] * s;
-   if (nlv > 1 && !((x - xs) & 7)) {   // ..one level alone is that one
-    L = 0;
-    flo_t const ux = (vx[2] - (persp ? u * vx[1] : 0)) * s, vxx = (vx[3] - (persp ? v * vx[1] : 0)) * s,
-                uy = (vy[2] - (persp ? u * vy[1] : 0)) * s, vyy = (vy[3] - (persp ? v * vy[1] : 0)) * s;
-    flo_t r2 = ux * ux + vxx * vxx, ry = uy * uy + vyy * vyy;
-    r2 = ry > r2 ? ry : r2;
-    while (r2 > 2 && L + 1 < nlv) r2 /= 4, L++;
-    us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L); }
-   struct rz_tex const *tx = lv + L;
-   intptr_t iu = rz_ifloor(u * us), iv = rz_ifloor(v * us);
-   if (tx->mw) iu &= tx->mw;   // wrapped, by a mask where a side is a power of two
-   else if ((uintptr_t) iu >= (uintptr_t) tx->w) iu %= tx->w, iu += iu < 0 ? tx->w : 0;
-   if (tx->mh) iv &= tx->mh;
-   else if ((uintptr_t) iv >= (uintptr_t) tx->h) iv %= tx->h, iv += iv < 0 ? tx->h : 0;
-   intptr_t const t = tx->px[iv * tx->w + iu];
+   if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+   intptr_t const t = rz_fetch(lv + L, u * us, v * us);
    if (t < 0) hole = 1;
    else if (glass) tint[0] = u8[t >> 16 & 255], tint[1] = u8[t >> 8 & 255], tint[2] = u8[t & 255];
    else c[0] *= u8[t >> 16 & 255], c[1] *= u8[t >> 8 & 255], c[2] *= u8[t & 255]; }
@@ -267,34 +300,34 @@ love_noinline static void rz_planes(struct rz_plane *t, struct rz_v const *p0, s
 
 // edge i runs P[i] to P[i+1] and is above 0 on the inside; a top or a left edge owns the
 // pixels on it, the rest lose them by the bias of one
-love_noinline static void rz_edges(struct rz_plane *t, int64_t const *X, int64_t const *Y) {
+love_noinline static void rz_edges(struct rz_plane *t, intptr_t const *X, intptr_t const *Y) {
  for (int i = 0; i < 3; i++) {
   int const j = (i + 1) % 3;
-  int64_t const dx = X[j] - X[i], dy = Y[j] - Y[i];
-  t->ex[i] = -dy * 16, t->ey[i] = dx * 16;
-  t->ec[i] = dx * (8 - Y[i]) - dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); } }
+  intptr_t const dx = X[j] - X[i], dy = Y[j] - Y[i];
+  t->ex[i] = (int64_t) -dy * 16, t->ey[i] = (int64_t) dx * 16;
+  t->ec[i] = (int64_t) dx * (8 - Y[i]) - (int64_t) dy * (8 - X[i]) - (dy < 0 || (dy == 0 && dx > 0) ? 0 : 1); } }
 
 // a screen triangle's plane, edges exact in sixteenths so a shared edge's pixels fall to one
 // side, riders over w unless affine; 0 if it draws nothing
 love_noinline static int rz_setup(struct rz *r, struct rz_plane *t, struct rz_v const *p0, struct rz_v const *p1, struct rz_v const *p2) {
  struct rz_v const *P[3] = { p0, p1, p2 };
- int64_t X[3], Y[3];
+ intptr_t X[3], Y[3];
  for (int i = 0; i < 3; i++)
   X[i] = (intptr_t) rz_floor(P[i]->x * 16 + (flo_t) 0.5), Y[i] = (intptr_t) rz_floor(P[i]->y * 16 + (flo_t) 0.5);   // in the guard band: a word
- int64_t A = (X[1] - X[0]) * (Y[2] - Y[0]) - (X[2] - X[0]) * (Y[1] - Y[0]);
+ int64_t A = (int64_t) (X[1] - X[0]) * (Y[2] - Y[0]) - (int64_t) (X[2] - X[0]) * (Y[1] - Y[0]);
  if (A == 0) return 0;
  if (A > 0 && (r->flags & rz_cull)) return 0;   // anticlockwise in gl's y-up faces the eye,
  if (A < 0) {                                  // and is clockwise on the screen's y-down
   struct rz_v const *t = P[1]; P[1] = P[2], P[2] = t;
-  int64_t u = X[1]; X[1] = X[2], X[2] = u;
+  intptr_t u = X[1]; X[1] = X[2], X[2] = u;
   u = Y[1], Y[1] = Y[2], Y[2] = u, A = -A; }
  p0 = P[0], p1 = P[1], p2 = P[2];
  // the pixels whose centres the box holds: none, and done before any plane
- int64_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
+ intptr_t xa = X[0], xb = X[0], ya = Y[0], yb = Y[0];
  for (int i = 1; i < 3; i++)
   xa = X[i] < xa ? X[i] : xa, xb = X[i] > xb ? X[i] : xb,
   ya = Y[i] < ya ? Y[i] : ya, yb = Y[i] > yb ? Y[i] : yb;
- int64_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
+ intptr_t bx0 = (xa + 7) >> 4, bx1 = (xb + 8) >> 4, by0 = (ya + 7) >> 4, by1 = (yb + 8) >> 4;
  bx0 = bx0 < 0 ? 0 : bx0, by0 = by0 < 0 ? 0 : by0;
  bx1 = bx1 > r->W ? r->W : bx1, by1 = by1 > r->H ? r->H : by1;
  if (bx0 >= bx1 || by0 >= by1 || rz_own(r, (intptr_t) by0) >= (intptr_t) by1) return 0;   // ..or none of them this worker's
@@ -332,13 +365,13 @@ static void rz_tri(struct rz *r, struct rz_v const *p0, struct rz_v const *p1, s
  if (!rz_setup(r, &t, p0, p1, p2)) return;
  for (intptr_t y = rz_own(r, t.y0); y < t.y1; y = rz_own(r, y + 1)) rz_row(r, &t, lv, nlv, y); }
 
-// clip space to pixels; snapped to whole ones on request
-static void rz_project(struct rz const *r, struct rz_v *v) {
- flo_t const q = 1 / v->w;
- v->x = (v->x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W;
- v->y = ((flo_t) 0.5 - v->y * q * (flo_t) 0.5) * (flo_t) r->H;
- v->z = v->z * q;
- if (r->flags & rz_snap) v->x = rz_floor(v->x + (flo_t) 0.5), v->y = rz_floor(v->y + (flo_t) 0.5); }
+// clip space to pixels into v's place, its w and riders left; snapped to whole ones on request
+static love_inline void rz_place(struct rz const *r, flo_t x, flo_t y, flo_t z, flo_t w, struct rz_v *v) {
+ flo_t const q = 1 / w;
+ x = (x * q * (flo_t) 0.5 + (flo_t) 0.5) * (flo_t) r->W, y = ((flo_t) 0.5 - y * q * (flo_t) 0.5) * (flo_t) r->H;
+ if (r->flags & rz_snap) x = rz_floor(x + (flo_t) 0.5), y = rz_floor(y + (flo_t) 0.5);
+ v->x = x, v->y = y, v->z = z * q; }
+static love_inline void rz_project(struct rz const *r, struct rz_v *v) { rz_place(r, v->x, v->y, v->z, v->w, v); }
 
 static struct rz_v rz_lerp(struct rz_v const *a, struct rz_v const *b, flo_t t) {
  struct rz_v o;
@@ -395,7 +428,7 @@ static void rz_draw(struct rz *r, struct tray *vt, intptr_t const ix[3], struct 
  int n = 3, in = (o0 & o1 & o2 & 64) != 0;
  if (in) {
   struct rz_v s[3];
-  for (int i = 0; i < 3; i++) s[i].x = p[i].x, s[i].y = p[i].y, s[i].z = p[i].z, s[i].w = p[i].w, rz_project(r, s + i);
+  for (int i = 0; i < 3; i++) rz_place(r, P[i][0], P[i][1], P[i][2], P[i][3], s + i);
   struct rz_v const *const S[3] = { s, s + 1, s + 2 };
   if (!rz_may(r, S)) return; }
  flo_t const *vd = vt->type == love_R ? tray_data(vt) : 0;
@@ -657,19 +690,17 @@ static uintptr_t rz_out(struct tray *f, intptr_t kind, intptr_t s, uint8_t *o) {
   o[at++] = got == 2 ? (uint8_t) abc[acc >> 6 & 63] : '=', o[at++] = '='; }
  return at; }
 
-love_noinline static struct g *host_frame_bytes(struct g *g) {
- word *a = g->sp;
- if (!galaxyp(a[0]) || tray(a[0])->rank > 2 || !(a[1] & a[2] & 1)) { a[0] = ZeroPoint; return g; }
- intptr_t const kind = getcharm(a[1]), s = getcharm(a[2]);
- if (kind < 0 || kind > 2 || s < 1 || s > 16) { a[0] = ZeroPoint; return g; }
- uintptr_t const n = rz_out(tray(a[0]), kind, s, 0);
- if (!ok(g = have(g, str_width(n)))) return g;
- a = g->sp;
- struct str *o = ini_str(bump(g, str_width(n)), n);
- rz_out(tray(a[0]), kind, s, (uint8_t*) txt(o));
- a[0] = word(o);
- return g; }
-static lvm(lvm_frame_bytes) { LvmCallp(g, 2, host_frame_bytes) }
+static lvm(lvm_frame_bytes) {
+ if (!galaxyp(Sp[0]) || tray(Sp[0])->rank > 2 || !(Sp[1] & Sp[2] & 1)) love_musttail return Answerp(2, ZeroPoint);
+ intptr_t const kind = getcharm(Sp[1]), s = getcharm(Sp[2]);
+ if (kind < 0 || kind > 2 || s < 1 || s > 16) love_musttail return Answerp(2, ZeroPoint);
+ uintptr_t const n = rz_out(tray(Sp[0]), kind, s, 0);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += req;
+ rz_out(tray(Sp[0]), kind, s, (uint8_t*) txt(o));
+ love_musttail return Answerp(2, word(o)); }
 
 // (frame-paint f w s P W): a frame w pixels wide onto the cask P, W 32-bit xrgb pixels a
 // row, each of the frame's an s by s square from the corner, clipped to P; answers P
@@ -694,29 +725,27 @@ static lvm(lvm_frame_paint) {
 
 // (lace cols): columns laced into one float tray, row i the i-th of each (facets's verts); a
 // column is a tray, or a number in every row; () when lengths differ or a column is neither
-love_noinline static struct g *host_lace(struct g *g) {
+static lvm(lvm_lace) {
  uintptr_t k = 0, n = 0;
  int seen = 0;
- for (word l = g->sp[0]; chainp(l); l = B(l), k++) {
+ for (word l = Sp[0]; chainp(l); l = B(l), k++) {
   word const c = A(l);
   if (galaxyp(c)) {
    uintptr_t const m = tray_nelem(tray(c));
-   if (seen && m != n) { g->sp[0] = ZeroPoint; return g; }
+   if (seen && m != n) love_musttail return Answer(ZeroPoint);
    n = m, seen = 1; }
-  else if (!isnum(c)) { g->sp[0] = ZeroPoint; return g; } }
+  else if (!isnum(c)) love_musttail return Answer(ZeroPoint); }
  uintptr_t const w = b2w(tray_bytes(love_R, 1, k * n));
- if (!ok(g = have(g, w))) return g;
- struct tray *o = ini_tray(bump(g, w), love_R, 1);
+ Have(w);
+ struct tray *o = ini_tray((struct tray*) Hp, love_R, 1); Hp += w;
  o->shape[0] = k * n;
  flo_t *d = tray_data(o);
  uintptr_t j = 0;
- for (word l = g->sp[0]; chainp(l); l = B(l), j++) {   // re-walked: the bump may have moved it
+ for (word l = Sp[0]; chainp(l); l = B(l), j++) {
   word const c = A(l);
   if (galaxyp(c)) for (uintptr_t i = 0; i < n; i++) d[i * k + j] = tray_get_flo(tray(c), i);
   else { flo_t const v = toflo(c); for (uintptr_t i = 0; i < n; i++) d[i * k + j] = v; } }
- g->sp[0] = word(o);
- return g; }
-static lvm(lvm_lace) { LvmCall(g, host_lace) }
+ love_musttail return Answer(word(o)); }
 
 // FIXME namespace these
 LvDef("facets", raster, 8, "lore");

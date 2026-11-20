@@ -1,7 +1,7 @@
 #include "../impl.h"
 
 int tcsetattr(int fd, int act, struct termios const *t) {
-  if (act < 0 || act > 2) { __errno_v = EINVAL; return -1; }
+  if (act < 0 || act > 2) { errno = EINVAL; return -1; }
 #ifdef LvMac
   if (__love_osv == 4) {
     struct __fb_termios f, cur;
@@ -16,4 +16,9 @@ int tcsetattr(int fd, int act, struct termios const *t) {
     __love_tiofb(t, &f);
     if (fb3(NR_fb_ioctl, fd, 0x402c7413L, (long) &cur) >= 0) __love_tiokeep(&f, &cur);   /* TIOCGETA */
     return (int) er(fb3(NR_fb_ioctl, fd, 0x802c7414L + act, (long) &f)); }   /* TIOCSETA/AW/AF */
+  if ((t->c_cflag & CBAUD) == BOTHER || (t->c_cflag & CIBAUD) >> 16 == BOTHER) {
+    struct __lx_termios2 k;                                                  /* a rate with no code */
+    memcpy(&k, t, 17 + sizeof k.c_cc);
+    k.c_ospeed = t->c_ospeed, k.c_ispeed = t->c_ispeed ? t->c_ispeed : t->c_ospeed;
+    return ioctl(fd, 0x402c542bUL + (unsigned long) act, &k); }            /* TCSETS2/W2/F2 */
   return ioctl(fd, (unsigned long) (21506 + act), t); }                      /* TCSETS/W/F */

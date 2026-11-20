@@ -21,11 +21,11 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
-// the fine clock; love.c's weak default degrades to ms*1e6
-love_noinline intptr_t nclock(void) {
+// the fine clock; where there is no monotonic one (inle's kernels), the coarse one in ns
+love_noinline int64_t nclock(void) {
  struct timespec ts;
- return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
-  : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+ return clock_gettime(CLOCK_MONOTONIC, &ts) ? (int64_t) love_clock() * 1000000
+  : (int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
  if (love_inflag)                                        // the blocking bit was ours, a scare or not
@@ -68,7 +68,7 @@ static bool inle_tasks(void) {
 }
 
 // on inle without fork a twirled task is a process of the shell's
-love_door lvm(lvm_exit) {
+love_doorlvm(lvm_exit) {
  union u *t = g->tasks;
  if (t && (t[2].x & 1) && getcharm(t[2].x) && inle_tasks()) love_musttail return Ap(lvm_task_quit, g);
  int rc = (int) getcharm(Sp[0]);
@@ -192,7 +192,7 @@ love_noinline static struct g *host_harkdrain(struct g *g) {
   g->sp[2] = putcharm(-2); }                              // drained; now reap
  int st; pid_t w;
  do w = waitpid(pid, &st, WNOHANG); while (w < 0 && errno == EINTR);
- if (!w) { g->next_wake_at = love_clock() + 1; return g; }
+ if (!w) { g->next_wake_at = tick_add(love_tick(), 1); return g; }
  uintptr_t n = (uintptr_t) getcharm(g->sp[1]);
  // the capture cut to what was read: a NUL and a zeroed pad, as ini_str lays them
  if (n) memset(txt(g->sp[0]) + n, 0, b2w(n + 1) * sizeof(word) - n), len(g->sp[0]) = n;
@@ -267,7 +267,7 @@ static lvm(lvm_getenv) {
  if (!v) { Sp[0] = ZeroPoint; love_musttail return Next(1); }
  LvmCallp(g, 1, strof, v) }
 
-love_door lvm(lvm_getpid) {
+love_doorlvm(lvm_getpid) {
   love_musttail return Answer(putcharm(getpid())); }
 
 static union u const
@@ -687,10 +687,11 @@ int main(int argc, char const **argv) {
   char const *noimg = getenv("LOVE_NO_IMAGE");
   uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uintptr_t t0 = love_clock(), blen = 0;
+   uint64_t t0 = love_clock();
+   uintptr_t blen = 0;
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
-    woke_ms = love_clock() - t0,
+    woke_ms = (uintptr_t) (love_clock() - t0),
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   char const *envimg = getenv("LOVE_IMAGE");

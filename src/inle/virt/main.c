@@ -18,7 +18,7 @@ static int uart_rx_ready(void) { return UART[5] & 1; }
 
 // mtime runs at 10 MHz
 #define MTIME (*(volatile uint64_t *) 0x0200BFF8u)
-uintptr_t love_clock(void) { return (uintptr_t) (MTIME / 10000u); }
+uint64_t love_clock(void) { return (uint64_t) (MTIME / 10000u); }
 
 // FINISHER_FAIL (0x3333) carries the exit status in its high half
 #define TESTDEV (*(volatile uint32_t *) 0x100000u)
