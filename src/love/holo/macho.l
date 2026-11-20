@@ -86,7 +86,8 @@
        imps (dyn? ? (ld-imports objs0 + wimps) ()) ni #imps
        plt {'id "<stubs>" 'src "" 'secs {1 ['text 0 (16 * ni) 16 'text]} 'lanes {'text [1]}
             'drops {} 'syms {} 'nsym 0 'relas () 'named () 'base {}}
-       objs (dyn? ? (objs0 + [plt]) objs0)
+       ; the stubs only when there are imports: an empty one's alignment would lift the text end
+       objs (dyn? && 0 < ni ? (objs0 + [plt]) objs0)
        pg 4096
        base elf-base
        img? (0 < foldl (\ a ob (a + ld-lanesz ob 'image)) 0 objs)
