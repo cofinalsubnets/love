@@ -88,3 +88,12 @@
       (cpback "a日" 4 = 1) (cpback "a日" 1 = 0) (cpback "é" 2 = 0)
       (cpback "a\xe2\x82" 3 = 2) (cpback "\x80\x80\x80\x80" 4 = 3)   ; a torn tail stands alone
       (cpword? 95) (cpword? 233) (cpword? 1635) !(cpword? 45) !(cpword? 8212)))
+
+; upper and lower, cpupper and cplower over a whole string; ucase's 2 and 3 keep to ascii, a
+; byte that starts no character stays
+(: cpupper (cite 'text 'cpupper) cplower (cite 'text 'cplower)
+   (test
+      (upper "straße éÿı" = "STRAßE ÉŸI") (lower "İSTANBUL ÀÉ" = "istanbul àé") (lower "Ⱥ" = "ⱥ")
+      (lower "A\xe2\x82B" = "a\xe2\x82b") (upper "\xc0\x80a" = "\xc0\x80A") (lower "" = "")
+      (ucase 2 "ÀB" = "Àb") (ucase 3 "éa" = "éA") (lower [65 66] = "ab") (upper [99 97] = "CA")
+      (all (c \ lower (utf8 c) = utf8 (cplower c) && upper (utf8 c) = utf8 (cpupper c)) ^12288)))

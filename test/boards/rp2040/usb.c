@@ -1,7 +1,8 @@
 // the rp2040's usb controller (and the rp2350's, the same block) as a cdc-acm device, under ../../../src/inle/usbcdc.h's class
 // half, at full speed and polled: usb_poll takes setup packets, bus resets and finished
 // buffers. endpoint 0 and the data endpoints move at most a packet a buffer, so a longer
-// transfer goes a packet at a time from the buffer-done path
+// transfer goes a packet at a time from the buffer-done path. under UCDC_ACM2 the second port
+// rides endpoints 4 and 5
 #include <stdint.h>
 #ifdef RP2350
 #include "../rp2350/rp2350.h"
@@ -43,15 +44,19 @@ static char serial[17];   // the chip's unique id in hex, set by usb_init
 #define EP0BUF ((uint8_t *) (DPRAM + 0x100u))
 #define RXBUF  ((uint8_t *) (DPRAM + 0x180u))   // 2 out
 #define TXBUF  ((uint8_t *) (DPRAM + 0x1c0u))   // 2 in
+#define RX5BUF ((uint8_t *) (DPRAM + 0x280u))   // 5 out, after 3 in at 0x200 and 4 in at 0x240
+#define TX5BUF ((uint8_t *) (DPRAM + 0x2c0u))   // 5 in
 
-// the next data pid of each buffer (2 n + out), what endpoint 0 still owes in, and endpoint 2's
-// send in flight with its copy
-static uint32_t pid[8];
+// the next data pid of each buffer (2 n + out), what endpoint 0 still owes in, and a bulk
+// endpoint's send in flight with its copy
+static uint32_t pid[12];
 static uint8_t const *e0p;
 static uint32_t e0n, e0addr, e0want;
-static uint8_t txb[ucdc_tx];
-static uint8_t const *txp;
-static uint32_t txn, txlast, txon;
+struct tx { uint8_t b[ucdc_tx]; uint8_t const *p; uint32_t n, last, on; };
+static struct tx tx2;
+#ifdef UCDC_ACM2
+static struct tx tx5;
+#endif
 
 // AVAILABLE goes in a write of its own, a few clk_usb cycles after the rest
 static void arm(uint32_t n, uint32_t out, uint32_t len, uint32_t extra) {
@@ -88,29 +93,47 @@ static void usbhw_open(void) {
   EP_CTRL(2, 1) = EP_ON | EP_INT1 | 2u << 26 | 0x180u;
   EP_CTRL(2, 0) = EP_ON | EP_INT1 | 2u << 26 | 0x1c0u;
   EP_CTRL(3, 0) = EP_ON | EP_INT1 | 3u << 26 | 0x200u;
-  for (uint32_t i = 2; i < 8; i++) pid[i] = 0;
-  txon = 0; }
+#ifdef UCDC_ACM2
+  EP_CTRL(4, 0) = EP_ON | EP_INT1 | 3u << 26 | 0x240u;
+  EP_CTRL(5, 1) = EP_ON | EP_INT1 | 2u << 26 | 0x280u;
+  EP_CTRL(5, 0) = EP_ON | EP_INT1 | 2u << 26 | 0x2c0u;
+  tx5.on = 0;
+#endif
+  for (uint32_t i = 2; i < 12; i++) pid[i] = 0;
+  tx2.on = 0; }
 
 static void usbhw_clear_halt(uint32_t ep) {
   uint32_t const n = ep & 0x7Fu, out = !(ep & 0x80u);
-  if (n == 2 || n == 3) pid[2u * n + out] = 0, BUF_CTRL(n, out) &= ~BC_STALL; }
+  if (2 <= n && n <= 5) pid[2u * n + out] = 0, BUF_CTRL(n, out) &= ~BC_STALL; }
 
 static void usbhw_rx_arm(void) { arm(2, 1, ucdc_pkt, 0); }
 
-static void txnext(void) {
-  uint32_t const m = txn < ucdc_pkt ? txn : ucdc_pkt;
-  for (uint32_t i = 0; i < m; i++) TXBUF[i] = txp[i];
-  txp += m, txn -= m, txlast = m;
-  arm(2, 0, m, 0); }
-
-void usb_poll(void);
-static int usbhw_tx_busy(void) { usb_poll(); return (int) txon; }
+static void txnext(struct tx *t, uint32_t ep, uint8_t *buf) {
+  uint32_t const m = t->n < ucdc_pkt ? t->n : ucdc_pkt;
+  for (uint32_t i = 0; i < m; i++) buf[i] = t->p[i];
+  t->p += m, t->n -= m, t->last = m;
+  arm(ep, 0, m, 0); }
 
 // the class fills its buffer again once this returns, so the send goes from a copy
-static void usbhw_tx(void const *src, uint32_t n) {
-  for (uint32_t i = 0; i < n; i++) txb[i] = ((uint8_t const *) src)[i];
-  txp = txb, txn = n, txon = 1;
-  txnext(); }
+static void txstart(struct tx *t, uint32_t ep, uint8_t *buf, void const *src, uint32_t n) {
+  for (uint32_t i = 0; i < n; i++) t->b[i] = ((uint8_t const *) src)[i];
+  t->p = t->b, t->n = n, t->on = 1;
+  txnext(t, ep, buf); }
+
+// a packet in landed: the rest, then a zero packet after a full one
+static void txdone(struct tx *t, uint32_t ep, uint8_t *buf) {
+  if (t->n) txnext(t, ep, buf);
+  else if (t->last == ucdc_pkt) t->last = 0, arm(ep, 0, 0, 0);
+  else t->on = 0; }
+
+void usb_poll(void);
+static int usbhw_tx_busy(void) { usb_poll(); return (int) tx2.on; }
+static void usbhw_tx(void const *src, uint32_t n) { txstart(&tx2, 2, TXBUF, src, n); }
+#ifdef UCDC_ACM2
+static void usbhw_uart_rx_arm(void) { arm(5, 1, ucdc_pkt, 0); }
+static int usbhw_uart_tx_busy(void) { usb_poll(); return (int) tx5.on; }
+static void usbhw_uart_tx(void const *src, uint32_t n) { txstart(&tx5, 5, TX5BUF, src, n); }
+#endif
 
 static uint32_t usbhw_ms(void) { return clock_ms(); }
 
@@ -121,7 +144,10 @@ void usb_poll(void) {
   if (s & ST_RESET) {
     UREG(SIE_STATUS) = ST_RESET;
     UREG(ADDR_ENDP) = 0;
-    e0n = 0, e0addr = 0, e0want = 0, txon = 0;
+    e0n = 0, e0addr = 0, e0want = 0, tx2.on = 0;
+#ifdef UCDC_ACM2
+    tx5.on = 0;
+#endif
     ucdc_reset(); }
   if (s & ST_SETUP) {
     UREG(SIE_STATUS) = ST_SETUP;
@@ -140,10 +166,12 @@ void usb_poll(void) {
     ucdc_ep0_out(EP0BUF, n);
     usbhw_ep0_ack(); }
   if (b & 1u << 5) ucdc_rx(RXBUF, BUF_CTRL(2, 1) & 0x3FFu);   // 2 out
-  if (b & 1u << 4) {                               // 2 in: the rest, then a zero packet after a full one
-    if (txn) txnext();
-    else if (txlast == ucdc_pkt) txlast = 0, arm(2, 0, 0, 0);
-    else txon = 0; } }
+  if (b & 1u << 4) txdone(&tx2, 2, TXBUF);                     // 2 in
+#ifdef UCDC_ACM2
+  if (b & 1u << 11) ucdc_uart_rx(RX5BUF, BUF_CTRL(5, 1) & 0x3FFu);   // 5 out
+  if (b & 1u << 10) txdone(&tx5, 5, TX5BUF);                         // 5 in
+#endif
+}
 
 // the serial the chip's id; pll_usb 12 MHz x 120 / 6 / 5 = 48 MHz into clk_usb, then the controller on its phy, vbus taken
 // as present, the pullup on. the rom's usb boot leaves the pll running and feeding clk_usb, so

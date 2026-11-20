@@ -56,6 +56,9 @@
         ; one trap per task, all open at once: each catches its own
         (: (sess i) (twirl (_ \ (rest 0, trap (_ \ scare 'boom i) () (a \ b \ b))) ())
            ('(1 2 3) = (map catch (map sess '(1 2 3))))))
+; a caught scare leaves by k, so the raise keeps no C frame: more catches than a C stack holds
+(test (300000 = foldl (n \ i \ trap (_ \ scare 'x i) () (a \ b \ n + 1)) 0 ^300000))
+
 ; n fires with the displaced help back, so a raise in it goes to the trap outside
 (hear (a \ b \ 'floor))
 (test ('(outer-saw from-n) = (trap (_ \ trap (_ \ scare 'x 0) () (a \ b \ scare 'from-n a))

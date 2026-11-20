@@ -3,7 +3,8 @@
 ; turns swdio to the host (1) or the target (0), 'rst b holds nrst low (1) or lets it go (0);
 ; bits go lsb first. a probe wire moves whole transfers: 'xfer [[rq wdata] ..] answers
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
-; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set. the
+; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'aux b the same for the probe's second
+; line (a boot button), 'clock hz answers the rate set. the
 ; love swd probe and cmsis-dap are probe wires
 (module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-batch swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
@@ -379,9 +380,12 @@
      {'xfer (its \ (io 'send (join "" (map one its) + "E"), answers its ()))
       'line (bn \ io 'send ("B" + wrle (bn 1) 2 + snip (bn 0) 0 ((bn 1 + 7) // 8)))
       'rst (b \ io 'send ("R" + string [b]))
+      'aux (b \ io 'send ("Q" + string [b]))
       'clock (hz \ (io 'send ("C" + wrle hz 4), rdle (io 'recv 4) 0 4))
       'id (_ \ (io 'send "I", io 'recv 8))
-      'close (_ \ (io 'send "Z", io 'close ()))})
+      ; a write is posted, its access done only as the clock goes on: 8 idle bits land the
+      ; last one (a reset asked of aircr) before the lines go
+      'close (_ \ (io 'send ("B" + wrle 8 2 + string [0] + "Z"), io 'close ()))})
  ; the probe on its serial device, raw: 8 bits, no parity, no echo, no line discipline, a
  ; read waiting for a byte. it must name itself
  (probe-wire path)
