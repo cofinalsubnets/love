@@ -81,15 +81,17 @@
 ;; one-byte map, 1 0F, 2 0F 38, 3 0F 3A. kinds in Intel order (dest first), a role and a width:
 ;; G the modrm reg field, E its r/m, V and W the same as xmm, Z a register in the opcode's low
 ;; bits, A the accumulator, CL, S a segment register, C D a control or debug register, N an
-;; indirect r/m, T an x87 st(i) in r/m and K the stack's top; under VEX, H the vvvv register, B
+;; indirect r/m, T an x87 st(i) in r/m and K the stack's top, Q the segment register sr names,
+;; O an absolute address (moffs), DX the port register; under VEX, H the vvvv register, B
 ;; a general one there, L one in an immediate's high nibble; I a signed immediate kept with its
 ;; size, U an unsigned one, ub a bare byte, J a relative target. widths: b w d q 1 2 4 8, v the
 ;; operand size (66, REX.W), p a push's (64 unless 66), y 4 or 8 by REX.W, z an immediate's 2 or
 ;; 4; a bare V W H L the row's vector, x an xmm, y a ymm. attrs: p the mandatory prefix (none 66
 ;; f3 f2), d the modrm digit, mod r or m, rm the whole modrm byte, b REX.B, w REX.W (VEX.W), ow
-;; the operand size, iw the item's width when not its first register's (p a push's), x rep and
-;; repne go to a mandatory f3 or f2, ate the rep it reads, fw a wait that may lead an escape,
-;; vex or evex its length L (0 xmm, 1 ymm, 2 zmm), n the bytes an EVEX disp8 counts in
+;; the operand size, iw the item's width when not its first register's (p a push's, o the
+;; operand size), i64 a row a 64-bit segment refuses, sr Q's register, x rep and repne go to
+;; a mandatory f3 or f2, ate the rep it reads, fw a wait that may lead an escape, vex or evex
+;; its length L (0 xmm, 1 ymm, 2 zmm), n the bytes an EVEX disp8 counts in
 (: x6t-cc '(o no b ae e ne be a s ns p np l ge le g)
    (x6t-ccn pre k) (name (pre + show (x6t-cc k)))
    x6t-alu '(add or adc sbb and sub xor cmp)
@@ -214,7 +216,7 @@
                                        (48 wrmsr) (49 rdtsc) (50 rdmsr) (162 cpuid)))
      [(x6t-r 'sysretq 1 7 () '((ow 8))) (x6t-r 'sysretl 1 7 () ())
       (x6t-r 'lar 1 2 '(Gv Ev) ()) (x6t-r 'lsl 1 3 '(Gv Ev) ())]
-     (x6t-dig 1 0 '(Ew) '((iw 0)) '(sldt str lldt () verr verw)) (x6t-dig 1 0 '(Ew) () '(() () () ltr))
+     (x6t-dig 1 0 '(Ew) '((iw 0) (mod m)) '(sldt str)) (x6t-dig 1 0 '(Ew) '((iw 0)) '(() () lldt () verr verw)) (x6t-dig 1 0 '(Ew) () '(() () () ltr))
      [(x6t-r 'nop 1 31 '(Ev) ())]                                       ; the long nops
      (x6t-dig 1 24 '(Eq) '((mod m) (iw 0)) '(prefetchnta prefetcht0 prefetcht1 prefetcht2))
      [(x6t-r 'endbr64 1 30 () '((p f3) (rm 250) (x 1))) (x6t-r 'endbr32 1 30 () '((p f3) (rm 251) (x 1)))]
@@ -398,13 +400,38 @@
             (109 vpunpckhqdq 1 (V H W) 1) (112 vpshufd 1 (V W ub) 0) (71 vpsllvq 2 (V H W) 1) (69 vpsrlvq 2 (V H W) 1)
             (124 vpbroadcastq 2 (V Eq) 1) (67 vshufi64x2 3 (V H W ub) 1)))
      (catmap (e \ x6t-e (e 1) 1 115 '(H W ub) [['p 66] ['d <e] ['w (e 2)] '(mod r)] '(2))
-             '((7 vpslldq 0) (3 vpsrldq 0) (6 vpsllq 1) (2 vpsrlq 1)))])
+             '((7 vpslldq 0) (3 vpsrldq 0) (6 vpsllq 1) (2 vpsrlq 1)))
+     ;; the system rows by mode, i64 those a 64-bit segment refuses. a segment register: to it
+     ;; never 66, from it 66 only into a register; the control and debug registers whole
+     [(x6t-r 'mov 0 140 '(Ew S) '((mod m))) (x6t-r 'mov 0 140 '(Ev S) '((mod r))) (x6t-r 'mov 0 142 '(S Ew) ())
+      (x6t-r 'mov 0 142 '(S Ed) '((mod r))) (x6t-r 'mov 0 142 '(S Eq) '((mod r) (w 1)))
+      (x6t-r 'mov 1 32 '(Ed C) '((i64 1))) (x6t-r 'mov 1 34 '(C Ed) '((i64 1)))
+      (x6t-r 'mov 1 33 '(Ed D) '((i64 1))) (x6t-r 'mov 1 35 '(D Ed) '((i64 1)))]
+     ; ..pushed and popped, Q the one the row's sr names
+     (map (e \ x6t-r (e 1) (e 2) <e '(Qp) [['sr (e 3)] '(iw p) (e 4 ? '(i64 1) '(i64 ()))])
+          '((6 push 0 0 1) (7 pop 0 0 1) (14 push 0 1 1) (22 push 0 2 1) (23 pop 0 2 1) (30 push 0 3 1) (31 pop 0 3 1)
+            (160 push 1 4 0) (161 pop 1 4 0) (168 push 1 5 0) (169 pop 1 5 0)))
+     ; the far transfers: to a segment:offset, the offset's width the operand size, or through memory
+     [(x6t-r 'ljmp 0 234 '(Iz Uw) '((i64 1) (iw o))) (x6t-r 'lcall 0 154 '(Iz Uw) '((i64 1) (iw o)))]
+     (x6t-dig 0 255 '(Nv) '((mod m) (iw o)) '(() () () lcall () ljmp))
+     ; the descriptor tables at a suffix's operand size; a word's register forms
+     (x6t-dig 1 1 '(Ev) '((mod m) (iw o) (i64 1)) '(sgdt sidt lgdt lidt))
+     (x6t-dig 1 0 '(Ev) '((mod r)) '(sldt str)) (x6t-dig 1 0 '(Ew) '((mod r)) '(() () lldt ltr verr verw))
+     (x6t-dig 1 1 '(Ew) '((iw 0) (mod m)) '(() () () () smsw () lmsw)) (x6t-dig 1 1 '(Ev) '((mod r)) '(() () () () smsw))
+     (x6t-dig 1 1 '(Ew) '((mod r)) '(() () () () () () lmsw))
+     ; the ports, by an imm8 or by DX, at the accumulator's width
+     [(x6t-r 'in 0 228 '(Ab ub) ()) (x6t-r 'in 0 229 '(Av ub) '((w 0))) (x6t-r 'in 0 236 '(Ab DX) ()) (x6t-r 'in 0 237 '(Av DX) '((w 0)))
+      (x6t-r 'out 0 230 '(ub Ab) ()) (x6t-r 'out 0 231 '(ub Av) '((w 0))) (x6t-r 'out 0 238 '(DX Ab) ()) (x6t-r 'out 0 239 '(DX Av) '((w 0)))]
+     ; inc and dec 40+r and 48+r, REX in 64; mov's accumulator to and from an absolute address
+     (map (r \ x6t-r 'inc 0 (64 + r) '(Zv) '((i64 1))) ^8) (map (r \ x6t-r 'dec 0 (72 + r) '(Zv) '((i64 1))) ^8)
+     [(x6t-r 'mov 0 160 '(Ab Ob) '((i64 1))) (x6t-r 'mov 0 161 '(Av Ov) '((i64 1)))
+      (x6t-r 'mov 0 162 '(Ob Ab) '((i64 1))) (x6t-r 'mov 0 163 '(Ov Av) '((i64 1)))]])
    ;; the rows by map and opcode, in table order
    x64-tabix (foldl (\ t r (: k (r 1 * 256 + r 2) (pin t k (peep t k () + [r])))) {} x64-tab)
    ;; the encoder: a row lays operands written as the decoder's (decode.l), Intel order; of the
    ;; rows of a name that take them, the shortest, the first on a tie
-   (x64-role k) (show k @ t (? (t = "CL" || t = "ub") t (#t = 1) t (snip t 0 1)))
-   (x64-wl k) (show k @ t (#t = 2 && t != "CL" && t != "ub" ? (snip t 1 2) ""))
+   (x64-role k) (show k @ t (? (elem t ["CL" "ub" "DX"]) t (#t = 1) t (snip t 0 1)))
+   (x64-wl k) (show k @ t (#t = 2 && nelem t ["CL" "ub" "DX"] ? (snip t 1 2) ""))
    (x6e-rg? o) (two? o && <o = 'rg)
    (x6e-mem? o) (two? o && elem <o '(mem rip seg))
    ;; a memory operand's modrm, sib and displacement with reg field rf -> [bytes X B], or ()
@@ -491,14 +518,14 @@
         (catmap (ro \ filter (i \ rl i = ro) ^n) '(G E Z A) @ (i . _) i _ -1)
         (a 'ow) (a 'iw) (a 'p) (a 'mod) (a 'rm) (a 'd) (a 'w) (a 'b)
         ((r 1 @ 0 () 1 [15] 2 [15 56] [15 58]) + [(r 2)]) (a 'p @ 'f3 [243] 'f2 [242] _ ()) (elem 'p wl || a 'iw = 'p)
-        (filter (i \ elem (rl i) '(I U ub J L)) ^n @ is (map (i \ [i (show (ks i))]) is))
-        (r 2) (a 'vex) (a 'evex) (a 'n) (idx '(H B)) (r 1)])
+        (filter (i \ elem (rl i) '(I U ub J L O)) ^n @ is (map (i \ [i (show (ks i))]) is))
+        (r 2) (a 'vex) (a 'evex) (a 'n) (idx '(H B)) (r 1) (a 'i64) (a 'sr)])
    ;; a row's lay for operands of this shape, or (): all the shape decides, once, and a
    ;; (\ ops pc) for the rest, a memory operand, the immediates and targets -> bytes or ().
    ;; md the segment's bits: outside 64 no REX, and 66 names the width that is not its own
    (x6e-stage p w ops) (x6e-stagem 64 p w ops)
    (x6e-stagem md p w ops)
-    (p @ [_ n rl wl szc vsz byte? gi ei zi gwi ow iw0 ap mod rm ad aw ab opb pfx hasp ims oc vl el nn hi mp]
+    (p @ [_ n rl wl szc vsz byte? gi ei zi gwi ow iw0 ap mod rm ad aw ab opb pfx hasp ims oc vl el nn hi mp i6 sk]
      (: ; the operand size: ow, else a sized register's, else the item's
        sized (filter (i \ x6e-rg? (ops i) && ops i 2 >= 2) szc)
        dsz (md = 16 ? 2 4)
@@ -519,13 +546,15 @@
              'N (two? o && <o = 'ind && (x6e-rg? (o 1) && o 1 2 = (md = 64 ? 8 osz) || x6e-mem? (o 1)))
              'S (two? o && <o = 'sr) 'C (two? o && <o = 'cr) 'D (two? o && <o = 'dr)
              'T (two? o && <o = 'st && charm? (o 1)) 'K (o = ['st] || o = ['st 0])
+             'Q (o = ['sr sk]) 'DX (o = ['rg 2 2])
+             'O (two? o && <o = 'mem && o 1 < 0 && o 2 < 0 && #o < 7)
              (two? o && elem <o '(im lbl)))
        (oks os rs ls) (? !(two? os) 1 (ok <os <rs <ls) (oks >os >rs >ls) 0)
        ; the item's width as the decoder names it: iw, else the first general register kind's.
        ; outside 64 a target's or an indirect one's is the operand size it names
-       iw (? (iw0 = 'p) (md = 64 ? (osz = 2 ? 2 8) osz) (iw0 != ()) iw0 (gwi < 0 ? 0 (wd (wl gwi))))
+       iw (? (iw0 = 'p) (md = 64 ? (osz = 2 ? 2 8) osz) (iw0 = 'o) w (iw0 != ()) iw0 (gwi < 0 ? 0 (wd (wl gwi))))
        jn (any (r \ elem r '(J N)) rl)
-       (? (#ops != n || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
+       (? (#ops != n || (i6 && md = 64) || (iw != w && !(jn && iw = 0 && md != 64 && (w = 2 || w = 4))) || !(oks ops rl wl)
            || (ow != () && w > 0 && vsz && w != ow) || (hasp && md = 64 && osz = 4)
            || (o66 && (ap = 'none)) || (mod = 'r && ei >= 0 && !(x6e-rg? (ops ei) || <(ops ei) = 'st || <(ops ei) = 'ind && x6e-rg? (ops ei 1)))
            || (mod = 'm && ei >= 0 && (x6e-rg? (ops ei) || <(ops ei) = 'ind && x6e-rg? (ops ei 1))))
@@ -574,6 +603,11 @@
                    (lay1 l)
                     (: w (fw l) z (? (l = "Jb") 1 (l = "Jz") w 0) im (x6e-immf l osz byte?)
                        (? (l = "L") (\ o at [(o 1 << 4)])
+                          ; an absolute address at the segment's address width
+                          (starts? l "O")
+                           (\ o at (: d (o 4) sy (#o > 5 ? (o 5) ()) k (md = 16 ? 2 4)
+                                      (? (nom? sy) [(fix k (k = 2 ? 'abs16 'abs32) sy d)]
+                                         (k = 2) (0 <= d && d < 65536 ? (le16 d) ()) (fits32 d || 0 <= d && d < 1 << 32) (le32 d) ())))
                        (\ o at
                           (: v (o 1)
                              (? (fix? v) (v 1 = w ? [v] ())

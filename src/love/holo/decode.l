@@ -104,6 +104,7 @@
                          (e @ 'p (v = px) 'b (pf p 'b = v) 'w (pf p 'w = v) 'ow (w = v)
                               'd (((m >> 3) & 7) = v) 'mod (v = 'r ? ((m >> 6) = 3) ((m >> 6) != 3)) 'rm (m = v) 1))))
                        '(p b w ow d mod rm)
+                  && peep at 'i64 () = ()
                   && (? ev (peep at 'evex () = pf p 'vl) vx (peep at 'vex () = pf p 'vl) (peep at 'vex () = () && peep at 'evex () = ())))
        (lay r)
         (: ks (r 3) at (r 4)
@@ -138,11 +139,12 @@
                         "CL" (go >ks pos (['rg 1 1] . acc))
                         "T" (go >ks pos (['st (m & 7)] . acc)) "K" (go >ks pos (['st] . acc))
                         ("H" || "B") (go >ks pos (['rg (pf p 'vvvv) (kw q)] . acc))
+                        "Q" (go >ks pos (['sr (peep at 'sr 0)] . acc)) "DX" (go >ks pos (['rg 2 2] . acc))
                         (imm pos (show q) @ (o nx) (go >ks nx (o . acc))))))
            st (mr ? (md 0) (peep at 'rm () != () || any (k \ x64-role k = "T") ks ? (k + 1) k))
            ; the item's width: the first general register's, reg field ahead of r/m
            gw (catmap (ro \ filter (k \ x64-role k = ro) ks) ["G" "E" "Z" "A"] @ l (two? l ? <l ()))
-           iw (peep at 'iw () @ v (? (v = 'p) w8 (v != ()) v (gw = () ? 0 (kw gw))))
+           iw (peep at 'iw () @ v (? (v = 'p) w8 (v = 'o) w (v != ()) v (gw = () ? 0 (kw gw))))
            ate (? (peep at 'ate 0) 1 (peep at 'x 0) (elem px '(f2 f3) ? 1 0) 0)
            (go ks st () @ (pos ops)
               (peep at 'fw 0 && pos < n && 216 <= dc-at s pos <= 223 ? (dc-op s i pos p @ r (<r . ([['op 'fwait 0 ()]] + >r)))
@@ -241,7 +243,6 @@
           ['op (name ("cmp" + show (od-cmpp (ops 2 1)) + snip (show mn) 3 5)) w (snip ops 0 2)]
           (mn = 'xchg && n = 2 && ops = [['rg 0 2] ['rg 0 2]]) ['op 'nop 0 ()]
           (elem mn '(lar lsl) && rg?) ['op mn w [<ops ['rg (ops 1 1) 2]]]
-          (elem mn '(sldt str smsw) && #ops = 1 && <<ops = 'rg) ['op mn 0 [['rg (ops 0 1) (w > 2 ? w 4)]]]
           it))
 ;; a shuffle's lanes, as llvm notes them: mask m picks lane i of source one below n, of
    ;; source two above, -1 a zero; a run from one source is one bracket. "" for no shuffle
@@ -286,12 +287,15 @@
           ""))
    (od-mn mn w ops)
     (: s (show mn)
-       (? (elem mn '(call ret push pop pushf popf)) (s + "q")
+       (? (elem mn '(push pop)) (s + (w = 2 ? "w" "q"))
+          (elem mn '(call ret pushf popf)) (s + "q")
+          (elem mn '(ljmp lcall in out)) (s + xa-wsfx w)
+          (elem mn '(lgdt lidt sgdt sidt)) (s + "q")
           (mn = 'fwait) "wait"
           (elem mn '(andn bzhi bextr pdep pext mulx sarx shlx shrx rorx blsr blsmsk blsi)) (s + xa-wsfx w)
           (elem mn '(fucomip fcomip)) (mn @ 'fucomip "fucompi" "fcompi")
           (elem mn '(lar lsl)) (s + xa-wsfx w)
-          (elem mn '(lldt ltr)) (s + "w")
+          (elem mn '(lldt ltr lmsw)) (s + "w")
           (elem mn '(sldt str smsw rdfsbase rdgsbase wrfsbase wrgsbase))
            (s + (<<ops = 'rg ? (xa-wsfx (ops 0 2)) "w"))
           (mn = 'mov && any (o \ <o = 'sr) ops)

@@ -81,13 +81,8 @@
    ;; own field, so the fix's aux steps back over the n immediate bytes that follow it
    (as-imt bs n o) (<o = 'rip ? (as-riptail bs n) bs)
    (as-riptail bs n) (map (x \ (two? x && <x = 'fix && x 2 = 'rel32 ? (fix (x 1) 'rel32 (x 3) (x 4 - n)) x)) bs)
-   ;; what the table leaves of one operand: inc and dec of a whole register outside 64-bit, 40+r
-   ;; and 48+r; neg not inc dec with no width say so
-   (as-1 md mn w a)
-      (? (elem mn '(inc dec) && md != 64 && <a = 'rg && 1 < w)
-          (as-osz md w + [((mn = 'inc ? 64 72) + as-lo (as-regn a))])
-         (elem mn '(neg not inc dec) && w = 0) (scare 'as-nowidth [mn a])
-         (scare 'as-op1 mn))
+   ;; what the table leaves of one operand: neg not inc dec with no width say so
+   (as-1 md mn w a) (? (elem mn '(neg not inc dec) && w = 0) (scare 'as-nowidth [mn a]) (scare 'as-op1 mn))
    ;; the nullaries: the reader folds AT&T's c<from>t<to> family and retq/leaveq/xlatb onto these
    as-nils {'ret '(195) 'nop '(144) 'hlt '(244)
             'syscall '(15 5) 'leave '(201)
@@ -180,8 +175,6 @@
                                 (elem <l [38 46 54 62 100 101 102 103 240 242 243]) (go >l)
                                 (64 <= <l <= 79))
                      (go bs))
-   ;; the system lane's rows a 64-bit segment shares: the bit tests, the tables, a far transfer through memory
-   (as-sys64? mn) (elem mn '(bt bts btr btc lgdt lidt sgdt sidt ljmp ljmpl lcall lcalll mov))
    (as-instrm md it)
     (as-instrm1 md it @ bs
        (? (md = 64 && any as-hb? (it 3) && as-rexed? bs) (scare 'as-highbyte-rex (it 1)) bs))
@@ -196,7 +189,6 @@
      (? (two? (as-stro md mn ops0)) (as-stro md mn ops0)
         (two? sg) ([(<>sg @ 'fs 100 'gs 101 'es 38 'cs 46 'ss 54 62)]
                    + as-instrm1 md ['op (it 1) w (map (o \ (two? o && <o = 'seg) ? <>>o o) ops0)])
-        ((md < 64 || as-sys64? mn) && two? (as-sys md mn w ops)) (as-sys md mn w ops)
         (two? (as-tab md mn w ops)) (as-tab md mn w ops)
         (as-more md mn w ops @ x
            (two? x ? x
@@ -221,8 +213,11 @@
           (starts? t "set") (as-ccl t 3 @ v (0 < v ? (x6t-ccn "set" (v - 128)) mn))
           (starts? t "j") (as-ccl t 1 @ v (0 < v ? (x6t-ccn "j" (v - 128)) (as-brn mn)))
           (#t > 3 && elem (t (#t - 1)) [108 113] && elem (name (snip t 0 (#t - 1))) as-bmi) (name (snip t 0 (#t - 1)))
+          (elem mn '(inb inw inl outb outw outl sgdtl sgdtw sidtl sidtw lgdtl lgdtw lidtl lidtw))
+           (name (snip t 0 (#t - 1)))
           (mn @ 'wait 'fwait 'fildq 'fildll 'fistpq 'fistpll 'fisttpq 'fisttpll (as-brn mn))))
-   (as-brn mn) (mn @ ('callw || 'calll || 'callq) 'call ('jmpw || 'jmpl || 'jmpq) 'jmp 'loopz 'loope 'loopnz 'loopne
+   (as-brn mn) (mn @ ('callw || 'calll || 'callq) 'call ('jmpw || 'jmpl || 'jmpq) 'jmp ('ljmpw || 'ljmpl) 'ljmp
+                     ('lcallw || 'lcalll) 'lcall 'loopz 'loope 'loopnz 'loopne
                      ('jecxz || 'jcxz) 'jrcxz mn)
    ;; a branch's target: rel8 for loop and jrcxz, else the operand's width, pc-relative
    (as-bro md tn ow o) (? (<o != 'lbl) o
@@ -237,91 +232,39 @@
    (as-tab md mn w0 ops)
     (: rip? (any (o \ <o = 'rip || <o = 'ind && <(o 1) = 'rip) ops)
        cp (as-cmpn (show mn))
-       tn (two? cp ? <cp (as-tabn mn))
+       tn (? (two? cp) <cp (mn = 'int && ops = [['im 3]]) 'int3 (as-tabn mn))
        ; a push's or pop's width unsuffixed, or the reader's 8 outside 64, is the segment's
        pp? (elem tn '(push pop)) dw (? (md = 64) 8 (md = 16) 2 4)
-       w (pp? && md != 64 && w0 = 8 ? 0 w0)
+       ; a descriptor table's width is its suffix's; a port's and int3's the row's own
+       w (? (pp? && md != 64 && w0 = 8) 0
+            (elem tn '(sgdt sidt lgdt lidt) && mn != tn) (show mn @ t (t (#t - 1) = 119 ? 2 4))
+            (elem tn '(in out int3)) 0
+            w0)
        ; a branch's operand size by its suffix: callw jmpw 2, calll jmpl 4
-       ow (mn @ ('callw || 'jmpw) 2 ('calll || 'jmpl) 4 (md = 16 ? 2 4))
+       ow (mn @ ('callw || 'jmpw || 'ljmpw || 'lcallw) 2 ('calll || 'jmpl || 'ljmpl || 'lcalll) 4 (md = 16 ? 2 4))
        bw (? (md = 64) 0 (ow = dw) 0 ow)
        ; the blends' and sha256rnds2's xmm0 is the row's own
        ops1 (elem tn '(pblendvb blendvps blendvpd sha256rnds2) && #ops = 3 && last ops = ['rg 0 16] ? (snip ops 0 2) ops)
-       os (map (as-bro md tn ow) (two? cp ? (ops1 + [['im (cp 1)]]) ops1))
+       ; int $3 is int3, as gas and llvm lay it
+       os (? (tn = 'int3) () (map (as-bro md tn ow) (two? cp ? (ops1 + [['im (cp 1)]]) ops1)))
        (enc1 w os) (x64-encm md tn w (map (as-tabo md w) os) 0 @ b (rip? ? (riptail b) b))
        (enc w) (enc1 w os)
        wt (peep as-x87w mn ())
        sts (? (#ops = 0) [[['st 1]] [['st 0] ['st 1]] [['st 1] ['st 0]]] [[['st 0] <ops] [<ops ['st 0]]])
-       ; inc and dec of a whole register outside 64 lay 40+r and 48+r, as-1's
-       inc? (md != 64 && elem mn '(inc dec) && #ops = 1 && <(ops 0) = 'rg && 1 < as-regw (ops 0))
        ; jecxz in a 64-bit segment is 67 jrcxz
        (? (nom? wt) (as-tab md wt w0 ops @ b (two? b ? ([155] + b) ()))
-          (inc? || !(two? (peep x64-byname tn ()))) ()
+          !(two? (peep x64-byname tn ())) ()
           (#ops < 2 && elem tn as-x87d && all (o \ <o = 'st) ops && !(two? (enc 0)))
            (foldl (\ b o (two? b ? b (enc1 0 o))) () sts)
           (tn = 'jrcxz) (enc 0 @ b (two? b && mn = 'jecxz && md = 64 ? ([103] + b) b))
-          (elem tn '(call jmp loop loope loopne)) (enc bw)
+          (elem tn '(call jmp loop loope loopne ljmp lcall)) (enc bw)
           (w != 0) (enc w)
           (mn = 'movd) (enc 4)
           (pp? && two? (enc dw)) (enc dw)
+          ; a bit test of memory by an immediate, unsized, at the segment's width as gas
+          (elem tn '(bt bts btr btc) && #ops = 2 && <(ops 1) = 'im && two? (enc (md = 16 ? 2 4))) (enc (md = 16 ? 2 4))
           (enc 0 @ b (two? b ? b
              (filter two? (map enc '(1 2 4 8)) @ l (#l = 1 ? <l ()))))))
-   (as-moffs md op w o)
-    (: sy (5 < #o ? (o 5) ()) d (o 4)
-       (as-osz md w + [(as-opw (op + 1) w)]
-        + (md = 16 ? (sy ? [(fix 2 'abs16 sy d)] (le16 d)) (sy ? [(fix 4 'abs32 sy d)] (le32 d)))))
-   ;; the system lane of a 16- or 32-bit segment: the segment and control registers, the far
-   ;; transfers, the descriptor tables, the ports, int. ops destination first; () when not one
-   (as-sys md mn w ops)
-    (: n #ops d (n > 0 ? (ops 0) ()) s (n > 1 ? (ops 1) ())
-       t (show mn) sfx (t (#t - 1)) sw (sfx @ 119 2 108 4 0)        ; a w or l suffix
-       stem (0 < sw ? (name (snip t 0 (#t - 1))) mn)
-       dw (md = 16 ? 2 4)                                            ; the segment's own width
-       fw (0 < sw ? sw dw)                                           ; a far pointer's offset width
-       (imm o k) (? (<o = 'im) (k = 2 ? (le16 <>o) (le32 <>o))
-                    (<o = 'ims) (xa-symoff (show <>o) @ so [(fix k (k = 2 ? 'abs16 'abs32) <so >so)])
-                    (scare 'as-sys-operand o))
-       (? ; mov to/from a segment register: 8E /r and 8C /r (a register destination takes its width)
-          (mn = 'mov && n = 2 && <d = 'sr) (as-emit md (<s = 'rg && as-regw s = 8 ? 8 0) 0 '(142) <>d s)
-          (mn = 'mov && n = 2 && <s = 'sr) (as-emit md (<d = 'rg ? (as-regw d) 0) 0 '(140) <>s d)
-          ; the accumulator and an absolute address outside 64: a0..a3, the address the segment's width
-          (mn = 'mov && n = 2 && md < 64 && <d = 'rg && as-regn d = 0 && as-abs? s) (as-moffs md 160 (as-regw d) s)
-          (mn = 'mov && n = 2 && md < 64 && <s = 'rg && as-regn s = 0 && as-abs? d) (as-moffs md 162 (as-regw s) d)
-          ; ..and a control or debug register: 0F 22/20, 0F 23/21, always the full register
-          ; (in a 64-bit segment REX reaches cr8 and r8..r15)
-          (mn = 'mov && n = 2 && elem <d '(cr dr))
-           (catall [(as-rexm md 0 0 (as-hi <>d) 0 (as-hi (as-regn s))) [15 (<d = 'cr ? 34 35) (as-mrm 3 (as-lo <>d) (as-lo (as-regn s)))]])
-          (mn = 'mov && n = 2 && elem <s '(cr dr))
-           (catall [(as-rexm md 0 0 (as-hi <>s) 0 (as-hi (as-regn d))) [15 (<s = 'cr ? 32 33) (as-mrm 3 (as-lo <>s) (as-lo (as-regn d)))]])
-          ; a segment register pushed or popped
-          (elem mn '(push pop) && n = 1 && <d = 'sr)
-           (: k <>d wd (w > 0 ? w dw)
-              (as-osz md wd + (mn @ 'push (k @ 0 [6] 1 [14] 2 [22] 3 [30] 4 [15 160] 5 [15 168] ())
-                                    (k @ 0 [7] 2 [23] 3 [31] 4 [15 161] 5 [15 169] (scare 'as-popcs d)))))
-          ; a far jump or call to an immediate segment:offset (at&T `$seg, $off` arrives [off seg])
-          (elem stem '(ljmp lcall) && n = 2 && <s = 'im && md < 64)
-           (as-osz md fw + [(stem = 'ljmp ? 234 154)] + imm d fw + le16 <>s)
-          ; ..and through a pointer in memory: FF /5, FF /3
-          (elem stem '(ljmp lcall) && n = 1 && <d = 'ind)
-           (as-emit md fw 0 '(255) (stem = 'ljmp ? 5 3) <>d)
-          ; the descriptor tables: 0F 01 /0../3, the l or w a 16-bit segment's 66 asks for
-          (elem stem '(sgdt sidt lgdt lidt) && n = 1)
-           (as-emit md sw 0 '(15 1) (stem @ 'sgdt 0 'sidt 1 'lgdt 2 3) d)
-          (elem mn '(lldt ltr sldt str verr verw) && n = 1)
-           (as-emit md 0 0 '(15 0) (mn @ 'sldt 0 'str 1 'lldt 2 'ltr 3 'verr 4 5) d)
-          (elem mn '(lmsw smsw) && n = 1) (as-emit md 0 0 '(15 1) (mn = 'lmsw ? 6 4) d)
-          (mn = 'invlpg && n = 1) (as-emit md 0 0 '(15 1) 7 d)
-          ; the ports: by an imm8 or by %dx, at the accumulator's width
-          (elem mn '(inb inw inl) && n = 2)
-           (: wd (as-regw d) (as-osz md wd + (<s = 'im ? [(wd = 1 ? 228 229) (byte <>s)] [(wd = 1 ? 236 237)])))
-          (elem mn '(outb outw outl) && n = 2)
-           (: wd (as-regw s) (as-osz md wd + (<d = 'im ? [(wd = 1 ? 230 231) (byte <>d)] [(wd = 1 ? 238 239)])))
-          (mn = 'int && n = 1 && <d = 'im) [205 (byte <>d)]
-          ; the bit tests, over a register or an imm8
-          (elem mn '(bt bts btr btc) && n = 2)
-           (: k (mn @ 'bt 0 'bts 1 'btr 2 3)
-              (<s = 'im ? (as-imt (as-emit md w 0 '(15 186) (4 + k) d + [(byte <>s)]) 1 d)
-                 (as-emit md w 0 [15 (163 + 8 * k)] (as-regn s) d)))
-          ()))
 
    ;; pass one: encode each item, assign addresses, record labels and .globl -> {'items 'labels
    ;; 'globls}. the listed directives are ignored: one .text section
