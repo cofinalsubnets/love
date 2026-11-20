@@ -298,7 +298,8 @@
     the words go in any order, and only two that disagree refuse
       ARCH   x64 | a64 | rv64, or any spelling of one (x86_64, aarch64, riscv64 ..): build
              for that machine instead, as DIR/love-ARCH
-      OS     linux | freebsd | netbsd | elf, macos | macho: the container, an ELF or a mach-o
+      OS     linux | freebsd | netbsd | elf, macos | macho: the container, an ELF or a mach-o.
+             another container is this binary transposed, its image and all, as DIR/love
       kernel this binary transposed onto the metal, as DIR/love-ARCH.elf: a reformat, its
              code the running binary's, its own objects compiled from the carried tree (inle)
       apk | aab  android's app for both abis, as DIR/love.FORMAT, its FLAGs love apk's
@@ -327,7 +328,8 @@
           (nom? xa ? (src-die "seed: the kernel is this binary transposed, for its own machine only")
              (quit (kern-seed as))))
        _ (nom? cont && cont != seed-cont 0 ?
-          (src-die "seed: a \(cont) seed transposes this binary, and that is not built yet"))
+          (cont = 'macho && !(nom? xa) ? (quit (macho-seed as))
+             (src-die "seed: a \(cont) seed \(nom? xa ? "for \(xa) " "")is not built yet")))
        dir (two? as ? <as ".")
        _ (src-dash? dir ? (src-not-dir "seed" dir))
        exe (src-me 0)
@@ -401,6 +403,30 @@
    (kern-pick nm)
     (uread "/love/\(nm)" @ [1 s] (s + "") (src-die "the carried tree has no \(nm)"))
    (kern-b16 s i) (s i + 256 * s (i + 1))
+   ; --- `love seed macho [DIR]` -- this binary as dyld's mach-o, its image and all -------
+   ; the code is the same bytes in either container, so nothing is built: the ELF transposes
+   ; (holo's macho-of-elf). the signature names it love.raw, as a mac's own link does
+   (macho-seed as)
+    (: dir (two? as ? <as ".")
+       _ (two? (stat dir) ? 0 (mkdir dir 493))
+       exe (selfpath 0)
+       _ (string? exe ? 0 (src-die "can't read the seed path"))
+       _ (love-arch = 'x64 ? 0 (src-die "seed: a mach-o is x64's alone so far"))
+       pie (open exe "r" @ h
+             (hot? h ? (slurp h @ s (close h, s))
+                (src-die "can't read this binary")))
+       out "\(dir)/love"
+       vt (cite 'verbs 'tab)
+       _ (pin vt 'macho-in (pins {} 'pie pie 'out out))
+       cat ("(borrow 'holo)"
+            + "(: kb (peep (cite 'verbs 'tab) 'macho-in 0)"
+            + "   (write-bytes (peep kb 'out 0) (macho-of-elf (peep kb 'pie 0) \"love.raw\")))")
+       (reads (tap ((: (g i) (i < #cat ? (peep cat i 0 . g (1 + i)))) 0)),
+        pull vt 'macho-in 0,
+        chmod out 493,
+        puts ";; wrote \(out), this binary as a mach-o: run `love seed` on the mac to prove it\n",
+        0))
+
    (kern-seed as)
     (: _ (two? as && src-help? <as ? (seed-usage 0, quit 0))
        dir (two? as ? <as ".")
