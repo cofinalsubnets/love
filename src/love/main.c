@@ -310,8 +310,8 @@ static struct g *run_program(struct g *g, bool replp) {
 
 #ifdef Love0
 // love0's boot is inle/boot.c
-struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_from,
-               char const *bake_out, struct image_opt const *bake_opt);
+struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load, char const *bake_out,
+               struct image_opt const *bake_opt);
 #else
 // src/inle/tasks.l, by which a process on inle runs its own stages
 static char const src_tasks[] =
@@ -477,7 +477,7 @@ static int bake_prof_open(struct bake_prof *b) {
 
 // FIXME too much code in string literals
 static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake_load,
-                       char const *bake_from, char const *bake_out, struct image_opt const *bake_opt) {
+                       char const *bake_out, struct image_opt const *bake_opt) {
   // LOVE_NO_MOP keeps the internal names (egg.l)
   char const *nm = getenv("LOVE_NO_MOP");
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
@@ -546,7 +546,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
       if (bake_load == cat) unlink(cat);
       if (!ok) return g; }
     if (!ok(g = evals_(g, "(: _ (pull book 'bake-calls 0) (pull book 'book 0))"))) return g;
-    int rc = *bake ? (int) core_of(g = image_dump(g, bake, bake_opt))->b : image_bake(g, bake_from, bake_out, 0, bake_opt);
+    int rc = *bake ? (int) core_of(g = image_dump(g, bake, bake_opt))->b : image_bake(g, bake_out, 0, bake_opt);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
   return run_program(g, !argp && isatty(STDIN_FILENO)); }
@@ -645,18 +645,16 @@ int main(int argc, char const **argv) {
   struct g *g = NULL;
   char const *image_load_path = NULL, *bake = NULL,   // bake: "" = self-bake, a path = an image file
              *bake_load = NULL,                      // bake -l CAT: read-eval it before the seal
-             *bake_out = NULL,                       // bake -o OUT: a copy of the binary, not this one
-             *bake_from = NULL;                      // bake --from BIN: laid into BIN, this link in another kernel's container
+             *bake_out = NULL;                       // bake -o OUT: a copy of the binary, not this one
   int skip = 0, bare = 0;                            // words that are the prime's, not the program's; bake -n
   struct image_opt const *bake_opt = NULL;
 #ifndef Love0
   struct bake_prof bp = { 0, NULL, { 0, NULL, 0 }, NULL, NULL };   // bake --profile
   if (argc >= 2 && !strcmp(argv[1], "bake") && !bake_roster(argc, argv)) {
-   int i = 2, in_place = 0;                        // bake [-l CAT] [-i] [--from BIN] [-o OUT] [-n] [IMAGE]
+   int i = 2, in_place = 0;                        // bake [-l CAT] [-i] [-o OUT] [-n] [IMAGE]
    for (; i < argc && argv[i][0] == '-' && argv[i][1]; i++)
     if (!strcmp(argv[i], "-l") && i + 1 < argc) bake_load = argv[++i];
     else if (!strcmp(argv[i], "-o") && i + 1 < argc) bake_out = argv[++i];
-    else if (!strcmp(argv[i], "--from") && i + 1 < argc) bake_from = argv[++i];
     else if (!strcmp(argv[i], "-n")) bare = 1;      // no image: the stub back, and no snapshot
     else if (!strcmp(argv[i], "-i")) in_place = 1;  // -i says the default -- this binary -- out loud
     else if (!strcmp(argv[i], "--profile") && i + 1 < argc && !strcmp(argv[i + 1], "calls")) bp.mode = 1, i++;
@@ -664,15 +662,13 @@ int main(int argc, char const **argv) {
     else if (!strcmp(argv[i], "--with") || !strcmp(argv[i], "--without") || !strcmp(argv[i], "--list") || !strcmp(argv[i], "--pick"))
      return fprintf(stderr, "love: bake: no carried source for a roster\n"), 2;
     else
-     return fprintf(stderr, "love: bake [-l CAT] [-i] [--from BIN] [-o OUT] [-n] [--profile calls | --profile layout CALLS] [IMAGE]\n"
+     return fprintf(stderr, "love: bake [-l CAT] [-i] [-o OUT] [-n] [--profile calls | --profile layout CALLS] [IMAGE]\n"
                             "       bake [--with U,..] [--without U,..] [-o OUT] | --list | --pick [-o OUT]\n"), 2;
    bake = i < argc ? argv[i] : "";
    if (*bake && (bake_out || bare))                 // a named IMAGE is a plain image file, never a binary
     return fprintf(stderr, "love: bake: IMAGE writes an image; -o and -n write a binary\n"), 2;
    if (in_place && bake_out)                        // one says this binary, the other a copy
     return fprintf(stderr, "love: bake: -i and -o name different targets\n"), 2;
-   if (bake_from && (*bake || in_place || !bake_out))   // another's container is never baked in place
-    return fprintf(stderr, "love: bake: --from BIN lays a copy, and needs -o OUT\n"), 2;
    skip = (i < argc ? i + 1 : i) - 1; }
   else
 #endif
@@ -706,7 +702,7 @@ int main(int argc, char const **argv) {
   if (!g) g = ini();
   // -n saves no heap, so it skips the warm: it works for a binary whose corpus will not boot
   if (bare) {
-    int rc = image_bake(g, bake_from, bake_out, 1, NULL);
+    int rc = image_bake(g, bake_out, 1, NULL);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }
 #ifndef Love0
@@ -754,7 +750,7 @@ int main(int argc, char const **argv) {
       if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
-                        : boot(g, argp, bake, bake_load, bake_from, bake_out, bake_opt); }
+                        : boot(g, argp, bake, bake_load, bake_out, bake_opt); }
   if (code_of(g) == status_scare) scare_face(g);
   // the status is cli-line's charm at sp[0]; a scare answers 1 through fin
   int rc = (image_load_path || argp) && ok(g) && charmp(g->sp[0])
