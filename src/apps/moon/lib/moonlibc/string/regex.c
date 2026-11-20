@@ -22,7 +22,9 @@ typedef struct node { int t, c, n, min, max; struct node *a, *b; rset *set; } no
 typedef struct { int op, x, y; rset *set; } ins;
 /* the program, one block that holds no pointer: this, then its np ins, nsets sets and their
  * ranges -- an O_SET's x is its set, a set's cr where its ranges start */
-typedef struct { int np, nsets, nregs, bref, flags, u8, lead; size_t nsub; } prog;
+/* first: the ascii bytes a match can open on, unless any; bol: a match opens only on a line;
+ * line: a match never takes a newline, so stays in its line */
+typedef struct { int np, nsets, nregs, bref, flags, u8, lead, any, bol, line; unsigned char first[16]; size_t nsub; } prog;
 #define INS(g) ((ins const *) ((g) + 1))
 #define SETS(g) ((rset const *) (INS(g) + (g)->np))
 #define RANGES(g) ((uint32_t const *) (SETS(g) + (g)->nsets))
@@ -441,6 +443,39 @@ static int lead(ins const *p, int flags) {
   while (p->op == O_SAVE || p->op == O_MARK) p++;
   return p->op == O_CHAR && p->x < 128 && !(flags & REG_ICASE) ? p->x : p->op == O_BOL && !(flags & REG_NEWLINE) ? -2 : -1; }
 
+/* the ascii bytes a match can open on: every path from pc 0 to its first character, past what
+ * matches nothing; one that can end empty, or by a back-reference, opens on any */
+static void firsts(prog *g) {
+  ins const *p = INS(g);
+  unsigned char *seen = calloc((size_t) g->np, 1);
+  int *st = malloc((size_t) g->np * sizeof *st), sp = 0, k = 0;
+  if (!seen || !st) g->any = 1;
+  else seen[0] = 1, st[sp++] = 0;
+#define FPUSH(j) do { int j_ = (j); if (j_ >= 0 && j_ < g->np && !seen[j_]) seen[j_] = 1, st[sp++] = j_; } while (0)
+  while (sp && !g->any) {
+    int pc = st[--sp];
+    ins const *q = p + pc;
+    switch (q->op) {
+    case O_CHAR: if (q->x < 128) g->first[q->x >> 3] |= (unsigned char) (1 << (q->x & 7)); break;
+    case O_SET:
+      for (int c = 0; c < 128; c++)
+        if (inset(SETS(g) + q->x, RANGES(g) + SETS(g)[q->x].cr, c, g->u8)) g->first[c >> 3] |= (unsigned char) (1 << (c & 7));
+      break;
+    case O_SPLIT: FPUSH(q->x); FPUSH(q->y); break;
+    case O_JMP: FPUSH(q->x); break;
+    case O_CHECK: FPUSH(pc + 1); FPUSH(q->y); break;
+    case O_SAVE: case O_MARK: case O_ASSERT: case O_BOL: case O_EOL: FPUSH(pc + 1); break;
+    default: g->any = 1; } }
+#undef FPUSH
+  free(seen); free(st);
+  while (p[k].op == O_SAVE || p[k].op == O_MARK) k++;
+  g->bol = g->flags & REG_NEWLINE && p[k].op == O_BOL;
+  g->line = g->flags & REG_NEWLINE && !g->bref;
+  for (int i = 0; i < g->np && g->line; i++)
+    g->line = p[i].op == O_CHAR ? p[i].x != '\n'
+            : p[i].op == O_SET ? !inset(SETS(g) + p[i].x, RANGES(g) + SETS(g)[p[i].x].cr, '\n', g->u8)
+            : p[i].op != O_ANY; }
+
 int regcomp(regex_t *re, char const *pat, int flags) {
   parser P = {0};
   P.s = pat; P.ext = flags & REG_EXTENDED; P.icase = flags & REG_ICASE; P.nl = flags & REG_NEWLINE; P.grep = flags & REG_GREP;
@@ -457,7 +492,8 @@ int regcomp(regex_t *re, char const *pat, int flags) {
   size_t size = sizeof(prog) + (size_t) E.np * sizeof(ins) + (size_t) P.nsets * sizeof(rset) + nr * sizeof(uint32_t);
   prog *g = E.err ? 0 : malloc(size);
   if (g) {
-    *g = (prog) {E.np, P.nsets, E.nregs, P.bref, flags, P.u8, lead(E.p, flags), (size_t) P.ngroup};
+    *g = (prog) {.np = E.np, .nsets = P.nsets, .nregs = E.nregs, .bref = P.bref, .flags = flags, .u8 = P.u8,
+                 .lead = lead(E.p, flags), .nsub = (size_t) P.ngroup};
     ins *p = (ins *) (g + 1);
     rset *t = (rset *) (p + E.np);
     uint32_t *r = (uint32_t *) (t + P.nsets);
@@ -466,7 +502,8 @@ int regcomp(regex_t *re, char const *pat, int flags) {
       for (int j = 0; E.p[i].set && j < P.nsets; j++) if ((void *) P.sets[j] == (void *) E.p[i].set) p[i].x = j; }
     for (int j = 0, at = 0; j < P.nsets; at += 2 * t[j++].nr) {
       t[j] = *P.sets[j]; t[j].r = 0; t[j].cr = at;
-      if (t[j].nr) memcpy(r + at, P.sets[j]->r, 2 * (size_t) t[j].nr * sizeof *r); } }
+      if (t[j].nr) memcpy(r + at, P.sets[j]->r, 2 * (size_t) t[j].nr * sizeof *r); }
+    firsts(g); }
   free(E.p);
   for (int i = 0; i < P.nsets; i++) free(P.sets[i]->r), free(P.sets[i]);
   free(P.sets);
@@ -478,9 +515,9 @@ void regfree(regex_t *re) { free(re->re_prog); re->re_prog = 0; }
 
 typedef struct { int kind, a, b; } frame;      /* kind 0: branch (pc a, pos b); 1: restore slot a to b */
 typedef struct {
-  prog const *g; char const *s; int n, base, eflags, *slot, nslot;
+  prog const *g; char const *s; int n, base, lim, eflags, *slot, nslot;   /* seen spans base to lim */
   frame *st; int nst, cst;
-  unsigned char *seen; int best, *bestslot, err; } run;
+  unsigned char *seen; size_t cseen; int best, *bestslot, err; } run;
 
 static int push(run *R, int k, int a, int b) {
   if (R->nst == R->cst) {
@@ -527,7 +564,7 @@ static int search(run *R, int at) {
     ins const *p = INS(g) + pc;
     int ok = 1;
     if (R->seen) {
-      size_t b = ((size_t) pc * (size_t) (R->n - R->base + 1) + (size_t) (i - R->base)) * 2 + (R->slot[R->nslot - 1] == i);
+      size_t b = ((size_t) pc * (size_t) (R->lim - R->base + 1) + (size_t) (i - R->base)) * 2 + (R->slot[R->nslot - 1] == i);
       if (R->seen[b >> 3] >> (b & 7) & 1) ok = 0;
       else R->seen[b >> 3] |= (unsigned char) (1 << (b & 7)); }
     if (ok) switch (p->op) {
@@ -589,18 +626,41 @@ int regexec(regex_t const *re, char const *str, size_t nm, regmatch_t *pm, int e
   else n = (int) strlen(str);
   if (g->lead >= 0 && !memchr(str + off, g->lead, (size_t) (n - off))) return REG_NOMATCH;
   run R = {0};
-  R.g = g; R.s = str; R.n = n; R.base = off; R.eflags = eflags;
+  R.g = g; R.s = str; R.n = n; R.base = off; R.lim = g->line ? -1 : n; R.eflags = eflags;
   R.nslot = 2 * ((int) g->nsub + 1) + g->nregs + 1;
   R.slot = malloc((R.nslot + 2 * ((int) g->nsub + 1)) * sizeof *R.slot);
   if (!R.slot) return REG_ESPACE;
   R.bestslot = R.slot + R.nslot;
   size_t bits = (size_t) g->np * (size_t) (n - off + 1) * 2;
-  if (!g->bref && bits <= ((size_t) 1 << 31)) R.seen = calloc(bits / 8 + 1, 1);
+  if (!g->line && !g->bref && bits <= ((size_t) 1 << 31)) R.seen = calloc(bits / 8 + 1, 1);
   int hit = 0;
   for (int at = off, k; at <= n && !hit && !R.err; at += at < n ? (chat(&R, at, &k), k) : 1) {
+    /* past what cannot open a match: a line's middle under bol, an ascii byte not in first */
+    if (g->bol && (at ? str[at - 1] != '\n' : eflags & REG_NOTBOL)) {
+      char const *e = memchr(str + at, '\n', (size_t) (n - at));
+      if (!e) break;
+      at = (int) (e - str) + 1; }
+    if (!g->any && g->lead < 0) {   /* a lead byte's memchr below is the faster skip */
+      while (at < n && (unsigned char) str[at] < 128 && !(g->first[str[at] >> 3] >> (str[at] & 7) & 1)) {
+        at++;
+        if (g->bol) {
+          char const *e = memchr(str + at - 1, '\n', (size_t) (n - at + 1));
+          if (!e) { at = n; break; }
+          at = (int) (e - str) + 1; } }
+      if (at >= n) break; }
     char const *q = g->lead >= 0 ? memchr(str + at, g->lead, (size_t) (n - at)) : 0;
     if (g->lead >= 0 && !q) break;
     if (q) at = (int) (q - str);
+    /* a match kept in its line: seen spans that line alone, laid again at the next */
+    if (g->line && at > R.lim) {
+      char const *e = memchr(str + at, '\n', (size_t) (n - at));
+      R.base = at, R.lim = e ? (int) (e - str) : n;
+      size_t nb = (size_t) g->np * (size_t) (R.lim - at + 1) * 2 / 8 + 1;
+      if (nb > R.cseen) {
+        free(R.seen);
+        R.seen = nb <= ((size_t) 1 << 28) ? malloc(nb) : 0;
+        R.cseen = R.seen ? nb : 0; }
+      if (R.seen) memset(R.seen, 0, nb); }
     R.best = -1;
     hit = search(&R, at);
     if (g->lead == -2) break; }

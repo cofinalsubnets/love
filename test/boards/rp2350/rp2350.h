@@ -18,6 +18,7 @@
 #define XOSC_BASE       0x40048000u
 #define PLL_SYS_BASE    0x40050000u
 #define PLL_USB_BASE    0x40058000u
+#define UART0_BASE      0x40070000u
 #define TIMER_BASE      0x400b0000u   // timer0
 #define TICKS_BASE      0x40108000u
 #define SIO_BASE        0xd0000000u
@@ -33,6 +34,7 @@
 #define RST_PLL_SYS    (1u << 14)
 #define RST_PLL_USB    (1u << 15)
 #define RST_TIMER      (1u << 23)
+#define RST_UART0      (1u << 26)
 #define RST_USBCTRL    (1u << 28)
 
 // XOSC (12 MHz crystal)
@@ -88,7 +90,28 @@
 #define PADS_IE  (1u << 6)
 #define PADS_OD  (1u << 7)
 #define PADS_ISO (1u << 8)
+#define IO_FUNC_UART 2u      // GPIO0/1 -> UART0 TX/RX
 #define IO_FUNC_SIO  5u
+
+// UART0 (PL011), as the rp2040's
+#define UART_DR    (UART0_BASE + 0x00u)
+#define UART_FR    (UART0_BASE + 0x18u)
+#define UART_IBRD  (UART0_BASE + 0x24u)
+#define UART_FBRD  (UART0_BASE + 0x28u)
+#define UART_LCR_H (UART0_BASE + 0x2cu)
+#define UART_CR    (UART0_BASE + 0x30u)
+#define UART_FR_TXFF (1u << 5)
+#define UART_FR_RXFE (1u << 4)
+#define UART_FR_BUSY (1u << 3)
+#define UART_LCR_H_SPS    (1u << 7)
+#define UART_LCR_H_WLEN_8 (0x3u << 5)
+#define UART_LCR_H_FEN    (1u << 4)
+#define UART_LCR_H_STP2   (1u << 3)
+#define UART_LCR_H_EPS    (1u << 2)
+#define UART_LCR_H_PEN    (1u << 1)
+#define UART_CR_UARTEN (1u << 0)
+#define UART_CR_TXE    (1u << 8)
+#define UART_CR_RXE    (1u << 9)
 
 // SIO
 #define SIO_GPIO_IN      (SIO_BASE + 0x04u)
