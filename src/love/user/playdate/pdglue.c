@@ -37,11 +37,12 @@ int pdg_file_read(const char *path, void *buf, unsigned cap) {
 
 // the horn: the SDK pulls on its audio side, love pushes; hornring.h between them (lawed off
 // the device by test/front/hornseat.l)
-enum { pdg_hn = 1 << 17 };                // 131072 frames, ~6 s at 22.05k: a slow frame's paint
+enum { pdg_hn = 1 << 17 };                // 131072 frames, ~12 s at 11.025k: a slow frame's paint
 static int16_t h_buf[pdg_hn * 2];
 static struct horn_ring h_ring = { h_buf, pdg_hn, 0, 0 };
 static SoundSource *h_src;
-// at half the device's rate each frame plays twice, the first halfway from the one before
+// at a half or a quarter of the device's rate each frame plays step times, laid in a line from
+// the one before
 static struct { int step; int16_t l, r; } h_up;
 
 // the trial's meter: frames the pull padded with silence, at the device's rate
@@ -49,18 +50,20 @@ static unsigned h_short;
 unsigned pdg_horn_short(void) { return h_short; }
 static int pdg_horn_pull(void *ctx, int16_t *l, int16_t *r, int len) {
   if (h_up.step == 1) return h_short += (unsigned) (len - hring_pull(&h_ring, l, r, len)), 1;
-  int16_t sl[128], sr[128];
-  for (int o = 0; o < len; o += 256) {
-    int m = len - o < 256 ? (len - o + 1) / 2 : 128;
-    h_short += (unsigned) (2 * (m - hring_pull(&h_ring, sl, sr, m)));
-    for (int i = 0, j = o; i < m; i++, j += 2) {
-      l[j] = (int16_t) ((h_up.l + sl[i]) >> 1), r[j] = (int16_t) ((h_up.r + sr[i]) >> 1);
-      if (j + 1 < len) l[j + 1] = sl[i], r[j + 1] = sr[i];
+  int const s = h_up.step;
+  int16_t sl[64], sr[64];
+  for (int o = 0; o < len; o += 64 * s) {
+    int m = len - o < 64 * s ? (len - o + s - 1) / s : 64;
+    h_short += (unsigned) (s * (m - hring_pull(&h_ring, sl, sr, m)));
+    for (int i = 0, j = o; i < m; i++) {
+      int const l0 = h_up.l, r0 = h_up.r, dl = sl[i] - l0, dr = sr[i] - r0;
+      for (int k = 1; k <= s; k++, j++)
+        if (j < len) l[j] = (int16_t) (l0 + dl * k / s), r[j] = (int16_t) (r0 + dr * k / s);
       h_up.l = sl[i], h_up.r = sr[i]; } }
   return 1; }                             // 1: this source produced output
 
 int pdg_horn_open(int rate) {
-  if (rate != PDG_HORN_RATE && rate * 2 != PDG_HORN_RATE) return -1;
+  if (rate != PDG_HORN_RATE && rate * 2 != PDG_HORN_RATE && rate * 4 != PDG_HORN_RATE) return -1;
   h_ring.rd = h_ring.wr = 0;
   h_up.step = PDG_HORN_RATE / rate, h_up.l = h_up.r = 0;
   if (!h_src) h_src = PD->sound->addSource(pdg_horn_pull, NULL, 1);
