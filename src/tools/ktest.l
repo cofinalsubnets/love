@@ -76,8 +76,10 @@
    ; qemu loads -initrd only for a linux kernel: the virts' elf takes it over fw_cfg
    media (? img? (: d (iso + ".dtb")
                     _ (uwrite d (fdt 0x20000000))
+                    ; the pi's firmware leads the line with its own k=v words (~230 bytes): more here
                     ["-kernel" iso "-dtb" d "-append"
-                     (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))])
+                     (join " " (map (k \ "bcm2709.k\(show k)=0x\(show (k * 1234567))") ^16)
+                      + " " + (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l")))])
             elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
                   + (env-of "KTEST_INITRD" @ f
                       (!(string? f) ? ()
@@ -105,8 +107,9 @@
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
    ; raspi3b: the zero 2 w's bcm2837 with 1G, since the corpus outgrows 512M. its console is
-   ; the mini uart, serial1
-   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" (pi? ? "1G" "1536M")]
+   ; the mini uart, serial1. KTEST_MEM: a lane's own
+   mem  (env-of "KTEST_MEM" @ m (string? m ? m (pi? ? "1G" "1536M")))
+   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" mem]
          + mach + kvm + (pi? ? () dargs)               ; the pi has no virtio: its card is rung 6's
          + (pi? ? ["-serial" "null" "-serial" "stdio"] ["-serial" "stdio"])
          + ["-display" "none" "-no-reboot"] + media)

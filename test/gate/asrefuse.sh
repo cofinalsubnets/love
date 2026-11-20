@@ -1,5 +1,5 @@
 #!/bin/sh
-# test/gate/asrefuse.sh -- the OTHER half of the as.l gate. a golden can only say what the bytes
+# test/gate/asrefuse.sh -- the OTHER half of the assembler's gate. a golden can only say what the bytes
 # ARE; these say that there are none. that is the half which keeps a silent mis-encoding from
 # passing for an answer, and the reason it exists: `movq $N, %rax' with an undefined N once
 # assembled to `movq $30' -- as-num read the character's value off the front and stopped.
@@ -12,7 +12,7 @@ n=0 leaked=0
 
 try() {   # try NAME SOURCE  -- SOURCE must RAISE
   n=$((n + 1))
-  { cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/as.l
+  { cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l
     printf "(borrow 'holo)\n(: _ (puts (as-hex \"%s\")) _ 0)\n" "$2"
   } | $love > /dev/null 2>&1 &&
     { echo "FAIL asrefuse: $1 -- assembled, should have raised"; leaked=$((leaked + 1)); }

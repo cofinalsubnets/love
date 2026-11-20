@@ -6,10 +6,11 @@
 ; closure, so the univalence tower (bottoming at an `axm`) drops on its own. `paths` is the
 ; Type-valued identity (Lean's `Eq` is Prop), so a path can be a Sigma carrier.
 ;
-; Run: out/love src/tools/uu2lean.l > test/proof/lean/uugen.lean   then  lean test/proof/lean/uugen.lean
+; Run: out/love src/tools/uu2lean.l DIR, then lean -o each module it names, in order, with
+; LEAN_PATH=DIR (test_uulean)
 
 (borrow 'posix)
-; stdout is the artifact, so the files' `test` laws run as assert: silent, a false one stops
+; stdout names the modules, so the files' `test` laws run as assert: silent, a false one stops
 (:: 'test (. 'assert))
 (: _ (reads (open "test/uu.l" "r"))
    _ (reads (open "test/uuhom.l" "r"))
@@ -205,8 +206,22 @@
    ; foldr keeps ents' order: lean wants every definition before its uses
    exports (foldr (\ e a (peep keep (e 1) 0 ? (e . a) a)) () ents)
 
-   _ (dot (lines [
-      "/- test/proof/lean/uugen.lean -- GENERATED from test/uu.l by src/tools/uu2lean.l. Do not edit;"
+   ; --- write, in source order, as modules: Uu0 the prelude, Uu1.. the defs cut by bytes into
+   ; parts, each importing the one before, UuZ the axiom witnesses. lean holds one part and the
+   ; compiled ones before it, not the whole corpus; the module names go to stdout in order
+   dir (>argv @ [d] d _ (puts "usage: love src/tools/uu2lean.l DIR\n", quit 2))
+   parts 8
+   opts ["set_option linter.unusedVariables false"
+         "set_option maxHeartbeats 4000000"
+         "set_option maxRecDepth 300000  -- uu_app_tower reduces a unary-Nat Church tower to 262144"
+         "universe u v"]
+   (put nm ls) (open (dir + "/" + nm + ".lean") "w" @ q (each ls (s \ say q s), close q, puts (nm + "\n")))
+   bodies (map emit exports)
+   total (foldl (\ a s (a + #s)) 0 bodies)
+   (place bs at acc) (two? bs ? (place >bs (at + #<bs) ([(min (parts - 1) (at * parts // total)) <bs] . acc)) (rev acc))
+   tagged (place bodies 0 ())
+   _ (put "Uu0" [(lines ([
+      "/- Uu0.lean .. UuZ.lean -- GENERATED from test/uu.l by src/tools/uu2lean.l. Do not edit;"
       "   regenerate with `make test_uulean`. The SAME uu proof terms Rocq certifies"
       "   (test/proof/rocq/uugen.v) re-checked by a SECOND independent kernel, Lean 4 -- so each law"
       "   is agreed by two unrelated implementations (the de Bruijn criterion, diversified)."
@@ -214,11 +229,7 @@
       "   `make test`); this is the same term in Lean. Lean gives structure-eta and universe"
       "   polymorphism for free; `paths` is the Type-valued Id type (Lean's Eq is Prop) so a"
       "   path can be a Sigma carrier. Only the univalence tower (an axm) is skipped, on its"
-      "   own via the dependency closure (counted at the foot). -/"
-      "set_option linter.unusedVariables false"
-      "set_option maxHeartbeats 4000000"
-      "set_option maxRecDepth 300000  -- uu_app_tower reduces a unary-Nat Church tower to 262144"
-      "universe u v"
+      "   own via the dependency closure (counted at the foot of UuZ). -/"] + opts + [
       "/- uu's paths: the Type-valued identity type (UniMath's `paths`), NOT Prop's Eq. -/"
       "inductive paths {A : Type u} (a : A) : A -> Type u where"
       "  | idpath : paths a a"
@@ -228,14 +239,12 @@
       "  pr1 : A"
       "  pr2 : B pr1"
       "/- the bridge shim: a Type-valued path eliminates into Prop's = -/"
-      "theorem paths_to_eq {A : Type u} {a b : A} (p : paths a b) : a = b := by cases p; rfl"
-      "/- CERTIFY, never run: defs use bare recursors the code generator rejects. -/"
-      "noncomputable section"
-      ""]))
-   _ (map (dot * emit) exports)
-   _ (dot (lines [
-      ""
-      "end"
+      "theorem paths_to_eq {A : Type u} {a b : A} (p : paths a b) : a = b := by cases p; rfl"]))])
+   ; ..CERTIFY, never run: defs use bare recursors the code generator rejects
+   _ (each ^parts (k \ put ("Uu" + show (k + 1))
+                          ([(lines ([("import Uu" + show k)] + opts + ["noncomputable section"]))]
+                           + map (p \ p 1) (filter (p \ <p = k) tagged) + ["end\n"])))
+   _ (put "UuZ" [(lines [("import Uu" + show parts)
       "/- the de Bruijn witness: Lean agrees these carry NO axioms (closed under the"
       "   global context), the same property Rocq's `Print Assumptions` reports. -/"
       "#print axioms uu_natpluscomm"
@@ -267,7 +276,7 @@
       "#print axioms uu_total2_paths_f"
       "#print axioms uu_idisweq"
       "#print axioms uu_iscontrcoconustot"
-      ""]))
-   _ (dot ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;\n"
-         + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/\n"))
+      ""])
+                 ("/- " + (show #(keys keep)) + " exported / " + (show #ents) + " corpus entries swept;\n"
+                  + "   re-certified by Lean 4 -- a second kernel beside Rocq's uugen.v -/\n")])
    (quit 0))

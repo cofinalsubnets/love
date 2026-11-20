@@ -86,6 +86,8 @@ int main(void) {
   gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   serial_init();
   puts_("\n; mooncc/rp2040 (cortex-m0+, thumb1)\n");
+  char const *at = ((uintptr_t) main >> 28 == 2u ? "; from sram\n" : "; from flash\n");   // where this code runs
+  puts_(at);
   int r = run();
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));
@@ -98,6 +100,7 @@ int main(void) {
     usb_poll(); (void) usb_rx_ready();
     if (usb_up() && !told) {
       for (const char *m = "\n; mooncc/rp2040 (cortex-m0+, thumb1)\n"; *m; m++) usb_putc(*m);
+      for (const char *m = at; *m; m++) usb_putc(*m);
       for (const char *m = r <= 100 ? "; all " : "; FAILED at "; *m; m++) usb_putc(*m);
       bput_n(usb_putc, (uint32_t)(r <= 100 ? r : r - 100), 10);
       for (const char *m = r <= 100 ? "/32 green\n" : "\n"; *m; m++) usb_putc(*m);

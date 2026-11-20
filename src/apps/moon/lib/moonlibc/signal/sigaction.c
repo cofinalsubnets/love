@@ -130,7 +130,9 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
   memset(&ko, 0, sizeof ko);
   if (a) {
     ka.h = (void *) a->sa_handler;
-#if defined(__aarch64__) || defined(__riscv) || defined(__ARM_EABI__)   /* the kernel's own return path */
+#if defined(__mips__)                    /* the kernel's own return path, and no restorer field */
+    ka.flags = (unsigned long) (unsigned int) a->sa_flags;
+#elif defined(__aarch64__) || defined(__riscv) || defined(__ARM_EABI__)   /* the kernel's own return path */
     ka.flags = (unsigned long) (unsigned int) a->sa_flags;
     ka.restorer = 0;
 #elif defined(__i386__)
@@ -140,12 +142,12 @@ int sigaction(int sig, struct sigaction const *a, struct sigaction *old) {
     ka.flags = (unsigned long) (unsigned int) a->sa_flags | 67108864UL;   /* SA_RESTORER */
     ka.restorer = (void *) __love_sigret;
 #endif
-    memcpy(ka.mask, &a->sa_mask.__v[0], 8); }
-  long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, 8);
+    __love_ksig(ka.mask, &a->sa_mask); }
+  long r = sc4(NR_rt_sigaction, sig, a ? (long) &ka : 0, old ? (long) &ko : 0, LvSigsz);
   if (r < 0) { errno = (int) -r; return -1; }
   if (old) {
     memset(old, 0, sizeof *old);
     old->sa_handler = (void (*)(int)) ko.h;
     old->sa_flags = (int) ko.flags;
-    memcpy(&old->sa_mask.__v[0], ko.mask, 8); }
+    __love_usig(&old->sa_mask, ko.mask); }
   return 0; }

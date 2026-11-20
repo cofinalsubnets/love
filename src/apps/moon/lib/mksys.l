@@ -12,6 +12,7 @@
    (mksys-a64 dst) (mksys-as 'a64 dst)
    (mksys-rv64 dst) (mksys-as 'rv64 dst)
    (mksys-rv32 dst) (mksys-as 'rv32 dst)
+   (mksys-mips dst) (mksys-as 'mips dst)
    (mksys-i386 dst) (mksys-as 'i386 dst)
    (mksys-arm dst) (mksys-as 'arm dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
@@ -988,6 +989,114 @@
          (label __love_nbsvc))
           + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
+         (arch = 'mips)
+         ; mips o32: linux alone. the number in v0, a0..a3 and the fifth and sixth at 16 and 20
+         ; up the stack; a3 set says v0 is the errno. holo names v0 v1 a0..a3 t0 t1 s0..s3 fp sp
+         ; ra (r0..r11), so s4..s7 and gp ride raw. jmp_buf: [0] ra, [1] sp, [2..9] s0..s7,
+         ; [10] fp, [11] gp, the 16-byte mask at byte 48; soft float, so no fp file
+         '(
+         (label __love_sys)
+         (mov r0 r2)                 ; v0 <- n
+         (mov r2 r3)                 ; a0 <- a
+         (mov r3 r4)
+         (mov r4 r5)
+         (ld r5 sp 16)               ; a3 <- d
+         (ld r6 sp 20)               ; e and f, to the kernel's stack slots
+         (ld r7 sp 24)
+         (lea sp sp -32)
+         (st sp 16 r6)
+         (st sp 20 r7)
+         (sys)
+         (lea sp sp 32)
+         (cmp r5 0)
+         (br eq sys-ok)
+         (neg r0)                    ; -errno, as C wraps it
+         (label sys-ok)
+         (ret)
+
+         (label __sigsetjmp)
+         (st r2 0  lr)
+         (st r2 4  sp)
+         (st r2 8  r8)
+         (st r2 12 r9)
+         (st r2 16 r10)
+         (st r2 20 r11)
+         (raw (172 148 0 24))        ; sw s4, 24(a0)
+         (raw (172 149 0 28))        ; sw s5, 28(a0)
+         (raw (172 150 0 32))        ; sw s6, 32(a0)
+         (raw (172 151 0 36))        ; sw s7, 36(a0)
+         (st r2 40 fp)
+         (raw (172 156 0 44))        ; sw gp, 44(a0)
+         (lea r4 r2 48)              ; a2 = the mask (oldset)
+         (li r3 0)
+         (li r5 16)
+         (li r2 1)                   ; SIG_BLOCK
+         (li r0 4195)                ; rt_sigprocmask
+         (sys)
+         (li r0 0)
+         (ret)
+
+         (label siglongjmp)
+         (mov r6 r2)                 ; t0 <- buf, t1 <- val: a syscall keeps both
+         (mov r7 r3)
+         (lea r3 r6 48)
+         (li r4 0)
+         (li r5 16)
+         (li r2 3)                   ; SIG_SETMASK
+         (li r0 4195)
+         (sys)
+         (ld r8  r6 8)
+         (ld r9  r6 12)
+         (ld r10 r6 16)
+         (ld r11 r6 20)
+         (raw (141 20 0 24))         ; lw s4, 24(t0)
+         (raw (141 21 0 28))         ; lw s5, 28(t0)
+         (raw (141 22 0 32))         ; lw s6, 32(t0)
+         (raw (141 23 0 36))         ; lw s7, 36(t0)
+         (ld fp  r6 40)
+         (raw (141 28 0 44))         ; lw gp, 44(t0)
+         (mov r0 r7)
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (ld sp r6 4)
+         (ld lr r6 0)
+         (ret)
+
+         (label __love_sigret)
+         (li r0 4193)                ; rt_sigreturn
+         (sys)
+
+         ; clone's fourth is tls and its fifth ctid, on the stack
+         (label __love_clone)
+         (ld r6 sp 16)               ; t0 <- tls
+         (lea sp sp -32)
+         (st sp 16 r5)               ; ctid
+         (mov r5 r6)                 ; a3 <- tls
+         (li r0 4120)                ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (cmp r5 0)
+         (br ne clone-out)
+         (ld r6 sp 0)                ; the child, on its own stack: sp[0](sp[1])
+         (ld r2 sp 4)
+         (callr r6)
+         (li r2 0)
+         (li r0 4001)                ; exit
+         (sys)
+         (label clone-out)
+         (lea sp sp 32)
+         (cmp r5 0)
+         (br eq clone-ok)
+         (neg r0)
+         (label clone-ok)
+         (ret)
+         (label __love_tp)
+         (raw (124 2 232 59))        ; rdhwr v0, $29: the tls clone set
+         (ret))
+
          (arch = 'rv32)
          ; rv32: linux alone, rv64's lanes at a 4-byte word. jmp_buf: [0] ra, [1] sp, [2..13]
          ; s0..s11, the mask at byte 56; soft float, so no fp file
@@ -1334,6 +1443,8 @@
                   '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   (arch = 'rv32)
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp" "__love_fencei")
+                  (arch = 'mips)
+                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
                   (elem arch '(thumb1 thumb2 thumb2sp xtensa))
                   '("__sigsetjmp" "siglongjmp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"

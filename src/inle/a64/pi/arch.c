@@ -1,7 +1,7 @@
 // a64 on the raspberry pi zero 2 w (bcm2837, as the 3's): the mini uart console on gpio14/15,
-// the bcm2836 local intc and the bcm2835 armctrl, the pm watchdog's reset, the hardware rng
-// and the videocore's mailbox. stands in for a64/arch.c; the stub maps the peripherals, so
-// nothing is mapped here
+// bluetooth's pl011 (hci.c), the bcm2836 local intc and the bcm2835 armctrl, the pm watchdog's
+// reset, the hardware rng and the videocore's mailbox. stands in for a64/arch.c; the stub maps
+// the peripherals, so nothing is mapped here
 #include <stdint.h>
 #include "../asmops.h"                 // the privileged instructions, both spellings
 #include "k.h"                       // kticks, kq's queue
@@ -11,6 +11,7 @@ void k_timer_init(void), k_timer_rearm(void);   // cpu.c
 int usb_init(void), usb_up(void), usb_rx_ready(void), usb_getc(void);   // usb.c
 void usb_irq(void), usb_tick(void), usb_putc(int);
 uint32_t usb_hwcfg(int);
+void hci_irq(void);                    // hci.c
 
 #define PERI    0x3f000000             // the peripherals, as the arm sees them
 #define AUX     (PERI + 0x215000)      // the mini uart's block
@@ -30,9 +31,11 @@ uint32_t usb_hwcfg(int);
 #define LSR_TXE     (1u << 5)          // room for one
 
 #define IRQ_PEND1   0x04               // gpu interrupts 0-31, pending
+#define IRQ_PEND2   0x08               // ..32-63
 #define IRQ_EN1     0x10               // ..set-enable
 #define AUX_BIT     (1u << 29)         // aux is gpu interrupt 29
 #define USB_BIT     (1u << 9)          // the otg controller, gpu interrupt 9
+#define UART0_BIT   (1u << 25)         // the pl011 (bluetooth's), gpu interrupt 57
 
 #define CORE0_TIMER 0x40               // core 0's timer interrupt control
 #define CORE0_SRC   0x60               // core 0's interrupt source
@@ -78,16 +81,16 @@ void k_irq(void) {
   if (src & SRC_CNTPNS) kticks++, k_timer_rearm(), usb_tick();
   uint32_t p = src & SRC_GPU ? mmio_rd(ARMCTL, IRQ_PEND1) : 0;
   if (p & AUX_BIT) k_uart();
-  if (p & USB_BIT) usb_irq(); }
+  if (p & USB_BIT) usb_irq();
+  if (src & SRC_GPU && mmio_rd(ARMCTL, IRQ_PEND2) & UART0_BIT) hci_irq(); }
 
 // the rng: a warm-up count first, then a word whenever the fifo holds one
 #define RNG_CTRL    0x00
 #define RNG_STATUS  0x04
 #define RNG_DATA    0x08
-#define RNG_MASK    0x10
+// reads poll: its interrupt is never enabled at the armctrl, so its mask is left as it is
 static void rng_init(void) {
   mmio_wr(RNG, RNG_STATUS, 0x40000);
-  mmio_wr(RNG, RNG_MASK, mmio_rd(RNG, RNG_MASK) | 1);    // no interrupt: reads poll
   mmio_wr(RNG, RNG_CTRL, mmio_rd(RNG, RNG_CTRL) | 1); }
 
 // /dev/urandom's bytes; a fifo that stays empty answers short
