@@ -17,16 +17,17 @@
    (dict-num s) (foldl (\ n i (n * 64 + peep b64v (s i) 0)) 0 ^#s)
    ; dictd's key: lower case, and but for a database that keeps every character, letters,
    ; digits and spaces alone. a byte no character wears stays
-   ; a key with no byte db 'dirty matches is its own, as most are
-   (dict-key db s)
-    (: o (jug 0) all (db 'all) u8 (db 'utf8) d (db 'dirty)
+   ; a key with no byte db 'dirty matches is its own, as most are, asked before anything is laid
+   (dict-key db s) (db 'dirty @ d (two? d && !(rehas d s) ? s (dict-rekey db s)))
+   (dict-rekey db s)
+    (: o (jug 0) all (db 'all) u8 (db 'utf8)
        (keep? c) (all || c = 32 || cpis "alnum" c)
        (go k) (#s <= k ? (slurp o)
                (: c (s k) m (c < 128 || !u8 ? 1 (cpn s k))
                   (? (m < 1 || c >= 128 && !u8) (put o c, go (k + 1))
                      (: u (c < 128 ? c (cpat s k))
                         (keep? u ? (say o (utf8 (cplower u))) 0, go (k + m))))))
-       (d && !(rehas d s) ? s (go 0)))
+       (go 0))
    find fsub
    (rd p off n) (uread-at p off n @ r (two? r ? <>r ""))
    ; the index through a cache of 4K blocks, dropped whole once it holds 4096
