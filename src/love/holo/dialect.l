@@ -540,9 +540,10 @@
           sw (t (n - 1) @ 98 1 119 2 108 4 113 8 0)
           (bare o) (two? o && <o = 'seg ? <>>o o)
           (lane o) (bare o 1 % 32)
-          ; beside the memory, stos lods scas name the accumulator and ins outs %dx
-          (reg? o) (<o = 'rg && (? (elem stem '(ins outs)) (o = ['rg 2 2]) (as-regn o = 0 && as-regw o = sw)))
-          ms (filter (o \ <(bare o) = 'mem) ops)
+          ; beside the memory, stos lods scas name the accumulator and ins outs %dx, or (%dx)
+          (port? o) (o = ['rg 2 2] || <o = 'mem && >o = [34 -1 1 0])
+          (reg? o) (? (elem stem '(ins outs)) (port? o) (<o = 'rg && as-regn o = 0 && as-regw o = sw))
+          ms (filter (o \ <(bare o) = 'mem && !(reg? o)) ops)
           (? (sw = 0 || nelem stem as-strs) ()
              !(#ms = (elem stem '(movs cmps) ? 2 1) && all (o \ <(bare o) = 'mem || reg? o) ops) ()
              (: src (filter (o \ lane o = 6) ms)
