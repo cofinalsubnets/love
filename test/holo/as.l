@@ -1,7 +1,7 @@
 ; x86-64 goldens: each hex is the .text gas emits for the same source:
 ; printf '%s\n' 'src' | as --64 -o t.o - && objcopy -O binary -j .text t.o t.bin && xxd -p t.bin
-; straight-line only: branch relaxation and accumulator short forms are gas choices as.l
-; does not make; call/lea targets sit in-snippet so the rel32 resolves in place
+; straight-line only: branch relaxation and accumulator short forms are gas choices the
+; assembler does not make; call/lea targets sit in-snippet so the rel32 resolves in place
 (borrow 'holo)
 
 (borrow 'posix)

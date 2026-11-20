@@ -7,7 +7,7 @@
 ;   (x64-disasm s base)      the whole string -> ((off n items) ..), a branch or rip target an
 ;                            absolute number (base + where it points)
 ;   (x64-relabel rows base)  the same rows with every in-range target a symbol L<addr> and a
-;                            (label L<addr>) row laid where it lands -- what as.l re-encodes
+;                            (label L<addr>) row laid where it lands -- what dialect.l's lay re-encodes
 ;
 ; a decoded operand is the value's: (rg enc w), (im n), (mem base index scale disp), a rip form
 ; (rip () disp) with no symbol, a branch target (lbl n) as a number, a memory operand under a
