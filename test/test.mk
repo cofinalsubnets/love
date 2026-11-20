@@ -782,12 +782,12 @@ test_holo: host
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
+# the x86-64 assembler (dialect.l's lay over x64.l's table): goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
 # riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
 # last two against llvm-mc (rvgas, a64gas) alongside
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
+	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l test/holo/as.l \
 	  | $(gsh) test/gate/run.sh as "$m" ", 0 failed"
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
@@ -975,7 +975,7 @@ test_holofuzz: host
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
-	@for p in order targets cached keyed; do \
+	@for p in order targets cached1 cached2 keyed; do \
 	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
 	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
 	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \

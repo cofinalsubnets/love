@@ -1,7 +1,7 @@
 ; gas -- the GNU-dialect front for inline asm and file-scope assembly: the text in the syntax
 ; the target's own toolchain speaks (AT&T on x86, ARM on a64, riscv, thumb), lowered to the
 ; neutral IR holo.l assembles, so one template serves every compiler. a line lands on a backend
-; row where one fits, else on as.l's bytes (x64) or its own word (a64).
+; row where one fits, else on as-instr's bytes (x64) or its own word (a64).
 ;
 ;   (gas-text tgt src)          ; text -> IR forms, tgt 'x64 'i386 'i386m16 'a64 'rv64 'rv32 or a thumb
 ;   (gas-reg tgt r w mod)       ; the dialect's spelling of neutral register r at byte width w
@@ -183,7 +183,7 @@
         (r \ (: t (show <r) e (w \ [<>r <>>r w])
                 (pin gx-mdig <r (e 4), pin gx-mdig (name (t + "q")) (e 8), pin gx-mdig (name (t + "64")) (e 8)))))
    gx-alu '(add sub and or xor imul)
-   ;; ops whose template rows are 64-bit: narrower on a register, as.l lays them, flags and all
+   ;; ops whose template rows are 64-bit: narrower on a register, as-instrm lays them, flags and all
    gx-narrow '(mov add sub and or xor imul cmp test shl sal shr sar rol ror not neg inc dec)
    ;; ..of registers and immediates; li's word and the xor zeroing are exact already
    (gx-narrow? m w0 d s ops)
@@ -355,7 +355,7 @@
                       'op (any (o \ two? o && <o = 'seg) (it 3) ? (gx-seg (it 1) (it 2) (it 3))
                              (gx-ins (it 1) (it 2) (it 3)))
                       (scare 'gas-x64-line it))
-   ; an inline template's line: the template lane, and as.l's bytes where it has no row (the
+   ; an inline template's line: the template lane, and as-instr's bytes where it has no row (the
    ; vector rows -- pshufb, sha256rnds2) or no operand (an index, `-16(%rsi,%rcx)`). bytes hold no
    ; fix, so an operand naming a symbol the template refuses stays refused
    (gx-plain? o) (? (atom? o) 1 (elem <o '(lbl rip ims seg)) 0 (<o = 'mem) (#o < 6) (<o = 'ind) (gx-plain? <>o) 1)
@@ -383,7 +383,7 @@
                        (ghas? gx-ren <f) [((gx-ren <f) . >f)]
                        [f]))
                fs))
-   ;; ..i386's: the template lane at i386's word (gx-w32), and where it has no row, as.l's bytes
+   ;; ..i386's: the template lane at i386's word (gx-w32), and where it has no row, as-instrm's bytes
    ;; at the segment's own width (lcallw in a 16-bit one)
    (gx-text32 tgt src)
     (catmap (it \ (<it = 'op ? (trap (i \ gx-w32 (gx-item i)) it
@@ -391,11 +391,11 @@
                                              (\ _ _ (a = 'gas-x64-op ? (scare 'gas-i386-op b) (scare a b))))))
                      (gx-w32 (gx-item it))))
             (gx-locals (att-read src)))
-   ;; ..and a file-scope run (an assembly source's): encoded exactly by as.l -- the width it says,
-   ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as.l
-   ;; has no row (the system lane)
+   ;; ..and a file-scope run (an assembly source's): encoded exactly by as-instrm -- the width it says,
+   ;; any addressing, the flags a 32-bit op sets -- and lowered as a template only where as-instrm
+   ;; has no row
    (gx-exact src) (gx-exactm 64 'x64 src)
-   ;; ..in a segment of md bits (.code16/.code32/.code64): as.l at that mode; the template lane
+   ;; ..in a segment of md bits (.code16/.code32/.code64): as-instrm at that mode; the template lane
    ;; takes over only in the object's own mode, whose backend lays it
    (gx-md tgt) (tgt @ 'i386 32 'i386m16 16 64)
    ;; a jmp or jcc to a plain label: a 'jx, short until settle grows it, as gas relaxes --
@@ -413,7 +413,7 @@
        (two? >fs && <fs = ['raw [240]] && <>fs 0 = 'raw) (['raw (gx-lockin (fs 1 1))] . gx-lock >>fs)
        (<fs . gx-lock >fs))
    (gx-exactm md tgt src)
-    ; both refusing, as.l's word stands: it names the instruction, the template lane an operand
+    ; both refusing, as-instrm's word stands: it names the instruction, the template lane an operand
     (gx-lock (catmap (it \ (? (<it != 'op) (gx-item it)
                      (gx-jx md tgt it @ j (two? j ? [j]
                         (trap (i \ [['raw (as-instrm md i)]]) it
