@@ -33,6 +33,13 @@ for sc in 's/b.*/\U&/' 's/\(.\)\(.*\)/\u\1\U\2\E!/' 's/[a-z]*/\L\u&/' 's/z/\U\lZ
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"
 done
 bothrc "sed -E case" sed -E 's/^([a-z])([a-z]*)/\U\1\L\2/' "$ho/.sd1"
+# and past ascii: a whole character, as GNU's in a utf-8 locale
+printf 'élan ÀÉ straße ǆ\n' > "$ho/.sdu"
+( export LC_ALL=C.UTF-8
+  for sc in 's/.*/\U&/' 's/.*/\L&/' 's/\(.\)/\u\1/' 's/[[:upper:]]/\l&/g'; do
+    bothrc "sed '$sc' past ascii" sed "$sc" "$ho/.sdu"
+  done ) || exit 1
+rm -f "$ho/.sdu"
 # \n and \t in a replacement are a newline and a tab, as apparmor's caps mask ends
 for sc in 's/ *$/"\n/' 's/b/\t&\t/g'; do
   bothrc "sed '$sc'" sed "$sc" "$ho/.sd1"

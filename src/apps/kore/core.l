@@ -681,7 +681,7 @@
                       (ink (sp i)))
        (skipf l k i) (k = 0 ? i (skipf l (k - 1) (field l i)))
        (key l) (: i (min #l (skipf l nf 0 + ns)) s (snip l i (nw ? (min #l (i + nw)) #l))
-                  (i? ? (lower s) s))
+                  (i? ? (ucase 2 s) s))                      ; ascii alone, as GNU's bytes
        plain? !(i? || 0 < nf || 0 < ns || nw)
        (emit line cnt) ((d? && cnt < 2) || (u? && 1 < cnt) ? ()
                         (c? ? (say o (upad 7 (show cnt) + " ")),
@@ -1971,7 +1971,7 @@
        un1 (vv = "1" || elem "1" av)
        un2 (vv = "2" || elem "2" av)
        ic (tf 105) empty (tf 101 ? (uoptv tf 101) "")
-       (ck k) (ic ? (lower k) k)
+       (ck k) (ic ? (ucase 2 k) k)                  ; ascii alone, as GNU's bytes
        ; a side is its rows grouped by key: ((key (fields..)..)..), the run of one key
        (grp sel lns)
         (: rows (map (ln \ (: f (ujfs sep ln) k (unth f sel)
@@ -2404,7 +2404,7 @@
        (drop k) (k <= 0 ? 1 (urdj-take rd (min k ibs) @ g (#g ? (drop (k - #g)) 0)))
        _ (drop sk ? 0 (udie 1 "dd: cannot skip past end of input"))
        ; one input block as it goes out: the case, the byte pairs, sync's pad to ibs
-       (conv b) (: b1 (? (cv? "ucase") (upper b) (cv? "lcase") (lower b) b)
+       (conv b) (: b1 (? (cv? "ucase") (ucase 3 b) (cv? "lcase") (ucase 2 b) b)
                    b2 (cv? "swab" ? (#b1 @ n (cats (map (i \ (i + 1 < n ? (string (b1 (i + 1)) + string (b1 i)) (string (b1 i)))) (filter (i \ i % 2 = 0) ^n)))) b1)
                    (cv? "sync" && #b2 < ibs ? (b2 + cats (map (_ \ string 0) (jot (ibs - #b2)))) b2))
        ; the sink: blocks stream out as they come, save where a file is spliced, when

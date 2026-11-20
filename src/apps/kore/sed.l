@@ -18,7 +18,7 @@
        (expand ms me sp)
         (: rn #repl
            (cased t m o) (: u (? (m = 85) (upper t) (m = 76) (lower t) t)
-                            (o && 0 < #u ? ((o = 117 ? upper lower) (snip u 0 1) + snip u 1 #u) u))
+                            (o && 0 < #u ? (cpnext u 0 @ k ((o = 117 ? upper lower) (snip u 0 k) + snip u k #u)) u))
            ; t onto acc, then on from j: a one-shot case spends itself on the first character
            (xgo i acc m o)
             (: (on t j) (xgo j (acc + cased t m o) m (0 < #t ? () o))
