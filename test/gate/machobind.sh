@@ -14,6 +14,8 @@ if lo=$(command -v llvm-objdump 2>/dev/null); then
     && cmp -s $d/ours $d/llvm || { echo "FAIL machobind: love objdump and llvm-objdump read the mach-o apart"; diff $d/ours $d/llvm | head -5; exit 1; }
 fi
 "$love" objdump --macho --bind $d/t.mac > $d/binds && "$love" test/gate/machobind.l $d/t.elf $d/binds || exit 1
+# the ELF alone transposes to the mach-o link (test/gate/machox.l)
+"$love" test/gate/machox.l $d/t.elf $d/t.mac || exit 1
 # the same code bytes in both: an image, a nif row, a data pointer and bss to reach (test/gate/macform.l)
 cat > $d/f.c <<'EOF'
 #include <unistd.h>
@@ -25,4 +27,5 @@ int main(int c, char **v) { buf[c] = 1; return (int) write(1, msg, 0) + (int) (i
 EOF
 "$love" mooncc -pie $d/f.c -o $d/f.elf && "$love" mooncc -os macos -pie $d/f.c -o $d/f.mac \
   || { echo "FAIL macform: the links"; exit 1; }
-"$love" test/gate/macform.l $d/f.elf $d/f.mac
+"$love" test/gate/macform.l $d/f.elf $d/f.mac || exit 1
+"$love" test/gate/machox.l $d/f.elf $d/f.mac
