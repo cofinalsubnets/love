@@ -6,6 +6,8 @@ vgcore.*
 .claude/*
 !.claude/settings.json
 /out/
+# a build's own choices (Makefile), carried by selfpack but never tracked
+/config.mk
 /web/wasm/*.gz
 # the build stamp, written by selfpack into the archive and read back by an unpacked release
 /STAMP

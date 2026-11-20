@@ -34,7 +34,7 @@ driven bare, ADV_NONCONN_IND) names the result and the die's temperature, `mb 28
 with the same in manufacturer data under the test company 0xFFFF.
 `make flash` copies firm.hex onto the DAPLink's drive; test_microbit builds it and
 verifies the boot surface, test_microbit_board flashes it over the DAPLink's CMSIS-DAP
-on a host with microbit-daplink and reads the battery.
+on a host with microbit-swd and reads the battery.
 
 ## rp2040/
 
@@ -49,8 +49,24 @@ into a named section. Gate test_rp2040 verifies the boot image (boot2 CRC, SP,
 thumb-bit reset entry); qemu has no RP2040 machine, so test_mps2_t1 is where
 this ISA actually runs. arm-none-eabi-ld still binds it (thumb relocations
 are not in src/love/holo/link.l); `make bin` writes the raw flash image, which
-src/tools/uf2.l packs as a UF2 (family 0xE48BFF56).
+src/tools/uf2.l packs as a UF2 (family 0xE48BFF56). The battery reports on UART0 and,
+to each host that opens it, on the chip's own usb serial port. test_rp2040_board writes
+it over swd on a host with rp2040-swd: no flash controller, so swd.l's rp-flash runs the
+ROM's own flash routines on the halted core, and a pulse on RUN starts it.
 
+
+## rp2350/
+
+Raspberry Pi Pico 2 (RP2350 on its Cortex-M33s @ 150 MHz, 520 KB SRAM, the
+single-precision FPU): mooncc -t thumb2sp end to end, the nucleo's battery
+(../battery.h) on v8-M. No boot2: the ROM sets up flash itself and wants an
+image definition in the first 4 KB, which mkboot.l lays behind the vector
+table. The console is the chip's own usb, ../rp2040/usb.c built against
+rp2350.h; 134 baud on it reboots into the ROM's drive (the reboot waits on
+the watchdog, whose tick rp2350.c starts). `make` also builds probe.uf2,
+../rp2040/probe.c on this chip. test_rp2350 verifies the boot image;
+test_rp2350_board writes the UF2 raw to the board's drive on a host with
+rp2350-uf2 and reads the battery off its usb console.
 
 ## esp32c6/
 

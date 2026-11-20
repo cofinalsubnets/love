@@ -15,7 +15,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -37,7 +37,7 @@ test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpu
 test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
 	test_gc test_extract test_big test_mx test_tools test_web test_doc test_glaze test_hook test_envimage test_sat \
 	test_holo test_holowasm test_as test_glazefuzz test_encver test_refuzz test_vi test_clay \
-	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_moonfuzz test_forge test_gates test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio \
 	test_fat32 test_root test_uuhomgen test_uusplgen test_uumx test_uuvallaw test_raw_bake test_drat \
 	test_asmops test_dtb test_ffalloc test_elf32 test_objcopy test_fat test_cci386 test_cci386m16 test_ccarm test_ccthumb1 test_ccthumb2 \
@@ -48,7 +48,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_tools test_web test_hostnif test_doc test_glaze test_hook test_sat test_holo test_holowasm test_as \
 	test_holofuzz test_glazefuzz test_encver test_kore test_refuzz test_sb test_vi \
 	test_clay test_moonfuzz test_forge test_gates test_kernel_vmx \
-	test_cts test_libc test_ulp test_softfp test_reloc32 \
+	test_cts test_libc test_ulp test_softfp test_reloc32 test_rtall \
 	test_drv test_hdiff test_ccwarn test_tco0 nettest test_wake test_gz test_standalone test_sqfs test_ext4 test_cpio test_tfm test_caja test_gpic test_grap test_chem test_fat32 test_root \
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
@@ -56,7 +56,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6_board test_teensy41_board test_links \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
@@ -471,6 +471,8 @@ gate_hm += test_softfp
 # test_reloc32 -- arm32 --emit-relocs: linked 64K apart, the table is the words that moved;
 # MOVW/MOVT absolutes refuse
 gate_hm += test_reloc32
+# test_rtall -- every header name links on every carried isa, from the carried archive alone
+gate_hm += test_rtall
 # every love C file and moonlibc by mooncc, the system linker binding; opt-in, x64 only
 test_selfhost: host
 	@echo TEST $(ho)/love-selfhost
@@ -516,11 +518,11 @@ test_rvboot: host
 	@$(MAKE) -s a=rv64 $(ko)/rv64/rv64/boot.o $(ko)/rv64/inle/rv64/dtb.o
 	@$(MAKE) -s $(ko)/rv64/rvboot.elf
 	@sh test/gate/boot.sh rvboot "$(MAKE)"
-# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else $(ko).
-# two ifeqs, never an else-ifeq
-kvec_x64  = $(ko)/x64/x64/vec.o
-kvec_a64 = $(ko)/a64/a64/vec.o
-kvec_rv64 = $(ko)/rv64/rv64/vec.o
+# test_vec -- real CPU exceptions and their reports. kvec.o: $(moon_d) at the host arch, else the
+# cross lane's. two ifeqs, never an else-ifeq
+kvec_x64  = out/x-x64/o/kvec.o
+kvec_a64 = out/x-a64/o/kvec.o
+kvec_rv64 = out/x-rv64/o/kvec.o
 ifeq ($(hosta),x64)
 kvec_x64  = $(moon_d)/kvec.o
 endif
@@ -593,7 +595,8 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
-test_thumb1 test_thumb2 test_thumb2sp: test_%: host
+# lane j links the leaves and longjmp out of the isa's own archives
+test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
 # love on the metal by mooncc and our linker; exit 42 = laws held, 98 = a trap.
 #   virt the bare rv64 hart; mps2 the M7, -t thumb2; mps2_t1 the same at -t thumb1
@@ -632,18 +635,27 @@ test_microbit: host
 	   sh test/gate/skip.sh gate-skip "test_microbit: no arm-none-eabi toolchain, skipped"; exit $$?; fi; \
 	  $(MAKE) -C test/boards/microbit || { echo "FAIL microbit build (the boot-image verify is inside)"; exit 1; }; \
 	  echo "test_microbit: firmware (all-mooncc thumb2sp), OUR linker and flatten, boot image verified"
-# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa
+# test_rp2040 -- the Pico, no .S: boot2 by mkboot2.l, verified; builds only, test_mps2_t1 runs its isa.
+# the swd probe (probe.c, usb.c) beside it, packed as a uf2
 test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
-	@echo "test_rp2040: firmware (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten and runtime -- no foreign file, flash R|X, boot surface verified"
+	@echo "test_rp2040: firmware and swd probe (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten, runtime and uf2 -- no foreign file, flash R|X, boot surface verified"
 # the boards' batteries on silicon, flashed over swd on a host with the board's cap
 test_rp2040_board: test_rp2040
 	@echo TEST out/rp2040/love.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love.bin
-test_esp32_board: host
-	@echo TEST test/holo/xtrun.l "(on the esp32, from ram)"
-	@$(gsh) test/gate/esp32board.sh $(ho)/love $(ho)
+# test_rp2350 -- the pico 2 (arm), all-mooncc thumb2sp: its battery and the swd probe, image defs verified
+test_rp2350: host
+	@echo TEST out/rp2350/firm.uf2
+	@$(MAKE) -C test/boards/rp2350 || { echo "FAIL rp2350 build (the boot-image verify is inside)"; exit 1; }
+	@echo "test_rp2350: battery and swd probe (all-mooncc thumb2sp, the image definition laid by holo, no sdk), OUR linker, flatten and uf2 -- boot surface verified"
+test_rp2350_board: test_rp2350
+	@echo TEST out/rp2350/firm.uf2 "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm.uf2
+test_esp32s3_board: host
+	@echo TEST test/holo/xtrun.l "(on the esp32-s3, from ram)"
+	@$(gsh) test/gate/esp32s3board.sh $(ho)/love $(ho)
 # test_esp32c6 -- the esp32-c6's battery: mooncc -t rv32 compiles and links it at hp sram, nothing foreign
 test_esp32c6: host
 	@echo TEST out/esp32c6/firm.elf
@@ -666,14 +678,14 @@ test_nucleo446_board: test_nucleo446
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
 test_microbit_board: test_microbit
 	@echo TEST out/microbit/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-daplink out/microbit/firm.bin
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.hex
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
-test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
-	@echo "test_boards: nine ports build and link -- mooncc and our linker, no emulator"
+test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
+	@echo "test_boards: eleven ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build test_virt_build: test_%_build: host
 	@echo TEST out/$*/love.elf '(build)'
 	@$(MAKE) -C src/inle/$* || { echo "FAIL $* build"; exit 1; }
@@ -765,7 +777,8 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect and decode alongside
+# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump and the riscv
+# and aarch64 tables both ways (rvcodec, a64codec) alongside
 test_as: host
 	@echo TEST test/holo/as.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
@@ -773,6 +786,9 @@ test_as: host
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
 	@$(gsh) test/gate/decode.sh "$m" $(ho)
+	@$(gsh) test/gate/objdump.sh "$m" $(ho)
+	@$(gsh) test/gate/rvcodec.sh "$m" $(ho)
+	@$(gsh) test/gate/a64codec.sh "$m" $(ho)
 # test_elf32 -- holo's ELF32 writer judged by Linux under qemu-arm: thumb write+exit returns 42
 gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l byte-compared with objcopy, both formats; skips without
@@ -804,9 +820,12 @@ test_gcstress_full: host $(love0) out/gcs0/love0 out/lib/corpus.list $(ho)/moonc
 	@sh test/gate/l0stress.sh .
 # --- the machine-checked half: test/proof/rocq/ + test/proof/lean/ ---
 # each gate skips, saying so, when its checker is missing
-COQC     ?= $(shell command -v coqc 2>/dev/null)
-OCAMLOPT ?= $(shell command -v ocamlopt 2>/dev/null)
-LEAN     ?= $(shell command -v lean 2>/dev/null)
+coqc_at     := $(shell command -v coqc 2>/dev/null)
+ocamlopt_at := $(shell command -v ocamlopt 2>/dev/null)
+lean_at     := $(shell command -v lean 2>/dev/null)
+COQC     ?= $(coqc_at)
+OCAMLOPT ?= $(ocamlopt_at)
+LEAN     ?= $(lean_at)
 # the scratch coqc strews beside a .v, and what an extracted ocaml ref leaves
 vclean = rm -f $(foreach n,$1,test/proof/rocq/$n.vo test/proof/rocq/$n.vok test/proof/rocq/$n.vos test/proof/rocq/$n.glob test/proof/rocq/.$n.aux)
 dclean = rm -f $(foreach n,$1,test/proof/rocq/$n_ref.ml test/proof/rocq/$n_ref.mli test/proof/rocq/$n_drive)
@@ -1082,7 +1101,8 @@ test_uefi_stay: host $(S)/tools/ktest.l
 	 && $m $(S)/tools/ktest.l $(k_stayd) $$fw x64 "efihello: one two"; fi
 endif
 
-QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
+qemu_a64_at := $(shell command -v qemu-system-aarch64 2>/dev/null)
+QEMU_A64 ?= $(qemu_a64_at)
 ifeq ($(QEMU_A64),)
 test_uefi_a64:
 	@sh test/gate/skip.sh gate-skip "test_uefi_a64: skipped (qemu-system-aarch64 needed)"
@@ -1150,7 +1170,8 @@ test_kernel_rpi3: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-a64pi.img - a64pi
 endif
 
-QEMU_RV64 ?= $(shell command -v qemu-system-riscv64 2>/dev/null)
+qemu_rv64_at := $(shell command -v qemu-system-riscv64 2>/dev/null)
+QEMU_RV64 ?= $(qemu_rv64_at)
 ifeq ($(QEMU_RV64),)
 test_kernel_rv64 test_kernel_uproc_rv64:
 	@sh test/gate/skip.sh gate-skip "$@: skipped (need qemu-system-riscv64)"
@@ -1170,8 +1191,10 @@ test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 
-NODE ?= $(shell command -v node 2>/dev/null)
-WASMOPT ?= $(shell command -v wasm-opt 2>/dev/null)
+node_at := $(shell command -v node 2>/dev/null)
+wasmopt_at := $(shell command -v wasm-opt 2>/dev/null)
+NODE ?= $(node_at)
+WASMOPT ?= $(wasmopt_at)
 wasmopt_flags = --enable-memory64 --enable-bulk-memory --enable-nontrapping-float-to-int
 holo_wasm = out/.holo.wasm out/.holo2.wasm out/.holo3.wasm
 ifeq ($(NODE),)
