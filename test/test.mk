@@ -15,7 +15,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_root test_roster test_rp2040 test_rp2040_board test_nucleo446_board test_microbit_board test_esp32_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -194,6 +194,7 @@ hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, r
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
+hostnif_tests += test/host/wchisp.l   # wch's usb isp: a flash session's bulk requests to the byte, the key by hand
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -651,6 +652,15 @@ test_esp32c6: host
 test_esp32c6_board: test_esp32c6
 	@echo TEST out/esp32c6/firm.elf "(on the esp32-c6, from ram)"
 	@$(gsh) test/gate/esp32c6board.sh $(ho)/love out/esp32c6/firm.elf $(ho)
+# test_ch32v203 -- the qt py ch32v203's blink: mooncc -t rv32 compiles and links it at flash 0
+test_ch32v203: host
+	@echo TEST out/ch32v203/firm.bin
+	@$(MAKE) -C test/boards/ch32v203 || { echo "FAIL ch32v203 build (the image verify is inside)"; exit 1; }
+	@echo "test_ch32v203: the blink (all-mooncc rv32imac), linked by mooncc at flash 0, image verified"
+# ..by hand, not in test_extra: each run wants a person holding BOOT over a reset
+test_ch32v203_board: test_ch32v203
+	@echo TEST out/ch32v203/firm.bin "(into the ch32v203's flash, by its usb isp)"
+	@$(gsh) test/gate/ch32v203board.sh $(ho)/love out/ch32v203/firm.bin $(ho)
 test_nucleo446_board: test_nucleo446
 	@echo TEST out/nucleo446/firm.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
@@ -662,7 +672,7 @@ test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.hex
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
-test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_teensy41 test_playdate
+test_boards: test_mps2_build test_virt_build test_rp2040 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
 	@echo "test_boards: nine ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build test_virt_build: test_%_build: host
 	@echo TEST out/$*/love.elf '(build)'

@@ -692,6 +692,30 @@ static lvm(lvm_ioctl) {
         : ioctl((int) fd, (unsigned long) getcharm(Sp[1]), &w) < 0 ? love_err(g, errno)
         : putcharm((intptr_t) w);
   Sp += 2; love_musttail return Next(1); }
+// (usb-bulk fd ep buf ms): one bulk transfer through linux's usbfs, fd a /dev/bus/usb node;
+// ep's top bit the way in, buf then a cask filled, else a text or cask sent. answers the bytes
+// moved, or the errno. (usb-claim fd n) (usb-release fd n): interface n taken from its driver
+// and given back. the kernel's struct, as linux/usbdevice_fs.h lays it
+struct lv_usbbulk { unsigned ep, len, timeout; void *data; };
+#define LvUsbBulk  _IOWR('U', 2, struct lv_usbbulk)
+#define LvUsbClaim _IOR('U', 15, unsigned)
+#define LvUsbFree  _IOR('U', 16, unsigned)
+static word host_usb_bulk(struct g *g, word f, word e, word b, word t) {
+ intptr_t fd = charmp(f) ? getcharm(f) : port_fd(f), ep = charmp(e) ? getcharm(e) : -1, ms = charmp(t) ? getcharm(t) : -1;
+ struct str *s = ep & 0x80 ? cask_str(b) : bytes_of(b);
+ if (fd < 0 || ep < 0 || ep > 255 || ms < 0 || !s || s->len > 0x7fffffff) return badarg(g);
+ struct lv_usbbulk x = { (unsigned) ep, (unsigned) s->len, (unsigned) ms, s->bytes };
+ int n = ioctl((int) fd, LvUsbBulk, &x);
+ return n < 0 ? love_err(g, errno) : putcharm(n); }
+static lvm(lvm_usb_bulk) {
+  Sp[3] = host_usb_bulk(g, Sp[0], Sp[1], Sp[2], Sp[3]); Sp += 3; love_musttail return Next(1); }
+static word host_usb_iface(struct g *g, word f, word i, unsigned long req) {
+ intptr_t fd = charmp(f) ? getcharm(f) : port_fd(f);
+ if (fd < 0 || !charmp(i) || getcharm(i) < 0) return badarg(g);
+ unsigned n = (unsigned) getcharm(i);
+ return ioctl((int) fd, req, &n) < 0 ? love_err(g, errno) : ZeroPoint; }
+static lvm(lvm_usb_claim) { Sp[1] = host_usb_iface(g, Sp[0], Sp[1], LvUsbClaim); Sp += 1; love_musttail return Next(1); }
+static lvm(lvm_usb_release) { Sp[1] = host_usb_iface(g, Sp[0], Sp[1], LvUsbFree); Sp += 1; love_musttail return Next(1); }
 #if defined(__moonlibc__)
 static int restart2(char const *a) { return reboot2(a); }
 #else
@@ -713,6 +737,9 @@ static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(
 static lvm(lvm_swapon) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_swapoff) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_ioctl) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
+static lvm(lvm_usb_bulk) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
+static lvm(lvm_usb_claim) { Sp[1] = love_err(g, ENOSYS); Sp += 1; love_musttail return Next(1); }
+static lvm(lvm_usb_release) { Sp[1] = love_err(g, ENOSYS); Sp += 1; love_musttail return Next(1); }
 #endif
 
 static lvm(lvm_chroot) {
@@ -1142,6 +1169,9 @@ LvDef("reboot", reboot, 1, "posix");
 LvDef("swapon", swapon, 1, "posix");
 LvDef("swapoff", swapoff, 1, "posix");
 LvDef("ioctl", ioctl, 3, "posix");
+LvDef("usb-bulk", usb_bulk, 4, "usb");
+LvDef("usb-claim", usb_claim, 2, "usb");
+LvDef("usb-release", usb_release, 2, "usb");
 LvDef("mknod", mknod, 3, "posix");
 LvDef("newns", newns, 1, "posix");
 LvDef("stat", posix_stat, 1, "posix");
