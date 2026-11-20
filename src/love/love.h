@@ -538,13 +538,15 @@ int raw_mode(intptr_t on);                      // the (raw on) latch; main.c's 
 size_t host_selfpath(char*, size_t);
 // ..image.c..
 struct image_opt;
-int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win);
+int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win),
+    bake_same(int src, uint64_t off, char *win);
+uintptr_t bake_slide(void);
 // ..elfbake.c and macho.c, each declining (>0) a container not its own: 0 laid, >0 not laid
-// for growth, <0 failed
+// for growth, -7 a container of another link, <0 failed
 int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win),
     image_lay_elf(int src, int dst, void const *buf, uintptr_t len, char *win),
     image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win);
-int image_bake(struct g*, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
+int image_bake(struct g*, char const *from, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
 struct g *image_load(char const*, int*), *image_dump(struct g*, char const*, struct image_opt const*);
 extern uint64_t baked_image[];
 extern uintptr_t baked_image_len;

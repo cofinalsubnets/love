@@ -4,7 +4,6 @@
 #include "bytes.h"
 #include <string.h>
 #include <unistd.h>
-#include <link.h>
 
 // a mach-o's .image is its __IMAGE segment, last mapped, grown to hold the blob. dyld wants
 // __LINKEDIT last, so it and every offset into it move past the image. segments map a linked
@@ -48,16 +47,14 @@ static int macho_sign(int src, int dst, char *cmds, uint32_t ncb, long li, struc
  out:
   alloc(blob, 0);
   return rc; }
-static int macho_slideof(struct dl_phdr_info *in, size_t sz, void *d) {
-  return *(uintptr_t*) d = in->dlpi_addr, 1; }
 int image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win) {
-  uintptr_t slide = 0;
-  dl_iterate_phdr(macho_slideof, &slide);
-  uintptr_t lenaddr = (uintptr_t) &baked_image_len - slide, imgaddr = (uintptr_t) baked_image - slide;
+  uintptr_t slide = bake_slide();
+  uintptr_t lenaddr = (uintptr_t) &baked_image_len - slide, imgaddr = (uintptr_t) baked_image - slide,
+            codeaddr = (uintptr_t) image_lay - slide;
   uint32_t h[8];
   if (pread(src, h, sizeof h, 0) != (ssize_t) sizeof h || h[0] != 0xfeedfacfu) return 1;
   struct macho_seg is, ls;
-  uint64_t lenoff = 0, imgoff = 0, last = 0;
+  uint64_t lenoff = 0, imgoff = 0, codeoff = 0, last = 0;
   long si = -1, li = -1, ci = -1;
   uint32_t sfrom = 0;
   int rc = -6;
@@ -73,11 +70,13 @@ int image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win)
     if (!strncmp(sg.name, "__LINKEDIT", sizeof sg.name)) { li = at, ls = sg; continue; }
     if (lenaddr >= sg.addr && lenaddr < sg.addr + sg.fsz) lenoff = sg.off + (lenaddr - sg.addr);
     if (imgaddr >= sg.addr && imgaddr < sg.addr + sg.fsz) imgoff = sg.off + (imgaddr - sg.addr);
+    if (codeaddr >= sg.addr && codeaddr < sg.addr + sg.fsz) codeoff = sg.off + (codeaddr - sg.addr);
     if (!strncmp(sg.name, "__IMAGE", sizeof sg.name)) si = at, is = sg;
     if (sg.off + sg.fsz > last) last = sg.off + sg.fsz; }
   rc = 1;
   if (si < 0 || !lenoff || !imgoff || imgoff < is.off || is.off + is.fsz != last
       || (li >= 0 && ls.off < last) || (ci >= 0 && li < 0)) goto out;
+  if (!bake_same(src, codeoff, win)) { rc = -7; goto out; }
   if ((rc = bake_move(src, dst, 0, 0, imgoff, win))) goto out;
   is.fsz = imgoff - is.off + len;
   is.vsz = (is.fsz + 4095) & ~(uint64_t) 4095;

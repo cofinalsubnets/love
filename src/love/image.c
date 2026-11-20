@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <link.h>
 
 // the scratch beside a bake's target, per process: make -jN bakes one name concurrently
 static char *bake_scratch(struct g *g, char const *path) {
@@ -93,19 +94,32 @@ int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *
     z += w; }
   return 0; }
 
-// out NULL bakes in place, a path writes a copy; bare lays the stub back, an imageless binary
-int image_bake(struct g *g, char const *out, int bare, struct image_opt const *o) {
+static int bake_slideof(struct dl_phdr_info *in, size_t sz, void *d) {
+  return *(uintptr_t*) d = in->dlpi_addr, 1; }
+// the running link's slide: an address less it is the link's own, in any container of the link
+uintptr_t bake_slide(void) {
+  uintptr_t s = 0;
+  dl_iterate_phdr(bake_slideof, &s);
+  return s; }
+// the target is this link: it carries image_lay's code at off, byte for byte
+int bake_same(int src, uint64_t off, char *win) {
+  size_t n = 256;
+  return off && pread(src, win, n, (off_t) off) == (ssize_t) n && !memcmp(win, (void const*)(uintptr_t) image_lay, n); }
+
+// out NULL bakes in place, a path writes a copy; bare lays the stub back, an imageless binary.
+// from names another container of this link to lay into (the other kernel's), NULL this binary
+int image_bake(struct g *g, char const *from, char const *out, int bare, struct image_opt const *o) {
   uint64_t stub[ReserveWords] = {1};
   uintptr_t len = sizeof stub;
   void *buf = bare ? NULL : image_save2(g, &len, NULL, o);
   if (!bare && !buf) return -2;
   // the kernel's PATH_MAX
   char exe[4096];
-  if (!host_selfpath(exe, sizeof exe)) return alloc(buf, 0), -6;
-  char const *to = out ? out : exe;
+  if (!from && !host_selfpath(exe, sizeof exe)) return alloc(buf, 0), -6;
+  char const *in = from ? from : exe, *to = out ? out : in;
   char *tmp = bake_scratch(g, to), *win = alloc(NULL, BakeScratch);
   struct stat st;
-  int rc = -6, src = tmp ? open(exe, O_RDONLY) : -1, dst;
+  int rc = -6, src = tmp ? open(in, O_RDONLY) : -1, dst;
   if (win && src >= 0 && !fstat(src, &st) && (dst = open(tmp, O_RDWR | O_CREAT | O_TRUNC, 0700)) >= 0) {
     rc = image_lay(src, dst, bare ? (void const *) stub : buf, len, win);
     if (rc > 0) {
