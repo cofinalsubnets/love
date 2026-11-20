@@ -27,6 +27,8 @@
 # define NRgetpid 39
 #elif defined(__aarch64__) || defined(__riscv)
 # define NRgetpid 172
+#elif defined(__mips__)
+# define NRgetpid 4020
 #else
 # define NRgetpid 20
 #endif

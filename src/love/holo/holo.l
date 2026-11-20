@@ -70,6 +70,8 @@
    (le16 n)  [(byte n) (byte (n >> 8))]
    (le32 n)  [(byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24))]
    (le64 n)  (u64 n @ u (map (i \ (u // i 256) % 256) ^8))
+   (be16 n)  [(byte (n >> 8)) (byte n)]
+   (be32 n)  [(byte (n >> 24)) (byte (n >> 16)) (byte (n >> 8)) (byte n)]
    (u64 n) (n < 0 ? (n + 18446744073709551616) n)                     ; two's-complement into [0,2^64)
    (s64 n) (n > 9223372036854775807 ? (n - 18446744073709551616) n)   ; a u64 pattern as the signed value it encodes
    ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian

@@ -6,7 +6,7 @@ long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, 4 macos, -
 
 long __love_call(long n, long a, long b, long c, long d, long e, long f) {
 #ifdef LvOsNone
-  return -38;                                         /* ENOSYS: no kernel to ask */
+  return -ENOSYS;                                     /* no kernel to ask */
 #endif
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
@@ -23,7 +23,7 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
       if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
 #endif
     n = __love_nrfb(n);
-    if (n < 0) return -38;                            /* ENOSYS, canonically */
+    if (n < 0) return -ENOSYS;                        /* canonically */
 #ifdef LvMac
     if (v == 4) {
       long r = __love_door(n, a, b, c, d, e, f);
@@ -35,7 +35,7 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
 #endif
   long r = __love_sys(n, a, b, c, d, e, f);
 #ifdef __ARM_EABI__
-  if (r == -38 && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
+  if (r == -ENOSYS && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
 #endif
 #ifdef LvOsTranslate                                     /* a parked BSD answer */
   if (__love_parked(r)) r = -__love_errfb(-r - 4096);
@@ -49,7 +49,7 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   return r; }
 long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
 #ifdef LvOsNone
-  return -38;
+  return -ENOSYS;
 #endif
 #ifdef LvMac
   long r = __love_osv == 4 ? __love_door(n, a, b, c, d, e, f) : LvNoDoor;
@@ -76,7 +76,7 @@ long __love_inle__host(long n, long a, long b, long c, long d, long e, long f) {
 __attribute__((weak))
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 #endif
-  return -38; }
+  return -ENOSYS; }
 
 /* a refused address the program can make good: 1 retries the call */
 __attribute__((weak))
@@ -125,11 +125,11 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
       if ((r = nar(d, o, 1))) return r;
       d = (long) o; }
     return __love_sys(NR_futex_32, a, b, c, d, e, f); }
-  return -38; }
+  return -ENOSYS; }
 
 /* an android app's seccomp filter traps a call it does not list, new ones among them:
  * as on a kernel without it, the caller reads ENOSYS. 8 is r0 in arm's ucontext */
-static void refused(int sig, void *si, long *uc) { uc[8] = -38; }
+static void refused(int sig, void *si, long *uc) { uc[8] = -ENOSYS; }
 void __love_refusals(void) {
   struct __ksigaction ka = { (void *) refused, 4 };      /* SA_SIGINFO */
   __love_sys(NR_rt_sigaction, 31, (long) &ka, 0, 8, 0, 0); }
@@ -151,7 +151,7 @@ static void bwid(union __bts const *o, long p) {
 long __love_tbsd(long n, long a, long b, long c, long d, long e, long f) {
   union __bts o[2];
   long nr = __love_nrfb(n), r;
-  if (nr < 0) return -38;
+  if (nr < 0) return -ENOSYS;
   if (n == NR_clock_gettime) {
     r = __love_sys(nr, a, (long) o, 0, 0, 0, 0);
     if (!r) bwid(o, b);

@@ -3,8 +3,8 @@
 ; targets round the rel8 and rel32 edges, held to the reach and read back by the decoder; and
 ; the lowering's random IR laid in one order and the reverse, each on a fresh load, which must
 ; agree: an emitter's key that names the wrong shape hands one shape another's bytes.
-; X64ENC_PART is one of order, targets, cached, keyed: each its own process, since a caught
-; scare keeps some stack and these catch one per refused lay
+; X64ENC_PART is one of order, targets, cached1, cached2 (the names' halves), keyed: each its own
+; process, since a caught scare keeps some stack and these catch one per refused lay
 ;   cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l \
 ;     test/holo/fuzz/x64enc.l | X64ENC_PART=order out/love
 
@@ -114,16 +114,17 @@
        (each ^#irs (i \ (count 'ir, fw i = bw i ? 0 (miss "order" [(irs i) (fw i) (bw i)])))))
 
    part (getenv "X64ENC_PART")
-   names (sort (keys x64-byname))
+   names (sort (keys x64-byname)) half (#names // 2)
    _ (? (part = "order") (ordered 0)
         (part = "targets") (each (filter (n \ n = 'call || n = 'jmp || elem n (map (c \ name ("j" + show c)) x6t-cc)) names) target)
-        (part = "cached") (each names cached)
+        (part = "cached1") (each (snip names 0 half) cached)
+        (part = "cached2") (each (snip names half #names) cached)
         (part = "keyed") (each names keyed)
         (scare 'x64enc-part part))
    (puts ("test/holo/fuzz/x64enc " + part + ": "
           + (? (part = "order") (show (peep tally 'ir 0) + " IR forms both ways")
                (part = "targets") (show (peep tally 'target 0) + " targets")
-               (show (peep tally 'laid 0) + " lays" + (part = "cached" ? " (" + show (peep tally 'fit 0) + " fit)" "")))
+               (show (peep tally 'laid 0) + " lays" + (starts? part "cached" ? " (" + show (peep tally 'fit 0) + " fit)" "")))
           + ", " + show (peep tally 'miss 0) + " missed\n"),
     flush out,
     (peep tally 'miss 0 = 0 ? 0 (quit 1))))

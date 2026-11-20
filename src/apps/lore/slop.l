@@ -316,7 +316,7 @@
           1.0)
    (? (v < song-floor) song-floor (1.0 < v) 1.0 v))
 
- ; a triangle in phase with the sine (play.l's i-tri starts at -1, a quarter behind)
+ ; a triangle in phase with the sine (harp's tri starts at -1, a quarter behind)
  (song-tri u) (u * 4.0 @ v
                  ((u < 0.25) * v
                   + ((u >= 0.25) * (u < 0.75)) * (2.0 - v)

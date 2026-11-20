@@ -77,9 +77,11 @@
    ;   'rela       target index -> [(off kind sym addend) ..] in file order, the addend ()
    ;               on a REL; 'rels the same as [(target . entries) ..] in header order.
    ;               rels? 2 keeps 'relz target index -> a decoder instead, read by ld-relas
-   (ld-obj id s rels?)
-    (: _ (#s > 52 && s 0 = 127 && s 1 = 69 && s 2 = 76 && s 3 = 70 ? 0 (scare 'link-not-elf id))
-       fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94) ? elf32rf elf32f) (scare 'link-elf-class id))
+   ; a big-endian file reads as its swap: its tables little-endian, its sections as they were
+   (ld-obj id s0 rels?)
+    (: _ (#s0 > 52 && s0 0 = 127 && s0 1 = 69 && s0 2 = 76 && s0 3 = 70 ? 0 (scare 'link-not-elf id))
+       s (s0 5 = 2 ? (elf-swap s0) s0)
+       fs (? (s 4 = 2) elf64f (s 4 = 1) (elem (rle16 s 18) '(243 94 8) ? elf32rf elf32f) (scare 'link-elf-class id))
        (f b r) (: i (b + <r) w <>r (? (w = 4) (rle32 s i) (w = 8) (rle64 s i) (w = 2) (rle16 s i) (rdle s i w)))
        (fx nm) (ld-row fs nm)
        shoff (ld-f fs s 0 'e-shoff) shnum (ld-f fs s 0 'e-shnum)
@@ -92,6 +94,9 @@
                                [(ld-cstr s (shstro + f h hn)) (f h ht) (f h hf) (f h ho) (f h hz)
                                 (f h ha) (f h he) (f h hl) (f h hi)]))
                         ^shnum))
+       ; a mips object is RELA as holo lays it, or REL as gcc and GNU as do
+       mrel (rle16 s 18 = 8 && elem 9 (map (i \ sec i 1) ^shnum))
+       rf (mrel ? elf32f fs)
        ob {'id id 'src s 'class (? (s 4 = 2) 64 32) 'type (rle16 s 16) 'mach (rle16 s 18) 'shnum shnum
            'sec sec 'syms {} 'nsym 0 'rela {} 'rels () 'relz {}}
        ; held to sh_entsize: a wrong stride reads well-formed garbage
@@ -115,8 +120,8 @@
                                    (? (two? m) m (: v (row i) _ (pin memo i v) v))))
                      (pin ob 'symr row, pin ob 'syms sym))
                   (pin ob 'syms (spread (map row ^n))))))
-       rty (ld-n fs 'rl-ty) re (ld-n fs 'rl-ent)
-       ro (fx 'rl-off) rk (fx 'rl-kind) rs (fx 'rl-sym) ad (fx 'rl-add)
+       rty (ld-n rf 'rl-ty) re (ld-n rf 'rl-ent)
+       ro (ld-row rf 'rl-off) rk (ld-row rf 'rl-kind) rs (ld-row rf 'rl-sym) ad (ld-row rf 'rl-add)
        ; entries i to j of the section r holds
        (ents r i j) (: (go k acc) (? (k < i) acc
                                      (: e (r 3 + re * k)
@@ -124,11 +129,13 @@
                        (go (j - 1) ()))
        _ (? rels? (each ^shnum (i \ (: r (sec i)
                                        (? (r 1 != rty) 0
-                                          (: _ (esz r 'rl-ent)
-                                             (? (rels? = 2) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
+                                          (: _ (r 6 = re ? 0 (scare 'link-entsize <r))
+                                             (? (rels? = 2 && !mrel) (pin (ob 'relz) (r 8) (q \ (? (q = ()) (r 4 // re) (ents r <q (q 1)))))
                                                 (: es (ents r 0 (r 4 // re)) (pin (ob 'rela) (r 8) es, pin ob 'rels ((r 8 . es) . ob 'rels)))))))))
             0)
        _ (pin ob 'rels (rev (ob 'rels)))
+       _ (mrel ? (pin ob 'rels (map (p \ (: es (ld-mreladd s (sec <p 3) >p (ob 'syms)) (pin (ob 'rela) <p es, <p . es)))
+                                   (ob 'rels))))
        ob)
 
    ; section si's relocations, decoded afresh under 'relz; the target sections that have them
@@ -142,6 +149,29 @@
     (? (c 'n < 0) (: l (c 'l) _ (pin c 'l ()) l)
        (: i (c 'i) j (min (c 'n) (i + k)) _ (pin c 'i j) (? (i < j) ((c 'f) [i j]) ())))
 
+   ; o32 REL addends out of their fields, as GNU ld reads them: a 32 the word, a 26 its
+   ; word target (sign-extended for a global), a PC16 its words, a LO16 its signed half, a
+   ; HI16 its half above the low half of the next LO16 against the same symbol. es are
+   ; [off kind sym ()] in file order (GNU as files a HI16 out of place, beside its LO16), the
+   ; target's bytes at base; a GOT16 against a local pairs as a HI16 does, the gp-relative kinds
+   ; take their signed field, a kind left out answers 0. -> by offset, as the patcher reads them
+   (ld-mreladd s base es syms)
+    (: (w o) (rdbe s (base + o) 4)
+       (sx v b) (: m (2 ** b) h (m // 2) ((v & (m - 1) ^ h) - h))
+       (lo16 l sy) (? (l = ()) (scare 'link-mips-hi16 sy)
+                      (<l 1 = 6 && <l 2 = sy) (sx (w (<l 0)) 16)
+                      (lo16 >l sy))
+       (add e l) (: k (e 1) v (w (e 0))
+                    (? (k = 2) (sx v 32)
+                       (k = 4) (: a ((v & 0x3ffffff) << 2) (peep (peep syms (e 2) ()) 1 0 = 0 ? a (sx a 28)))
+                       (k = 10) (sx v 16 << 2)
+                       (k = 6) (sx v 16)
+                       (k = 5 || k = 9 && peep (peep syms (e 2) ()) 1 0 = 0) (((v & 0xffff) << 16) + lo16 l (e 2))
+                       (elem k '(7 9 11)) (sx v 16)
+                       (k = 12) (sx v 32)
+                       0))
+       (go l) (l = () ? () ([(<l 0) (<l 1) (<l 2) (add <l >l)] . go >l))
+       (sort (go es)))
    ; --- the relocation table, every machine's: e_machine -> kind -> (width how), how the
    ; field takes S+A at P. RELA: abs whole, pc S+A-P whole, abs32 four bytes in either range,
    ; u32 u16 u8 unsigned, s32 signed, pc32 S+A-P signed; else a backend's instruction field, ored
@@ -159,6 +189,10 @@
             243 (ld-cls '((1 4 abs32) (2 8 abs) (57 4 pc32) (17 4 j21) (19 8 pcrel)))
             ; slot0 is a j's or a call0's offset, the opcode in the field says which
             94 (ld-cls '((1 4 abs32) (20 3 slot0)))
+            ; big-endian: the word's own kind, not abs32's little-endian one
+            ; ..and ld-mgot's: gp16 gp32, _gp_disp's hi and lo, a local GOT16's lui
+            8 (ld-cls '((2 4 mabs32) (4 4 mj26) (5 4 mhi16) (6 4 mlo16) (10 4 mb16)
+                        (256 4 mlo16) (257 4 mabs32) (258 4 mhi16) (259 4 mlo16) (260 4 mgotlui)))
             ; the thumb bit rides in S (st_value's bit 0) and every branch field drops bit 0, so
             ; ((S+A)|T) falls out of S+A; one image may mix cores, so the widest arm32 backend
             40 (ld-cls '((2 4 w32) (3 4 r32) (42 4 p31) (28 4 acall) (29 4 a24) (10 4 bl) (30 4 b) (47 4 movw16) (48 4 movt16) (49 4 movw16p) (50 4 movt16p) (51 4 bcc) (96 4 gotprel)))
@@ -296,10 +330,12 @@
    ;                       on a rel, where it rides in the field instead
    ; layout pins 'base later, section index -> load address
    (ld-read id s mach)
-    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94)) 4 9)
+    (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94 8)) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
        secs {} lanes {} drops {}
-       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach}
+       ; 'pic: a mips object laid pic (e_flags bit 1), each function's gp from $t9
+       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach
+           'pic (mach = 8 && 0 < rle32 (r 'src) 36 & 2)}
        ; droppable: empty, no shf_alloc, a note, or the unwinder's tables. the index is
        ; recorded so a relocation against it is skipped, not scared at.
        (drop? i ty fl nm sz)
@@ -322,8 +358,10 @@
                           (nm = ".comment" ? (pin ob 'comment (snip s off (off + sz))) 0,
                            class (i + 1))
                          (scare 'link-section nm)))
-                  (ty = 2 || ty = rty || elem ty '(0 3)) (class (i + 1))
+                  (ty = 2 || ty = rty || elem ty '(0 3) || mach = 8 && ty = 9) (class (i + 1))
                   (drop? i ty fl nm sz) (class (i + 1))
+                  ; mips's .reginfo and .MIPS.abiflags: allocated, read by no static image
+                  (mach = 8 && elem ty '(1879048198 1879048234)) (pin drops i 1, class (i + 1))
                   (scare 'link-section nm))))
        _ (class 1)
        ; the named lanes this object carries, first-seen in header order
@@ -364,7 +402,7 @@
              "__data_start__" "__data_end__" "__data_load__"
              "__bss_start__" "__bss_end__" "__load_size__" "_GLOBAL_OFFSET_TABLE_"
              "__init_array_start" "__init_array_end" "__fini_array_start" "__fini_array_end"
-             "__preinit_array_start" "__preinit_array_end")
+             "__preinit_array_start" "__preinit_array_end" "_gp" "_gp_disp" "__gnu_local_gp")
    (dusyms id bs mach)                     ; (id bytes) -> (defs strong-undefs tls? strong-defs ctor?), global noms
     (: ob (ld-read id bs mach) sy9 (peep ob 'syms 0)
        (go i ds us ss)
@@ -384,7 +422,7 @@
    (ld-arpad s) (#s & 1 ? (s + "\n") s)
    (ld-arelf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70)
    ; a member's defined globals in symbol-table order; a non-ELF member defines nothing
-   (ld-ardefs f b) (ld-arelf? b ? (rev <(dusyms f b (b 18 + 256 * b 19))))
+   (ld-ardefs f b) (ld-arelf? b ? (rev <(dusyms f b (b 5 = 2 ? (256 * b 18 + b 19) (b 18 + 256 * b 19)))))   ; e_machine in the member's order
    (arbytes ms) (arlay 0 1 ms)
    ; ..any shape: thin keeps only each member's header, its name (a path from the archive's
    ; directory) in "//" however short, as llvm-ar lays one; ix 0 leaves the index out
@@ -679,7 +717,14 @@
                      (go (off0 + ro + 4) >es
                         (ldarm be s (off0 + ro) (charm? ix && kind = 2 ? 0 sv) kind (base + ro) <sy
                          . (snip s pos (off0 + ro) . acc)))))
-                 (: sa (ld-u64 (sv + ad))
+                 (: ; ld-mgot's mips kinds: S + A less _gp, or less the site (_gp_disp's lo four back)
+                    mk (? (peep ob 'mach 0 != 8 || kind < 256) 0
+                          (kind < 258) (ldres glo n0 n1 r0 r1 xt "_gp")
+                          (kind = 258) (base + ro)
+                          (kind = 259) (base + ro - 4)
+                          0)
+                    sa (ld-u64 (sv + ad - mk))
+                    _ (kind = 256 && mk != 0 && !(-32768 <= s64 sa <= 32767) ? (scare 'link-mips-gp16 <sy))
                     row (ld-rk (peep ob 'mach 0) kind) w <row k (row 1)
                     abs64? (k == 'abs)
                     abs32? (elem k '(abs32 u32 s32 u16 u8))
@@ -1252,16 +1297,58 @@
                      (oi + 1)))
                 0 objs)
        (env 'sv))
+   ; mips abicalls objects linked static, as GNU ld lays them: a got of one word for each symbol
+   ; a GOT16 or CALL16 names, after a reserved word that _gp starts (every entry gp-relative); a
+   ; local's GOT16, its lw of a page, turned to a lui of the high half the LO16 after it ends;
+   ; _gp_disp's pair gp less its own address; GPREL16 and GPREL32 against _gp; a JALR hint
+   ; dropped. kinds past a byte are this link's: 256 gp16, 257 gp32, 258 and 259 _gp_disp's hi
+   ; and lo, 260 the lui. a jal from outside pic into a pic function wants gnu's la25 stub, and
+   ; refuses. no such kind anywhere and the objects pass untouched
+   (ld-mgot objs mach)
+    (: (sy ob i) (peep (peep ob 'syms 0) i ())
+       (glob? ob i) (elem (sy ob i 1) '(1 2))
+       (gotk? ob e) (e 1 = 11 || e 1 = 9 && glob? ob (e 2))
+       (walk f) (each objs (ob \ each (peep ob 'relas ()) (p \ each >p (f ob))))
+       (names f) (: t {} (f (ob \ e \ gotk? ob e ? (pin t <(sy ob (e 2)) 1)), sort (keys t)))
+       gn (names walk)
+       need (: t {} (walk (ob \ e \ elem (e 1) '(7 9 11 12) || elem <(sy ob (e 2)) '("_gp_disp" "__gnu_local_gp") ? (pin t 0 1)), t 0 = 1))
+       ; the globals a pic object defines, whose gp wants $t9: a jal from outside pic may not reach one
+       cp (: t {} (each objs (ob \ peep ob 'pic 0 ? (each ^(peep ob 'nsym 0) (i \ sy ob i 3 != 0 && glob? ob i ? (pin t <(sy ob i) 1)))), t))
+       _ (walk (ob \ e \ !(peep ob 'pic 0) && e 1 = 4 && glob? ob (e 2) && cp <(sy ob (e 2)) ? (scare 'link-mips-la25 <(sy ob (e 2)))))
+       (fix ob)
+        (: n (peep ob 'nsym 0) s (peep ob 'src 0) secs (peep ob 'secs 0)
+           used (names (f \ each (peep ob 'relas ()) (p \ each >p (f ob))))
+           ; _gp at n, each got entry's own nom after it
+           xs (["_gp" 1 0 0 0 0 0] . map (m \ [("__got." + m) 1 0 0 0 0 0]) used)
+           ix (: t {} (each ^#used (j \ pin t (used j) (n + 1 + j)), t))
+           (one si e)
+            (: k (e 1) o (e 0) y (sy ob (e 2))
+               (? (k = 37) ()
+                  (k = 9 && !(glob? ob (e 2)))
+                   (: w (rdbe s (secs si 1 + o) 4)
+                      (w >> 26 = 35 ? [[o 260 (e 2) (e 3)]] (scare 'link-mips-got16 (peep ob 'id 0))))
+                  (gotk? ob e) [[o 256 (ix <y) 0]]
+                  (k = 7) [[o 256 (e 2) (e 3)]]
+                  (k = 12) [[o 257 (e 2) (e 3)]]
+                  (elem k '(5 6) && <y = "_gp_disp") [[o (k = 5 ? 258 259) n (e 3)]]
+                  [e]))
+           (pin ob 'relas (map (p \ (<p . catall (map (one <p) >p))) (peep ob 'relas ())),
+            pin ob 'syms (spread (map (sy ob) ^n + xs)), pin ob 'nsym (n + #xs), ob))
+       (got u) (objsecs 'mips [[".data" 1 3 16 (['align 16] . ['label '_gp] . ['label '__gnu_local_gp] . ['raw [0 0 0 0]]
+                                              . catall (map (m \ [['label (name ("__got." + m))] ['raw [['fix 4 'abs32 (name m) 0]]]]) gn))]]
+                    () ("_gp" . "__gnu_local_gp" . map (m \ "__got." + m) gn) gn ())
+       (need ? (map fix objs + [(ld-read "<got>" (elf-flat (got 0)) mach)]) objs))
+
    (ldlink target pie org srcs prod readme sf)
     (: mach (peep elf-machines target 0)
        _ (0 < mach ? 0 (scare 'link-target target))
-       objs (map (p \ ld-read <p <>p mach) srcs)
+       objs (map (p \ ld-read <p <>p mach) srcs @ os (mach = 8 ? (ld-mgot os mach) os))
        rv (mach = 243)
        ; a thread template (x64 and a64): .tdata then .tbss as file zeros, past the nifs, a pt_tls
        tls? (ld-tls? objs)
        _ (tls? && !(elem mach '(62 183)) ? (scare 'link-tls target))
-       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32 and xtensa the headers and symbols
-       w32 (elem mach '(3 40 94) || target = 'rv32)
+       ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32, xtensa and mips the headers and symbols
+       w32 (elem mach '(3 40 94 8) || target = 'rv32)
        _ (w32 && pie ? (scare 'link-i386-pie target))
        shf (w32 ? elf-shdr32 elf-shdr)
        phf (w32 ? elf32-phdr elf64-phdr)
@@ -1381,9 +1468,10 @@
        hdr (w32 ? (elf32-hdrn 2 ent mach (sf ? 83886592 (elf32-eflags target)) [shto nsh 10] phs) (elf64-hdrn (pie ? 3 2) ent mach [shto nsh 10] phs))
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
-       (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
-                 + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
-                    (ld-zeros (shto - (rdmo + rdmz))) sht])))
+       (elf-order mach
+        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
+                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
+                     (ld-zeros (shto - (rdmo + rdmz))) sht]))))
 
    ; --- the shared object: ldlink's lay at base 0, plus what a dynamic loader reads ---
    ; a strong undefined no object defines is an import: a plt stub branches through a got
@@ -1864,11 +1952,12 @@
                              rlanes))
        hdr (elf32-hdrn 2 ent mach (elf32-eflags target) [shto (nl + 4 + nr) (nl + 3)]
                        (map (g \ elf32-phdr 1 (g 5) (g 2) <g (g 1) (g 3) (g 4) 4096) segs))
-       (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
-               + [(ld-zeros (symo - fend)) <st <>st <shstr
-                  (ld-zeros (relo - (ssto + sstz)))]
-               + relbs
-               + [(ld-zeros (shto - (relo + relsz))) sht])))
+       (elf-order mach
+        (hdr . ([(ld-zeros (foff - hdrsz))] + pieces
+                + [(ld-zeros (symo - fend)) <st <>st <shstr
+                   (ld-zeros (relo - (ssto + sstz)))]
+                + relbs
+                + [(ld-zeros (shto - (relo + relsz))) sht]))))
 
    ; set byte i of a piece, a text or a byte list
    (ld-brand p i v)

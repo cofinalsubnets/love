@@ -291,6 +291,12 @@
    (bu-elf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && b 5 = 1
                 && (b 4 = 1 || b 4 = 2))
    (bu-fs b) (b 4 = 2 ? elf64f elf32f)
+   ; readelf's and objdump's: a big-endian file read as its swap, its byte 5 still saying so
+   (bu-read? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && (b 5 = 1 || b 5 = 2)
+                && (b 4 = 1 || b 4 = 2))
+   ; the swap as holo reads one, its byte 5 little-endian again
+   (bu-le b) (b 5 = 2 ? (snip b 0 5 + "\x01" + snip b 6 #b) b)
+   (bu-in b) (52 < #b && b 5 = 2 && bu-read? b ? (elf-swap b @ s (snip s 0 5 + "\x02" + snip s 6 #s)) b)
    (bu-secs fs b)
     (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
        sx (ld-f fs b 0 'e-shstrx)
@@ -456,6 +462,8 @@
     ("0x" + radix f 16
      + (? (m = 40) (f >> 24 ? (", Version" + show (f >> 24) + " EABI"
                              + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
+          (m = 8) ((f & 1 ? ", noreorder" "") + (f & 2 ? ", pic" "") + (f & 4 ? ", cpic" "")
+                   + (f >> 12 & 15 = 1 ? ", o32" "") + (f >> 28 @ 5 ", mips32" 7 ", mips32r2" ""))
           (m = 243) ((f & 1 ? ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
                      + (f & 8 ? ", RVE" "") + (f & 16 ? ", TSO" ""))
           ""))
@@ -466,7 +474,7 @@
         map (i \ (say out (re-hex (b i) 2 + " "))) ^16,
         say out "\n",
         row "Class:" (e64 ? "ELF64" "ELF32"),
-        row "Data:" "2's complement, little endian",
+        row "Data:" ("2's complement, " + (b 5 = 2 ? "big" "little") + " endian"),
         row "Version:" (show (b 6) + (b 6 = 1 ? " (current)" "")),
         row "OS/ABI:" (re-osabi (b 7)),
         row "ABI Version:" (show (b 8)),
@@ -655,7 +663,10 @@
             (filter (sc \ (sc 2 = 2 || sc 2 = 11)) ss)))
    ; relocation type names by e_machine, llvm's own (llvm/BinaryFormat/ELFRelocs), the prefix apart
    re-rtypes
-    {62 ["R_X86_64_" {0 "NONE" 1 "64" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
+    {8 ["R_MIPS_" {0 "NONE" 1 "16" 2 "32" 3 "REL32" 4 "26" 5 "HI16" 6 "LO16" 7 "GPREL16" 8 "LITERAL"
+        9 "GOT16" 10 "PC16" 11 "CALL16" 12 "GPREL32" 37 "JALR" 38 "TLS_DTPMOD32" 39 "TLS_DTPREL32"
+        47 "TLS_TPREL32" 49 "TLS_TPREL_HI16" 50 "TLS_TPREL_LO16"}]
+     62 ["R_X86_64_" {0 "NONE" 1 "64" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
         8 "RELATIVE" 9 "GOTPCREL" 10 "32" 11 "32S" 12 "16" 13 "PC16" 14 "8" 15 "PC8" 16 "DTPMOD64"
         17 "DTPOFF64" 18 "TPOFF64" 19 "TLSGD" 20 "TLSLD" 21 "DTPOFF32" 22 "GOTTPOFF" 23 "TPOFF32"
         24 "PC64" 25 "GOTOFF64" 26 "GOTPC32" 27 "GOT64" 28 "GOTPCREL64" 29 "GOTPC64" 30 "GOTPLT64"
@@ -834,8 +845,8 @@
        (one f)
         (uread f @ r
            (atom? r ? (say err ("readelf: Error: '" + f + "': No such file\n"), 0)
-            (<>r @ b
-               (!(bu-elf? b) ? (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
+            (bu-in <>r @ b
+               (!(bu-read? b) ? (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
                   (bu-fs b @ fs2
                      (two? >fs ? (say out ("\nFile: " + f + "\n")) 0,
                       h? ? (re-head fs2 b) 0,
@@ -853,7 +864,7 @@
    ; and aarch64's disassembled, a heading per symbol, a branch or rip target named by the symbol
    ; it lands in
    (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
-               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" "unknown"))
+               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" 8 "mips" "unknown"))
    ; --macho: a mach-o's dyld_info streams, rebase, bind and weak bind, as llvm-objdump prints
    ; them. -> ((seg addr vsz ((sect addr size) ..)) ..) and (dylib ..) and the stream pairs
    (mo-str b i n) (: (go j) (j < n && b (i + j) != 0 ? (go (j + 1)) j) (snip b i (i + go 0)))
@@ -949,7 +960,7 @@
        0)
 
    (od-dis b ss m)
-    (: fs (bu-fs b) sy (ld-syms "objdump" b) rv? (m = 243) a6? (m = 183) wd? (rv? || a6?)
+    (: fs (bu-fs b) sy (ld-syms "objdump" (bu-le b)) rv? (m = 243) a6? (m = 183) mi? (m = 8) wd? (rv? || a6? || mi?)
        ; x86's bytes one by one, and data's; riscv's and aarch64's a word or halfword as a number,
        ; longer ones by halves
        (hexb s) (xa-join " " (map (c \ zpad 2 (radix c 16)) (chars s)))
@@ -974,10 +985,11 @@
                        (" <" + <>l + (<l = a ? "" ("+" + od-hex (a - <l))) + ">")))
            at (foldl (\ t l (pin t <l (peep t <l () + [<>l]))) {} labs)
            (row r)
-            (: a (addr + <r) x ((? rv? rv-od a6? a64-od x64-od) r a sym)
-               _ (each (peep at a ()) (n \ say out ("\n" + zpad 16 (radix a 16) + " <" + n + ">:\n")))
+            (: a (addr + <r) x ((? rv? rv-od a6? a64-od mi? mips-od x64-od) r a sym)
+               _ (each (peep at a ()) (n \ say out ("\n" + zpad (b 4 = 2 ? 16 8) (radix a 16) + " <" + n + ">:\n")))
                h (urpad (8 - #(radix a 16)) "" + radix a 16 + ": ")
-               by ((wd? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
+               ; mips's bytes one by one, as llvm writes a big-endian word
+               by ((wd? && !mi? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
                c0 (#h + #by) pad (col c0 "")
                t0 ((c0 + #pad) // 8 * 8 + 8)
                tx <x
@@ -1001,7 +1013,7 @@
            (data? o) (100 = foldl (\ k p (<p <= addr + o ? (p 1) k)) 120 maps)
            ; a word ISA's rows a symbol or mapping at a time, where llvm counts its zero runs
            cuts (sort (filter (o \ 0 < o && o < sc 5) (map (l \ <l - addr) (catall [labs maps]))) + [(sc 5)])
-           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
+           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) mi? (mips-disasm bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
                           (a64-disasm bs addr lo hi))
            (wrows _) (foldl (\ acc hi (acc + dis (two? acc ? (last acc @ r (<r + r 1)) 0) hi)) () cuts)
            (each (wd? ? (wrows 0) (catmap split (x64-disasm bs addr))) row))
@@ -1022,15 +1034,15 @@
        (one f)
         (uread f @ rd
            (atom? rd ? (say err ("objdump: error: '" + f + "': No such file or directory\n"), 1)
-            (<>rd @ b
+            (bu-in <>rd @ b
                (? mac? (#b < 32 || rdle b 0 4 != 4277009103
                           ? (say err ("objdump: error: '" + f + "': object is not a Mach-O file type.\n"), 1)
                           (mo-dump b f ts))
-                  !(bu-elf? b) (say err ("objdump: error: '" + f + "': The file was not recognized as a valid object file\n"), 1)
+                  !(bu-read? b) (say err ("objdump: error: '" + f + "': The file was not recognized as a valid object file\n"), 1)
                   (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
                      rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
                      _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
-                     _ (d? && !(elem m [62 183 243]) ? (udie 1 ("objdump: -d reads x86-64, aarch64 and riscv here, not " + od-fmt b)) 0)
+                     _ (d? && !(elem m [62 183 243 8]) ? (udie 1 ("objdump: -d reads x86-64, aarch64, riscv and mips here, not " + od-fmt b)) 0)
                      _ (d? ? (od-dis b ss m) 0)
                      _ (each (d? ? () rs) (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
                                                 + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),

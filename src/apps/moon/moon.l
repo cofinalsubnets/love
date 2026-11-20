@@ -114,6 +114,10 @@
           'rv64                        '("__riscv" "__riscv_xlen=64" "__CHAR_UNSIGNED__")
           'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
           'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
+          ; o32, big-endian, soft float: plain char signed
+          'mips                        '("__mips__" "__mips" "mips" "__mips=32" "__mips_isa_rev=2" "__MIPSEB__" "__MIPSEB" "_MIPSEB"
+                                         "_MIPS_ISA=_MIPS_ISA_MIPS32" "_MIPS_ISA_MIPS32=32" "_ABIO32=1" "_MIPS_SIM=_ABIO32" "__mips_o32"
+                                         "_MIPS_SZINT=32" "_MIPS_SZLONG=32" "_MIPS_SZPTR=32" "__mips_soft_float" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
           'thumb2                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=14")   ; gcc's fpu bits: half, single, double
           'thumb2sp                    '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=6")    ; no double: it is soft
@@ -154,8 +158,8 @@
    ; gcc's atomic predefines: a width's lock-free answer as gen lays it, 2 or 0 (rv64 has no
    ; sub-word rmw, thumb2 no doubleword, thumb1 no exclusives)
    (atomdefs tgt sw)
-    (: ws (tgt @ ('thumb1 || 'xtensa) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa) ? 4 8)
+    (: ws (tgt @ ('thumb1 || 'xtensa || 'mips) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips) ? 4 8)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
@@ -283,6 +287,15 @@
          "__SIZEOF_WCHAR_T__=4")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"
          "__SIZEOF_WCHAR_T__=4"))
+   ; mips o32 as gcc and clang lay it: the fast-8 types a byte
+   stdmips
+    (: own '("__INT_FAST8_TYPE__=signed char" "__INT_FAST8_MAX__=0x7f" "__INT_FAST8_WIDTH__=8"
+             "__UINT_FAST8_TYPE__=unsigned char" "__UINT_FAST8_MAX__=0xff")
+       (key d) <(usplit 61 d)
+       (filter (d \ !(elem (key d) (map key own))) stdt32 + own))
+   ; a big-endian target's byte order
+   stdbe {"__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" "__BYTE_ORDER__=__ORDER_BIG_ENDIAN__"
+          "__FLOAT_WORD_ORDER__=__ORDER_LITTLE_ENDIAN__" "__FLOAT_WORD_ORDER__=__ORDER_BIG_ENDIAN__"}
    ; i386 is the 32-bit table but where SysV i386 parts from AAPCS: the fast-8 types a
    ; byte, the widest alignment SSE's 16, and wchar_t a long
    stdi386
@@ -296,6 +309,7 @@
                       '("__WCHAR_TYPE__=long int" "__WCHAR_MAX__=0x7fffffffL" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)"
                         "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
         + stdcommon)
+       (tgt = 'mips) (stdmips + wchdefs tgt sw + map (d \ peep stdbe d d) stdcommon)
        ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
    ; a gripe prints "cc: <file>:<line>:<col>: msg" (no file: the source; no line/col: elided);
    ; anything else prints plain. both exit 1
@@ -833,6 +847,24 @@
              (ret))
    ; ..rv32's: argv a word past argc
    crt0-rv32 (map (f \ f = '(lea r1 r0 8) ? '(lea r1 r0 4) f) crt0-rv)
+   ; mips o32: linux alone, the vector at sp. each call leaves its callee 16 home bytes
+   ; below the frame, so the frames are made by hand
+   crt0-mips '((mov r2 sp)
+               (li r3 0)
+               (lea sp sp -32)
+               (call __love_start)
+               (mov r2 r0)
+               (li r0 4246)             ; exit_group
+               (sys)
+               (label __love_start)
+               (lea sp sp -32)
+               (st sp 28 lr)
+               (lea r3 r2 4)
+               (ld r2 r2 0)
+               (call main)
+               (ld lr sp 28)
+               (lea sp sp 32)
+               (ret))
    ; the driver's libc: a link still owing strong symbols pulls moonlibc + lm + sys, compiled
    ; from the sources beside us, member by need. -nostdlib leaves it off. noms still owed are
    ; said at once (a misspelling, an undefined function, a goto label gen spells main.<lbl>)
@@ -1023,14 +1055,14 @@
                   () (sort (filter (k \ starts? k d) (keys vb)))))
        ; the 32-bit isas have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
        (map ((a b) \ [a b [inc]]) (nlmems ndir + (!(elem tgt '(x64 a64 rv64 wasm)) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
-        + (elem tgt '(x64 a64 rv64 i386 arm rv32 thumb1 thumb2 thumb2sp xtensa) ? [["mksys.o" "" ()]] ())))
+        + (elem tgt '(x64 a64 rv64 i386 arm rv32 mips thumb1 thumb2 thumb2sp xtensa) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it)
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
    ; one roster member, compiled -> [name bytes]
    (rtmem1 tgt os vb e)
     (: nm (e 0) src (e 1) is (e 2)
-       [nm (!#src ? (string (mksys-bytes tgt))
-                    (string (cc-objbytes src (rtflags tgt os vb is))))])
+       [nm (!#src ? (elf-flat (mksys-bytes tgt))
+                    (elf-flat (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
    (rtpull srcs tgt os nostd vb imp? bare)
@@ -1148,7 +1180,7 @@
        ; a mach-o is an executable at a fixed base
        _ (mac? && (so || charm? org) && udie 2 "cc: -os macos lays an executable: no -shared or -Ttext")
        ars (filter dota? ins)
-       srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
+       srcs (map (f \ (? (dotsrc? f) [f (elf-flat (cc-objbytes f t))]
                          (doto? f) (uread f @ r
                                       (two? r ? [f <>r]
                                                 (udie 1 "cc: cannot open \(f)")))
@@ -1156,9 +1188,9 @@
                  (filter (f \ !(dota? f)) ins))
        ; a thumb link is a board's: the image lays at the address the core boots from, and
        ; no crt0 rides first: the first text byte is the vector table. -t arm is linux's,
-       ; hosted as i386 is. rv32 under -os none is a board's too, entered at _start; xtensa links
+       ; hosted as i386 is. rv32 and mips under -os none are a board's too, entered at _start; xtensa links
        ; only so, moonlibc not yet speaking its syscalls
-       arm? (rtbare? tgt || tgt = 'rv32 && os = 'none)
+       arm? (rtbare? tgt || elem tgt '(rv32 mips) && os = 'none)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; a bare link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
@@ -1183,10 +1215,10 @@
        ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
        _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
        c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
-             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
        ent (? dx ["_start" "atexit"] (tgt = 'x64 && !(mac? && !dyld?)) '("__love_start" "__love_main") '("__love_start"))
        all (arm? || so ? srcs
-                   (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
+                   (["crt0" (elf-flat (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
@@ -1201,7 +1233,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
