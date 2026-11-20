@@ -917,6 +917,7 @@
           (two? bad ? ['broke txt <bad] (lexw-fz (i - 1) <>d))))
    ; 260 one-word rules: past 255 the tables go two bytes a cell
    lexw-wide <(lex-scan ("%%\n" + join "" (map (k \ "k" + show k + "  w\n") (jot 260))))
+   lexw-pad (string (map (k \ 120) ^70000))
    (test
       (lexw-fz 60 (wheel 7) = 'ok)
       (<>lexw-r = '("word" "num" "lt" "ws" "com" "nl" "other"))
@@ -928,6 +929,8 @@
       (lexw-t 0 = 1) (lexw-wide 0 = 2)
       (lex-next lexw-wide "k123x" 0 = [124 4]) (lex-next lexw-wide "k259" 0 = [260 4])
       (lex-next lexw-wide "k" 0 = ())
+      ; an end past 64 KB: on 32-bit, end * 65536 + rule outgrows a charm and a word
+      (lex-next lexw-t ("/*" + lexw-pad + "*/") 0 = [5 70004]) (lex-next lexw-t (lexw-pad + "<<=") 70000 = [3 70003])
       ; dfa.c answers 0 for anything it cannot walk
       (lexw-run "x" "abc" 0 = 0) (lexw-run lexw-t "ab" 2 = 0) (lexw-run lexw-t "ab" 3 = 0)
       (lexw-run lexw-t "ab" -1 = 0) (lexw-run lexw-t 7 0 = 0) (lexw-run (lexw-t + "x") "ab" 0 = 0)

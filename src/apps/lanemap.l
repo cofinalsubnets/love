@@ -46,9 +46,9 @@
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_core"] ""]
-     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
-      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
-      ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
+     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`"
+      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*"] ["test_gcstress"]
+      ", in the queue's union; a `Makefile` or `common.mk` change owes it only by judgment, when it changes how the C core compiles (name it in the row); a `.l`, doc, app or test diff never owes it"]
      ["what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze"
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
@@ -83,7 +83,7 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32_board" "test_esp32c6" "test_esp32c6_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
@@ -95,8 +95,9 @@
                 "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
                 "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
                 "test_ccrv64" "source" "test_tools" "source" "test_moonfuzz" "source"
-                "test_refuzz" "source" "test_clay" "source" "test_hostnif" "source"
+                "test_refuzz" "source" "test_clay" "source"
                 "test_bakerep" "exact" "test_envimage" "exact" "test_wake" "exact"}
+   ; test_hostnif stays local: its gpu.l holds gpu-facets to facets on the box's own gpu
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)

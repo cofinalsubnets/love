@@ -95,13 +95,11 @@ void serial_putc(int c) {
   k_outb(COM1, (uint8_t) c); }
 
 // IRQ4, from uart_isr: one interrupt can cover several bytes, so drain the FIFO
-void kq(uint8_t);
 void k_uart(void) {
   while (k_inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
     kq(k_inb(COM1)); }
 
 // a guest of the firmware runs no timer of its own: the ticks follow the tsc
-extern uint64_t kticks;
 void k_tick_sync(void) {
   if (kboot.efi_st && kboot.tsc_khz)
     kticks = (k_rdtsc() - kboot.tsc0) / (kboot.tsc_khz * 10); }   // k_tick_ms

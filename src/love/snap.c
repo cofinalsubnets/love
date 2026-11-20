@@ -176,10 +176,15 @@ static intptr_t image_imm_index(word v) {
 #define CodeSegHead (4 * sizeof(uint64_t))
 #define CodeRow (3 * sizeof(uint64_t))                         // raw offset, coded offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
-#define CodeDict ((uintptr_t) 32 << 10)
+#define CodeDict ((uintptr_t) 256 << 10)                       // the largest; a segment under 4x a size takes the next
 #define CodeDictSpan 1536u                                    // the picker's spans, and the bytes of a shape
 #define CodeDictShape 8u
 #define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
+// the dictionary's size for a code segment of n bytes: the largest that a quarter of it holds,
+// 32K below that, where the picker declines
+static uintptr_t code_dict_for(uintptr_t n) {
+ uintptr_t k = n / 4 >> 10;
+ return (k >= 256 ? 256 : k >= 112 ? 112 : k >= 64 ? 64 : 32) << 10; }
 #ifndef CodeZLevel
 #define CodeZLevel 15
 #endif
@@ -1219,7 +1224,8 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
  // code ships as whole-blob chunks of about CodeZChunk coded apart against one dictionary, so
  // a wake decodes only what runs; one that would not shrink is raw, nch 0
  uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
- unsigned char *cz = NULL, *dic = craw ? alloc(NULL, CodeDict + 2 * (CodeDict + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
+ uintptr_t cd = code_dict_for(craw);
+ unsigned char *cz = NULL, *dic = craw ? alloc(NULL, cd + 2 * (cd + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
  if (craw) {
   uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, pn = 0;
   uintptr_t *cut = dic ? alloc(NULL, (ncap + 1) * sizeof *cut) : NULL;
@@ -1232,10 +1238,10 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     cut[nch + 1] = b; }
    if (cut[nch] != craw) nch = 0; }
   uintptr_t *ze = nch ? alloc(NULL, nch * sizeof *ze) : NULL;
-  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
-   zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
-   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs, cz, craw, ze);
-   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
+  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, cd, CodeZChunk, CodeDictSpan, CodeDictShape))) {
+   zd = dic + cd, dz = zd + cd + CodeDictTabs;
+   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, cd + CodeDictTabs, cz, craw, ze);
+   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, cd + CodeDictTabs + 64) : 0;
    if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg; }
   if (!dn) nch = 0;
   uint64_t *tab = nch ? alloc(NULL, 3 * nch * sizeof(uint64_t)) : NULL;

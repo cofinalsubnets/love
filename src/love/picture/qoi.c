@@ -55,19 +55,20 @@ static int qoi_ops(const uint8_t *s, uintptr_t n, uint8_t *out, uintptr_t k) {
   memcpy(out + o, px, 4); }
  return 0; }
 
-love_noinline static struct g *host_qoid(struct g *g) {
+static lvm(lvm_qoid) {
+ word const sw = Sp[0];
  uint32_t w, h;
- if (!strp(g->sp[0])) return g->sp[0] = putcharm(1), g;
- int why = qoi_head((const uint8_t*) txt(g->sp[0]), len(g->sp[0]), &w, &h);
- if (why) return g->sp[0] = putcharm(why), g;
+ if (!strp(sw)) love_musttail return Answer(putcharm(1));
+ int why = qoi_head((const uint8_t*) txt(sw), len(sw), &w, &h);
+ if (why) love_musttail return Answer(putcharm(why));
  uintptr_t k = (uintptr_t) w * h * 4;
- if (len(g->sp[0]) - 14 < k / 4 / 62) return g->sp[0] = putcharm(2), g;   // a byte says at most 62 pixels
- if (!ok(g = str0(g, k))) return g;               // pushes: out over s
- why = qoi_ops((const uint8_t*) txt(g->sp[1]), len(g->sp[1]), (uint8_t*) txt(g->sp[0]), k);
- if (why) return g->sp[1] = putcharm(why), g->sp += 1, g;
- g->sp[1] = g->sp[0], g->sp += 1;
- return g; }
-static lvm(lvm_qoid) LvmCall(g, host_qoid)
+ if (len(sw) - 14 < k / 4 / 62) love_musttail return Answer(putcharm(2));   // a byte says at most 62 pixels
+ uintptr_t const req = str_width(k);
+ Have(req);
+ struct str *o = ini_str(str(Hp), k);
+ Hp += req;
+ why = qoi_ops((const uint8_t*) txt(sw), len(sw), (uint8_t*) txt(o), k);
+ love_musttail return Answer(why ? putcharm(why) : word(o)); }
 LvDef("qoi-pixels", qoid, 1, "qoi");
 
 // the encoding into o, or its length alone when o is null

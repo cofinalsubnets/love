@@ -79,7 +79,7 @@ void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
+// the metal image's far edge, patched in by transpose.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for an arch's proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
@@ -108,9 +108,6 @@ struct k_boot kboot;
 
 // the source table: each fd's row of methods, a NULL one skipped (writes discard, reads
 // the end, ready false); state is per row. grows through k_source_open to k_fd_most
-void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-void kfree(void *p), k_drop(void *p);
-
 struct k_source {
   // love.h's readn, one fd deeper: >0 bytes, 0 nothing, -1 end
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n),
@@ -970,7 +967,6 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 
 // (stat path) -> (size mtime-ms mode ns) | (); ns is the ms date times a million. ino, nlink,
 // uid and dev are sys.c's to invent
-struct k_st { uintptr_t size, ms, mode; };
 
 // -> 0 | -ENOENT. fills a struct, not an index: a synthesized directory (the root, a bare
 // prefix) has no row
@@ -1463,18 +1459,18 @@ static lvm(lvm_disk) {
   Sp[0] = putcharm((intptr_t) k_blk_sectors());
   love_musttail return Next(1); }
 
-love_noinline static struct g *k_disk_read(struct g *g) {
-  word lw = g->sp[0], nw = g->sp[1];
+static lvm(lvm_disk_read) {
+  word lw = Sp[0], nw = Sp[1];
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
-  if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper raises
-  if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
-    g->sp[0] = ZeroPoint;
-  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+  if (lba < 0 || n <= 0 || n > 1 << 24) love_musttail return Answerp(1, ZeroPoint);
+  uintptr_t const req = str_width((uintptr_t) n * 512);
+  Have(req);
+  struct str *o = ini_str(str(Hp), (uintptr_t) n * 512);
+  Hp += req;
+  word const r = k_blk_rw((uint64_t) lba, (uint32_t) n, txt(o), 0) < 0 ? ZeroPoint : word(o);
+  love_musttail return Answerp(1, r); }
 
-static lvm(lvm_disk_read) {
- LvmCall(g, k_disk_read) }
 
 love_noinline static word k_disk_write(word lw, word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
@@ -2048,32 +2044,32 @@ love_noinline static struct g *k_paper(struct g *g) {
   return k_charms(g, v, 2); }
 // (kgrab 1) grabs the held paper's pointer, at its middle; (kgrab 0) lets it go; (kgrab (x y))
 // puts it there -> 1, 0 when the paper is not held
-love_noinline static struct g *k_grabev(struct g *g) {
-  word const a = g->sp[0];
-  if (!kkb.hold) return g->sp[0] = putcharm(0), g;
+static lvm(lvm_kgrab) {
+  word const a = Sp[0];
+  if (!kkb.hold) love_musttail return Answer(putcharm(0));
   if (chainp(a) && charmp(A(a)) && chainp(B(a)) && charmp(A(B(a))))
     kkb.vx = k_aimed(0, (int32_t) getcharm(A(a)), kfb.width), kkb.vy = k_aimed(0, (int32_t) getcharm(A(B(a))), kfb.height);
   else {
     bool const on = charmp(a) && getcharm(a);
     if (on && !kkb.grab) kkb.vx = kfb.width / 2, kkb.vy = kfb.height / 2, kkb.lon = 0;
     if (on != kkb.grab) kkb.grab = on, k_hold_out(on); }
-  return g->sp[0] = putcharm(1), g; }
+  love_musttail return Answer(putcharm(1)); }
 // (kshow cask y0 y1): rows y0..y1 of a screen-sized paper (32-bit pixels, as paint.c lays them)
 // -> the rows shown; 0 when the paper is not held or no longer fits
-love_noinline static struct g *k_show(struct g *g) {
+static lvm(lvm_kshow) {
   uintptr_t n = 0;
-  uint8_t const *s = cask_bytes(g->sp[0], &n);
+  uint8_t const *s = cask_bytes(Sp[0], &n);
   uintptr_t const w = kfb.width, h = kfb.height;
-  intptr_t y0 = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0, y1 = charmp(g->sp[2]) ? getcharm(g->sp[2]) : 0;
+  intptr_t y0 = charmp(Sp[1]) ? getcharm(Sp[1]) : 0, y1 = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
   if (y0 < 0) y0 = 0;
   if (y1 > (intptr_t) h) y1 = (intptr_t) h;
-  if (!kkb.hold || !s || n != w * h * 4 || y1 <= y0) return g->sp[0] = putcharm(0), g;
+  if (!kkb.hold || !s || n != w * h * 4 || y1 <= y0) love_musttail return Answerp(2, putcharm(0));
   for (intptr_t y = y0; y < y1; y++) {
     volatile uint32_t *d = kfb._ + (uintptr_t) y * kfb.pitch;
     uint32_t const *r = (uint32_t const*) s + (uintptr_t) y * w;
     for (uintptr_t x = 0; x < w; x++) d[x] = r[x]; }
   k_fb_touch();
-  return g->sp[0] = putcharm(y1 - y0), g; }
+  love_musttail return Answerp(2, putcharm(y1 - y0)); }
 // (kscan _) -- the held paper's next event: a key's set-1 code (bit 7 the break, 0x100 the
 // extended keys), (how b x y) for the pointer, (w h) when the paper changed size; () for none
 love_noinline static struct g *k_scanev(struct g *g) {
@@ -2092,10 +2088,6 @@ love_noinline static struct g *k_scanev(struct g *g) {
   return g->sp[0] = c < 0 ? ZeroPoint : putcharm(c), g; }
 static lvm(lvm_kpaper) {
   LvmCall(g, k_paper) }
-static lvm(lvm_kshow) {
-  LvmCallp(g, 2, k_show) }
-static lvm(lvm_kgrab) {
-  LvmCall(g, k_grabev) }
 static lvm(lvm_kscan) {
   LvmCall(g, k_scanev) }
 
@@ -2289,7 +2281,7 @@ void kmain(void) {
   if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
- // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
+ // baked_pick reads the transpose's re-based image as the hosted start does; NULL bakes the egg
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;

@@ -34,6 +34,7 @@ out=$($box "cd $rd && ./love -e '(+ 1 2)' && ./love -e '(show love-os)' && ./lov
   && codesign -v love.raw love cf && echo signed") \
   || fail "the baked love on the box -- got: $out"
 cat > "$ho/maclove-tone.l" <<'EOF'
+(borrow '(horn))
 (: (s16 v) (: u (v < 0 ? (v + 65536) v) (string [(u & 255) (u >> 8)]))
    per (join "" (map (k \ (: v (int (6000.0 * sin (6.283185307179586 * k / 100.0))) (s16 v + s16 v))) ^100))
    h (horn 48000 2)

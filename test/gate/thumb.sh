@@ -26,7 +26,8 @@ mkdir -p "$d"
 rm -f "$d"/*.o
 thumb_board $tgt "$d"
 
-# one differential lane; libgcc rides every link for its __aeabi helpers
+# one differential lane; libgcc rides every link for its __aeabi helpers, and $lx's objects
+lx=
 lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   tag=$1; libsrc=$2; harsrc=$3; mflags=$4; want=$5; tmo=$6; msg=$7; tail=$8
   lb=$(basename "$libsrc" .c); hb=$(basename "$harsrc" .c)
@@ -34,7 +35,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
     || fail "mooncc -t $tgt -c $lb"
   arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$harsrc" -o "$d/$tag.har.o" \
     || fail "gcc $hb"
-  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" "$lg" \
+  # shellcheck disable=SC2086
+  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" $lx "$lg" \
     -o "$d/$prefix$tag.elf" || fail "ld $tag objects"
   timeout "$tmo" qemu-system-arm -M $mach -semihosting -nographic \
     -kernel "$d/$prefix$tag.elf" < /dev/null
@@ -97,6 +99,16 @@ if [ "$tgt" = thumb2 ]; then
 fi
 
 # ---------------------------------- the shared differential lanes ----------------
+# setjmp and longjmp: the leaves are mksys's, longjmp moonlibc's over them, the members the
+# carried runtime lays for this isa
+rt=$(pwd)/out/rt/$tgt
+(cd "$d" && rm -f mksys.o proc_longjmp.o && arm-none-eabi-ar x "$rt/top.a" mksys.o \
+  && arm-none-eabi-ar x "$rt/proc.a" proc_longjmp.o) || fail "no mksys.o or proc_longjmp.o in out/rt/$tgt"
+lx="$d/mksys.o $d/proc_longjmp.o"
+lane j test/thumb2/libj.c test/thumb2/harnessj.c "-Isrc/apps/moon/include" 2 30 "$tgt setjmp" \
+  " = a jump out of a nest, longjmp 0 answering 1, the callee-saved ints and doubles back, and s16-s31 kept across a jump from a frame that wrote them; 100+n names the first miss -- see test/thumb2/libj.c"
+lx=
+
 case $tgt in
 thumb1)
   lane v  test/thumb1/libv.c  test/thumb1/harnessv.c  "" 7  30 "thumb1 varargs" \

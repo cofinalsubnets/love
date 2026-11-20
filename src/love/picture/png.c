@@ -58,27 +58,29 @@ static void png_over(uint8_t *d, const uint8_t *s) {
  for (int k = 0; k < 3; k++) d[k] = (uint8_t) ((s[k] * u + d[k] * v) / al);
  d[3] = (uint8_t) (al / 255); }
 
-love_noinline static struct g *host_pnglay(struct g *g) {
+static lvm(lvm_pnglay) {
  for (int k = 0; k < 7; k++)
-  if ((k == 0 || k == 2 ? !strp(g->sp[k]) : !oddp(g->sp[k]) || getcharm(g->sp[k]) < 0))
-   return g->sp[6] = ZeroPoint, g->sp += 6, g;
- uintptr_t cw = (uintptr_t) getcharm(g->sp[1]), fw = (uintptr_t) getcharm(g->sp[3]),
-           x = (uintptr_t) getcharm(g->sp[4]), y = (uintptr_t) getcharm(g->sp[5]),
-           k = len(g->sp[0]), fn = len(g->sp[2]);
- int op = (int) getcharm(g->sp[6]);
- if (!cw || !fw || cw > 1 << 24 || fw > 1 << 24 || k % (4 * cw) || fn % (4 * fw)) return g->sp[6] = ZeroPoint, g->sp += 6, g;
+  if ((k == 0 || k == 2 ? !strp(Sp[k]) : !oddp(Sp[k]) || getcharm(Sp[k]) < 0))
+   love_musttail return Answerp(6, ZeroPoint);
+ uintptr_t cw = (uintptr_t) getcharm(Sp[1]), fw = (uintptr_t) getcharm(Sp[3]),
+           x = (uintptr_t) getcharm(Sp[4]), y = (uintptr_t) getcharm(Sp[5]),
+           k = len(Sp[0]), fn = len(Sp[2]);
+ int op = (int) getcharm(Sp[6]);
+ if (!cw || !fw || cw > 1 << 24 || fw > 1 << 24 || k % (4 * cw) || fn % (4 * fw)) love_musttail return Answerp(6, ZeroPoint);
  uintptr_t ch = k / (4 * cw), fh = fn / (4 * fw);
- if (x > cw || fw > cw - x || y > ch || fh > ch - y) return g->sp[6] = ZeroPoint, g->sp += 6, g;
- if (!ok(g = str0(g, k))) return g;               // pushes: the new canvas over the seven
- uint8_t *o = (uint8_t*) txt(g->sp[0]);
- const uint8_t *f = (const uint8_t*) txt(g->sp[3]);
- memcpy(o, txt(g->sp[1]), k);
+ if (x > cw || fw > cw - x || y > ch || fh > ch - y) love_musttail return Answerp(6, ZeroPoint);
+ if (!k) love_musttail return Answerp(6, EmptyString);
+ uintptr_t const req = str_width(k);
+ Have(req);
+ struct str *z = ini_str(str(Hp), k);
+ Hp += req;
+ uint8_t *o = (uint8_t*) txt(z);
+ const uint8_t *f = (const uint8_t*) txt(Sp[2]);
+ memcpy(o, txt(Sp[0]), k);
  for (uintptr_t r = 0; r < fh; r++) {
   uint8_t *d = o + ((y + r) * cw + x) * 4;
   const uint8_t *c = f + r * fw * 4;
   if (op != 1) memcpy(d, c, fw * 4);
   else for (uintptr_t i = 0; i < fw; i++) png_over(d + 4 * i, c + 4 * i); }
- g->sp[7] = g->sp[0], g->sp += 7;
- return g; }
-static lvm(lvm_pnglay) LvmCall(g, host_pnglay)
+ love_musttail return Answerp(6, word(z)); }
 LvDef("png-lay", pnglay, 7, "png");
