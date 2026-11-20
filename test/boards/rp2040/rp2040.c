@@ -6,6 +6,7 @@
 // linker bounds (rp2040.lds)
 extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
+extern void *const vectors[];
 
 int main(void);
 
@@ -19,14 +20,14 @@ static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
 // --- crt0 / reset ---------------------------------------------------------
 // boot2 has loaded SP from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(VTOR_ADDR) = 0x10000100u;
+  REG(VTOR_ADDR) = (uint32_t) (uintptr_t) vectors;
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
 
-// --- vector table (at 0x10000100) -----------------------------------------
+// --- vector table (at 0x10000100, or sram's base in a ram image) ---------
 // system vectors only: no peripheral IRQ is enabled
 __attribute__((section(".vectors"), used))
 void *const vectors[] = {

@@ -641,18 +641,18 @@ test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware and swd probe (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten, runtime and uf2 -- no foreign file, flash R|X, boot surface verified"
-# the boards' batteries on silicon, flashed over swd on a host with the board's cap
+# the boards' batteries on silicon, run from sram on a host with the board's cap: the flash untouched
 test_rp2040_board: test_rp2040
-	@echo TEST out/rp2040/love.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love.bin
+	@echo TEST out/rp2040/love-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love-ram.bin
 # test_rp2350 -- the pico 2 (arm), all-mooncc thumb2sp: its battery and the swd probe, image defs verified
 test_rp2350: host
 	@echo TEST out/rp2350/firm.uf2
 	@$(MAKE) -C test/boards/rp2350 || { echo "FAIL rp2350 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2350: battery and swd probe (all-mooncc thumb2sp, the image definition laid by holo, no sdk), OUR linker, flatten and uf2 -- boot surface verified"
 test_rp2350_board: test_rp2350
-	@echo TEST out/rp2350/firm.uf2 "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm.uf2
+	@echo TEST out/rp2350/firm-ram.uf2 "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm-ram.uf2
 test_esp32s3_board: host
 	@echo TEST test/holo/xtrun.l "(on the esp32-s3, from ram)"
 	@$(gsh) test/gate/esp32s3board.sh $(ho)/love $(ho)
@@ -674,11 +674,11 @@ test_ch32v203_board: test_ch32v203
 	@echo TEST out/ch32v203/firm.bin "(into the ch32v203's flash, by its usb isp)"
 	@$(gsh) test/gate/ch32v203board.sh $(ho)/love out/ch32v203/firm.bin $(ho)
 test_nucleo446_board: test_nucleo446
-	@echo TEST out/nucleo446/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
+	@echo TEST out/nucleo446/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm-ram.bin
 test_microbit_board: test_microbit
-	@echo TEST out/microbit/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
+	@echo TEST out/microbit/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"

@@ -1,5 +1,5 @@
 // Nucleo-F446RE firmware, all mooncc -t thumb2sp (single-precision FPU, f64 through __aeabi_*).
-// not love (128 KB SRAM): the toolchain on silicon, a self-check battery over the ST-LINK VCP.
+// not love (128 KB SRAM): the toolchain on silicon, a self-check battery on USART1.
 // -D QSMOKE exits through qemu semihosting with the tally (100+n the first miss, 98 a fault),
 // booted by hand (`make -C test/boards/nucleo446 smoke`); the device blinks slow green, fast a miss
 #include <stdint.h>
@@ -13,6 +13,7 @@ int main(void) {
   puts_("\n; mooncc/nucleo446\n; core ");
   putu(clock_mhz());
   puts_(" MHz\n");
+  puts_((uintptr_t) main >> 28 == 2u ? "; from sram\n" : "; from flash\n");   // where this code runs
   int r = run();
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));
