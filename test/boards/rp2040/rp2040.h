@@ -16,6 +16,7 @@
 #define PADS_BANK0_BASE 0x4001c000u
 #define XOSC_BASE       0x40024000u
 #define PLL_SYS_BASE    0x40028000u
+#define PLL_USB_BASE    0x4002c000u
 #define UART0_BASE      0x40034000u
 #define TIMER_BASE      0x40054000u
 #define WATCHDOG_BASE   0x40058000u
@@ -29,7 +30,10 @@
 #define RST_IO_BANK0   (1u << 5)
 #define RST_PADS_BANK0 (1u << 8)
 #define RST_PLL_SYS    (1u << 12)
+#define RST_PLL_USB    (1u << 13)
+#define RST_TIMER      (1u << 21)
 #define RST_UART0      (1u << 22)
+#define RST_USBCTRL    (1u << 24)
 
 // XOSC (12 MHz crystal)
 #define XOSC_CTRL    (XOSC_BASE + 0x0u)
@@ -60,6 +64,8 @@
 #define CLK_SYS_SELECTED  (CLOCKS_BASE + 0x44u)
 #define CLK_PERI_CTRL     (CLOCKS_BASE + 0x48u)
 #define CLK_PERI_SELECTED (CLOCKS_BASE + 0x50u)
+#define CLK_USB_CTRL      (CLOCKS_BASE + 0x54u)
+#define CLK_USB_DIV       (CLOCKS_BASE + 0x58u)
 #define CLK_REF_SRC_XOSC   0x2u          // CLK_REF_CTRL.SRC
 #define CLK_SYS_SRC_REF    0x0u          // CLK_SYS_CTRL.SRC = clk_ref
 #define CLK_SYS_SRC_AUX    0x1u          // CLK_SYS_CTRL.SRC = aux (PLL)
@@ -87,6 +93,8 @@
 // IO_BANK0 / PADS_BANK0
 #define IO_BANK0_GPIO_CTRL(n) (IO_BANK0_BASE + 0x4u + (n) * 0x8u)  // GPIOn_CTRL
 #define PADS_BANK0_GPIO(n)    (PADS_BANK0_BASE + 0x4u + (n) * 0x4u)
+#define PADS_PDE (1u << 2)
+#define PADS_PUE (1u << 3)
 #define PADS_IE (1u << 6)
 #define PADS_OD (1u << 7)
 #define IO_FUNC_UART 2u      // GPIO0/1 -> UART0 TX/RX
@@ -116,6 +124,8 @@ void serial_putc(int c);
 int  serial_getc(void);
 int  serial_rx_ready(void);
 uint32_t clock_ms(void);
+void chip_uid(uint8_t id[8]);
+void rom_bootsel(void);
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);

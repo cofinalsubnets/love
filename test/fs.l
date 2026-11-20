@@ -108,6 +108,17 @@
        (test (charm? fd) !r (nom? gone) (here = cwd 0)
              ('enotdir = nd) ('badarg = (fchdir "x")) ('badarg = (fchdir -1)))),
 
+    ; ioctl by a string: the call fills a copy of its bytes, the string handed in left as it was.
+    ; FIONREAD (21531) on a file: the bytes left to read, written past an empty string's end
+    ; unseen; TCGETS (21505) is no file's; FS_IOC_GETFLAGS (0x80086601) says 8 bytes, s holds 4
+    (: f (d + "/io") _ (open f "w" @ p (say p "five!", close p))
+       fd (openfd f 0) s (string [9 9 9 9])
+       r (ioctl fd 21531 s) n (ioctl fd 21531 0) e (ioctl fd 21531 "") t (ioctl fd 21505 (string ^60))
+       k (ioctl fd 0x80086601 s)
+       _ (close fd) _ (unlink f)
+       (test (r = string [5 0 0 0]) (s = string [9 9 9 9]) (5 = n) ("" = e) ('enotty = t)
+             ('badarg = k) ('badarg = (ioctl -1 21531 "abcd")) ('badarg = (ioctl "x" 21531 "abcd")))),
+
     ; a NUL in a path is misuse: the kernel would stop at it
     ((d + string 0 + "x") @ z
      (test ('badarg = (open z "r")) ('badarg = (stat z)) ('badarg = (lstat z))

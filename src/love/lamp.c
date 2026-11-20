@@ -14,13 +14,6 @@
 // (lamp-varies ps lift step gap db): 1 where the light the open lets in on face ps, its
 // corners end to end, changes by more than step, else 0. () where an argument is not as it says
 #include "love.h"
-#if Bits == 64
-double lm_sqrt(double);
-#define lp_sqrt lm_sqrt
-#else
-float lm_sqrtf(float);
-#define lp_sqrt lm_sqrtf
-#endif
 
 enum { lp_chunk = 1024 };   // vertices a share
 struct lamp { flo_t const *ps; uintptr_t np; flo_t r, c[3], n[3], s2, wr, box[6]; bool fn, keep, keepy; };
@@ -49,7 +42,7 @@ static void lp_share(void *c, intptr_t s) {
     for (uintptr_t q = 0; q < l->np; q++) {
      flo_t const *p = l->ps + 3 * q,
                  lx = p[0] - X, ly = p[1] - Y, lz = p[2] - Z, d2 = lx * lx + ly * ly + lz * lz,
-                 d = lp_sqrt(d2 + (flo_t) 1e-9),
+                 d = love_sqrt(d2 + (flo_t) 1e-9),
                  lam = lp_sat(((nx * lx + ny * ly + nz * lz) / d + l->wr) / ((flo_t) 1.0 + l->wr)),
                  em = l->fn ? lp_sat((flo_t) 0.25 - (l->n[0] * lx + l->n[1] * ly + l->n[2] * lz) / d) : (flo_t) 1.0,
                  f = lp_sat((flo_t) 1.0 - (d2 / (l->r * l->r)) * (d2 / (l->r * l->r)));
@@ -160,7 +153,6 @@ love_noinline static struct g *host_lamp_lights(struct g *g) { return lp_light(g
 // a brush of the db: its kind, box, and its n numbers, planes or a land; v0 the first walked
 struct dbr { flo_t const *lo, *hi, *pl; uintptr_t n, np, nt; int kind; bool any; };
 struct day { flo_t const *x[3]; flo_t *out[3]; struct dbr const *b; uintptr_t nb, v0, nv; bool tall; };
-static flo_t dy_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
 // a land's numbers: low, cell width g, its first cell x0 z0, nx by nz cells, each cell's start
 // among the triangles' numbers, those, then the triangles, nine numbers each
 static bool dy_land(struct dbr *b) {
@@ -173,7 +165,7 @@ static bool dy_land(struct dbr *b) {
 // the land's height at x z, as brush.l's land-at: the first of its cell's triangles holding it
 static bool dy_land_y(struct dbr const *b, flo_t x, flo_t z, flo_t *h) {
  flo_t const *v = b->pl, g = v[1];
- intptr_t const nx = (intptr_t) v[4], nz = (intptr_t) v[5], i = (intptr_t) dy_floor(x / g) - (intptr_t) v[2], j = (intptr_t) dy_floor(z / g) - (intptr_t) v[3];
+ intptr_t const nx = (intptr_t) v[4], nz = (intptr_t) v[5], i = (intptr_t) love_floor(x / g) - (intptr_t) v[2], j = (intptr_t) love_floor(z / g) - (intptr_t) v[3];
  if (i < 0 || j < 0 || i >= nx || j >= nz) return 0;
  flo_t const *of = v + 6, *ix = of + nx * nz + 1, *ts = ix + (uintptr_t) of[nx * nz];
  uintptr_t const c = (uintptr_t) (i * nz + j), q0 = (uintptr_t) of[c], q1 = (uintptr_t) of[c + 1];
@@ -328,7 +320,7 @@ love_noinline static struct g *host_lamp_varies(struct g *g) {
  uintptr_t nv = 1;
  for (uintptr_t i = 0; i < nc; i++) {
   flo_t const *p = ps + 3 * i, *q = ps + 3 * ((i + 1) % nc), d[3] = {q[0] - p[0], q[1] - p[1], q[2] - p[2]};
-  nv += (uintptr_t) (lp_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1; }
+  nv += (uintptr_t) (love_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1; }
  flo_t *x = alloc(NULL, 3 * nv * sizeof *x);
  struct dbr *bs = alloc(NULL, nmax * sizeof *bs);
  struct day t = {.nv = nv};
@@ -339,7 +331,7 @@ love_noinline static struct g *host_lamp_varies(struct g *g) {
   for (int k = 0; k < 3; k++) x[k * nv] = m[k] / (flo_t) nc + lift[k];
   for (uintptr_t i = 0, s = 1; i < nc; i++) {
    flo_t const *p = ps + 3 * i, *q = ps + 3 * ((i + 1) % nc), d[3] = {q[0] - p[0], q[1] - p[1], q[2] - p[2]};
-   uintptr_t const n = (uintptr_t) (lp_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1;
+   uintptr_t const n = (uintptr_t) (love_sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) / gap) + 1;
    for (uintptr_t j = 0; j < n; j++, s++) for (int k = 0; k < 3; k++) x[k * nv + s] = p[k] + d[k] * ((flo_t) j / (flo_t) n) + lift[k]; }
   for (int k = 0; k < 3; k++) t.x[k] = x + k * nv;
   good = dy_read(g->sp[4], &t, bs, nmax); }

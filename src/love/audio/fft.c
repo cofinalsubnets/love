@@ -5,7 +5,6 @@
 #include "love.h"
 #include "fft.h"
 
-double lm_sin(double), lm_cos(double);
 
 void love_fft_rev(double *z, uintptr_t n) {
  for (uintptr_t i = 1, j = 0; i < n; i++) {

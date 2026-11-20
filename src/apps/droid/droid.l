@@ -310,21 +310,33 @@
              (? (string? c && (umkdirs (cite 'path 'nest 0 + "/etc") 448, uwrite f (key-pem k + pem-out "CERTIFICATE" c)))
                 [k c]))))
 
-   ; --- the bridge, compiled out of the source this love carries ---
-   (bridge-src _)
+   ; --- the bridge and the gpu's helper, compiled out of the source this love carries ---
+   (carried p)
     (: a (tree-tar 0) t (? (string? a) (tar-unpack a))
-       (? (two? t) (foldl (\ r e (? (string? r) r (ends? (tar-get e 'nom "") "src/apps/droid/bridge.c") (tar-get e 'body "") ()))
+       (? (two? t) (foldl (\ r e (? (string? r) r (ends? (tar-get e 'nom "") p) (tar-get e 'body "") ()))
                           () <>t)))
+   (bridge-src _) (carried "src/apps/droid/bridge.c")
    ; a love's abi off its elf header
    (ap-abi lb lov) (lb 18 @ 183 "arm64-v8a" 40 "armeabi-v7a" _ (udie 1 ("apk: " + lov + " is no a64 or arm love")))
+   ; ..glhelp built in, the gpu drawing on the app's window from the app's own process
    (bridge-so tmp abi)
-    (: c (bridge-src 0)
-       _ (string? c ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c"))
-       src (tmp + "/bridge.c") so (tmp + "/libbridge-" + abi + ".so")
-       (uwrite src c,
-        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic"]) + ["-shared" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src]) != 0)
+    (: c (bridge-src 0) gc (carried "src/apps/lore/glhelp.c")
+       _ (string? c && string? gc ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c or src/apps/lore/glhelp.c"))
+       src (tmp + "/bridge.c") gsrc (tmp + "/glhelp-in.c") so (tmp + "/libbridge-" + abi + ".so")
+       (uwrite src c, uwrite gsrc gc,
+        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic"])
+                                    + ["-shared" "-D" "GLHELP_IN" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src gsrc]) != 0)
            (udie 1 "apk: the bridge does not compile")
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
+   ; ..glhelp, an executable under the phone's loader, shipped as a library: an app runs
+   ; only what its lib dir holds. () where it does not build, and the app draws on the cpu
+   (glhelp-so tmp abi)
+    (: c (carried "src/apps/lore/glhelp.c") a64 (abi = "arm64-v8a")
+       src (tmp + "/glhelp.c") so (tmp + "/libglhelp-" + abi + ".so")
+       (string? c && uwrite src c
+        && (cite 'moon 'moon-run) ((a64 ? ["-t" "a64"] ["-t" "arm" "-fpic"])
+                                   + ["-O2" "-dynamic-linker" (a64 ? "/system/bin/linker64" "/system/bin/linker") "-o" so src "-l:libc.so" "-l:libdl.so"]) = 0
+        ? (uread so @ r (two? r ? <>r)) ()))
 
    (apk-usage _) (puts """
     usage: love apk [-o OUT.apk] [-p PACKAGE] [-n LABEL] [-L LOVE].. [-b LINE] [-s] [-P PERM].. [-V CODE] [-v NAME] [-T SDK] [-R] MAIN.l [FILE..]
@@ -376,7 +388,10 @@
        _ (aab || two? ks ? 0 (udie 1 "apk: no key in \(cite 'path 'nest 0)/etc/apk.pem, and none could be made"))
        tmp ((ap-or (getenv "TMPDIR") "/tmp") + "/love-apk-" + show (getpid 0))
        _ (mkdir tmp 448)
-       abis (map (l \ (: abi <l [[("lib/" + abi + "/libbridge.so") (bridge-so tmp abi)] [("lib/" + abi + "/liblove.so") <>l]])) libs)
+       abis (map (l \ (: abi <l gh (glhelp-so tmp abi)
+                         ([[("lib/" + abi + "/libbridge.so") (bridge-so tmp abi)] [("lib/" + abi + "/liblove.so") <>l]]
+                          + (string? gh ? [[("lib/" + abi + "/libglhelp.so") gh]] ()))))
+                 libs)
        ins (map (f \ [("assets/app/" + ap-base f) (uread f @ r (? (two? r) <>r (udie 1 ("apk: cannot read " + f))))]) fs)
        stay (t 's = 1)
        target (? (charm? (t 'target)) (t 'target) aab 36 31)

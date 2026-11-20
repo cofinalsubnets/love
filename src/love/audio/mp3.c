@@ -317,7 +317,6 @@ struct mst {
  uint8_t ist[40];           // the right channel's intensity positions, 255 none
  float pcm[1152 * 2]; };
 
-double lm_sin(double), lm_cos(double), lm_sqrt(double);
 #define MP3_PI 3.14159265358979323846
 
 static void mp3_tables(struct mst *m) {
@@ -670,17 +669,15 @@ love_noinline static struct g *host_mp3_new(struct g *g) {
  return g->sp[0] = word(k), g; }
 static lvm(lvm_mp3_new) LvmCall(g, host_mp3_new)
 
-static love_inline struct g *host_mp3_head(struct g *g) {
+static lvm(lvm_mp3_head) {
  word r = putcharm(0);
- if (strp(g->sp[0]) && oddp(g->sp[1])) {
-  struct str *s = str(g->sp[0]);
-  intptr_t o = getcharm(g->sp[1]);
+ if (strp(Sp[0]) && oddp(Sp[1])) {
+  struct str *s = str(Sp[0]);
+  intptr_t o = getcharm(Sp[1]);
   int ver, rate, nch, n;
   if (o >= 0 && (uintptr_t) o + 4 <= s->len && (n = mp3_head((const uint8_t*) s->bytes + o, &ver, &rate, &nch)))
    r = putcharm(n == -1 ? -1 : (intptr_t) (n < 0 ? 0 : n) | (intptr_t) nch << 12 | (intptr_t) rate << 16); }
- return g->sp[1] = r, g->sp += 1, g; }
-static lvm(lvm_mp3_head) LvmCall(g, host_mp3_head)
-
+ love_musttail return Answerp(1, r); }
 love_noinline static struct g *host_mp3_frame(struct g *g) {
  struct mst *m = mp3_st(g->sp[0]);
  if (!m || !strp(g->sp[1]) || !oddp(g->sp[2]) || !oddp(g->sp[3]))

@@ -36,4 +36,10 @@ xtdata $((4194304 + off % 4096))
 timeout 60 qemu-xtensa -cpu dc233c "$d/data.elf"
 a=$?
 [ "$a" -eq 42 ] || fail "xtdata.c answered $a, want 42 (100+n names the miss)"
-echo "$name: $(sed -n 's/^xtrun: //p' "$d/law.log"), every answer as love's own on qemu-xtensa; two objects linked and run; -Tdata's constants with the data"
+# a bare link that pulls the runtime: setjmp's leaves and the soft doubles come from the archive
+LOVE_NO_IMAGE= $love mooncc -t xtensa -Isrc/apps/moon/include -Ttext 0x10000 -o "$d/jmp.elf" test/holo/xtjmp.c \
+  > "$d/jmp.log" 2>&1 || { cat "$d/jmp.log"; fail "mooncc could not build xtjmp.c"; }
+timeout 60 qemu-xtensa -cpu dc233c "$d/jmp.elf"
+a=$?
+[ "$a" -eq 42 ] || fail "xtjmp.c answered $a, want 42 (100+n names the miss in test/thumb2/libj.c)"
+echo "$name: $(sed -n 's/^xtrun: //p' "$d/law.log"), every answer as love's own on qemu-xtensa; two objects linked and run; -Tdata's constants with the data; setjmp and longjmp from the runtime"

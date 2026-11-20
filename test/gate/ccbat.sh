@@ -598,7 +598,78 @@ EOF
   for w in "ELF32" "DYN (" "(REL)" "R_ARM_GLOB_DAT" "R_ARM_RELATIVE"; do
     case $so in *"$w"*) ;; *) fail "shared: no $w in the object" ;; esac
   done
-  echo "arm: a trapped call answers ENOSYS, -shared lays a REL object"
+  # -fpic reaches a name it does not lay through the got: the link makes that load a nop
+  # where it lays the name, an import's got slot under a system loader
+  cat > "$d/.ga.c" <<'EOF'
+#include <stdio.h>
+extern int g_val;
+extern int g_arr[4];
+int bump(int);
+int (*fp)(int) = bump;
+int main(void) {
+  int *p = &g_val, (*f)(int) = bump;
+  g_arr[2] = 5;
+  return *p + f(g_arr[2]) + fp(1) + (stderr != 0) == 40 + 6 + 2 + 1 ? 42 : 1; }
+EOF
+  printf 'int g_val = 40;\nint g_arr[4];\nint bump(int x) { return x + 1; }\n' > "$d/.gb.c"
+  for o in "" -O2; do
+    moonrun -t arm -fpic $o -o "$d/got" "$d/.ga.c" "$d/.gb.c" > "$d/got.log" 2>&1 \
+      || { cat "$d/got.log" >&2; fail "got: mooncc -t arm -fpic $o"; }
+    qemu-arm "$d/got"; a=$?
+    [ $a -eq 42 ] || fail "got: -fpic $o through a relaxed got load (got $a want 42)"
+  done
+  moonrun -t arm -fpic -c -o "$d/ga.o" "$d/.ga.c" > "$d/got.log" 2>&1 || { cat "$d/got.log" >&2; fail "got: mooncc -c"; }
+  case $(arm-none-eabi-readelf -r "$d/ga.o") in *R_ARM_GOT_PREL*) ;; *) fail "got: no R_ARM_GOT_PREL in the object" ;; esac
+  # ..and an executable the system's loader runs: a pie by default, its import's address the
+  # got's, no relocation in its text; the phone is the oracle for the run
+  moonrun -t arm -O2 -dynamic-linker /system/bin/linker -o "$d/dx" "$d/.ga.c" "$d/.gb.c" -l:libc.so > "$d/dx.log" 2>&1 \
+    || { cat "$d/dx.log" >&2; fail "dx: mooncc -t arm -dynamic-linker"; }
+  dx=$(arm-none-eabi-readelf -hlrd "$d/dx")
+  for w in "DYN (" "interpreter: /system/bin/linker" "R_ARM_GLOB_DAT    00000000   stderr" "Shared library: [libc.so]"; do
+    case $dx in *"$w"*) ;; *) fail "dx: no $w in the executable" ;; esac
+  done
+  case $dx in *TEXTREL*) fail "dx: the text is relocated" ;; esac
+  te=$(arm-none-eabi-readelf -SW "$d/dx" | sed -n 's/.* \.text  *PROGBITS  *\([0-9a-f]*\) [0-9a-f]* \([0-9a-f]*\) .*/\1 \2/p')
+  lo=$((0x${te% *})); hi=$((lo + 0x${te#* }))
+  arm-none-eabi-readelf -rW "$d/dx" | while read -r off rest; do
+    case $off in [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f])
+      [ $((0x$off)) -ge $lo ] && [ $((0x$off)) -lt $hi ] && echo "$off" ;; esac
+  done > "$d/dx.tr"
+  [ ! -s "$d/dx.tr" ] || fail "dx: a relocation lands in the text, at $(head -1 "$d/dx.tr")"
+  # -mfloat-abi=softfp, android's abi: floats at a call in the words, both ways, held to gcc's
+  # softfp object; the float file still computes
+  if command -v arm-none-eabi-gcc > /dev/null 2>&1; then
+    printf '%s\n' 'double mix(float a, double b, int c, float d) { return a * 2 + b + c + d; }' \
+      'float half(float x) { return x / 2; }' \
+      'double cb(double (*f)(double, float), double x) { return f(x, 0.5f) * 3; }' > "$d/.fp.c"
+    cat > "$d/.fpm.c" <<'EOF'
+extern double mix(float, double, int, float);
+extern float half(float);
+extern double cb(double (*)(double, float), double);
+static double twice(double x, float y) { return x * 2 + y; }
+int main(void) {
+  double m = mix(1.5f, 2.25, 3, 0.25f);
+  float h = half(5.0f);
+  double c = cb(twice, 1.0);
+  return m == 8.5 && h == 2.5f && c == 7.5 ? 42 : 1; }
+EOF
+    arm-none-eabi-gcc -c -O2 -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp -o "$d/fp.o" "$d/.fp.c" \
+      || fail "softfp: arm-none-eabi-gcc could not build the reference"
+    for o in "" -O2 -Os; do
+      moonrun -t arm $o -mfloat-abi=softfp -nostdlib -o "$d/fpt" "$d/.fpm.c" "$d/fp.o" > "$d/fp.log" 2>&1 \
+        || { cat "$d/fp.log" >&2; fail "softfp: mooncc -t arm -mfloat-abi=softfp $o"; }
+      qemu-arm "$d/fpt"; a=$?
+      [ $a -eq 42 ] || fail "softfp: $o against gcc's softfp object (got $a want 42)"
+    done
+    case $(arm-none-eabi-readelf -h "$d/fpt") in *soft-float*) ;; *) fail "softfp: the header does not say soft-float" ;; esac
+  fi
+  moonrun -t arm -mfloat-abi=softfp -o "$d/fpr" "$d/.ga.c" "$d/.gb.c" > "$d/fpr.log" 2>&1 \
+    && fail "softfp: a link that pulls moonlibc, which is hard-float, was taken"
+  grep -q "softfp links with" "$d/fpr.log" || fail "softfp: the refusal: $(cat "$d/fpr.log")"
+  # a static link says its stack is not executable: without pt_gnu_stack a 32-bit arm
+  # kernel maps every read as exec too, for it and all it execs (selinux then refuses a gpu)
+  case $(arm-none-eabi-readelf -lW "$d/got") in *"GNU_STACK"*" RW  "*) ;; *) fail "static: no PT_GNU_STACK rw" ;; esac
+  echo "arm: a trapped call answers ENOSYS, -shared lays a REL object, -fpic loads through the got, -dynamic-linker lays a pie, softfp is gcc's, the stack is not exec"
 fi
 
 [ $n -gt 0 ] || fail "no programs ran from test/cc/"
