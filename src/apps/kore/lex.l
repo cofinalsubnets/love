@@ -144,7 +144,7 @@
        _ (string? b ? () (lex-die ("regcomp refuses " + e)))
        np (lex-i32 b 0) ns (lex-i32 b 4)
        ; header, instruction and set sizes on a 64- and a 32-bit word: the block's size picks
-       z (filter ([h i r] \ #b = h + i * np + r * ns) [[40 24 56] [32 16 52]])
+       z (filter ([h i r] \ #b = h + i * np + r * ns) [[64 24 56] [60 16 52]])
        _ (two? z ? () (lex-die "regcomp's program is not the block this reads"))
        h <<z i (<z 1) r (<z 2)
        (set k) (: o (h + i * np + r * k)

@@ -29,12 +29,13 @@
    pl (dict-db "law" (d + "/law.index") (d + "/law.dict"))
    zd (dict-db "lawz" (d + "/law.index") (d + "/law.dict.dz"))
    (defs db w s) (map (\ [h o n] [h (dict-text db o n)]) (dict-find db w s))
+   (ms w s) (dict-match pl w s)
    ; a session: each line's reply, the stats taken off
    (talk ls) (dict-session [pl zd] "box" "7" @ [b r]
                [b (map (l \ (r l @ [t q] [(t @ (a + " [d/m/c" + _ + "]\r\n") (a + "\r\n") t) q])) ls)])
    s (talk ["DEFINE law abaddon" "define law \"A Cappella\"" "DEFINE law nothing" "DEFINE none x"
-            "MATCH law prefix ab" "MATCH * exact bath" "MATCH law lev x" "SHOW DB" "SHOW INFO law"
-            "OPTION MIME" "DEFINE lawz bath" "MATCH ! prefix ba" "DEFINE" "FOO" "QUIT"])
+            "MATCH law prefix ab" "MATCH * exact bath" "MATCH law nope x" "SHOW DB" "SHOW INFO law"
+            "OPTION MIME" "DEFINE lawz bath" "MATCH ! . bat" "DEFINE" "FOO" "QUIT"])
    rs (s 1) (re k) (<(rs k))
    _ (test
       ; the key: case folded, but for letters, digits and spaces nothing kept
@@ -52,6 +53,21 @@
       (defs zd "abandon" 'prefix = defs pl "abandon" 'prefix)
       (defs zd "bath" 'exact = [["bath" "BATH, n.\n"]])
       (map (\ [h t] t) (defs zd "0" 'prefix) = [<>(es 0) <>(es 1)])
+      ; the scanning strategies, each headword once
+      (ms "and" "substring" = ["abandon"]) (ms "ON" "suffix" = ["Abaddon" "abandon"])
+      (ms "^A.*N$" "re" = ["Abaddon" "abandon"]) (ms "ba\\(d\\|t\\)" "regexp" = ["Abaddon" "bath"]) (ms "^$" "re" = ())
+      (ms "abadon" "soundex" = ["Abaddon"]) (ms "abandn" "lev" = ["abandon"]) (ms "cappella" "word" = ["a cappella"])
+      (ms "a" "first" = ["a cappella"]) (ms "cappella" "last" = ["a cappella"]) (ms "a" "last" = ())
+      ; the keys' search refuses a hit in an offset's digits, and a word with a space in it
+      (all (c \ ms c "substring" = uniq (filter (h \ 0 <= fsub (dict-key pl h) c 0) (map cap es)))
+           (map (i \ string [i]) (cats [(map (+ 97) ^26) (map (+ 48) ^10)])))
+      (ms "a cappella" "word" = ()) (ms "a cappella" "first" = ()) (ms " abadon" "soundex" = ["Abaddon"])
+      ; nprefix skips and counts the index's lines, not its headwords
+      (ms "1#2#ab" "nprefix" = ["abandon"]) (ms "ab" "nprefix" = ms "ab" "prefix") (ms "x#ab" "nprefix" = ())
+      (dict-soundex "Robert" = "R163") (dict-soundex "Pfister" = "P236") (dict-soundex "  bath" = "B300")
+      (dict-soundex "Ashcraft" = "A226") (dict-soundex "" = "")
+      (dict-lev1 "ab" ["x" "y"] 0 = ["ba" "abx" "aby" "b" "xab" "xb" "yab" "yb" "a" "axb" "ax" "ayb" "ay"])
+      (dict-lev1 "aa" ["a"] 1 = ["aaa" "a" "aa"])
       ; the protocol
       (has? <s "220 box love dict <mime> <7@box>\r\n")
       (re 0 = "150 1 definitions retrieved\r\n151 \"Abaddon\" law \"A Law's Dictionary\"\r\nAbaddon\r\nthe pit\r\n.\r\n250 ok\r\n")
@@ -67,7 +83,7 @@
       (re 11 = "152 1 matches found\r\n\r\nlaw \"bath\"\r\n.\r\n250 ok\r\n")
       (re 12 = "501 syntax error, illegal parameters\r\n") (re 13 = "500 unknown command\r\n")
       (rs 14 = ["221 bye\r\n" 1]) (all (r \ r 1 = 0) (take 14 rs))
-      ; a dot opening a line is doubled; quotes and a backslash in a command's words
+      ; a dot opening a line is doubled; quotes part a command's words, a backslash and its byte kept
       (has? (<(talk ["DEFINE law \"abandon\""] 1 0)) "\r\n..a dot opens this line\r\n")
-      (dict-args "DEFINE 'a b' \"c \\\"d\\\"\" e\\ f" = ["DEFINE" "a b" "c \"d\"" "e f"]))
+      (dict-args "DEFINE 'a b' \"c \\\"d\\\"\" e\\ f" = ["DEFINE" "a b" "c \\\"d\\\"" "e\\ f"]))
    (hark ["rm" "-rf" d]))

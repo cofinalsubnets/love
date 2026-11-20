@@ -27,7 +27,7 @@ $(eval $(call p_obj,main,test/boards/rp2350/main.c,main.c rp2350.h ../battery.h 
 $(eval $(call p_obj,usb,test/boards/rp2040/usb.c,../rp2040/usb.c rp2350.h $(S)/inle/usbcdc.h $(mc),$(rp_cc) -D 'UCDC_PRODUCT="love board"'))
 # the swd probe, ../rp2040's, on this chip
 $(eval $(call p_obj,probe,test/boards/rp2040/probe.c,../rp2040/probe.c rp2350.h $(mc),$(rp_cc)))
-$(eval $(call p_obj,pusb,test/boards/rp2040/usb.c,../rp2040/usb.c rp2350.h $(S)/inle/usbcdc.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,pusb,test/boards/rp2040/usb.c,../rp2040/usb.c rp2350.h $(S)/inle/usbcdc.h $(mc),$(rp_cc) -D UCDC_ACM2))
 
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
