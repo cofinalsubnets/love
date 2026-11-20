@@ -164,7 +164,7 @@ thumb2sp)
   LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/r4.c" -o "$d/r4.o" || fail "mooncc r4.c"
   arm-none-eabi-objdump -d "$d/r4.o" | grep -qE 'stmdb.*\{r4,' || fail "thumb2 leaves r4 idle under pressure"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
-  for f in raster lamp poly swatch audio/tones; do
+  for f in raster lamp poly swatch audio/tones audio/tonerun; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
     arm-none-eabi-nm -u "$d/nosoft.o" | grep -E '__aeabi_(dadd|dsub|dmul|ddiv|dcmp|i2d|ui2d|fadd|fsub|fmul|fdiv|fcmp|i2f|ui2f|f2iz|f2uiz)' && fail "$f.c calls a soft float or double"
   done
