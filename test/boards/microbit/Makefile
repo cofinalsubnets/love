@@ -13,14 +13,16 @@ include ../../../src/inle/port.mk
 MICROBIT_DRIVE ?= /run/media/$(USER)/MICROBIT
 mb_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
 
-objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/song.o $(R)/$(o)/tonerun.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 
 .PHONY: microbit flash
 default: microbit
 microbit: $(R)/$(o)/firm.bin $(R)/$(o)/firm-ram.bin
 
 $(eval $(call p_obj,microbit,test/boards/microbit/microbit.c,microbit.c microbit.h ../crt0.h $(S)/inle/bput.h $(mc),$(mb_cc)))
-$(eval $(call p_obj,main,test/boards/microbit/main.c,main.c microbit.h ../battery.h $(S)/inle/bput.h $(mc),$(mb_cc)))
+$(eval $(call p_obj,main,test/boards/microbit/main.c,main.c microbit.h song.h $(S)/love/audio/tones.h ../battery.h $(S)/inle/bput.h $(mc),$(mb_cc)))
+$(eval $(call p_obj,song,test/boards/microbit/song.c,song.c song.h $(S)/love/audio/tones.h $(mc),$(mb_cc)))
+$(eval $(call p_obj,tonerun,src/love/audio/tonerun.c,$(S)/love/audio/tonerun.c $(S)/love/audio/tones.h $(mc),$(mb_cc)))
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",../armboot.l))
 $(eval $(call p_link,xlink,../boardld.l))
 $(eval $(p_ocopy))

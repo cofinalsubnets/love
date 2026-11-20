@@ -12,7 +12,7 @@
 #   skip    not held to anything here: assumes a 64-bit long, or no witness
 #   nogcc   held to x86-64 alone
 #   gnopie  an address as an "i" operand: gcc wants no pie
-# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 rv32 xtensa wasm arm i386 i386m16 thumb1 thumb2)
+# usage: ccbat.sh TARGET OUTDIR LOVE   (TARGET: a64 rv64 rv32 xtensa mips wasm arm i386 i386m16 thumb1 thumb2)
 . test/gate/skip.sh
 . test/gate/a64run.sh
 . test/gate/cclib.sh
@@ -181,6 +181,63 @@ case $tgt in
     gref() {
       clang $rvf -O0 -w -ffreestanding -Dmain=cc_main -c "$2" -o "$1.o" \
         && ld.lld -o "$1" "$d/start.cc.o" "$d/run.cc.o" "$1.o" "$d/sf.o" "$d/rt.o"
+    } ;;
+  mips)
+    # gwen's routers' isa, big-endian mips32r2 o32, under qemu-mips's 24Kc: bare as rv32's, _start
+    # exits by syscall 4001. clang's build is the witness, linked by ld.lld over rv32sf.c's libgcc
+    # names and rt.c, both mooncc's: clang's code calls ours across o32
+    for tool in clang ld.lld qemu-mips; do have $tool || gate_skip "$name: no $tool, skipped"; done
+    a64_qemu="qemu-mips -cpu 24Kc"
+    pretty=qemu-mips
+    GCC=clang
+    exitonly=1
+    mflags="-os none -Dmain=cc_main -c"
+    # no gas dialect: a target asm refuses
+    refuse="$int128s 364-w128float 297-frameaddr 327-bcp-splice 357-asmoutaddr"
+    wide="68-static-assert 120-bfinit 161-enumwide"
+    narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
+    nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
+      148-tagscope 149-paste 150-alloc 154-blockextern 158-gnukw 159-stmtexpr 160-rangeinit 162-constexpr
+      163-bitfields 164-switchtab 165-constcond 166-condconv 228-strictalign 280-cxf-fuzz
+      283-splitsexpr 298-malloc-wrap 300-aligned-alloc 301-free-checks 302-realloc-grow 303-arena-churn
+      304-size-classes 315-alloca-stack 345-jmpsave 348-libcmore 353-intuint 354-idioms 355-cplxarg
+      356-vafnval 390-qualon"
+    nogcc="72-quals 95-libcfill 140-fsuffix 176-cleanup 268-overflow-p 269-builtin-alloca 308-negnan
+      311-coldsplit 315-rgnnest 375-splitcall 380-initcover 383-vfpimm 385-packedinit 142-syntax
+      152-rotate 378-extbounds"
+    mpf="--target=mips-unknown-elf -march=mips32r2 -msoft-float -mno-abicalls -fno-pic -G0"   # no gp: no small data
+    { echo 'int cc_main(int, char **);'
+      echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
+      echo 'void *memset(void *p, int c, unsigned long n){'
+      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
+      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
+      echo 'void *memmove(void *a, const void *b, unsigned long n){'
+      echo ' unsigned char *x = a; const unsigned char *y = b;'
+      echo ' if (x < y) { while (n--) *x++ = *y++; }'
+      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
+      echo 'int strcmp(const char *a, const char *b){'
+      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+    } > "$d/run.c"
+    # exit's status in a0 (holo's r2), 4001 in v0 (r0)
+    { echo 'int main(void);'
+      echo 'void _start(void){ int r = main();'
+      echo ' __attribute__((holo)) asm volatile("mov r2, %0\n\tli r0, 4001\n\tsys" :: "r"(r) : "r0", "r2"); for (;;); }'
+    } > "$d/start.c"
+    { echo 'int main(void);'
+      echo 'void _start(void){ int r = main();'
+      echo ' __asm__ volatile("move $4, %0\n\tli $2, 4001\n\tsyscall" :: "r"(r) : "$2", "$4"); for (;;); }'
+    } > "$d/ccstart.c"
+    moonrun -t mips -os none -c -o "$d/run.o" "$d/run.c" || fail "mooncc run.c"
+    moonrun -t mips -os none -c -o "$d/start.o" "$d/start.c" || fail "mooncc start.c"
+    moonrun -t mips -os none -c -o "$d/rt.o" src/apps/moon/lib/rt.c || fail "mooncc rt.c"
+    moonrun -t mips -os none -c -o "$d/sf.o" test/gate/rv32sf.c || fail "mooncc rv32sf.c"
+    clang $mpf -O1 -ffreestanding -fno-builtin -c "$d/run.c" -o "$d/run.cc.o" || fail "clang run.c"
+    clang $mpf -O1 -ffreestanding -c "$d/ccstart.c" -o "$d/start.cc.o" || fail "clang start.c"
+    blink() { moonrun -t mips -os none -nostdlib -Ttext 0x400000 -o "$2" "$d/start.o" "$1" "$d/run.o" "$d/rt.o"; }
+    gref() {
+      clang $mpf -O0 -w -ffreestanding -Dmain=cc_main -c "$2" -o "$1.o" \
+        && ld.lld -e _start -Ttext=0x400000 -o "$1" "$d/start.cc.o" "$d/run.cc.o" "$1.o" "$d/sf.o" "$d/rt.o"
     } ;;
   xtensa)
     # the esp32's lx6 under qemu-xtensa's user mode (dc233c: no mul32_high, which moon leaves be),
@@ -474,6 +531,26 @@ if [ $tgt = rv32 ]; then
     echo "hosted: $nh programs the board cannot link run over moonlibc on qemu-riscv32 as on arm"
   else
     gate_partly "  (the hosted rv32 leg skipped: no qemu-arm for its witness)"
+  fi
+fi
+if [ $tgt = mips ]; then
+  # the hosted leg, as rv32's: what the board cannot link, and test/libc's programs whose output
+  # neither a 64-bit long nor mips's own numbers move, over moonlibc on linux, held to arm's
+  if have qemu-arm; then
+    nh=0
+    mlibc="altstack buf cal ctype elf exec fnmatch gen line mem mstream odds opt rbuf shell sort str terrno thread"
+    for b in $nolibc $mlibc; do
+      f=test/cc/$b.c; [ -f "$f" ] || f=test/libc/$b.c
+      moonrun -t mips -os linux -Itest/libc -o "$d/$b.h" "$f" > "$d/$b.hlog" 2>&1 || { cat "$d/$b.hlog" >&2; fail "$b: a hosted mips link failed"; }
+      moonrun -t arm -Itest/libc -o "$d/$b.ha" "$f" > "$d/$b.halog" 2>&1 || { cat "$d/$b.halog" >&2; fail "$b: the arm witness failed to build"; }
+      { timeout 120 qemu-mips -cpu 24Kc "$d/$b.h"; echo "rc $?"; } > "$d/$b.hout" 2>&1
+      { timeout 120 qemu-arm "$d/$b.ha"; echo "rc $?"; } > "$d/$b.haout" 2>&1
+      cmp -s "$d/$b.hout" "$d/$b.haout" || { diff "$d/$b.haout" "$d/$b.hout" | head -10 >&2; fail "$b: hosted mips and arm disagree"; }
+      nh=$((nh + 1))
+    done
+    echo "hosted: $nh programs run over moonlibc on qemu-mips as on arm"
+  else
+    gate_partly "  (the hosted mips leg skipped: no qemu-arm for its witness)"
   fi
 fi
 if [ $tgt = a64 ]; then

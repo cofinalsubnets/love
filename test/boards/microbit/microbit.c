@@ -33,6 +33,7 @@ void cmain(void) {
 
 // the crystal, bounded: a timeout stays on the internal rc, which the banner says
 void clocks_init(void) {
+  REG(NVMC_ICACHECNF) = 1;
   REG(CLOCK_HFSTARTED) = 0;
   REG(CLOCK_HFCLKSTART) = 1;
   for (uint32_t i = 0; i < 4000000u && !REG(CLOCK_HFSTARTED); i++) {} }
@@ -186,3 +187,39 @@ void ble_adv(uint8_t const *pdu) {
     REG(RADIO_DISABLED) = 0;
     REG(RADIO_TXEN) = 1;
     while (!REG(RADIO_DISABLED)) {} } }
+
+// --- the speaker's samples: PWM0 on the speaker's pin plays a then b, n duties each out of
+// PWM_TOP, and again forever; pwm_ended(i) says (once) that i has played and may be laid
+// again while the other plays. a and b live in RAM, which EasyDMA reads
+void pwm_start(uint16_t const *a, uint16_t const *b, uint32_t n) {
+  REG(PWM_PSEL_OUT0) = SPKR_PIN;
+  REG(PWM_ENABLE) = 1;
+  REG(PWM_MODE) = 0;                                      // up
+  REG(PWM_COUNTERTOP) = PWM_TOP;
+  REG(PWM_PRESCALER) = 0;                                 // 16 MHz
+  REG(PWM_DECODER) = 0;                                   // one duty for every channel, by refresh
+  uint16_t const *q[2] = { a, b };
+  for (uint32_t i = 0; i < 2; i++) {
+    REG(PWM_SEQ_PTR(i)) = (uint32_t) (uintptr_t) q[i];
+    REG(PWM_SEQ_CNT(i)) = n;
+    REG(PWM_SEQ_REFRESH(i)) = 16000000u / PWM_TOP / PWM_RATE - 1u;
+    REG(PWM_SEQ_ENDDELAY(i)) = 0;
+    REG(PWM_EVENTS_SEQEND(i)) = 0; }
+  REG(PWM_LOOP) = 1;                                      // a then b, a loop
+  REG(PWM_SHORTS) = 1u << 2;                              // the loop done starts a again
+  REG(PWM_EVENTS_STOPPED) = 0;
+  REG(PWM_TASKS_SEQSTART0) = 1; }
+
+int pwm_ended(int i) {
+  if (!REG(PWM_EVENTS_SEQEND(i))) return 0;
+  REG(PWM_EVENTS_SEQEND(i)) = 0;
+  return 1; }
+
+// the pin back to the gpio, low, for the static's noise
+void pwm_stop(void) {
+  REG(PWM_SHORTS) = 0;
+  REG(PWM_TASKS_STOP) = 1;
+  for (uint32_t i = 0; i < 100000u && !REG(PWM_EVENTS_STOPPED); i++) {}
+  REG(PWM_ENABLE) = 0;
+  REG(PWM_PSEL_OUT0) = PSEL_OFF;
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }

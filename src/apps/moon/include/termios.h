@@ -45,11 +45,19 @@ struct termios {
 #define ECHOK      32
 #define ECHONL     64
 #define NOFLSH    128
+#ifdef __mips__
+#define TOSTOP    32768
+#else
 #define TOSTOP    256
+#endif
 #define ECHOCTL   512
 #define ECHOPRT  1024
 #define ECHOKE   2048
+#ifdef __mips__
+#define FLUSHO   8192
+#else
 #define FLUSHO   4096
+#endif
 #define PENDIN  16384
 /* a speed is its number, as glibc and the BSDs spell it; tcsetattr lays linux's CBAUD code */
 #define CBAUD   0x100f
@@ -92,24 +100,42 @@ struct termios {
 #define IXON 1024
 #define ISIG    1
 #define ICANON  2
+#ifdef __mips__
+#define IEXTEN 256
+#else
 #define IEXTEN 32768
+#endif
 #define NCCS   32
 #define VINTR   0
 #define VQUIT   1
 #define VERASE  2
 #define VKILL   3
+#ifdef __mips__
+#define VEOF    16
+#define VTIME   5
+#define VMIN    4
+#else
 #define VEOF    4
 #define VTIME   5
 #define VMIN    6
+#endif
 #define VSTART  8
 #define VSTOP   9
 #define VSUSP  10
+#ifdef __mips__
+#define VEOL   17
+#else
 #define VEOL   11
+#endif
 #define VREPRINT 12
 #define VDISCARD 13
 #define VWERASE 14
 #define VLNEXT 15
+#ifdef __mips__
+#define VEOL2  6
+#else
 #define VEOL2  16
+#endif
 #define TCIFLUSH  0
 #define TCOFLUSH  1
 #define TCIOFLUSH 2

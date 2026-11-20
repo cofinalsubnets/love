@@ -478,6 +478,35 @@
            [(show <m + (two? (m 1) ? ("\t" + xa-join ", " (map (o \ rvd-opt o sym) (m 1))) "")
              + (3 < #it ? (sym (it 3)) "")) ()]))))
 
+;; mips: a big-endian word decoded by its row in mips-tab (mips.l), and shown as llvm-objdump
+;; writes it. an operand: (r n) (im v) (mem off n) (lbl a)
+(: (md-r n) (n @ 0 "$zero" 28 "$gp" 29 "$sp" 30 "$fp" 31 "$ra" ("$" + show n))
+   (md-op k w pc)
+    (: (f sh n) (w >> sh & ((1 << n) - 1)) (sx v n) (v >= 1 << (n - 1) ? (v - (1 << n)) v)
+       (k @ 'rd ['r (f 11 5)] 'rs ['r (f 21 5)] 'rdt ['r (f 11 5)] 'rt ['r (f 16 5)] 'z ['r 0]
+            'hw ['r (f 11 5)] ('sa || 'pos) ['im (f 6 5)] 'i16 ['im (sx (f 0 16) 16)] 'u16 ['im (f 0 16)]
+            'mem ['mem (sx (f 0 16) 16) (f 21 5)] 'b16 ['lbl (pc + 4 + (sx (f 0 16) 16 << 2) & 4294967295)]
+            'j26 ['lbl ((pc + 4) >> 28 << 28 | f 0 26 << 2)]
+            'exsz ['im (f 11 5 + 1)] 'insz ['im (f 11 5 - f 6 5 + 1 & 63)]
+            (scare 'mips-dec-kind k)))
+   ;; -> (n item): item (op name ops), or (dir "<unknown>") for no row
+   (mips-dec s i pc)
+    (? (#s < i + 4) [(#s - i) ['dir "<unknown>"]]
+       (: w (dc-at s i << 24 | dc-at s (i + 1) << 16 | dc-at s (i + 2) << 8 | dc-at s (i + 3))
+          (rvd-first (r \ w & r 2 = r 1) mips-tab @ r
+           (!(two? r) ? [4 ['dir "<unknown>"]] [4 ['op <r (map (k \ md-op k w pc) (r 3))]]))))
+   (mips-disasm s base lo hi) (od-walk mips-dec s base lo hi)
+   (md-opt o sym)
+    (<o @ 'r (md-r (o 1)) 'im (od-hex (o 1))
+          'mem (od-hex (o 1) + "(" + md-r (o 2) + ")")
+          'lbl (od-hex (o 1) + sym (o 1))
+          (show o))
+   ;; a row -> (text notes) as x64-od answers
+   (mips-od r a sym)
+    (: it (r 2)
+       (? (<it = 'skip) ["..." ()] (<it = 'dir) [(it 1) ()]
+          [(show (it 1) + (two? (it 2) ? ("\t" + xa-join ", " (map (o \ md-opt o sym) (it 2))) "")) ()])))
+
 ;; a64: a word decoded by its row in a64-tab (a64.l), and shown as llvm-objdump writes it. an
 ;; operand: (x n) (w n) with 31 zr and 32 sp, (f c n), (v n arr), (el n c i), (im v) (dec v)
 ;; (sh name v) (ext name v), (cc k), (mem n off) (pre n off) (post n off) (memr n m ext amt s),

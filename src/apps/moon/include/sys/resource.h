@@ -17,11 +17,19 @@ typedef unsigned long rlim_t;
 #define RLIMIT_DATA    2
 #define RLIMIT_STACK   3
 #define RLIMIT_CORE    4
+#ifdef __mips__
+#define RLIMIT_RSS     7
+#define RLIMIT_NPROC   8
+#define RLIMIT_NOFILE  5
+#define RLIMIT_MEMLOCK 9
+#define RLIMIT_AS      6
+#else
 #define RLIMIT_RSS     5
 #define RLIMIT_NPROC   6
 #define RLIMIT_NOFILE  7
 #define RLIMIT_MEMLOCK 8
 #define RLIMIT_AS      9
+#endif
 struct rlimit { rlim_t rlim_cur, rlim_max; };
 int getrlimit(int, struct rlimit*), setrlimit(int, const struct rlimit*);
 #define PRIO_PROCESS 0

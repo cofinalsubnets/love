@@ -81,8 +81,8 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # either: everything else carries src/love/fd.c, whose bodies are the real ones, and two of
 # them in one link is a collision that says so. a board that grows a speaker drops
 # nohorn for src/love/horn.c, which answers love_horn_writen itself -- out/front is the link that
-# shows the shape.
-love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
+# shows the shape. the tones' operators ride along, so a seat with no card still renders a song
+love_m   = $(basename $(love_tu) $(love_codec)) audio/tones audio/tonerun bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
