@@ -5,21 +5,22 @@
 #include <fenv.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include "say.h"
 
-static unsigned long ub(double x) { unsigned long u; memcpy(&u, &x, 8); return u; }
+static uint64_t ub(double x) { uint64_t u; memcpy(&u, &x, 8); return u; }
 static unsigned uf(float x) { unsigned u; memcpy(&u, &x, 4); return u; }
-static double db(unsigned long u) { double d; memcpy(&d, &u, 8); return d; }
+static double db(uint64_t u) { double d; memcpy(&d, &u, 8); return d; }
 static char b[64];
 #define X(nm, v) say_u(nm, ub(v))
 #define N(nm, v) do { snprintf(b, sizeof b, "%.12g", (double) (v)); say_s(nm, b); } while (0)
 
 static double const vs[] = { -2.5, -1.5, -0.5, -0.4, -0.0, 0.0, 0.4, 0.5, 0.49999999999999994, 1.5,
                              2.5, 3.5, -3.5, 4503599627370495.5, 1e300, -7.0 };
-static unsigned long seed = 88172645463325252UL;
+static uint64_t seed = 88172645463325252ULL;
 static double rnd(void) {                          /* a double of any exponent near 1 */
   seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17;
-  return db((seed & 0x800fffffffffffffUL) | ((1023UL - 30 + (seed >> 52) % 60) << 52)); }
+  return db((seed & 0x800fffffffffffffUL) | ((uint64_t) (1023 - 30 + (seed >> 52) % 60) << 52)); }
 
 int main(void) {
   double inf = 1.0 / 0.0, nn = 0.0 / 0.0, sub = db(1);
@@ -30,7 +31,7 @@ int main(void) {
     say_n("fpclassify", fpclassify(cl[i]) == FP_NAN ? 0 : fpclassify(cl[i]) == FP_INFINITE ? 1
                         : fpclassify(cl[i]) == FP_ZERO ? 2 : fpclassify(cl[i]) == FP_SUBNORMAL ? 3 : 4);
     say_n("isnan isinf isfinite isnormal signbit",
-          !!isnan(cl[i]) * 10000 + !!isinf(cl[i]) * 1000 + !!isfinite(cl[i]) * 100 + !!isnormal(cl[i]) * 10 + !!signbit(cl[i])); }
+          !!isnan(cl[i]) * 10000 + !!isinf(cl[i]) * 1000 + !!isfinite(cl[i]) * 100 + !!isnormal(cl[i]) * 10 + (!!signbit(cl[i]) && !isnan(cl[i])));   /* a nan's sign is the isa's */ }
   say_n("float subnormal", fpclassify(fsub) == FP_SUBNORMAL);
   say_n("isnan(NAN) isinf(INFINITY)", isnan(NAN) * 10 + !!isinf(INFINITY));
   say_n("isgreater nan", isgreater(nn, 1.0) * 100 + isless(1.0, 2.0) * 10 + isunordered(nn, 1.0));
@@ -39,7 +40,8 @@ int main(void) {
     double v = vs[i];
     X("trunc", trunc(v)); X("floor", floor(v)); X("ceil", ceil(v)); X("round", round(v));
     X("rint", rint(v)); X("nearbyint", nearbyint(v));
-    if (fabs(v) < 1e18) { say_n("lrint", lrint(v)); say_n("lround", lround(v)); say_n("llround", llround(v)); }
+    if (fabs(v) < 2e9) { say_n("lrint", lrint(v)); say_n("lround", lround(v)); }
+    if (fabs(v) < 1e18) say_n("llround", llround(v));
     say_u("roundf", uf(roundf((float) v))); say_u("truncf", uf(truncf((float) v))); say_u("rintf", uf(rintf((float) v))); }
   say_n("lrintf", lrintf(2.5f)); say_n("lroundf", lroundf(-2.5f));
   X("trunc inf", trunc(inf)); X("floor -inf", floor(-inf)); X("round nan", round(nn) == round(nn));
@@ -82,7 +84,7 @@ int main(void) {
   X("fma cancel", fma(1.0 + db(0x3cb0000000000000UL), 1.0 - db(0x3ca0000000000000UL), -1.0));
   X("fma sub", fma(1e-300, 1e-10, 0.0)); X("fma sub2", fma(db(0x0010000000000001UL), 0.5, -db(0x0008000000000000UL)));
   X("fma over", fma(1e308, 10.0, -1e308)); X("fma sign", fma(-1.0, 1.0, 1.0));
-  unsigned long h = 0, hf = 0;
+  uint64_t h = 0, hf = 0;
   for (int i = 0; i < 400; i++) {
     double a = rnd(), c = rnd(), d = rnd();
     if (i & 1) d = -a * c * (1.0 + db(0x3cb0000000000000UL) * (i & 7));

@@ -263,8 +263,10 @@
                        (ws? (s i)) (go (i + 1) (i + 1) shut)
                        (go (i + 1) st acc)))
                 (go 0 0 ()))
-   (upper s) (string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars s)))
-   (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
+   ; each character's simple case, in C
+   ucase (cite 'ucd 'case)
+   (upper s) (ucase 1 (string s))
+   (lower s) (ucase 0 (string s))
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
    (uniq l)  (: (go seen l) (? (atom? l) () (peep seen <l 0) (go seen >l)

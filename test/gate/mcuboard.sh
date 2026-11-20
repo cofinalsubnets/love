@@ -36,13 +36,19 @@ sd=$ho/board-$cap
 rm -rf "$sd"; mkdir -p "$sd"
 if [ "$cap" = teensy41-usb ]; then
   cp "$img" "$sd/firm.hex"
+  cp "$ho/love" src/apps/swd.l test/gate/swdpress.l "$sd/"
   green='*40002*'
-  # the console is the host's tty fact, BEE_TTY under bee --on
+  # the console is the host's tty fact, BEE_TTY under bee --on; a button fact (a probe's line
+  # on its program pin, `aux lovswd TTY`) presses it, so an image not ours or hung still loads
   cat > "$sd/run.sh" <<'EOF'
-tty=${BEE_TTY:-}
+tty=${BEE_TTY:-} button=${BEE_BUTTON:-}
 [ -n "$tty" ] || { echo "the host gives no tty fact"; exit 1; }
 command -v teensy_loader_cli >/dev/null || { echo "no teensy_loader_cli on the host"; exit 1; }
-stty -F "$tty" 134 2>/dev/null || true
+if [ -n "$button" ]; then
+  ./love swdpress.l $button > press.log 2>&1 || { tail -3 press.log; echo "the button press failed"; exit 1; }
+else
+  stty -F "$tty" 134 2>/dev/null || true
+fi
 timeout 90 teensy_loader_cli --mcu=TEENSY41 -w -v firm.hex > flash.log 2>&1 \
   || { tail -5 flash.log; echo "the flash failed (an image that is not ours, or hung, wants the button)"; exit 1; }
 n=0
