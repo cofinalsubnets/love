@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "../../../src/love/audio/tones.h"
 
-enum { sg_rate = 16000, sg_chunk = 256, sg_notes = 4, sg_parts = 3, sg_dl = 8192 };
+enum { sg_rate = 10000, sg_chunk = 256, sg_notes = 4, sg_parts = 3, sg_dl = 8192 };
 
 // a box note: its partials' rows, from frame 0 at its start, and their feedback
 struct sg_note { uint32_t at, end, no; tn_flo ops[sg_parts * tn_row], st[2 * sg_parts]; };

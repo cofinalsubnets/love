@@ -39,6 +39,7 @@ void cmain(void) {
 
 // the crystal, bounded: a timeout stays on the internal rc, which the banner says
 void clocks_init(void) {
+  REG(NVMC_ICACHECNF) = 1;
   REG(CLOCK_HFSTARTED) = 0;
   REG(CLOCK_HFCLKSTART) = 1;
   for (uint32_t i = 0; i < 4000000u && !REG(CLOCK_HFSTARTED); i++) {} }

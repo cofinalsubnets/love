@@ -18,6 +18,7 @@
 #define CLOCK_HFCLKSTAT    0x4000040Cu
 #define HFCLKSTAT_XTAL     (1u << 0)
 #define HFCLKSTAT_RUNNING  (1u << 16)
+#define NVMC_ICACHECNF     0x4001E540u   // the flash's instruction cache, off at reset
 
 // --- GPIO ----------------------------------------------------------------
 #define P0 0x50000000u
@@ -128,8 +129,8 @@ void arm_irq_off(void);
 #define PWM_SEQ_REFRESH(i)   (PWM0 + 0x528u + 0x20u * (i))
 #define PWM_SEQ_ENDDELAY(i)  (PWM0 + 0x52Cu + 0x20u * (i))
 #define PWM_PSEL_OUT0        (PWM0 + 0x560u)
-#define PWM_TOP 500u     // 16 MHz over 500: a 32 kHz carrier
-#define PWM_RATE 16000u  // each duty held two periods: 16 kHz samples
+#define PWM_TOP 400u     // 16 MHz over 400: a 40 kHz carrier
+#define PWM_RATE 10000u  // each duty held four periods: 10 kHz samples
 
 // microbit.c
 void clocks_init(void);

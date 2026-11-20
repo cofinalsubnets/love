@@ -6,11 +6,14 @@ float lm_expf(float);
 #define sg_db ((tn_flo) 8.685889638065035)            // dB a neper
 #define sg_c4 ((tn_flo) 261.6255653005986)
 #define sg_semi ((tn_flo) 0.057762265046662105)       // ln 2 / 12
-#define sg_gain ((tn_flo) (5200.0 / 32768 * 2))       // song-gain, twice it for the small speaker
+#define sg_gain ((tn_flo) 0.56)                      // its loudest at about 0.95 of the range
 
-static tn_flo const phrase[3] = { -5.5f, -3.5f, -12.5f };
-static tn_flo const drone_notes[2] = { -24.5f, -17.5f };
-static tn_flo const echoes[3][2] = { { 0.09f, 0.45f }, { 0.21f, 0.28f }, { 0.37f, 0.16f } };
+// two octaves over apartment.l's, where the board's small speaker sounds
+static tn_flo const phrase[3] = { 18.5f, 20.5f, 11.5f };
+static tn_flo const drone_notes[2] = { -0.5f, 6.5f };
+// a note's returns: frames behind it (0.09 0.21 0.37 s), and how loud
+static uint32_t const echo_at[3] = { 900, 2100, 3700 };
+static tn_flo const echo_g[3] = { 0.45f, 0.28f, 0.16f };
 static tn_flo const box[sg_parts][3] = { { 2.0f, 1.0f, 0.0f }, { 6.0f, 0.3f, 6.0f }, { 11.6f, 0.15f, 9.0f } };   // ratio level decay
 enum { sg_loop = 20 * sg_rate };                      // the drone repeats each 20 s
 
@@ -75,12 +78,16 @@ void song_fill(struct song *s, uint16_t *d, uint32_t n, uint32_t top) {
       struct sg_note *v = s->nt + k;
       if (v->end > pos && v->no)
         tones_run(v->ops, v->no, v->st, sg_chunk, (int64_t) pos - (int64_t) v->at, sg_rate, s->B, s->B, s->sc); }
+    // the arrays and tables held in locals: mooncc reaches a field deep in the struct by a
+    // chain of adds each time it is named
+    tn_flo *const dl = s->dl, *const L = s->L, *const B = s->B;
+    uint32_t const e0 = echo_at[0], e1 = echo_at[1], e2 = echo_at[2];
+    tn_flo const g0 = echo_g[0], g1 = echo_g[1], g2 = echo_g[2], half = 0.5f * (tn_flo) top;
     for (int i = 0; i < sg_chunk; i++) {
       uint32_t const t = pos + (uint32_t) i;
-      s->dl[t & (sg_dl - 1)] = s->B[i];
-      tn_flo y = s->L[i] + s->B[i];
-      for (int e = 0; e < 3; e++) y += echoes[e][1] * s->dl[(t - (uint32_t) (echoes[e][0] * sg_rate)) & (sg_dl - 1)];
-      y *= sg_gain;
+      dl[t & (sg_dl - 1)] = B[i];
+      tn_flo y = (L[i] + B[i] + g0 * dl[(t - e0) & (sg_dl - 1)] + g1 * dl[(t - e1) & (sg_dl - 1)]
+                  + g2 * dl[(t - e2) & (sg_dl - 1)]) * sg_gain;
       y = y > 1 ? 1 : y < -1 ? -1 : y;
-      d[i] = (uint16_t) ((tn_flo) top * (0.5f + 0.5f * y)); }
+      d[i] = (uint16_t) (half + half * y); }
     s->pos = pos + sg_chunk; } }

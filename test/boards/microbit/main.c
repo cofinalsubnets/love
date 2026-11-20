@@ -143,13 +143,13 @@ int main(void) {
   int touched = 0;
   uint32_t gl[3] = { 0, 0, 0 };   // life: the board, the one before, its clock (0: seed anew)
   int was = 0;                    // the last pass's mode, b's value or 3 for the static
-  // the song plays while the moon is shown, half a buffer laid while the other half plays, and
-  // takes up where it left off
+  // the song plays while the moon is shown, a half of the buffer laid while the other plays, a
+  // chunk a pass so the matrix is never long dark; it takes up where it left off
   enum { half = 2 * sg_chunk };
   struct song sg;
   uint16_t pa[2][half];
   song_init(&sg, z);
-  int sing = 0;
+  int sing = 0, due[2] = { 0, 0 };   // each half's chunks still to lay
   puts_("; logo "), putu(base), puts_(" us\n");
   led_put(0);
   // the beacon every tenth pass, ~100 ms; the temperature read again each second
@@ -164,9 +164,12 @@ int main(void) {
       song_fill(&sg, pa[0], half, PWM_TOP);
       if (sg.pos == half) puts_("; song "), putu(clock_us() - t0), puts_(" us a half\n");
       song_fill(&sg, pa[1], half, PWM_TOP);
-      pwm_start(pa[0], pa[1], half), sing = 1; }
+      pwm_start(pa[0], pa[1], half), sing = 1, due[0] = due[1] = 0; }
     else if (mode != 1 && sing) pwm_stop(), sing = 0;
-    if (sing) for (int i = 0; i < 2; i++) if (pwm_ended(i)) song_fill(&sg, pa[i], half, PWM_TOP);
+    if (sing) {
+      for (int i = 0; i < 2; i++) if (pwm_ended(i)) due[i] = half / sg_chunk;
+      for (int i = 0; i < 2; i++)
+        if (due[i]) { song_fill(&sg, pa[i] + (half / sg_chunk - due[i]) * sg_chunk, sg_chunk, PWM_TOP), due[i]--; break; } }
     if (hiss) snow(lv, &z);
     else if (b == 1) moon(lv, t, sn, nx, nz);
     else if (b == 2) life(lv, t, gl, &z);
