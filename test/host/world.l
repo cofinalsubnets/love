@@ -684,6 +684,14 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; the street's traffic and a music box: each heard, under the clip, keeping its memory from
+; one chunk to the next; the box's reverb left from right
+(: (sw nm) (: st (world-new 8 8 (lv ("(room [0 0 0] [8 3 8]) (hum '" + nm + " [0 0 0] [8 3 8])")) "") _ (pins st 'px 4 'py 1.6 'pz 4)
+              bs (map (_ \ hum-bus st 1600) ^900) (pk f) (foldl (\ a b (max a (f b))) 0.0 bs)
+              (top x) (max (amax x) -(amin x))
+              [(pk (b \ top <b)) (pk (b \ top (<b - >b))) (keys (st 'hum 'mem))])
+   tr (sw "traffic") mb (sw "musicbox")
+ (test (0.05 < tr 0) (tr 0 < 1.0) (tr 2 = ['traffic]) (0.05 < mb 0) (mb 0 < 1.0) (0.0 < mb 1) (mb 2 = ['musicbox])))
 ; deep chunks: a room under the land far from its one opening is left out from above the
 ; ground, one near the opening is not, and nothing is from in the opening or under the ground
 (: (dpb l) (atom? l ? (show l) ("[" + join " " (map dpb l) + "]"))
@@ -795,6 +803,22 @@
    _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
  (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
        (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
+; a feed: its ad its placeholder till a frame is seen, then that frame, the placeholder's green
+; in it, and the overlay's own colour where it is not a hole; a stamp's time hh:mm:ss
+(: fq "(: m (texture 8 4 1 '((fill (rgb 0 1 0))))) (: o (texture 8 4 1 '((fill hole) (rect 0 0 4 4 (rgb 1 0 0))))) "
+   fl (world-read (fq + "(level \"t\" (room [0 0 0] [4 3 4]) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m)) (start [2 0 1] 0 0))"))
+   (lq s) (world-read (fq + "(level \"t\" " + s + ")"))
+   fst (world-new 16 16 fl "") f1 (world-pens fst) f2 (world-pens fst)
+   sl (lq "(room [0 0 0] [4 3 4]) (stamp [0 0] 1 {48 \"111101101101111\"} (rgb 1 1 1) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m))) (start [2 0 1] 0 0)")
+   sst (world-new 16 16 sl "") _ (world-pens sst) _ (world-pens sst) ss (sst 'sc 'feeds 0 'st)
+   (ch c k) (c >> k & 255)
+   row (map (x \ peep f2 (8 * 16 + x) 0) ^16)
+ (test (#(fst 'sc 'feeds) = 1) (ch (peep f1 (8 * 16 + 8) 0) 8 > ch (peep f1 (8 * 16 + 8) 0) 16)
+       (any (c \ ch c 8 > ch c 16 + 40) row) (any (c \ ch c 16 > ch c 8 + 40) row)
+       (#ss = 8 && ss 2 = 58 && ss 5 = 58 && all (c \ 48 <= c && c <= 57) (map ss [0 1 3 4 6 7]))
+       (has? (lq "(room [0 0 0] [1 1 1]) (stamp [0 0] 1 {} (rgb 1 1 1) (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(stamp [x y] size FONT (rgb r g b) FEED)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [] (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(feed [TEXTURE ..] AD)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [m] (room [0 0 0] [1 1 1]))") "(feed [TEXTURE ..] AD)")))
 ; a vined tree: not climbed till the loop first plays, a tap on the deck, and then not till
 ; its vines have grown to the fork, drawn as they go
 (: vwl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (vined (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))) (deck [5 0 -1] [6 1 1]) (start [6 0 0] 0 0)")
