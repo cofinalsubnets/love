@@ -1,8 +1,9 @@
 #!/bin/sh
-# test/gate/mipsrouter.sh -- test_ccmips's hosted programs, and test/holo/mipsbe.c and mipstp.c, on
-# a big-endian mips linux box bee knows by mips-exec (doc/bee.md, HOSTS), each held to its own
-# qemu-mips answer. qemu-user keeps the registers a real o32 syscall clobbers, and starts a program's
-# thread pointer at 0 where a real kernel keeps the parent's, so only the box sees either.
+# test/gate/mipsrouter.sh -- test_ccmips's hosted programs, the test/libc families they leave out,
+# and test/holo/mipsbe.c and mipstp.c, on a big-endian mips linux box bee knows by mips-exec
+# (doc/bee.md, HOSTS), each held to its own qemu-mips answer. qemu-user keeps the registers a real
+# o32 syscall clobbers, and starts a program's thread pointer at 0 where a real kernel keeps the
+# parent's, so only the box sees either.
 # by hand, by name: the box is a router, so the binaries go to /tmp alone (bee --ship's scratch
 # there) and nothing else on it is touched; what the programs leave in /tmp goes after
 # usage: mipsrouter.sh LOVE OUTDIR
@@ -16,9 +17,14 @@ fail() { echo "FAIL $name: $*"; exit 1; }
 
 "$love" bee --on mips-exec --probe > /dev/null 2>&1 || gate_skip "$name: skipped (no host with mips-exec answers)"
 command -v qemu-mips > /dev/null 2>&1 || gate_skip "$name: skipped (no qemu-mips for the answers)"
-for b in mipsbe mipstp; do
-  "$love" mooncc -t mips -os linux -o "$d/$b.h" test/holo/$b.c > "$d/$b.hlog" 2>&1 || { cat "$d/$b.hlog"; fail "mooncc could not build $b.c"; }
-  { timeout 120 qemu-mips -cpu 24Kc "$d/$b.h"; echo "rc $?"; } > "$d/$b.hout" 2>&1
+# the libc families test_ccmips's hosted set leaves out, from the same /tmp it runs them in
+ad=$(cd "$d" && pwd)
+for f in test/holo/mipsbe.c test/holo/mipstp.c test/libc/*.c; do
+  b=${f##*/}; b=${b%.c}
+  case $f in test/libc/inet.c|test/libc/port.c|test/libc/sig.c) continue ;; esac
+  case $f in test/libc/*) [ -f "$d/$b.hout" ] && continue ;; esac
+  "$love" mooncc -t mips -os linux -Itest/libc -o "$d/$b.h" "$f" > "$d/$b.hlog" 2>&1 || { cat "$d/$b.hlog"; fail "mooncc could not build $b.c"; }
+  ( cd /tmp && { timeout 120 qemu-mips -cpu 24Kc "$ad/$b.h"; echo "rc $?"; } ) > "$d/$b.hout" 2>&1
 done
 sd=$2/mips-router
 rm -rf "$sd"; mkdir -p "$sd/bin"
