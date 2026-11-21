@@ -1187,8 +1187,8 @@
  (unburn lv b) (: ts (lv 'trees)
    _ (each ^#ts (i \ (: o (ts i) q (b 'trees i) (pins o 'pl (q 0) 'trunk (q 1), atom? (q 2) || pin o 'shade (q 2)))))
    (pins lv 'grown 1 'brushes (lv 'brushes + b 'bs) 'pits (b 'pits) 'embers (b 'embers)))
- (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" hit (string? k && scene-got f lv)
-   n0 #(lv 'brushes) hit (tablet? hit && tablet? (hit 'burnt) && hit)
+ (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" got (string? k && scene-got f lv)
+   n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got)
    (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) hit)
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
