@@ -1381,7 +1381,8 @@ long k_fd_chdir(int fd) {
  return 0; }
 
 // linux_dirent64: 19 header bytes, the name with its NUL, rounded to 8
-struct k_dent { unsigned long ino; long off; unsigned short reclen;
+// linux_dirent64, 64-bit ino and off on every arch
+struct k_dent { unsigned long long ino; long long off; unsigned short reclen;
                 unsigned char type; char name[]; };
 static long k_host_dents(struct k_hd *h, void *buf, long cap) {
  long off = 0;
@@ -2318,6 +2319,10 @@ void kmain(void) {
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
  // baked_pick reads the transpose's re-based image as the hosted start does; NULL bakes the egg
+  // the heap's budget, said before a core wakes so its pools are sized inside it. it counts every
+  // pool but not a resize, which holds the old pair beside the new: a third of RAM leaves room for
+  // that. a seat under 32 MB gives three quarters, and the wake keeps its pools to it
+  love_budget_boot = kram_words < ((uintptr_t) 32 << 20) / sizeof(word) ? kram_words - kram_words / 4 : kram_words / 3;
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
@@ -2334,9 +2339,6 @@ void kmain(void) {
   // then the kernel's own, on both lanes, so a kernel row wins any name it shares
   g = defn(g, __start_knifs,
               (uintptr_t)(__stop_knifs - __start_knifs));
-  // the budget counts every pool but not a resize, which holds the old pair beside the new;
-  // a third of RAM leaves room for that
-  if (ok(g)) g->budget = kram_words / 3;
   // the kore roster; the cat itself is read off the ramfs below
   g = strof(g, src_korelist);
   struct def kd[] = {{"korelist", {.x = pop1(g)}}};
@@ -2408,7 +2410,8 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = evals_(r,
-   "(: pr (k-prog (. \"pier\" (. \"--here\" ())))"
+   "(: pp (k-prog (. \"pier\" (. \"--here\" ())))"
+   "   pr (? (two? pp) pp (k-prog (. \"lush\" ())))"       // a seat with no pier: lush on the console
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare's face on serial before reset

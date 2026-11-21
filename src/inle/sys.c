@@ -56,6 +56,18 @@ static void stat_fab(struct stat *st, struct k_st const *t) {
   st->st_mtim.tv_nsec = (long) (t->ms % 1000) * 1000000;
   st->st_atim = st->st_ctim = st->st_mtim; }
 
+#ifdef __ILP32__
+// a 32-bit libc asks statx (fstat.c's floor), and reads linux's record
+static void statx_fab(struct __lx_statx *sx, struct k_st const *t) {
+  *sx = (struct __lx_statx) {0};
+  sx->stx_mask = STATX_BASIC_STATS, sx->stx_blksize = 4096, sx->stx_nlink = 1;
+  sx->stx_mode = (unsigned short) t->mode;
+  sx->stx_size = t->size, sx->stx_blocks = (t->size + 511) / 512;
+  sx->stx_mtime.tv_sec = (long long) (t->ms / 1000);
+  sx->stx_mtime.tv_nsec = (unsigned) (t->ms % 1000) * 1000000;
+  sx->stx_atime = sx->stx_ctime = sx->stx_mtime; }
+#endif
+
 static long k_statat(long dfd, char const *p, struct stat *st, long fl) {
  long r = at_ok(dfd, p);
  if (r || !st) return r ? r : -EFAULT;
@@ -87,6 +99,18 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   case NR_ftruncate: return k_fd_truncate((int) a, b);
   case NR_openat:     return k_openat(a, (char const*) b, c, d);
   case NR_newfstatat: return k_statat(a, (char const*) b, (struct stat *) c, d);
+#ifdef __ILP32__
+  case NR_statx: {
+   struct k_st t;
+   char const *p = (char const*) b;
+   if (!e || !p) return -EFAULT;
+   // an empty path with AT_EMPTY_PATH is fstat's ask
+   if ((c & AT_EMPTY_PATH) && !*p) r = k_fd_stat((int) a, &t);
+   else if (!(r = at_ok(a, p))) r = k_fs_stat(p, strlen(p), &t, !(c & AT_SYMLINK_NOFOLLOW));
+   if (r) return r;
+   statx_fab((struct __lx_statx*) e, &t);
+   return 0; }
+#endif
   case NR_utimensat:  return k_utimeat(a, (char const*) b, (struct timespec const*) c, d);
   case NR_mkdirat:
    if ((r = at_ok(a, (char const*) b))) return r;

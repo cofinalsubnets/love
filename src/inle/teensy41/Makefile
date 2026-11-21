@@ -47,14 +47,18 @@ $(foreach u,$(k_brd),$(eval $(call p_obj,$u,src/inle/teensy41/$u.c,$u.c teensy41
 $(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/.kore-cat.l: FORCE
 	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
 # the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
-# agree; it bakes a cat under qemu-arm. the lib alone by default: kore's heap and a major's
-# copy of it pass the 16 MB (k_cat=out/.kore-cat.l takes it anyway). baked under LOVE_NO_GLAZE:
-# a cortex-m has no a32 state, so it cannot enter an arm native's stub, and the cat refuses a
-# bake that loaded the glaze
-k_cat = $(o)/lib-cat.l
+# agree; it bakes a cat under qemu-arm: kore's, so lush and the tools are there at boot
+# (k_src=out/teensy41/lib-cat.l bakes the lib alone). baked under LOVE_NO_GLAZE: a cortex-m has
+# no a32 state, so it cannot enter an arm native's stub, and the cat's last form refuses a bake
+# that loaded the glaze
+k_src = out/.kore-cat.l
+k_cat = $(o)/k-cat.l
 $(R)/$(o)/lib-cat.l: Makefile
 	@mkdir -p $(dir $@)
-	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(? (cite (quote glaze)) (puts "lib-cat: the glaze is loaded, and a cortex-m cannot enter its natives", putc 10, quit 1) 0)\n' > $@
+	@printf '\n(cite (quote verbs) (quote mark) ())\n' > $@
+$(R)/$(k_cat): $(R)/$(k_src) Makefile
+	@mkdir -p $(dir $@)
+	@{ cat $(R)/$(k_src); printf '\n(? (cite (quote glaze)) (puts "k-cat: the glaze is loaded, and a cortex-m cannot enter its natives", putc 10, quit 1) 0)\n'; } > $@
 k_xo = $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o
 $(R)/$(o)/baker: $(k_xo) $(lv)
 	@echo MOON	$@
