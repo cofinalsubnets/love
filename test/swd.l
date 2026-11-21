@@ -358,6 +358,25 @@
                                  ['wr 0xE000EDFC 0] ['wr 0xE000EDF0 0xA05F0000] 'resumes ['wr 0xE000ED0C 0x05FA0004]
                                  'sysreset 'runs])))
 
+; a run from sram: the image's words there, the vector table moved to it, sp and pc (thumb
+; bit off) and xpsr through dcrdr/dcrsr, debug off and read back -- it runs, nothing resets it
+(: t (f4core 0) w <t c (t 1) _ (swd-attach w) n0 #(c 'log ())
+   s (wrle 0x20020000 4 + wrle 0x20000065 4 + "love sram")
+   r (swd-ramrun w 0x20000000 s) m (c 'mem ())
+   moves (filter (e \ !(atom? e) && <e = 'wr && (e 1 = 0xE000EDF8 || e 1 = 0xE000EDF4)) (drop n0 (c 'log ())))
+   (test (1 = r) (0x20000065 = m 0x20000004) (rdle "love" 0 4 = m 0x20000008) (0x20000000 = m 0xE000ED08)
+         (map (e \ e 2) moves = [0x20020000 0x1000D 0x20000064 0x1000F 0x01000000 0x10010])
+         (take 3 (drop (#(c 'log ()) - 3) (c 'log ())) = [['wr 0xE000EDFC 0] ['wr 0xE000EDF0 0xA05F0000] 'resumes])
+         (0 = c 'halted ()) (!(elem 'sysreset (c 'log ())))))
+
+; an rp2040's: the rom's warm entry in watchdog scratch 4-7 -- magic, pc ^ -magic, sp, pc --
+; the psm's watchdog select all but the two oscillators, then the watchdog's trigger, posted
+; till the next transfer (on a probe, its close)
+(: t (f4core 0) w <t c (t 1) _ (swd-attach w)
+   r (rp-ramrun w 0x20000000 (wrle 0x20042000 4 + wrle 0x20000065 4)) g (swd-rd w 0x40058000) m (c 'mem ())
+   (test (1 = r) (map m [0x4005801C 0x40058020 0x40058024 0x40058028] = [0xB007C0D3 0x6FF83F48 0x20042000 0x20000065])
+         (0x1FFFC = m 0x40010008) (0x80000000 = g)))
+
 ; a halt that never shows scares after 101 polls, with dhcsr as last read: here a bus that
 ; reads 0 everywhere
 (: w (swdt-target (swdt-dp f4dp f4aps 0 {'rd (a \ 0) 'wr (\ a v 0) 'mem (_ \ {})})) _ (swd-connect w)

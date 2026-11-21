@@ -17,7 +17,7 @@ objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/song.o $(R)/$(o)/tonerun.
 
 .PHONY: microbit flash
 default: microbit
-microbit: $(R)/$(o)/firm.bin
+microbit: $(R)/$(o)/firm.bin $(R)/$(o)/firm-ram.bin
 
 $(eval $(call p_obj,microbit,test/boards/microbit/microbit.c,microbit.c microbit.h $(S)/inle/bput.h $(mc),$(mb_cc)))
 $(eval $(call p_obj,main,test/boards/microbit/main.c,main.c microbit.h song.h $(S)/love/audio/tones.h ../battery.h $(S)/inle/bput.h $(mc),$(mb_cc)))
@@ -42,6 +42,16 @@ $(R)/$(o)/firm.bin: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
 	  ok = 0x20000000<sp<=0x20020000 and (entry&1)==1 and 0x40<=entry<0x80000; \
 	  print('boot image: sp %08x entry %08x --'%(sp,entry), 'ok' if ok else 'BAD'); \
 	  exit(0 if ok else 1)" || { echo "FAIL boot image layout"; exit 1; }
+
+# the image a board lane runs from sram over swd, the flash never written
+$(R)/$(o)/firm-ram.elf: $(objs) $(R)/$(o)/xlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/xlink.l -ram $(o)/firm-ram.elf $(objs:$(R)/%=%)
+
+$(R)/$(o)/firm-ram.bin: $(R)/$(o)/firm-ram.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/firm-ram.elf $(o)/firm-ram.bin
+	$(call p_ramchk,$(R)/$(o)/firm-ram.bin,0x20020000,0x20010000)
 
 flash: $(R)/$(o)/firm.bin
 	@test -d $(MICROBIT_DRIVE) || { echo "no daplink drive at $(MICROBIT_DRIVE): mount it, or set MICROBIT_DRIVE"; exit 1; }

@@ -644,18 +644,18 @@ test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware and swd probe (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten, runtime and uf2 -- no foreign file, flash R|X, boot surface verified"
-# the boards' batteries on silicon, flashed over swd on a host with the board's cap
+# the boards' batteries on silicon, run from sram on a host with the board's cap: the flash untouched
 test_rp2040_board: test_rp2040
-	@echo TEST out/rp2040/love.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love.bin
+	@echo TEST out/rp2040/love-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love-ram.bin
 # test_rp2350 -- the pico 2 (arm), all-mooncc thumb2sp: its battery and the swd probe, image defs verified
 test_rp2350: host
 	@echo TEST out/rp2350/firm.uf2
 	@$(MAKE) -C test/boards/rp2350 || { echo "FAIL rp2350 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2350: battery and swd probe (all-mooncc thumb2sp, the image definition laid by holo, no sdk), OUR linker, flatten and uf2 -- boot surface verified"
 test_rp2350_board: test_rp2350
-	@echo TEST out/rp2350/firm.uf2 "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm.uf2
+	@echo TEST out/rp2350/firm-ram.uf2 "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm-ram.uf2
 test_esp32s3_board: host
 	@echo TEST test/holo/xtrun.l "(on the esp32-s3, from ram)"
 	@$(gsh) test/gate/esp32s3board.sh $(ho)/love $(ho)
@@ -677,11 +677,11 @@ test_ch32v203_board: test_ch32v203
 	@echo TEST out/ch32v203/firm.bin "(into the ch32v203's flash, by its usb isp)"
 	@$(gsh) test/gate/ch32v203board.sh $(ho)/love out/ch32v203/firm.bin $(ho)
 test_nucleo446_board: test_nucleo446
-	@echo TEST out/nucleo446/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
+	@echo TEST out/nucleo446/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm-ram.bin
 test_microbit_board: test_microbit
-	@echo TEST out/microbit/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
+	@echo TEST out/microbit/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"
@@ -781,6 +781,7 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
+	@$(gsh) test/gate/machobind.sh "$m"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
 # the x86-64 assembler (dialect.l's lay over x64.l's table): goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
 # riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
@@ -954,12 +955,14 @@ test_uulean:
 	@sh test/gate/skip.sh gate-skip "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
-	@mkdir -p test/proof/lean
-	@echo 'LOVE	'test/proof/lean/uugen.lean "(src/tools/uu2lean.l on $m)"
-	@$m src/tools/uu2lean.l > test/proof/lean/uugen.lean
-	@echo TEST test/proof/lean/uugen.lean "(lean)"
-	@$(LEAN) test/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
-	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
+	@rm -rf out/uulean; mkdir -p out/uulean
+	@echo 'LOVE	'out/uulean "(src/tools/uu2lean.l on $m)"
+	@$m src/tools/uu2lean.l out/uulean > out/uulean/order
+	@echo TEST out/uulean "(lean, a module at a time, each over the ones before)"
+	@: > out/.uulean.out; for f in $$(cat out/uulean/order); do \
+	  LEAN_PATH=out/uulean $(LEAN) -o out/uulean/$$f.olean out/uulean/$$f.lean >> out/.uulean.out 2>&1 \
+	    || { cat out/.uulean.out; exit 1; }; \
+	done; if grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
 # random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
@@ -1072,12 +1075,13 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	 KTEST_CAP=vt-x KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
-# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes
+# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc: host $(S)/tools/ktest.l
 	@$(MAKE) -s $(k_elf)
 	@mkdir -p $(ko)/uproc && $(ho)/love mooncc test/kernel/c/hello.c -o $(ko)/uproc/hello
 	@echo TEST $(k_elf) "(C programs and love as x64 processes: ring 3, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "uproc: ok"
 
 # an empty boot line is a pier on the console: keys by qemu's monitor, lush, exit, reset
@@ -1167,12 +1171,13 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 
-# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
 	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
@@ -1197,12 +1202,13 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
-# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
 	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 
