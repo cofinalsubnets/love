@@ -39,10 +39,11 @@ endef
 k_cc = $(MOONCC) -t arm -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
 k_hdr = $(addprefix $(R)/out/lib/,baked.h distlist.h korelist.h crewlist.h seat.h tasks.h)
 k_inle = kmain sys hda
+k_ih = $(wildcard $(S)/inle/*.h)                  # kboot.h lays the record kern.c fills
 k_brd = kern teensy41 usb sd psram
 k_objs = $(k_inle:%=$(R)/$(o)/%.o) $(k_brd:%=$(R)/$(o)/%.o) $(R)/$(o)/boot.o $(R)/$(o)/love-img.o
-$(foreach u,$(k_inle),$(eval $(call p_obj,$u,src/inle/$u.c,$(S)/inle/$u.c $(S)/inle/k.h $(mc) $(k_hdr),$(k_cc))))
-$(foreach u,$(k_brd),$(eval $(call p_obj,$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(S)/inle/k.h $(mc),$(k_cc))))
+$(foreach u,$(k_inle),$(eval $(call p_obj,$u,src/inle/$u.c,$(S)/inle/$u.c $(k_ih) $(mc) $(k_hdr),$(k_cc))))
+$(foreach u,$(k_brd),$(eval $(call p_obj,$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(k_ih) $(mc),$(k_cc))))
 $(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/.kore-cat.l: FORCE
 	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
 # the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
