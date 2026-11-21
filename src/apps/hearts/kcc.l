@@ -4,8 +4,8 @@
 ; another target and a unit mooncc refuses or outruns fail, the target and the road said; under
 ; $HEARTS_KCC_CLANG=1 they are clang's instead, on its own line, each that lays a file, a probe's
 ; aside, logged to $HEARTS_KCC_LOG as `target<TAB>why`. a line that fails is noted in
-; $HEARTS_KCC_REFUSED with its words. a probe fails with the rest, kconfig's of the compiler first,
-; so a build without the knob stops at its config.
+; $HEARTS_KCC_REFUSED with its words. a probe is mooncc's with or without the knob: a flag it does
+; not honour is refused, assembly is holo's, and the version is the one the units are lent.
 ; usage: love kcc.l CLANG-ARGS..   (hearts lays .hearts/bin/hk-cc over this, as CC)
 (borrow 'posix)
 (: argv cmdline
@@ -68,7 +68,29 @@
    (why _) (? (elem "-E" av) "-E" (elem "-S" av) "-S" (string? arch) "not a -c unit" ("target " + <tgt))
    ; a -E lays as clang does with mooncc's own predefines: the kernel's linker scripts match to the byte
    (cpp? _) (elem "-E" av && !(elem "-S" av) && lays? 0 && string? arch)
-   (? (cpp? 0)
+   ; a probe asks what the compiler takes: a source of nothing or of stdin, or a word about the
+   ; compiler itself. mooncc answers each, the kernel's .config saying what it can do
+   (ins l) (? (atom? l) () (<l = "-o") (ins >>l) (<l . ins >l))
+   probe (ins av @ w (elem "-" w || elem "/dev/null" w))
+   (run l) (: p (spawn l) (charm? p && 0 <= p ? (wait p) 127))
+   (pfn _) (filter (a \ starts? a "-print-file-name=") av)
+   ; assembly on stdin goes by a file, which holo reads by its name
+   (asm? _) (after "-x" = "assembler-with-cpp" && elem "-" av)
+   (probed _)
+    (: lay (lays? 0 ? tg "/dev/null")
+       f (asm? 0 ? (hark ["mktemp" "--suffix=.S"] @ r (two? r && <r = 0 ? (first >r) ())) ())
+       _ (string? f ? (run ["sh" "-c" "cat > \"$1\"" "kcc" f]) 0)
+       (strip l) (? (atom? l) () (elem <l ["-S" "-"] && string? f || <l = "-S") (strip >l)
+                    (<l = "-x" && string? f && two? >l) (strip >>l) (<l . strip >l))
+       rc (? (elem "-E" av) (run ([love "mooncc" "-t" arch] + ident + spell av () + (string? tg ? ["-o" tg] ())))
+             (run ([love "mooncc" "-t" arch "-c"] + ident + spell (strip av) () + ["-o" lay] + (string? f ? [f] ()))))
+       _ (string? f ? (hark ["rm" "-f" f]) 0)
+       (quit (rc = 0 ? 0 1)))
+   (? (elem "--version" av) (: _ (say out ("mooncc, as clang version " + join "." cv + "\n")) _ (flush out) (quit 0))
+      (two? (pfn 0)) (: _ (say out (snip <(pfn 0) 17 #<(pfn 0) + "\n")) _ (flush out) (quit 0))
+      (probe && string? arch && (elem "-c" av || elem "-S" av || elem "-E" av)) (probed 0)
+      probe (quit 1)                                  ; a link asked of the compiler: kcc links nothing
+      (cpp? 0)
        (: r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch] + av))
           (? (two? r && <r = 0) (quit 0)
              (clang 1 ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r "")))))
