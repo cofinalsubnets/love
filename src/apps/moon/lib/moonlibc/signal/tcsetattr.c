@@ -20,5 +20,5 @@ int tcsetattr(int fd, int act, struct termios const *t) {
     struct __lx_termios2 k;                                                  /* a rate with no code */
     memcpy(&k, t, 17 + sizeof k.c_cc);
     k.c_ospeed = t->c_ospeed, k.c_ispeed = t->c_ispeed ? t->c_ispeed : t->c_ospeed;
-    return ioctl(fd, 0x402c542bUL + (unsigned long) act, &k); }            /* TCSETS2/W2/F2 */
-  return ioctl(fd, (unsigned long) (21506 + act), t); }                      /* TCSETS/W/F */
+    return ioctl(fd, LvTCSETS2 + (unsigned long) act, &k); }               /* TCSETS2/W2/F2 */
+  return ioctl(fd, LvTCSETS + (unsigned long) act, t); }                     /* TCSETS/W/F */

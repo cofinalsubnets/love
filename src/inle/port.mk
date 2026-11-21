@@ -81,8 +81,8 @@ be_lc   = $(subst $(R)/,,$(p_be_l))
 # either: everything else carries src/love/fd.c, whose bodies are the real ones, and two of
 # them in one link is a collision that says so. a board that grows a speaker drops
 # nohorn for src/love/horn.c, which answers love_horn_writen itself -- out/front is the link that
-# shows the shape.
-love_m   = $(basename $(love_tu) $(love_codec)) bare nohorn
+# shows the shape. the tones' operators ride along, so a seat with no card still renders a song
+love_m   = $(basename $(love_tu) $(love_codec)) audio/tones audio/tonerun bare nohorn
 love_dep = $(love_h) $(lib_hR) $(lv)
 love_o   = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(love_m)))
 
@@ -152,6 +152,16 @@ $$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
 	@cd $$(R) && { echo "(borrow 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(borrow 'kore)"; \
 	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) $$(p_src)/$2.l; \
 	  echo '($2 $3)'; } | out/love
+endef
+
+# p_ramchk -- a ram image's boot surface: $1 the .bin, $2 its sram's top, $3 where .data is
+# copied to. sp in sram, a thumb entry inside the bytes it carries, and those all below $3
+define p_ramchk
+	@python3 -c "import struct; b=open('$1','rb').read(); \
+	  sp,e=struct.unpack_from('<II',b,0); end=0x20000000+len(b); \
+	  ok = 0x20000000<sp<=$2 and (e&1)==1 and 0x20000000<e<end and end<=$3; \
+	  print('ram image: sp %08x entry %08x, %d bytes --'%(sp,e,len(b)), 'ok' if ok else 'BAD'); \
+	  exit(0 if ok else 1)" || { echo "FAIL ram image layout"; exit 1; }
 endef
 
 # p_link -- the link driver's cat. $1 its stem. an explicit target, never a pattern rule:

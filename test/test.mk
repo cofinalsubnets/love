@@ -5,7 +5,7 @@
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
-  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 \
+  test_as test_asmops test_bakerep test_big test_boards test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 \
   test_ccthumb2 test_ccport test_clay test_cli test_nest test_cookdiff test_cpio test_cts test_cts_a64 test_tfm test_caja test_gpic test_grap test_chem \
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
@@ -15,9 +15,9 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_mips test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -53,9 +53,9 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_uuhomgen test_uusplgen test_uumx test_uuvallaw \
 	test_fixpoint test_xfixpoint test_raw_bake test_drat test_vec \
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
-	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
+	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
@@ -194,6 +194,7 @@ hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, r
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
+hostnif_tests += test/host/wchisp.l   # wch's usb isp: a flash session's bulk requests to the byte, the key by hand
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -449,7 +450,7 @@ test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
 	@LOVE_NO_IMAGE=1 $m -l test/gate/forge.l < /dev/null
 # every test/cc/*.c by `mooncc -t $*`, plain and -Os, held to its references; the table is in ccbat.sh
-test_cca64 test_ccrv64 test_ccrv32 test_ccxtensa test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
+test_cca64 test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_cci386 test_cci386m16 test_ccarm test_ccwasm test_ccthumb1 test_ccthumb2: test_cc%: host
 	@$(gsh) test/gate/ccbat.sh $* $(ho) $m
 # c-testsuite held to its shipped stdout, misses rostered in cts.sh
 test_cts: host
@@ -594,6 +595,9 @@ endif
 # holo's xtensa backend, its law laid as one linux program on qemu-xtensa
 test_xtensa: host
 	@$(gsh) test/gate/xtensa.sh "$m" $(ho)
+# holo's mips backend: its law as one big-endian linux program on qemu-mips, its table against llvm
+test_mips: host
+	@$(gsh) test/gate/mips.sh "$m" $(ho)
 # lane j links the leaves and longjmp out of the isa's own archives
 test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
@@ -640,18 +644,18 @@ test_rp2040: host
 	@echo TEST out/rp2040/love.bin
 	@$(MAKE) -C test/boards/rp2040 || { echo "FAIL rp2040 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2040: firmware and swd probe (all-mooncc thumb1, boot2 laid by holo, no .S), OUR linker, flatten, runtime and uf2 -- no foreign file, flash R|X, boot surface verified"
-# the boards' batteries on silicon, flashed over swd on a host with the board's cap
+# the boards' batteries on silicon, run from sram on a host with the board's cap: the flash untouched
 test_rp2040_board: test_rp2040
-	@echo TEST out/rp2040/love.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love.bin
+	@echo TEST out/rp2040/love-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love-ram.bin
 # test_rp2350 -- the pico 2 (arm), all-mooncc thumb2sp: its battery and the swd probe, image defs verified
 test_rp2350: host
 	@echo TEST out/rp2350/firm.uf2
 	@$(MAKE) -C test/boards/rp2350 || { echo "FAIL rp2350 build (the boot-image verify is inside)"; exit 1; }
 	@echo "test_rp2350: battery and swd probe (all-mooncc thumb2sp, the image definition laid by holo, no sdk), OUR linker, flatten and uf2 -- boot surface verified"
 test_rp2350_board: test_rp2350
-	@echo TEST out/rp2350/firm.uf2 "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm.uf2
+	@echo TEST out/rp2350/firm-ram.uf2 "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2350-uf2 out/rp2350/firm-ram.uf2
 test_esp32s3_board: host
 	@echo TEST test/holo/xtrun.l "(on the esp32-s3, from ram)"
 	@$(gsh) test/gate/esp32s3board.sh $(ho)/love $(ho)
@@ -663,19 +667,28 @@ test_esp32c6: host
 test_esp32c6_board: test_esp32c6
 	@echo TEST out/esp32c6/firm.elf "(on the esp32-c6, from ram)"
 	@$(gsh) test/gate/esp32c6board.sh $(ho)/love out/esp32c6/firm.elf $(ho)
+# test_ch32v203 -- the qt py ch32v203's blink: mooncc -t rv32 compiles and links it at flash 0
+test_ch32v203: host
+	@echo TEST out/ch32v203/firm.bin
+	@$(MAKE) -C test/boards/ch32v203 || { echo "FAIL ch32v203 build (the image verify is inside)"; exit 1; }
+	@echo "test_ch32v203: the blink (all-mooncc rv32imac), linked by mooncc at flash 0, image verified"
+# ..by hand, not in test_extra: each run wants a person holding BOOT over a reset
+test_ch32v203_board: test_ch32v203
+	@echo TEST out/ch32v203/firm.bin "(into the ch32v203's flash, by its usb isp)"
+	@$(gsh) test/gate/ch32v203board.sh $(ho)/love out/ch32v203/firm.bin $(ho)
 test_nucleo446_board: test_nucleo446
-	@echo TEST out/nucleo446/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm.bin
+	@echo TEST out/nucleo446/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ nucleo446-swd out/nucleo446/firm-ram.bin
 test_microbit_board: test_microbit
-	@echo TEST out/microbit/firm.bin "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm.bin
+	@echo TEST out/microbit/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.hex
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
-test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_teensy41 test_playdate
-	@echo "test_boards: ten ports build and link -- mooncc and our linker, no emulator"
+test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
+	@echo "test_boards: eleven ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build test_virt_build: test_%_build: host
 	@echo TEST out/$*/love.elf '(build)'
 	@$(MAKE) -C src/inle/$* || { echo "FAIL $* build"; exit 1; }
@@ -759,7 +772,8 @@ gate_love += test_caja
 test_gpic test_grap test_chem: test_%: host
 	@echo TEST test/gate/pictool.sh $*
 	@$(gsh) test/gate/pictool.sh $* $(ho)/love
-# holo's encoder goldens, objdump-checked. every backend is catted in: the host bakes only its own
+# holo's encoder goldens, objdump-checked (every backend catted in: the host bakes only its own),
+# the kernel link's laws, and the ELF byte order (beorder.sh)
 test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
@@ -768,12 +782,13 @@ test_holo: host
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/machobind.sh "$m"
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
+	@$(gsh) test/gate/beorder.sh $m $(ho)
+# the x86-64 assembler (dialect.l's lay over x64.l's table): goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
 # riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
 # last two against llvm-mc (rvgas, a64gas) alongside
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
+	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l test/holo/as.l \
 	  | $(gsh) test/gate/run.sh as "$m" ", 0 failed"
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
@@ -940,12 +955,14 @@ test_uulean:
 	@sh test/gate/skip.sh gate-skip "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
-	@mkdir -p test/proof/lean
-	@echo 'LOVE	'test/proof/lean/uugen.lean "(src/tools/uu2lean.l on $m)"
-	@$m src/tools/uu2lean.l > test/proof/lean/uugen.lean
-	@echo TEST test/proof/lean/uugen.lean "(lean)"
-	@$(LEAN) test/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
-	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
+	@rm -rf out/uulean; mkdir -p out/uulean
+	@echo 'LOVE	'out/uulean "(src/tools/uu2lean.l on $m)"
+	@$m src/tools/uu2lean.l out/uulean > out/uulean/order
+	@echo TEST out/uulean "(lean, a module at a time, each over the ones before)"
+	@: > out/.uulean.out; for f in $$(cat out/uulean/order); do \
+	  LEAN_PATH=out/uulean $(LEAN) -o out/uulean/$$f.olean out/uulean/$$f.lean >> out/.uulean.out 2>&1 \
+	    || { cat out/.uulean.out; exit 1; }; \
+	done; if grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
 # random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
@@ -961,7 +978,7 @@ test_holofuzz: host
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
-	@for p in order targets cached keyed; do \
+	@for p in order targets cached1 cached2 keyed; do \
 	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
 	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
 	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \
@@ -1153,12 +1170,13 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 
-# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
 	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
@@ -1183,12 +1201,13 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
-# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
 	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 

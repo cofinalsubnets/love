@@ -17,7 +17,7 @@ objs = $(R)/$(o)/nrf52840.o $(R)/$(o)/main.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/
 
 .PHONY: nrf52840 flash
 default: nrf52840
-nrf52840: $(R)/$(o)/firm.uf2
+nrf52840: $(R)/$(o)/firm.uf2 $(R)/$(o)/firm-ram.bin
 
 $(eval $(call p_obj,nrf52840,test/boards/nrf52840/nrf52840.c,nrf52840.c nrf52840.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
 $(eval $(call p_obj,main,test/boards/nrf52840/main.c,main.c nrf52840.h ../battery.h $(S)/inle/bput.h $(mc),$(nrf_cc)))
@@ -44,6 +44,16 @@ $(R)/$(o)/firm.bin: $(R)/$(o)/firm.elf $(R)/$(o)/ocopy.l
 $(R)/$(o)/firm.uf2: $(R)/$(o)/firm.bin $(S)/tools/uf2.l $(lv)
 	@echo LOVE	$@
 	@cd $(R) && out/love src/tools/uf2.l $(o)/firm.bin $(o)/firm.uf2 0x27000 0xADA52840
+
+# the image a board lane runs from sram over swd, the flash never written
+$(R)/$(o)/firm-ram.elf: $(objs) $(R)/$(o)/xlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/xlink.l -ram $(o)/firm-ram.elf $(objs:$(R)/%=%)
+
+$(R)/$(o)/firm-ram.bin: $(R)/$(o)/firm-ram.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/firm-ram.elf $(o)/firm-ram.bin
+	$(call p_ramchk,$(R)/$(o)/firm-ram.bin,0x20040000,0x20010000)
 
 flash: $(R)/$(o)/firm.uf2
 	@test -d $(UF2_DRIVE) || { echo "no uf2 drive at $(UF2_DRIVE): double tap reset, or set UF2_DRIVE"; exit 1; }

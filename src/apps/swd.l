@@ -3,13 +3,14 @@
 ; turns swdio to the host (1) or the target (0), 'rst b holds nrst low (1) or lets it go (0);
 ; bits go lsb first. a probe wire moves whole transfers: 'xfer [[rq wdata] ..] answers
 ; [[ack rdata par] ..] (a batch stops at its first ack not 1, the rest answering 0), 'line
-; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'clock hz answers the rate set. the
+; [bytes n] clocks n raw bits, 'rst b as a bit wire's, 'aux b the same for the probe's second
+; line (a boot button), 'clock hz answers the rate set. the
 ; love swd probe and cmsis-dap are probe wires
 (module (swd swd-bits swd-sample swd-par swd-xfer1 swd-xfer swd-batch swd-line swd-wake swd-noack swd-select swd-dp swd-dpw swd-use swd-ap swd-apw swd-connect swd-mdconnect swd-rd swd-rds swd-wr swd-wrs
              swd-halted? swd-wait swd-halt swd-attach swd-resume swd-run
              f4-ids f4-sectors f4-idle f4-locked? f4-unlock f4-lock f4-erase f4-write f4-read f4-flash
              nrf-ids nrf-idle nrf-erase nrf-write nrf-flash
-             swd-reg swd-regw swd-call rp-rom rp-crc rp-flash
+             swd-reg swd-regw swd-call rp-rom rp-crc rp-flash ram-put swd-ramrun rp-ramrun
              gpio-attr gpio-cfg gpio-req gpio-vals gpio-wire-on gpio-wire probe-wire-on probe-wire dap-wire-on dap-wire)
 (borrow 'bytes)
 (borrow 'posix)
@@ -318,6 +319,34 @@
      left (filter (i \ !(same? i)) bad)
      (two? left ? ['differs (a + 4096 * <left)] 1))
 
+ ; an image run from sram, the flash left alone: written at a and read back, 1 or where it
+ ; differs first. a halted cortex-m takes its vector table, sp and pc there and goes, with no
+ ; reset to boot the flash. an rp2040 takes the rom's warm entry (watchdog scratch 4-7) and a
+ ; watchdog reset that keeps sram, so it starts with every peripheral fresh
+ vtor 0xE000ED08
+ (ram-put w a s)
+  (: _ (!(string? s) || #s < 8 ? (scare 'ram-empty a))
+     _ (swd-wrs w a (f4-words s))
+     b (f4-read w a #s)
+     (at i) (? (i >= #s) 1 (b i = s i) (at (i + 1)) ['differs (a + i)])
+     (at 0))
+ (swd-ramrun w a s)
+  (: r (ram-put w a s) sp (rdle s 0 4) pc (rdle s 4 4)
+     (r != 1 ? r
+      (: _ (swd-wr w vtor a) _ (swd-regw w 13 sp) _ (swd-regw w 15 (pc - (pc & 1)))
+         _ (swd-regw w 16 0x01000000) _ (swd-wr w demcr 0) _ (swd-wr w dhcsr 0xA05F0000)
+         ; read back, which lands the posted write: the core runs
+         (swd-halted? w ? (scare 'ram-halted a) 1))))
+ rp-wd 0x40058000 rp-boot 0xB007C0D3
+ (rp-ramrun w a s)
+  (: r (ram-put w a s) sp (rdle s 0 4) pc (rdle s 4 4)
+     (r != 1 ? r
+      (: _ (swd-wrs w (rp-wd + 0x1C) [rp-boot (pc ^ (0x100000000 - rp-boot)) sp pc])
+         _ (swd-wr w 0x40010008 0x1FFFC)
+         ; the reset may cut the write's ack
+         _ (trap (_ \ swd-wr w rp-wd 0x80000000) 0 (_ \ _ \ 0))
+         1)))
+
  ; linux's gpio character device, its v2 uapi: a request of 592 bytes (64 line offsets, the
  ; consumer's name at 256, a config at 288, the line count at 560), its line fd answered at
  ; 588; a config of 272 (flags, then up to 10 attributes of 24 from 32); values 16, bits then
@@ -379,9 +408,12 @@
      {'xfer (its \ (io 'send (join "" (map one its) + "E"), answers its ()))
       'line (bn \ io 'send ("B" + wrle (bn 1) 2 + snip (bn 0) 0 ((bn 1 + 7) // 8)))
       'rst (b \ io 'send ("R" + string [b]))
+      'aux (b \ io 'send ("Q" + string [b]))
       'clock (hz \ (io 'send ("C" + wrle hz 4), rdle (io 'recv 4) 0 4))
       'id (_ \ (io 'send "I", io 'recv 8))
-      'close (_ \ (io 'send "Z", io 'close ()))})
+      ; a write is posted, its access done only as the clock goes on: 8 idle bits land the
+      ; last one (a reset asked of aircr) before the lines go
+      'close (_ \ (io 'send ("B" + wrle 8 2 + string [0] + "Z"), io 'close ()))})
  ; the probe on its serial device, raw: 8 bits, no parity, no echo, no line discipline, a
  ; read waiting for a byte. it must name itself
  (probe-wire path)

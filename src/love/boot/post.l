@@ -263,8 +263,10 @@
                        (ws? (s i)) (go (i + 1) (i + 1) shut)
                        (go (i + 1) st acc)))
                 (go 0 0 ()))
-   (upper s) (string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars s)))
-   (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
+   ; each character's simple case, in C
+   ucase (cite 'ucd 'case)
+   (upper s) (ucase 1 (string s))
+   (lower s) (ucase 0 (string s))
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
    (uniq l)  (: (go seen l) (? (atom? l) () (peep seen <l 0) (go seen >l)
@@ -345,6 +347,7 @@
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
                'i386m16 'i386m16
+               'mips 'mips  'mipsbe 'mips
                'xtensa 'xtensa  'esp32 'xtensa}
    ; uname's machine and a gnu triple's head; () for the embedded targets
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}

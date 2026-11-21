@@ -41,8 +41,8 @@
 #define AHB1ENR_GPIOA (1u << 0)
 #define AHB1ENR_GPIOC (1u << 2)
 #define APB1ENR_TIM2  (1u << 0)
-#define APB1ENR_USART2 (1u << 17)
 #define APB1ENR_PWR   (1u << 28)
+#define APB2ENR_USART1 (1u << 4)
 
 // --- PWR: regulator scale + over-drive (both wanted for 180 MHz) ----------
 #define PWR_CR  0x40007000u
@@ -64,14 +64,15 @@
 #define GPIO_IDR(b)    ((b) + 0x10u)
 #define GPIO_BSRR(b)   ((b) + 0x18u)
 #define GPIO_AFRL(b)   ((b) + 0x20u)
+#define GPIO_AFRH(b)   ((b) + 0x24u)
 #define LED_PIN 5u       // LD2 = PA5
 #define BTN_PIN 13u      // B1 (blue) = PC13, low when pressed
 
-// --- USART2: the ST-LINK virtual COM port ---------------------------------
-#define USART2_SR  0x40004400u
-#define USART2_DR  0x40004404u
-#define USART2_BRR 0x40004408u
-#define USART2_CR1 0x4000440Cu
+// --- USART1: the console, on the headers (PA9 D8, PA10 D2) ----------------
+#define USART1_SR  0x40011000u
+#define USART1_DR  0x40011004u
+#define USART1_BRR 0x40011008u
+#define USART1_CR1 0x4001100Cu
 #define USART_SR_RXNE (1u << 5)
 #define USART_SR_TXE  (1u << 7)
 #define USART_CR1_RE  (1u << 2)

@@ -18,7 +18,7 @@ int ptsname_r(int fd, char *b, size_t n) {
     memcpy(k, "/dev/", 5), l = (int) strlen(k); }               /* the kernel answers "pts/N" */
   else {
     int p = 0;
-    if (ioctl(fd, 2147767344UL, &p) < 0) return ENOTTY;      /* TIOCGPTN */
+    if (ioctl(fd, LvTIOCGPTN, &p) < 0) return ENOTTY;      /* TIOCGPTN */
     l = snprintf(k, sizeof k, "/dev/pts/%d", p); }
   if ((size_t) l >= n) return ERANGE;
   memcpy(b, k, (size_t) l + 1);
