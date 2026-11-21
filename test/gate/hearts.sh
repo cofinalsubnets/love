@@ -4,8 +4,8 @@
 # syncconfig and Image in an empty output dir: every unit by mooncc (its asm by holo) through kcc.l,
 # the link by love's ld, objcopy, strip, nm, objdump and readelf by kore, the host programs by
 # mooncc, flex and bison as love's lex and yacc, perl's scripts ported, the commands through lush
-# with kore's verbs. clang keeps what mooncc refuses or never takes (-E, -S), each file it lays named in
-# .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
+# with kore's verbs. the gate asks clang ($HEARTS_KCC_CLANG) for what mooncc refuses or never takes
+# (-E, -S), each file it lays named in .hearts/kcc.log and listed here; lld links the arm32 compat vdso.
 # the Image then boots under qemu virt to an init of ours (mooncc, love's cpio), which says so and
 # powers off. a green run keeps the Image for test_hearts_boot, named in $C/Image-$V.green.
 # heavy (a kernel build, hours); opt-in by name.
@@ -90,6 +90,8 @@ done
 export CCACHE_DISABLE=1
 export KBUILD_BUILD_USER=hearts KBUILD_BUILD_HOST=hearts KBUILD_BUILD_VERSION=1
 export KBUILD_BUILD_TIMESTAMP='Thu Jan  1 00:00:00 UTC 2026'
+# clang for the lines mooncc does not take yet, which a build outside a gate refuses
+export HEARTS_KCC_CLANG=1
 
 # our extract-cert against the kernel's own, built here on openssl: each case byte for byte,
 # the same exit, and nothing written where it refuses

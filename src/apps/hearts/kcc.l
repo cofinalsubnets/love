@@ -1,9 +1,11 @@
 ; src/apps/hearts/kcc.l -- the kernel's compiler under hearts: kbuild's clang line, a unit compiled
 ; by mooncc (and its asm by holo) in mooncc's spelling, for a64, x64 and arm32 (the compat vdso),
-; and clang's own line for the rest. a -E that lays a file is mooncc's too, on its line as it stands.
-; a probe, a -S, another target and a unit mooncc refuses or outruns go to clang; each that lays a
-; file, a probe's aside, is logged to $HEARTS_KCC_LOG as `target<TAB>why`, so the build says what
-; is still clang's.
+; and nothing else. a -E that lays a file is mooncc's too, on its line as it stands. a probe, a -S,
+; another target and a unit mooncc refuses or outruns fail, the target and the road said; under
+; $HEARTS_KCC_CLANG=1 they are clang's instead, on its own line, each that lays a file, a probe's
+; aside, logged to $HEARTS_KCC_LOG as `target<TAB>why`. a line that fails is noted in
+; $HEARTS_KCC_REFUSED with its words. a probe fails with the rest, kconfig's of the compiler first,
+; so a build without the knob stops at its config.
 ; usage: love kcc.l CLANG-ARGS..   (hearts lays .hearts/bin/hk-cc over this, as CC)
 (borrow 'posix)
 (: argv cmdline
@@ -22,7 +24,15 @@
          av ())
    tg (after "-o")
    tgt (filter (a \ starts? a "--target=") av)
-   (clang _) (: p (spawn ("clang" . av)) (quit (charm? p && 0 <= p ? (wait p) 127)))
+   ; clang only where it is asked for, logged where lg; else the line fails by name
+   (clang lg why)
+    (? (getenv "HEARTS_KCC_CLANG" = "1")
+        (: _ (lg ? (log why) 0) p (spawn ("clang" . av)) (quit (charm? p && 0 <= p ? (wait p) 127)))
+       (: t (string? tg ? tg "no target")
+          _ (say err "kcc: \(t): \(why): not mooncc's, and clang is not asked (HEARTS_KCC_CLANG=1)\n")
+          _ (flush err)
+          _ (note "HEARTS_KCC_REFUSED" (t + "\t" + why + "\t" + join " " av))
+          (quit 1)))
    ; the target as mooncc's -t, a line naming none being a64
    arch (? (atom? tgt) "a64" (<tgt = "--target=aarch64-linux-gnu") "a64" (<tgt = "--target=x86_64-linux-gnu") "x64"
               (<tgt = "--target=arm-linux-gnueabi") "arm" ())
@@ -49,8 +59,9 @@
              (x = "-isystem" && two? r) (spell >r (<r . "-I" . a))
              (elem x ["-I" "-D" "-U" "-include"] && two? r) (spell >r (<r . x . a))
              (spell r (x . a)))))
-   (log why) (getenv "HEARTS_KCC_LOG" @ f
-               (string? f ? (cite 'posix 'open f "a" @ h (hot? h ? (say h (tg + "\t" + why + "\n"), cite 'posix 'close h) 0)) 0))
+   ; a line appended to the file an environment word names
+   (note e l) (getenv e @ f (string? f ? (cite 'posix 'open f "a" @ h (hot? h ? (say h (l + "\n"), cite 'posix 'close h) 0)) 0))
+   (log why) (note "HEARTS_KCC_LOG" (tg + "\t" + why))
    (first s) (filter (l \ 0 < #l) (lines s) @ () "" l <l)
    ; a probe lays /dev/null or kbuild's .tmp_ scratch
    (lays? _) (string? tg && tg != "/dev/null" && !(has? tg ".tmp_"))
@@ -60,12 +71,11 @@
    (? (cpp? 0)
        (: r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch] + av))
           (? (two? r && <r = 0) (quit 0)
-             (: _ (log ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r ""))) (clang 0))))
-      !(moon? 0) (: _ (lays? 0 ? (log (why 0)) 0) (clang 0))
+             (clang 1 ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r "")))))
+      !(moon? 0) (clang (lays? 0) (why 0))
       (: sp (abs <srcs)
          r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch "-c"]
                   + ident + spell av () + ["-o" tg sp]))
          (? (two? r && <r = 0) (quit 0)
-            (: _ (log (? (two? r && <r = 124) "timeout 900s"
-                         ("rc " + show (two? r ? <r -1) + " " + first (two? r ? >r ""))))
-               (clang 0))))))
+            (clang 1 (? (two? r && <r = 124) "timeout 900s"
+                        ("rc " + show (two? r ? <r -1) + " " + first (two? r ? >r ""))))))))
