@@ -221,8 +221,8 @@
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
- ; the grid's mesh, [verts tris tone] or (), what lays the disc or the stars after, and their
- ; spots for a frame the gpu kept, [S C] or ()
+ ; the grid's mesh and the spots it lays, [verts tris tone [S C]] or (), what lays the disc or
+ ; the stars after, and their spots for a frame the gpu kept, [S C] or ()
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -244,14 +244,15 @@
      (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
                      (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
                         [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]))
-     ; ..laid on g where f was bare, as b? tells
-     (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (q 1)))
+     ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
+     (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x = -1))))
-         [(v \ sky-mesh v lt wx e sim k sm) (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
+         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
+         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0))]))
+          (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v

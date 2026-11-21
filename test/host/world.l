@@ -605,6 +605,18 @@
  (test (world-kb 65 = 'sprint-left) (world-kb 68 = 'sprint-right) (world-kb 83 = 'sprint-back) (world-kb 74 = 'sprint-back)
        (world-kb 72 = world-kb 104) (world-kb 76 = world-kb 108) (world-kb 85 = world-kb 117) (world-kb 78 = world-kb 110)
        (1.5 * went 'back < went 'sprint-back) (1.5 * went 'strafe-left < went 'sprint-left) (1.5 * went 'strafe-right < went 'sprint-right)))
+;; the sun's disc seen through glass whole, as bare it is: every pixel of it the one tinted
+;; colour, drawn here and on a gpu where there is one
+(: sg "(: t (texture 8 8 1 '((fill (grey 0.5))))) (level \"t\" (sky 12 'clear) (street [-60 0 -60] [60 40 60]) (start [0 0 0] 0 0) "
+   (sun-at x) (: st (world-new 320 200 (world-read (sg + x + ")")) "") s (st 'sc 'sky 'lt 'sun)
+     (pins st 'th (atan2 (s 0) (s 2)) 'ph (asin (s 1)), world-pens st))
+   ; ..bare, then behind a pane 3 m out toward -z, where the noon sun lies
+   (spread _) (: sb (sun-at "") sp (sun-at "(window [-6 0 -3] [6 30 -2.96] t)")
+                 dk (iota ((sb >> 16 & 255 >= 250) * (sb >> 8 & 255 >= 250))) gd (sp dk >> 8 & 255)
+                 [#dk (amax gd - amin gd) (amax gd)])
+   g0 (getenv "LORE_GPU") cp (: _ (setenv "LORE_GPU" "0") (spread ())) gp (: _ (setenv "LORE_GPU" "1") (spread ()))
+   _ (setenv "LORE_GPU" g0)
+ (test (20 < cp 0) (cp 1 <= 2) (cp 2 < 200) (20 < gp 0) (gp 1 <= 2) (gp 2 < 200)))
 ;; ..laid along: u how far down its rows from s, v across a row from its middle, in texels
 (: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
    sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
