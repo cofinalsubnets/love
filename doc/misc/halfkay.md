@@ -33,16 +33,19 @@ Written from public descriptions and from a Teensy 4.1, not from any loader's so
 - The first write erases the whole flash, so block 0 is always sent, even when it is all
   0xFF. After it, a block that is all 0xFF is skipped, since the erase left it so.
 - Blocks go in ascending order.
-- Measured on a 4.1: it takes blocks 0 and 1 at once, then refuses block 2 for longer than
-  0.5 s while it erases. A write of 658 blocks, the erase included, takes 7.5 s.
+- Measured on a 4.1: it takes blocks 0 and 1 at once, then refuses block 2 for 3.3 s
+  while it erases. A write of 658 blocks, the erase included, takes 10.6 s; the same image
+  written over itself takes 0.8 s.
 - So halfkay.l retries any block until 45 s after the write began, and for 0.5 s once that
   window is over. The 45 s is a third party's report for a fully written 4.x flash (Paul:
   the erase "is slower than prior boards"); PJRC's page gives 3 s and 0.2 s for older boards.
 
 ## reboot
 - One more report with offset bytes 0xFF 0xFF 0xFF and zero data starts the new program.
-- The board detaches at once, so on Linux this write often reports an error. halfkay.l
-  ignores that error and counts the reboot done once the hidraw node goes away.
+- The board detaches as it takes this report, so on Linux the write often reports an error;
+  and it refuses the report while it is still writing the last blocks. So the write's own
+  answer says nothing: halfkay.l sends the report again until the hidraw node goes away, and
+  only then counts the program started.
 
 ## what it cannot do
 - HalfKay has no readback. The proof of a write is the board booting the image

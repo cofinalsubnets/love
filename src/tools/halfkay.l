@@ -12,9 +12,10 @@
    most 8192                                          ; the 4.1's 8 MB in blocks
    ; the waits are PJRC's and its forum's: a full erase on a 4.x has been seen to take 45 s, a
    ; block after it answers within half a second. measured on a 4.1: it takes two blocks at
-   ; once and refuses the third past half a second while it erases, and 658 blocks with the
-   ; erase go in 7.5 s. so the erase's wait covers every block inside it, not the first alone
-   t-erase 45000 t-next 500 t-node 10000 t-gone 5000
+   ; once and refuses the third for 3.3 s while it erases, 658 blocks with the erase go in
+   ; 10.6 s, and the same image over itself in 0.8 s. so the erase's wait covers every block
+   ; inside it, not the first alone
+   t-erase 45000 t-next 500 t-node 10000 t-gone 15000
    (die m) (say err ("halfkay: " + m + "\n"), flush err, quit 1)
    ff (string (map (_ \ 255) ^blk))
    zz (string (map (_ \ 0) ^blk))
@@ -41,7 +42,10 @@
    ; the hidraw nodes that are PJRC's HalfKay (16C0:0478)
    (nodes _) (readdir sys @ l (two? l ? (filter (n \ uread (sys + n + "/device/uevent") @ [1 t] (t @ (a + "HID_ID=0003:000016C0:00000478\n" + b) 1 _ 0) _ 0) (sort l)) ()))
    (await t) (nodes 0 @ l (? (two? l) <l (clock 0 < t) (rest 100, await t) ()))
-   (gone node t) (? (!two? (stat ("/dev/" + node))) 1 (clock 0 < t) (rest 50, gone node t) 0)
+   (gone node t) (? (two? (stat ("/dev/" + node))) (clock 0 < t ? (rest 50, gone node t) 0) 1)
+   ; the start report, sent until the board leaves: it refuses one while it still writes, and
+   ; detaches as it takes one, so the write's own answer says nothing
+   (start fd r node t) (: _ (push fd r) (? (gone node (clock 0 + 300)) 1 (clock 0 < t) (start fd r node t) 0))
    ; the node's output report must be HalfKay's on a 4.x, unnumbered
    (fits node)
     (: d (uread (sys + node + "/device/report_descriptor") @ [1 d] d _ (die ("cannot read " + node + "'s report descriptor")))
@@ -51,7 +55,6 @@
           (die "\(node)'s output report is \(n) bytes\(id), not a teensy 4.x's \(rep) unnumbered: nothing written")))
    ; one report as one write, a 0 ahead of it for the report id the board does not use
    (push fd r) (cask (0 . map r ^#r) @ c (fdpush fd c 0 0 #c @ n (charm? n && n = #c ? 1 n)))
-   (send fd r) (push fd r = 1)
    ; 1 once the report is taken, else the last refusal at time t
    (until fd r t) (push fd r @ n (? (n = 1) 1 (clock 0 < t) (rest 20, until fd r t) n))
    (image p) (: s (uread p @ [1 s] s _ (die ("cannot read " + p)))
@@ -64,13 +67,17 @@
        _ (fits node)
        fd (openfd ("/dev/" + node) 4 @ fd (charm? fd ? fd (die ("/dev/" + node + ": " + uerrno fd))))
        t0 (clock 0)
+       held {'ms 0 'k 0}                              ; the longest a block waited, and which
        (go l k) (? (atom? >l) k
-                   (until fd <l (max (t0 + t-erase) (clock 0 + t-next)) @ n
+                   (: t1 (clock 0)
+                      n (until fd <l (max (t0 + t-erase) (t1 + t-next)))
+                      w (clock 0 - t1)
+                      _ (held 'ms < w ? (pin held 'ms w, pin held 'k k) 0)
                       (n = 1 ? (go >l (k + 1))
                          (die "a block was not taken (\(charm? n ? "a short write" (uerrno n))), \(k) written before it: the flash is part written"))))
        k (go fs 0)
-       _ (send fd (fs (#fs - 1)))                     ; the board detaches as it takes this
-       (gone node (clock 0 + t-gone) ? (say out "halfkay: \(k) blocks of \((#s + blk - 1) // blk) written from \(p), started\n", flush out, 0)
+       ms (clock 0 - t0)
+       (start fd (fs (#fs - 1)) node (clock 0 + t-gone) ? (say out "halfkay: \(k) blocks of \((#s + blk - 1) // blk) written from \(p) in \(ms) ms (write \(held 'k) waited \(held 'ms) ms), started\n", flush out, 0)
           (die "\(k) blocks written, but \(node) is still in HalfKay")))
    (main as)
     (as @ ["find"] (nodes 0 @ l (two? l ? (map (n \ say out "/dev/\(n) \(fits n)\n") l, flush out, 0) (die "no board in HalfKay")))
