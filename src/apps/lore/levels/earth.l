@@ -723,8 +723,8 @@
   (smog 0.9)
   (dye (rgb 0.5 0.22 0.72))
   ; ..and all through it far traffic, and a music box now and then
-  (hum 'traffic [-46 -11 -11] [71 46 57])
-  (hum 'musicbox [-46 -11 -11] [71 46 57])
+  (hum 'traffic [-1000 -1000 -1000] [1000 1000 1000])
+  (hum 'musicbox [-1000 -1000 -1000] [1000 1000 1000])
   (skin {'floor roadmetal 'walls facade} (street [-45 8.85 8.2] [45 45 47]))
   (skin {'all paving} (solid (box [-45 8.85 8.2] [45 9 22])))
   (skin {'all paving} (solid (box [-45 8.85 32.2] [-31 9 33])))

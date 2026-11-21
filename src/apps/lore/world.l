@@ -2172,18 +2172,20 @@
       (: a (fl (m 0) (110.0 + 380.0 * b) 0.7 0.0) r (fl (m 1) (900.0 + 1300.0 * b) 1.1 1.0)
          ((traffic-k * E * (<a + 0.2 * <r)) . [>a >r]))))
  ; ..a music box now and then, in a reverb: in one tune-slot in tune-odds the first four to six
- ; of tune-notes, struck tune-gap apart from a time in the slot its die picks, the last held
- ; longer; mem [the reverb's memory, the voices struck, by their frame]
- tune-notes [12.0 15.0 17.0 19.0 24.0 27.0] tune-slot 15.0 tune-odds 0.5 tune-gap 1.35 tune-ring 2.6 tune-k 0.09
+ ; of tune-notes tune-gap apart, the last held longer, begun in the slot's first tune-start
+ ; seconds at a time its die picks, so a minute and more lies between one and the next. mem
+ ; [the reverb's memory, the voices struck, by their frame]
+ tune-notes [12.0 15.0 17.0 19.0 24.0 27.0] tune-slot 90.0 tune-start 20.0 tune-odds 0.7 tune-gap 0.9
+ tune-ring 2.6 tune-k 0.09
  tune-space (gem-tray [16] [(1.0 * song-rate) 0.0 0.0 0.004 0.23 0.0 0.0 0.42 0.55 0.35 1.0 0.7 4.0 1.6 0.45 0.0])
  (tune-at t mem) (: mk (cite 'play 'mkvoice) nz (cite 'play 'vnoise) sp (cite 'dsp 'space)
    ix (frame-at t) i0 (ix 0) i1 (ix (#ix - 1)) k0 (int (t 0 / tune-slot))
-   (u k j) (0.5 + 0.5 * nz (k * 8 + 9001 + j))
+   (u k j) (0.5 + 0.5 * nz (k * 16 + 9001 + j))
    (notes k) (? (k < 0 || tune-odds <= u k 0) ()
-                (: n (4 + int (2.999 * u k 2)) s (k * tune-slot + (tune-slot - 6.0 * tune-gap - 1.6 * tune-ring) * u k 1)
-                   (map (i \ [(frame-at (s + i * tune-gap)) (tune-notes i) (i = n - 1 ? 1.6 1.0)]) ^n)))
+                (: n (4 + int (2.999 * u k 2)) s (k * tune-slot + tune-start * u k 1)
+                   (map (i \ [(frame-at (s + i * tune-gap)) (tune-notes i) (i = n - 1 ? 1.6 1.0) 0.7]) ^n)))
    ns (filter (q \ q 0 <= i1 && i0 < q 0 + int (q 2 * tune-ring * song-rate) + 2) (notes (k0 - 1) + notes k0))
-   vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain 0.7 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
+   vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain (q 3) 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
    y (foldl (\ a q (was (q 0) @ v (two? v ? (a + v 1 ix) a))) (t * 0.0) ns)
    (wet m) (sp y y m tune-space @ r (? (charm? r) (wet (cask r)) (two? r) [r m] [(y . y) m]))
    (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
