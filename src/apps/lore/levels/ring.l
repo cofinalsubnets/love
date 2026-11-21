@@ -344,6 +344,39 @@
    [(skin {'all stone} (solid (box [(x - 0.42) (y - 0.2) (z - 0.42)] [(x + 0.42) (y + h) (z + 0.42)])))
     (map (n \ decal [(x + e * n 0) (y + 0.14) (z + e * n 1)] [(n 0) 0 (n 1)] [0 1 0] 0.8 0.2 t) [[1 0] [-1 0] [0 1] [0 -1]])
     (brazier [x (y + h) z] stone)]))
+; ..a monitor filling a dead end's far wall, the orb on it as a camera somewhere out round
+; the whole ring sees it, a new place after each card, framed as a security camera's picture is, its labels and the hour stamped in a
+; pixel font three by five; now and then a burst of snow and a card, a solid colour and its
+; text, the cards in turn. before the first picture, no signal
+(: dots {48 "111101101101111" 49 "010110010010111" 50 "111001111100111" 51 "111001111001111" 52 "101101111001001"
+         53 "111100111001111" 54 "111100111101111" 55 "111001001001001" 56 "111101111101111" 57 "111101111001111"
+         65 "010101111101101" 66 "110101110101110" 67 "111100100100111" 68 "110101101101110" 69 "111100111100111"
+         70 "111100111100100" 71 "111100101101111" 72 "101101111101101" 73 "111010010010111" 74 "001001001101010"
+         75 "101101110101101" 76 "100100100100111" 77 "101111111101101" 78 "110101101101101" 79 "111101101101111"
+         80 "111101111100100" 81 "010101101110011" 82 "110101110101101" 83 "111100111001111" 84 "111010010010010"
+         85 "101101101101111" 86 "101101101101010" 87 "101101111111101" 88 "101101010101101" 89 "101101010010010"
+         90 "111001010100111" 58 "000010000010000" 45 "000000111000000" 46 "000000000000010" 44 "000000000010100"})
+(: (type x y s text c) (catmap (k \ (: g (peep dots (text k) "")
+                                    (catmap (i \ (g i = 49 ? [['rect (x + (4 * k + i % 3) * s) (y + (i // 3) * s) (x + (4 * k + i % 3 + 1) * s) (y + (i // 3 + 1) * s) c]] ()))
+                                            ^#g)))
+                         ^#text))
+(: camwhite '(grey 0.92))
+(: (corner x y dx dy) [['rect (min x (x + 18 * dx)) (min y (y + 2 * dy)) (max x (x + 18 * dx)) (max y (y + 2 * dy)) camwhite]
+                       ['rect (min x (x + 2 * dx)) (min y (y + 12 * dy)) (max x (x + 2 * dx)) (max y (y + 12 * dy)) camwhite]])
+(: (camover rec) (texture 192 104 13
+                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1
+                   + (rec ? [['disc 17 17 4 '(rgb 0.95 0.1 0.08)]] ()) + type 25 12 2 "REC" camwhite)))
+(: camfeed [(camover 1) (camover 0)])
+(: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
+; ..a card: its words in capitals, as many to a line as fit in n, each line in the middle
+(: (lines ws n) (foldl (\ a w (? (atom? a) [w] (#<a + 1 + #w <= n) (<a + " " + w . >a) (w . a))) () ws @ l (rev l)))
+(: (card t c) (: ls (lines (words (upper t)) 22) y0 ((104 - (14 * #ls - 4)) // 2)
+   (texture 192 104 13 ([['fill c]] + catmap (k \ (: l (ls k) (type ((192 - (8 * #l - 2)) // 2) (y0 + 14 * k) 2 l camwhite))) ^#ls))))
+(: slates [(card "the patient operation of the overpowering rationality of conceptual harmonization" '(rgb 0.08 0.14 0.5))])
+; ..the room: a dead end, the monitor across the wall facing the way in
+(: tv (: i 26 j 5 x (cx * (i + 0.5)) z (cz * (j + 1) - wt - 0.02)
+   (stamp [112 84] 2 dots (rgb 0.92 0.92 0.92)
+          (cards slates 30 5 (watch [sx hub 0] orb-r [75 95] 60 (feed camfeed (ad [x 1.45 z] [0 0 -1] [0 1 0] 5.0 2.7 nosignal)))))))
 (: wisps (map (i \ (: x (sx - 3.0 + 0.7 * i) z 1.8 (wisp [x (ground x z) z]))) ^4))
 
 (level "the ring"
@@ -351,7 +384,7 @@
   (textures {'wall paper 'floor carpet 'ceiling tiles 'door oak})
   ; ..while the resonance is tested, on the grass before the lift, the wisps at hand; the walk
   ; begins in the closet as (start [(cx * (ci + 0.5)) 0 (cz * (cj + 1) - wt - 0.6)] 180 0)
-  (start [(sx - 6.0) (ground (sx - 6.0) 3.0) 3.0] 90 -10)
+  (start [169.6 0 35.0] 0 0)
   (sky 13 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.78 0.72 0.5))
   (void [-4 -3 -4] [(lx + 4) (top + 14) (lz + 4)])
@@ -388,4 +421,6 @@
   ; ..the resonance, halfway from the orb's skin to the grass, its braziers, and the wisps by the lift
   (resonance [sx (hub - orb-r - 0.5 * (hub - top - orb-r)) 0] steps)
   (map hearth hearths)
-  wisps)
+  wisps
+  ; ..the monitor in its dead end
+  tv)

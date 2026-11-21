@@ -879,6 +879,16 @@
  (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
        (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
        (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
+; a camera's feed: shot from where the camera stands while its monitor is in view; with
+; cards, now and then snow, a card held, snow, and the camera again
+(: cl (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (cards [(texture 8 8 1 '((fill 0.3)))] 2 1 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   cs (world-new 32 20 cl "") cq (cs 'sc 'feeds 0) _ (world-pens cs) c0 (peep cq 'shot-t ())
+   phs (map (_ \ (pin cs 'mt (cs 'mt + 0.1), world-pens cs, cq 'ph)) ^50)
+ (test (cl 'ads 0 'cam 1 = 0.0) (#(cl 'ads 0 'cards 0) = 1) (c0 != ()) (elem 'in phs) (elem 'card phs) (elem 'out phs) (phs 49 = 'cam)
+       (has? (lv "(camera [0 0 0] 0 0 (ball [0 0 0]))") "(camera [x y z] bearing pitch FEED)")
+       (has? (lv "(cards [] 1 1 (ball [0 0 0]))") "(cards [TEXTURE ..] every hold FEED)")
+       (has? (lv "(watch [0 0 0] 1 [3 2] 30 (ball [0 0 0]))") "(watch [x y z] radius [near far] cone FEED)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving

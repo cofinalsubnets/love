@@ -726,20 +726,22 @@
  ; frame's gather once for each size of frame; a stamp's dots each second. a gpu that keeps
  ; its frames on a window reads each one back while a feed is in view
  (feeds-of lv tt) (map (d \ (: i (tix tt (d 'tex)) {'i i 'w (tt i 1) 'h (tt i 2) 'a (d 'w / d 'h) 'over (map (nm \ tix tt nm) (d 'feed))
-                                                     'stamp (d 'stamp)
+                                                     'stamp (d 'stamp) 'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'memo {}
+                                                     'cards (peep d 'cards () @ () () c [(map (nm \ tix tt nm) (c 0)) (c 1) (c 2)])
                                                      'mid (d 'at) 'rad (0.5 * sqrt (sq (d 'w) + sq (d 'h)))}))
                        (filter (d \ two? (peep d 'feed ())) (lv 'ads)))
  (feed-trays q tx) (: w (q 'w) h (q 'h) G (star-tray [h w] ^(w * h)) X (G % w) Y (G // w)
    dx ((2.0 * X - w) / w) dy ((2.0 * Y - h) / h)
    wt (int ((256.0 - 96.0 * (dx * dx + dy * dy)) * (0.7 + 0.3 * (Y % 2 = 0))))
    (fit t) (: o (tray? t ? t (t 0)) s (shape o) (s = [h w] ? o (o ((Y * s 0 // h) * s 1 + (X * s 1 // w)))))
-   (pins q 'X X 'Y Y 'wt wt 'ov (map (k \ fit (tx k)) (q 'over))))
+   (pins q 'X X 'Y Y 'wt wt 'ov (map (k \ fit (tx k)) (q 'over)) 'cs (q 'cards @ () () c (map (k \ fit (tx k)) (c 0)))))
  (feed-ix q W H) (? (q 'at = [W H]) (q 'ix)
    (: a (q 'a) wide (W > a * H) cw (wide ? (int (a * H)) W) ch (wide ? H (int (W / a)))
       ix (((H - ch) // 2 + (q 'Y * ch // q 'h)) * W + (W - cw) // 2 + (q 'X * cw // q 'w))
       (pins q 'at [W H] 'ix ix, ix)))
- (feed-pic st q tx e) (: _ (tray? (peep q 'wt ()) ? 0 (feed-trays q tx)) dm (mesh-dims st)
-   c (max 0 (e (feed-ix q (dm 0) (dm 1))))
+ (feed-pic st q tx s ph) (: _ (tray? (peep q 'wt ()) ? 0 (feed-trays q tx))
+   (? (ph = 'card) (carded q) (ph != 'cam) (snow st q) (shown st q (s 0) (s 1))))
+ (shown st q e dm) (: c (max 0 (e (feed-ix q (dm 0) (dm 1))))
    y (((c >> 16 & 255) * 77 + (c >> 8 & 255) * 150 + (c & 255) * 29) >> 8)
    g ((min 2048 (max 256 (28000 * q 'w * q 'h // (net y + q 'w * q 'h)))) * q 'wt >> 8)
    (ch k) (min 255 ((c >> k & 255) * g >> 8))
@@ -760,12 +762,53 @@
                (pins q 'st t 'six (star-tray [#l] l), q 'six)))
       (b k) (int (255.0 * c k + 0.5))
       (#ix = 0 ? f (pin f ix ((b 0 << 16) | (b 1 << 8) | b 2)))))
- ; ..the textures with each feed's laid on its own
- (fed st tx) (: fs (st 'sc 'feeds) e (peep st 'framed ())
-   (? (atom? fs || !(tray? e)) tx
-      (: ps (foldl (\ t q (pin t (q 'i) (feed-pic st q tx e))) {} fs)
+ ; ..the textures with each feed's laid on its own: the eye's frame before, or its camera's
+ ; last, while there is one
+ (fed st tx) (: fs (st 'sc 'feeds) e0 (peep st 'framed ())
+   (? (atom? fs) tx
+      (: (src q) (q 'cam = () ? [e0 (mesh-dims st)] [(peep q 'framed ()) (peep q 'fdim ())])
+         ps (foldl (\ t q (: s (src q) ph (feed-phase st q) (tray? (s 0) || ph != 'cam ? (pin t (q 'i) (feed-pic st q tx s ph)) t))) {} fs)
          (go l i) (atom? l ? () (peep ps i <l . go >l (i + 1)))
-         (go tx 0))))
+         (atom? (keys ps) ? tx (go tx 0)))))
+ ; ..a camera's feed shot again from where it stands at half its texture's size, cam-dt
+ ; seconds apart and only while it shows the camera or is about to
+ cam-dt 0.25
+ (cam-shot! st q) (: _ (q 'cam = () ? (watch-pick! st q) 0) c (q 'cam) w (q 'w // 2) h (q 'h // 2)
+   (? (st 'mt - peep q 'shot-t -1e9 < cam-dt || !(elem (peep q 'ph 'cam) ['cam 'out])) 0
+      (: f (level-pens st {'at [(c 0 0) (c 0 1 - eye-h) (c 0 2)] 'deg (c 1) 'pitch (c 2) 'fov (peep c 3 fov) 'ro (peep c 4 0.0) 'w w 'h h 'memo (q 'memo)
+                           'out (q 'watch != () ? 1 0)})
+         (pins q 'framed f 'fdim [w h] 'shot-t (st 'mt)))))
+ ; ..a watching camera's place: near to far from its mark, within the cone about the world's
+ ; up through it, even over its area, looking at it, turned any way about that; its eye as
+ ; wide as puts the ball round the mark a sixth to a half of the picture high
+ (watch-pick! st q) (: w (q 'watch) sf (st 'sc 'surf) n0 (peep q 'picks 0)
+   (W p) (tablet? sf ? (sf 'at (p 0) (p 1) (p 2)) p) (L p) (tablet? sf ? (sf 'chart p) p)
+   C (W (w 0)) (die k) (: r (sin (12.9898 * k + 78.233 * n0 + 0.5) * 43758.5453) (r - floor r))
+   c0 (cos (w 4 * pi / 180.0)) u ((die 0 < 0.5 ? 1.0 -1.0) * (c0 + (1.0 - c0) * die 1)) a (tau * die 2) s (sqrt (1.0 - u * u))
+   D (w 2 + (w 3 - w 2) * die 3) P (c+ C (c* D [(s * cos a) u (s * sin a)]))
+   e (L P) B (tablet? sf ? (sf 'axes (e 0) (e 1) (e 2)) [[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]]) d (c- C P) (dk k) (dot d (B k))
+   fv (2.0 * atan2 (w 1 * q 'w) ((1.0 / 6.0 + die 5 / 3.0) * D * q 'h))
+   (pins q 'picks (n0 + 1) 'cam [e (atan2 (dk 0) (dk 2) * 180.0 / pi) (atan2 (dk 1) (sqrt (2 (dk 0) + 2 (dk 2))) * 180.0 / pi) fv (tau * die 4)]))
+ ; ..a feed with cards: its picture for about every seconds, then a burst of snow, a card for
+ ; hold seconds, the cards in turn, snow again, and back; a hiss with each burst
+ snow-in 0.5 snow-out 0.3
+ (feed-phase st q) (: c (q 'cards) t (st 'mt)
+   (? (c = ()) 'cam
+      (: ph (peep q 'ph 'cam) u (peep q 'till ()) k (peep q 'k -1)
+         (? (u = ()) (pins q 'ph 'cam 'till (t + c 1) 'k -1, 'cam)
+            (t < u) ph
+            (: nx (ph @ 'cam 'in 'in 'card 'card 'out 'cam) k1 (nx = 'card ? ((k + 1) % #(c 0)) k)
+               r (sin (17.0 * k1 + 3.1 * t) * 43758.5453)
+               d (nx @ 'in snow-in 'card (c 2) 'out snow-out (c 1 * (0.7 + 0.6 * (r - floor r))))
+               _ (pins q 'ph nx 'till (t + d) 'k k1)
+               _ (nx = 'out && q 'watch != () ? (watch-pick! st q) 0)
+               _ (elem nx ['in 'out] ? (mix-cry st "hiss" [(q 'mid 0) (q 'mid 2)]) st)
+               nx)))))
+ ; ..snow, scanned as the picture is
+ (snow st q) (: n (sin (q 'X * 12.9898 + q 'Y * 78.233 + 91.7 * st 'mt) * 43758.5453) g ((int (255.0 * (n - floor n))) * q 'wt >> 8)
+   ((g << 16) | (g << 8) | g))
+ ; ..a card, scanned so
+ (carded q) (: c (q 'cs (q 'k)) (ch k) ((c >> k & 255) * q 'wt >> 8) ((ch 16 << 16) | (ch 8 << 8) | ch 0))
  (spin-light lv txs s) (: p (c+ (s 'at) [0.0 (0.5 * s 'h) 0.0])
    (light [{'at [p] 'c (c* 1.25 (c+ (avg-col txs (s 't1)) (avg-col txs (s 't2)))) 'r (s 'w + 10.0) 'soft 2.0
             'keep (inside (room-at lv (p 0) (p 2)))}]
@@ -1367,7 +1410,9 @@
                (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e (sk 'sim + st 'ct) (st 'ct) (k @ 1 1 (sky-k * k)) ())))
  ; ..a packed mesh's name for the gpu, its own number in st
  (gpu-name st pk) (pk 'gid @ () (: n (peep st 'gid 0 + 1) (pins st 'gid n, pin pk 'gid n, n)) g g)
- (level-pens st sh) (: k (peep st 'kp 1) dm (mesh-dims st) w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
+ ; ..or a camera's, sh with its frame's 'w and 'h: drawn on its own, and kept by the camera
+ (level-pens st sh) (: cam? (tablet? sh && peep sh 'w 0 > 0) k (cam? ? 1 (peep st 'kp 1)) dm (cam? ? [(sh 'w) (sh 'h)] (mesh-dims st))
+   w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
    ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0))
    hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
    e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
@@ -1376,15 +1421,15 @@
    ; for fog
    sk (sky-here (sc 'surf) (sc 'sky) e) sim (tablet? sk ? (sk 'sim + st 'mt) 0.0)
    (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
-   out (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
+   out (cam? && peep sh 'out 0 = 1 || tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
         && !(tablet? (sc 'surf) && any (b \ b 'air = 1 && !(peep b 'open 0) && b 'land = () && in? (b 'lo) (b 'hi)) (sc 'brushes)))
    ; ..on a surface, the eye's view laid there, and the sky seen as from the level's own
    sf (sc 'surf) fr (tablet? sf ? 300.0 (out ? 150.0 60.0))
-   vl (mesh-eye w h e th ph (tablet? sh ? 0.0 (peep st 'ro 0.0 + hb 3)) fov 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
-   _ (tablet? (mesh-gpu st) ? (pin v 'gpu (st 'gpu)))
+   vl (mesh-eye w h e th ph (tablet? sh ? (peep sh 'ro 0.0) (peep st 'ro 0.0 + hb 3)) (cam? ? (peep sh 'fov fov) fov) 0.05 fr) v (tablet? sf ? (bent-view sf vl) vl)
+   _ (!cam? && tablet? (mesh-gpu st) ? (pin v 'gpu (st 'gpu)))
    fog (out ? (: hz (mesh-haze vl (sk 'lt) (sk 'wx) sim) [(sk 'k * hz 0) (sk 'k * hz 1) (sk 'k * hz 2) (tablet? sf ? 90.0 50.0) fr]) [0.0 0.0 0.0 30.0 60.0])
    ; ..the sky asked about every sky-k pixels a 160 across, or a kitty column, however shown
-   sk0 (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (max k (w // 160) @ 1 1 q (sky-k * q)) (mesh-sky-memo st)) 0)
+   sk0 (tablet? sk ? (mesh-sky (sk 'ss) (sk 'lt) (sk 'wx) e sim (st 'mt) (max k (w // 160) @ 1 1 q (sky-k * q)) (cam? ? (sh 'memo) (mesh-sky-memo st))) 0)
    sky (? (!(tablet? sf) || charm? sk0) sk0 (two? sk0) [(_ \ <sk0 vl) (\ _ f B (sk0 1 vl f B))] (\ _ S (sk0 vl S)))
    ; ..indoors the sky only up through an open top, and elsewhere the dark: past what is
    ; drawn, or a crack between two surfaces. on a surface a ray climbs off it as the ground
@@ -1405,13 +1450,16 @@
    pls (map (q \ (: a (row (q 0)) b (row 3) s (q 1) n (map (j \ b j + s * a j) ^4) (: s (1.0 / sqrt (sq (n 0) + sq (n 1) + sq (n 2))) (map (x \ s * x) n))))
             [[0 1.0] [0 -1.0] [1 1.0] [1 -1.0] [2 1.0] [2 -1.0]])
    (seen? c) (: m (c 'mid) r -(c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
-   _ (tablet? (peep v 'gpu ()) ? (pin (v 'gpu) 'read (any seen? (sc 'feeds) ? 1 0)))
+   ; ..a feed's ball laid where the scene is
+   (fseen? q) (seen? (tablet? sf ? {'mid (sf 'at (q 'mid 0) (q 'mid 1) (q 'mid 2)) 'rad (q 'rad)} q))
+   _ (tablet? (peep v 'gpu ()) ? (pin (v 'gpu) 'read (any (q \ q 'cam = () && fseen? q) (sc 'feeds) ? 1 0)))
+   _ (cam? ? 0 (each (filter (q \ (q 'cam != () || q 'watch != ()) && fseen? q) (sc 'feeds)) (q \ cam-shot! st q)))
    (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
-   cks (sc 'chunks) hid ((tablet? sf && e 1 < peep sf 'cut -1e9) || deep-hid? sc [(st 'px) (st 'py) (st 'pz)])
+   cks (sc 'chunks) hid ((tablet? sf && e 1 < peep sf 'cut -1e9) || deep-hid? sc (cam? ? e [(st 'px) (st 'py) (st 'pz)]))
    cs (cells-seen sc v e) (cut? i) (tablet? cs && peep cs i 0 = 0)
    ; ..what relit or shine-at keep on a mesh, named for the gpu by the mesh and what it was
    ; made of: they write it again only as that changes
-   gk (tablet? (st 'gpu)) (named pk b x) (gk ? [(b 0) (b 1) [(gpu-name st pk) x]] b)
+   gk (!cam? && tablet? (st 'gpu)) (named pk b x) (gk ? [(b 0) (b 1) [(gpu-name st pk) x]] b)
    ; ..and one relit, by the ks of the lamps that reach it: a far lamp's breath sends it not
    (lit-named pk b) (named pk b (mesh-lit-ks pk dk))
    hall (map (q \ (: c (cks (q 1)) (lit-named (c 'pk) (relit (c 'pk) (c 'lit)))))
@@ -1462,7 +1510,7 @@
    (orb i) (orb-at (lv 'orbs i) (sc 'orbs i) (st 'mt) @ q (peep (lv 'orbs i) 'glow 0 @ 1 (mesh-shine (q 0) 1.0) (relit (q 0) (q 1))))
    (ok i) (lv 'orbs i 'coarse) ois ^#(lv 'orbs)
    orbs (map orb (filter (i \ ok i = 1) ois)) cos (map orb (filter (i \ ok i > 1) ois) @ l (tablet? sf ? (map (bent-tris sf) l) l)) ck (foldl (\ a i (max a (ok i))) 1 ois)
-   tx (fed st (sc 'texs))
+   tx (cam? ? (sc 'texs) (fed st (sc 'texs)))
    _ (two? cos ? (pin v 'under (mesh-coarse v [(map (b \ b 0) cos) (map (b \ b 1) cos)] tx fog 8 gain ck)))
    ; ..a lift's platform where it has got to, each leaf of its gates swung out as far as it
    ; is open, its pad and tether
@@ -1486,7 +1534,7 @@
    _ (gk ? (pin v 'keys (map (b \ b 2) all)) 0)
    ; ..the frame kept for a feed's next
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] tx fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare
-    @ f (tray? f ? (pin st 'framed f, f) f)))
+    @ f (tray? f && !cam? ? (pin st 'framed f, f) f)))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
  (world-frame st) (: w (st 'w) h (st 'h) f0 (world-pens st) r (h // 2) k (peep st 'kp 1) kit (st 'kitty)
