@@ -339,17 +339,27 @@
                             "\t.base64 \"\(b64s (snip <>r k (k + n)))\""))))
        ls (gsplit txt 10)
        (any (ln \ starts? (xa-trim ln) ".incbin") ls ? (xa-join "\n" (map one ls)) txt))
-   ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
-   (asmwrap s) "__asm__(\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s)))\");\n"
+   ; an assembly source's text as gen hands it to gas-top, its carriage returns dropped
+   (asmtext s) (gsplit s 13 @ l (two? >l ? (cats l) s))
    ; a .S: the assembly lexed on its own terms, preprocessed as C is (includes, macros, #if),
-   ; spelled back into lines, and taken as a .s is
-   (asmcpp src s ds is vb)
+   ; spelled back into lines, and taken as a .s is. it goes a block of q bytes at a time, cut
+   ; at line ends, so the tokens alive are one block's
+   (asmcpp src s ds is vb) (asmcppk src s ds is vb 65536)
+   (asmcppk src s ds is vb q)
     (: d2 ("__ASSEMBLER__=1" . ds)
-       lx (clexasm (deftext d2 + s) (1 - #d2) (elem "__aarch64__" ds || elem "__arm__" ds))
-       _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
-       pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
-       (okv? pp || ccdie pp src "cc: preprocessor error in \(src)",
-        asmwrap (incbins (asmspell <>pp) is src)))
+       txt (deftext d2 + s)
+       ar (elem "__aarch64__" ds || elem "__arm__" ds)
+       (incf name sys?) (incload vb is (cdir src) name sys?)
+       st (cppopen src)
+       sink (jug 0)
+       (lay pp) (okv? pp || ccdie pp src "cc: preprocessor error in \(src)", say sink (asmspell <>pp))
+       (go i ln)
+        (#txt <= i ? (lay (cppclose st), slurp sink)
+           (clexasmk txt i (i + q) ln ar @ lx
+              (okv? lx || ccdie lx src "cc: lex error in \(src)",
+               lay (cppfeed st <>lx incf),
+               go (lx 2) (lx 3))))
+       (go 0 (1 - #d2)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one; a
    ; space where the source had one and between two words that would paste (v0.16b stays one)
    (asmspell ts)
@@ -401,7 +411,10 @@
                   !vb ()
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
-       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
+       ; an assembly source is one file-scope asm of its whole text, and no C is read
+       asm (dotS? src || dots? src)
+       atx (asm && asmtext (incbins (dotS? src ? (asmcpp src <>r ds9 is vb) <>r) is src))
+       txt (asm ? "" <>r)
        lx (mprof 'lex (_ \ clexw (deftext ds9 + txt) (1 - #ds9)))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
@@ -409,7 +422,7 @@
        ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1 'dbg dbg}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
-        (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
+        (ps 1 @ a (<ps . (<a . (asm ? (<>a + [['tasm atx]]) (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a)) . >>a) . >>ps))))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
    ; other section(NAME) the TU used, in declaration order (its address is the program's to fix).
    ; the wide tuples are named once, here; `[]` is strict, so a changed arity refuses
