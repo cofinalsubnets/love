@@ -78,6 +78,17 @@ the watchdog, whose tick rp2350.c starts). `make` also builds probe.uf2,
 test_rp2350_board writes firm-ram.uf2, based in SRAM, raw to the ROM's drive on a host
 with rp2350-uf2 (the ROM runs it there) and reads the battery off its usb console.
 
+## esp32/
+
+Espressif ESP32 (LX6, the classic, through its board's CP2102) and ESP32-S3 (LX7, on its own
+USB-Serial-JTAG) -- firmware only, no love. The battery through `mooncc -t xtensa`, CALL0 and
+soft float, one source for both: code linked at IRAM and data at DRAM (IRAM takes only word
+access), firm.elf at 0x40080000/0x3FFB0000 and firm-s3.elf at 0x40378000/0x3FCA0000, with no
+crt0. src/tools/esprom.l lays each through the ROM loader and jumps to `_start`; the classic
+answers on uart0, the S3 on endpoint 1. RAM only, the flash never written. test_esp32 builds
+both and verifies where they load; test_esp32_board (esp32-uart) and test_esp32s3_board
+(esp32s3-usb) run holo's xtensa law, then the battery, and reset the chip into its app.
+
 ## esp32c6/
 
 Espressif ESP32-C6 (RV32IMAC @ 160 MHz, 512 KB HP SRAM -- firmware only, no love). The
