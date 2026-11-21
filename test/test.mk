@@ -1075,12 +1075,13 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	 KTEST_CAP=vt-x KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
-# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes
+# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc: host $(S)/tools/ktest.l
 	@$(MAKE) -s $(k_elf)
 	@mkdir -p $(ko)/uproc && $(ho)/love mooncc test/kernel/c/hello.c -o $(ko)/uproc/hello
 	@echo TEST $(k_elf) "(C programs and love as x64 processes: ring 3, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "uproc: ok"
 
 # an empty boot line is a pier on the console: keys by qemu's monitor, lush, exit, reset
