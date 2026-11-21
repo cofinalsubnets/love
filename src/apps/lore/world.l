@@ -707,6 +707,52 @@
    (light [{'at [p] 'n n 'c (c* 2.2 (avg-col txs (d 'tex))) 'r (0.9 * max (d 'w) (d 'h) + 6.0) 'soft 1.5 'wrap 0.3
             'keep (inside (room-at lv (p 0) (p 2)))}]
           (peep d 'music 0 @ 1 ['music] ()) [[(mesh-pack (decal-mesh d tt)) ad-shine]] ()))
+ ; ..a feed: the eye's frame before laid on its ad's texture, cropped to the ad's shape,
+ ; its gain set as a camera's own is to bring its mean up to a mid grey, up to eight times,
+ ; scanned and vignetted, under its overlays a second each; every tray made once, and the
+ ; frame's gather once for each size of frame; a stamp's dots each second. a gpu that keeps
+ ; its frames on a window reads each one back while a feed is in view
+ (feeds-of lv tt) (map (d \ (: i (tix tt (d 'tex)) {'i i 'w (tt i 1) 'h (tt i 2) 'a (d 'w / d 'h) 'over (map (nm \ tix tt nm) (d 'feed))
+                                                     'stamp (d 'stamp)
+                                                     'mid (d 'at) 'rad (0.5 * sqrt (sq (d 'w) + sq (d 'h)))}))
+                       (filter (d \ two? (peep d 'feed ())) (lv 'ads)))
+ (feed-trays q tx) (: w (q 'w) h (q 'h) G (star-tray [h w] ^(w * h)) X (G % w) Y (G // w)
+   dx ((2.0 * X - w) / w) dy ((2.0 * Y - h) / h)
+   wt (int ((256.0 - 96.0 * (dx * dx + dy * dy)) * (0.7 + 0.3 * (Y % 2 = 0))))
+   (fit t) (: o (tray? t ? t (t 0)) s (shape o) (s = [h w] ? o (o ((Y * s 0 // h) * s 1 + (X * s 1 // w)))))
+   (pins q 'X X 'Y Y 'wt wt 'ov (map (k \ fit (tx k)) (q 'over))))
+ (feed-ix q W H) (? (q 'at = [W H]) (q 'ix)
+   (: a (q 'a) wide (W > a * H) cw (wide ? (int (a * H)) W) ch (wide ? H (int (W / a)))
+      ix (((H - ch) // 2 + (q 'Y * ch // q 'h)) * W + (W - cw) // 2 + (q 'X * cw // q 'w))
+      (pins q 'at [W H] 'ix ix, ix)))
+ (feed-pic st q tx e) (: _ (tray? (peep q 'wt ()) ? 0 (feed-trays q tx)) dm (mesh-dims st)
+   c (max 0 (e (feed-ix q (dm 0) (dm 1))))
+   y (((c >> 16 & 255) * 77 + (c >> 8 & 255) * 150 + (c & 255) * 29) >> 8)
+   g ((min 2048 (max 256 (28000 * q 'w * q 'h // (net y + q 'w * q 'h)))) * q 'wt >> 8)
+   (ch k) (min 255 ((c >> k & 255) * g >> 8))
+   p ((ch 16 << 16) | (ch 8 << 8) | ch 0)
+   o (q 'ov (int (st 'mt) % #(q 'ov))) m (o < 0)
+   (stamped q (local-now q) (p * m + o * (1 - m))))
+ ; ..the wall clock's seconds in the local zone, the zone read once a feed
+ (local-now q) (: z (q 'zone @ () (: f ((cite 'kore 'tz-zone) 0) (pin q 'zone f, f)) f f) s (clock 0 // 1000)
+   (s + <(z s)))
+ ; ..the hour of a day s seconds in laid on a feed's picture f, as its stamp says
+ (stamped q s f) (q 'stamp @ () f [at z font c]
+   (: (two n) [(48 + n // 10) (48 + n % 10)] t (two (s // 3600 % 24) + [58] + two (s // 60 % 60) + [58] + two (s % 60))
+      ix (? (q 'st = t) (q 'six)
+            (: w (q 'w) h (q 'h)
+               (dot k i) (: x (at 0 + (4 * k + i % 3) * z) y (at 1 + (i // 3) * z)
+                           (catmap (j \ (: u (x + j % z) v (y + j // z) (u < w && v < h ? [(v * w + u)] ()))) ^(z * z)))
+               l (catmap (k \ (: g (peep font (t k) "") (catmap (i \ (g i = 49 ? (dot k i) ())) ^#g))) ^#t)
+               (pins q 'st t 'six (star-tray [#l] l), q 'six)))
+      (b k) (int (255.0 * c k + 0.5))
+      (#ix = 0 ? f (pin f ix ((b 0 << 16) | (b 1 << 8) | b 2)))))
+ ; ..the textures with each feed's laid on its own
+ (fed st tx) (: fs (st 'sc 'feeds) e (peep st 'framed ())
+   (? (atom? fs || !(tray? e)) tx
+      (: ps (foldl (\ t q (pin t (q 'i) (feed-pic st q tx e))) {} fs)
+         (go l i) (atom? l ? () (peep ps i <l . go >l (i + 1)))
+         (go tx 0))))
  (spin-light lv txs s) (: p (c+ (s 'at) [0.0 (0.5 * s 'h) 0.0])
    (light [{'at [p] 'c (c* 1.25 (c+ (avg-col txs (s 't1)) (avg-col txs (s 't2)))) 'r (s 'w + 10.0) 'soft 2.0
             'keep (inside (room-at lv (p 0) (p 2)))}]
@@ -740,7 +786,7 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (lv 'sky @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'twinkle (peep s 'twinkle 1.0))
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'dye (peep s 'dye ()) 'twinkle (peep s 'twinkle 1.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under
@@ -1084,7 +1130,7 @@
     'orbs (map (o \ (: k ['orb (o 'at) (o 'r) (o 'tex) (o 'turns) (o 'coarse) (peep o 'in 0) tt] pk (kept k (_ \ mesh-pack (orb-mesh o tt)))
                        {'pk pk 'lit (lit-of k pk) 'round (2.0 * tt (tix tt (o 'tex)) 1)}))
                (lv 'orbs))
-    'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex)
+    'texs (map (t \ kept ['tex (t 'w) (t 'h) (t 'layers)] (_ \ swatch (t 'w) (t 'h) (t 'layers))) txs + ptex) 'feeds (feeds-of lv tt)
     'memo memo 'surf sf 'deep-g (dp 'g) 'ports (dp 'ports)})))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
@@ -1293,6 +1339,7 @@
    pls (map (q \ (: a (row (q 0)) b (row 3) s (q 1) n (map (j \ b j + s * a j) ^4) (: s (1.0 / sqrt (sq (n 0) + sq (n 1) + sq (n 2))) (map (x \ s * x) n))))
             [[0 1.0] [0 -1.0] [1 1.0] [1 -1.0] [2 1.0] [2 -1.0]])
    (seen? c) (: m (c 'mid) r -(c 'rad) !(any (n \ n 0 * m 0 + n 1 * m 1 + n 2 * m 2 + n 3 < r) pls))
+   _ (tablet? (peep v 'gpu ()) ? (pin (v 'gpu) 'read (any seen? (sc 'feeds) ? 1 0)))
    (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
    cks (sc 'chunks) hid ((tablet? sf && e 1 < peep sf 'cut -1e9) || deep-hid? sc [(st 'px) (st 'py) (st 'pz)])
    cs (cells-seen sc v e) (cut? i) (tablet? cs && peep cs i 0 = 0)
@@ -1349,7 +1396,8 @@
    (orb i) (orb-at (lv 'orbs i) (sc 'orbs i) (st 'mt) @ q (peep (lv 'orbs i) 'glow 0 @ 1 (mesh-shine (q 0) 1.0) (relit (q 0) (q 1))))
    (ok i) (lv 'orbs i 'coarse) ois ^#(lv 'orbs)
    orbs (map orb (filter (i \ ok i = 1) ois)) cos (map orb (filter (i \ ok i > 1) ois) @ l (tablet? sf ? (map (bent-tris sf) l) l)) ck (foldl (\ a i (max a (ok i))) 1 ois)
-   _ (two? cos ? (pin v 'under (mesh-coarse v [(map (b \ b 0) cos) (map (b \ b 1) cos)] (sc 'texs) fog 8 gain ck)))
+   tx (fed st (sc 'texs))
+   _ (two? cos ? (pin v 'under (mesh-coarse v [(map (b \ b 0) cos) (map (b \ b 1) cos)] tx fog 8 gain ck)))
    ; ..a lift's platform where it has got to, each leaf of its gates swung out as far as it
    ; is open, its pad and tether
    lifts (catmap (i \ (: q (sc 'lifts i) s (st 'lifts i) c (lv 'lifts i) f (q 'fix) u (1.0 - s 'g) w (2 u * (3.0 - 2.0 * u))
@@ -1370,7 +1418,9 @@
    all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)))
    _ (gk ? (pin v 'keys (map (b \ b 2) all)) 0)
-   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] (sc 'texs) fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare))
+   ; ..the frame kept for a feed's next
+   (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] tx fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare
+    @ f (tray? f ? (pin st 'framed f, f) f)))
  ; ..a frame, and under it the bottom row's word: what a reload found wrong, or for a few
  ; seconds that it read the level again
  (world-frame st) (: w (st 'w) h (st 'h) f0 (world-pens st) r (h // 2) k (peep st 'kp 1) kit (st 'kitty)
@@ -2100,6 +2150,45 @@
  (throb-at t) (: ix (frame-at t) k0 (int (t 0 / throb-step))
    (one k nt) (k < 0 ? 0.0 (struck ix (frame-at (k * throb-step)) throb-ring (saw-sh (note-hz nt))))
    (0.14 * foldl (\ a j (a + one (k0 + 1 - j) -31.0 + one (k0 + 1 - j) -30.9)) (t * 0.0) ^4))
+ ; ..traffic a street or two off: cars going by, no engine nor horn, each a swell of the air
+ ; it pushes and its tyres on the road as it nears and passes, softer and slower the further
+ ; off, quicker the faster, brighter coming than going; heard alike wherever it is. a car in a
+ ; slot of car-slot seconds by its slot's die, as [when speed off loud]; noise through a
+ ; lowpass for the air and a bandpass for the tyres, mem their memory, a hair more traffic
+ ; further still under it
+ car-slot 1.7 car-odds 0.75 car-reach 6 car-far 0.04 traffic-k 0.5
+ (car k) (: nz (cite 'play 'vnoise) (u j) (0.5 + 0.5 * nz (k * 8 + 4099 + j)) d (14.0 + 22.0 * u 3)
+   (u 0 < car-odds ? [((k + u 1) * car-slot) (10.0 + 9.0 * u 2) d ((0.5 + 0.5 * u 4) * 14.0 / d)] ()))
+ (traffic-at t mem) (: ks (cite 'dsp 'sweep) nz (cite 'play 'vnoise) k0 (int (t 0 / car-slot)) mid (t (#t // 2))
+   cs (filter two? (map (j \ car (k0 - car-reach + j)) ^(2 * car-reach + 1)))
+   (x c u) ((u - c 0) * c 1 / c 2)
+   (e c u) (c 3 / (1.0 + 2 (x c u)))
+   E (foldl (\ a c (a + e c t)) (t * 0.0 + car-far) cs)
+   w (foldl (\ a c (a + e c mid)) car-far cs)
+   b (foldl (\ a c (: xm (x c mid) (a + e c mid * (0.5 - 0.4 * xm / (1.0 + abs xm))))) (0.5 * car-far) cs / w)
+   m (two? mem ? mem [() ()]) src (nz (frame-at t)) f0 (1.0 * frame-at (t 0))
+   (fl s c q bd) (ks src s (gem-tray [8] [(1.0 * song-rate) f0 c 0.0 0.0 0.0 q bd]))
+   (? !ks ((t * 0.0) . mem)
+      (: a (fl (m 0) (110.0 + 380.0 * b) 0.7 0.0) r (fl (m 1) (900.0 + 1300.0 * b) 1.1 1.0)
+         ((traffic-k * E * (<a + 0.2 * <r)) . [>a >r]))))
+ ; ..a music box now and then, in a reverb: in one tune-slot in tune-odds the first four to six
+ ; of tune-notes tune-gap apart, the last held longer, begun in the slot's first tune-start
+ ; seconds at a time its die picks, so a minute and more lies between one and the next. mem
+ ; [the reverb's memory, the voices struck, by their frame]
+ tune-notes [12.0 15.0 17.0 19.0 24.0 27.0] tune-slot 90.0 tune-start 20.0 tune-odds 0.7 tune-gap 0.9
+ tune-ring 2.6 tune-k 0.09
+ tune-space (gem-tray [16] [(1.0 * song-rate) 0.0 0.0 0.004 0.23 0.0 0.0 0.42 0.55 0.35 1.0 0.7 4.0 1.6 0.45 0.0])
+ (tune-at t mem) (: mk (cite 'play 'mkvoice) nz (cite 'play 'vnoise) sp (cite 'dsp 'space)
+   ix (frame-at t) i0 (ix 0) i1 (ix (#ix - 1)) k0 (int (t 0 / tune-slot))
+   (u k j) (0.5 + 0.5 * nz (k * 16 + 9001 + j))
+   (notes k) (? (k < 0 || tune-odds <= u k 0) ()
+                (: n (4 + int (2.999 * u k 2)) s (k * tune-slot + tune-start * u k 1)
+                   (map (i \ [(frame-at (s + i * tune-gap)) (tune-notes i) (i = n - 1 ? 1.6 1.0) 0.7]) ^n)))
+   ns (filter (q \ q 0 <= i1 && i0 < q 0 + int (q 2 * tune-ring * song-rate) + 2) (notes (k0 - 1) + notes k0))
+   vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain (q 3) 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
+   y (foldl (\ a q (was (q 0) @ v (two? v ? (a + v 1 ix) a))) (t * 0.0) ns)
+   (wet m) (sp y y m tune-space @ r (? (charm? r) (wet (cask r)) (two? r) [r m] [(y . y) m]))
+   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
  ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
  ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
  ; glass, dulled under a roof or sealed in glass (a lens's panes, the box they span)
@@ -2113,14 +2202,17 @@
    (any (p \ in (p 'lens)) ps))
  (desert-near st xz) (: e [(st 'px) (st 'py + eye-h) (st 'pz)]
    (open-at (st 'sc) e && !(glassed (st 'lvl) e) ? 1.0 0.15))
+ ; ..each [at near], at a sound's samples at the times t; or [at near 'kept], at answering its
+ ; samples, or a pair of them left and right, and what it keeps for the next chunk, given it
  hum-voices {'fluorescent [buzz-at buzz-near] 'wind [wind-at desert-near] 'bells [bells-at desert-near]
-             'throb [throb-at (\ st xz 1.0)]}
+             'throb [throb-at (\ st xz 1.0)] 'traffic [traffic-at (\ st xz 1.0) 'kept] 'musicbox [tune-at (\ st xz 1.0) 'kept]}
  ; ..the mixer's bus: each sound at its loudest box, eased from the last tic's over this one,
- ; or () where none is heard. st 'hum keeps the clock, the last loudness and the strips
+ ; or () where none is heard. st 'hum keeps the clock, the last loudness, the strips and what
+ ; each kept sound keeps
  (hums-bus st n) (: hs (st 'lvl 'hums)
    (? (atom? hs) ()
       (: m (st 'hum @ () (: ss (st 'lvl 'strips) (xs k) (gem-tray [#ss] (map (s \ 1.0 * s 'at k) ss))
-                                    m {'n 0 'g {} 'xz (#ss @ 0 () [(xs 0) (xs 1)])} _ (pin st 'hum m) m)
+                                    m {'n 0 'g {} 'mem {} 'xz (#ss @ 0 () [(xs 0) (xs 1)])} _ (pin st 'hum m) m)
                                  m m)
          p [(st 'px) (st 'py) (st 'pz)] t ((m 'n + iota n) / (1.0 * song-rate)) r (iota n / (1.0 * n))
          (loud nm) (foldl (\ a h (h 'sound = nm ? (max a (hum-in h p)) a)) 0.0 hs)
@@ -2128,8 +2220,10 @@
          gs (map (nm \ (: v (hum-voices nm) g (loud nm) g1 (g > 0.0 ? (g * (v 1) st (m 'xz)) g) [nm (peep (m 'g) nm 0.0) g1 v])) ns)
          heard (filter (q \ q 1 > 0.0 || q 2 > 0.0) gs)
          _ (pins m 'n (m 'n + n) 'g (foldl (\ a q (pin a (q 0) (q 2))) {} gs))
+         (said q) (: v (q 3) mm (m 'mem) y (? (#v < 3) (v 0 t) (v 0 t (peep mm (q 0) ()) @ o (pin mm (q 0) >o, <o)))
+                    (tray? y ? (y . y) y))
          (? (atom? heard) ()
-            (: y (foldl (\ a q (a + (q 1 + (q 2 - q 1) * r) * (q 3 0) t)) (iota n * 0.0) heard) (y . y))))))
+            (: z (iota n * 0.0) (foldl (\ a q (: g (q 1 + (q 2 - q 1) * r) y (said q) ((<a + g * <y) . (>a + g * >y)))) (z . z) heard))))))
  ; ..the loop as loud as the nearest speaker is to the listener's head, eased from the last
  ; tic's over this one, its clock going on heard or not; a speaker with a box heard in it alone.
  ; each where the level has it, one in the pocket brought up out of it, so a speaker by the
@@ -2148,7 +2242,7 @@
       (: g0 (m 'g) g1 (loop-in st) t ((m 'n + iota n) / (1.0 * song-rate)) r (iota n / (1.0 * n)) _ (pins m 'n (m 'n + n) 'g g1)
          (g0 <= 0.0 && g1 <= 0.0 ? () (: y ((g0 + (g1 - g0) * r) * loop-gain * decay-at (m 'd) t) (y . y))))))
  ; ..the hums and the loop together
- (hum-bus st n) (: a (hums-bus st n) b (loop-bus st n) (? (atom? a) b (atom? b) a ((<a + <b) . (<a + <b))))
+ (hum-bus st n) (: a (hums-bus st n) b (loop-bus st n) (? (atom? a) b (atom? b) a ((<a + <b) . (>a + >b))))
  ; --- the files watched: the level and its pictures, each by its stat stamp. a change reads
  ;     the level again, keeping the player where they stand; one that will not read keeps the
  ;     last and says why ---
