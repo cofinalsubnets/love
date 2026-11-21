@@ -30,6 +30,7 @@ const ptrs = {
   264: [[1, 'str', 'in'], [3, 'str', 'in']], 316: [[1, 'str', 'in'], [3, 'str', 'in']],
   280: [[1, 'str', 'in'], [2, 32, 'in']], 80: [[0, 'str', 'in']], 79: [[0, 1, 'out']],
   63: [[0, 390, 'out']], 61: [[1, 'int', 'out']],                           // uname wait4
+  99: [[0, 120, 'out']],                                                    // sysinfo
   0x4100: [[0, 1, 'in'], [2, 3, 'in'], [4, 5, 'in']] };                   // inle's spawn
 // the bulk calls go in window-sized pieces: a short count is a count all the same
 const piece = { 0: 1, 1: 1, 217: 1 };
