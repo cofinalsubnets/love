@@ -310,7 +310,7 @@
 ;                                      at x y z, its user facing the bearing: 'table 'desk
 ;                                      'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter
 ;                                      'crate 'carton 'stand 'sofa 'armchair 'sideboard 'tv
-;                                      'coatrack 'painting; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
+;                                      'coatrack 'painting 'rug; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
 ;                                      'panels 'trestle 'pedestal 'star or (), 'leg 'inset
 ;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
 ;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
@@ -941,7 +941,8 @@
    'sideboard {'w 1.6 'd 0.45 'h 0.8 'top 0.03 'low 0.14 'leg 0.025 'drawers 0 'doors 3 'skin {'body 'wood 'top 'plank 'frame 'wood}}
    'tv {'w 1.1 'd 0.06 'h 0.74 'low 0.08 'skin {'body 'metal 'screen 'screen}}
    'coatrack {'w 0.5 'd 0.5 'h 1.8 'leg 0.022 'fill () 'skin {'frame 'wood 'soft 'cloth}}
-   'painting {'w 1.0 'd 0.04 'h 0.75 'low 1.2 'skin {'frame 'wood 'picture 'canvas}}}
+   'painting {'w 1.0 'd 0.03 'h 0.75 'low 1.2 'skin {'frame 'wood 'picture 'canvas}}
+   'rug {'w 2.0 'd 3.0 'skin {'soft 'carpet}}}
  furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'low 'lip 'seed 'skin]
  book-colours [(rgb 0.36 0.09 0.07) (rgb 0.1 0.2 0.36) (rgb 0.14 0.3 0.16) (rgb 0.55 0.45 0.2) (rgb 0.2 0.2 0.22) (rgb 0.6 0.3 0.12)]
  (furnish k at deg st) (: u "(furnish KIND [x y z] bearing {PARAM v ..})" o (P at u) dd (N deg u)
@@ -982,6 +983,14 @@
          (books gp bk) (\ a dg e w (: bh (gp * pick e 'h [0.6 0.9]) bd (2.0 * D * pick e 'd [0.6 0.85]) c (bk (int (#bk * dice e 'c)))
                                      (fit c (box [(a 0 - 0.5 * w) (a 1) (o 2 + D - bd)] [(a 0 + 0.5 * w - 0.002) (a 1 + bh) (o 2 + D)]))))
          ; ..a picture laid on a face toward the user, its middle at x y, the role r's texture
+         (tex-of r) (tex-by (peep sks r (peep sks 'frame 'wood)))
+         ; ..a box bevelled e round its top and its upright corners, as a cushion is
+         (pillow x0 y0 z0 x1 y1 z1 e r) (: (at x y z) (v+ o [x y z])
+           cs [[(at x0 (y1 - e) z0) (at x1 (y1 - e) z0) (at x0 y1 (z0 + e))] [(at x0 (y1 - e) z1) (at x1 (y1 - e) z1) (at x0 y1 (z1 - e))]
+               [(at x0 (y1 - e) z0) (at x0 (y1 - e) z1) (at (x0 + e) y1 z0)] [(at x1 (y1 - e) z0) (at x1 (y1 - e) z1) (at (x1 - e) y1 z0)]
+               [(at (x0 + e) y0 z0) (at (x0 + e) y1 z0) (at x0 y0 (z0 + e))] [(at (x1 - e) y0 z0) (at (x1 - e) y1 z0) (at x1 y0 (z0 + e))]
+               [(at (x0 + e) y0 z1) (at (x0 + e) y1 z1) (at x0 y0 (z1 - e))] [(at (x1 - e) y0 z1) (at (x1 - e) y1 z1) (at x1 y0 (z1 - e))]]
+           (whole (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (skin (role r) (solid (box (at x0 y0 z0) (at x1 y1 z1)))) cs)))
          (face x y w h r) (decal [(o 0 + x) (o 1 + y) (o 2 - D - 0.003)] [0.0 0.0 -1.0] [0.0 1.0 0.0] w h (tex-by (peep sks r 'canvas)))
          parts
           ((k = 'armchair ? 'sofa k) @
@@ -1017,13 +1026,22 @@
                      (rim (0.0 - W - e) (e - W)) (rim (W - e) (W + e))
                      (bx (0.0 - W - e) (lo - 0.09) (0.0 - D - e) (W + e) (lo + lp) (e - D) 'frame)
                      (bx (0.0 - W - e) (H - 0.09) (D - e) (W + e) (H + lp) (D + e) 'frame)])
-           'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.18 0.0)
+           ; ..a sofa: short feet, a body, cushions side by side on it and against its back, each
+           ; bevelled round its top and corners, and its arms rolled
+           'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.17 0.0) sw (2.0 * (W - aw)) n (max 1 (int (sw / 0.72 + 0.5))) cw (sw / n)
+                   (rx i) (aw - W + cw * i)
                    [(map (c \ bx (c 0 * (W - 0.06) - 0.03) 0.0 (c 1 * (D - 0.06) - 0.03) (c 0 * (W - 0.06) + 0.03) 0.1 (c 1 * (D - 0.06) + 0.03) 'frame)
                          [[-1 -1] [1 -1] [-1 1] [1 1]])
-                    (bx (0.0 - W) 0.1 (0.0 - D) W (S - 0.12) D 'soft) (bx (aw - W) (S - 0.12) (0.22 - D) (W - aw) S D 'soft)
-                    (bx (0.0 - W) (S - 0.12) (0.0 - D) W H (0.22 - D) 'soft)
-                    (aw > 0.0 ? [(bx (0.0 - W) (S - 0.12) (0.22 - D) (aw - W) (S + 0.2) D 'soft)
-                                 (bx (W - aw) (S - 0.12) (0.22 - D) W (S + 0.2) D 'soft)] ())])
+                    (pillow (0.0 - W) 0.1 (0.0 - D) W (S - 0.12) D 0.03 'soft)
+                    (pillow (0.0 - W) (S - 0.13) (0.0 - D) W (H - 0.1) (0.14 - D) 0.06 'soft)
+                    (map (i \ pillow (rx i + 0.008) (S - 0.13) (0.16 - D) (rx (i + 1) - 0.008) (S + 0.03) (D - 0.01) 0.05 'soft) ^n)
+                    (map (i \ pillow (rx i + 0.01) (S + 0.02) (0.1 - D) (rx (i + 1) - 0.01) (H - 0.02) (0.3 - D) 0.07 'soft) ^n)
+                    (aw > 0.0 ? (map (sx \ (: x0 (sx < 0 ? (0.0 - W) (W - aw)) x1 (x0 + aw) xm (0.5 * (x0 + x1))
+                                            [(pillow x0 0.1 (0.0 - D) x1 (S + 0.08) D 0.03 'soft)
+                                             (rod (v+ o [xm (S + 0.1) (0.02 - D)]) (v+ o [xm (S + 0.1) D]) (0.5 * aw + 0.015) 10 (tex-of 'soft))]))
+                                     [-1 1]) ())])
+           ; ..a rug laid on the floor, a hair over it
+           'rug [(drape (tex-of 'soft) [[(v+ o [(0.0 - W) 0.008 (0.0 - D)]) (v+ o [W 0.008 (0.0 - D)])] [(v+ o [(0.0 - W) 0.008 D]) (v+ o [W 0.008 D])]])]
            ; ..a sideboard: short legs under a body of doors or drawers, its top over them
            'sideboard (: lo (g 'low) y (H - T)
                         [(map (c \ post (c 0 * (W - 0.05)) (c 1 * (D - 0.05)) lo) [[-1 -1] [1 -1] [-1 1] [1 1]])
@@ -1041,7 +1059,7 @@
                         (bx (0.0 - L2) 0.0 (0.0 - L2) L2 H L2 'frame) (bx (-1.5 * L2) (H - 0.03) (-1.5 * L2) (1.5 * L2) (H + 0.03) (1.5 * L2) 'frame)
                         (map (q \ peg (q 0) (q 1) (H - 0.12)) [[1 0] [-1 0] [0 1] [0 -1]])
                         (map (q \ peg (q 0) (q 1) (H - 0.4)) [[0.7 0.7] [-0.7 0.7] [0.7 -0.7] [-0.7 -0.7]])
-                        (g 'fill = 'coats ? [(bx 0.05 (H - 1.05) -0.22 0.17 (H - 0.14) 0.22 'soft) (bx 0.03 (H - 0.2) -0.12 0.19 (H - 0.08) 0.12 'soft)] ())])
+                        (g 'fill = 'coats ? [(lathe (v+ o [0.21 (H - 1.12) 0.0]) [[0.17 0.0] [0.16 0.3] [0.13 0.62] [0.15 0.86] [0.11 0.95] [0.035 1.0]] 12 (role 'soft))] ())])
            ; ..a painting hung low up its wall, the back of it at +z against it: a frame round the
            ; picture on its front
            'painting (: lo (g 'low) f 0.045

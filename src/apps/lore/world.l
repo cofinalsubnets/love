@@ -887,7 +887,7 @@
      (pt p r su sw) [(p 0 + r * (su * u 0 + sw * w 0)) (p 2 + r * (su * u 1 + sw * w 1))]
      (end p r t0) (map (j \ pt p r (cos (t0 + pi * j / k)) (sin (t0 + pi * j / k))) ^(k + 1))
      (hull (k @ 0 [(pt a ra -1.0 -1.0) (pt b rb 1.0 -1.0) (pt b rb 1.0 1.0) (pt a ra -1.0 1.0)] (end b rb (-0.5 * pi) + end a ra (0.5 * pi)))))
-   ps (map (slot 2) (filter (s \ s 2 >= hole-r) ss)) xs (catmap (q \ map (c \ c 0) q) ps) zs (catmap (q \ map (c \ c 1) q) ps)
+   ps (map (slot 8) (filter (s \ s 2 >= hole-r) ss)) xs (catmap (q \ map (c \ c 0) q) ps) zs (catmap (q \ map (c \ c 1) q) ps)
    lo [(foldl min 1e9 xs) (y0 - shaft-d) (foldl min 1e9 zs)] hi [(foldl max -1e9 xs) (y0 + 0.02) (foldl max -1e9 zs)]
    ; ..dark up the slots' walls but not the ground beside them, a face tested a way out from it,
    ; and a land's cell's width round, its sheet cut only by the cell
@@ -1255,9 +1255,12 @@
  (unburn lv b) (: ts (lv 'trees)
    _ (each ^#ts (i \ (: o (ts i) q (b 'trees i) (pins o 'pl (q 0) 'trunk (q 1), atom? (q 2) || pin o 'shade (q 2)))))
    (pins lv 'grown 1 'brushes (lv 'brushes + b 'bs) 'pits (b 'pits) 'embers (b 'embers)))
+ ; ..a kept scene's art painted again, thrown anew each run as the level's art is
+ (arted lv sc) (: txs (textures lv) ts (sc 'texs) (art? t) (any (q \ two? q && <q = 'art) (t 'layers))
+   (pin sc 'texs (map (i \ i < #txs && art? (txs i) ? (swatch (txs i 'w) (txs i 'h) (txs i 'layers)) (ts i)) ^#ts)))
  (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" got (string? k && scene-got f lv)
    n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got)
-   (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) hit)
+   (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) (arted lv hit))
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
           (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b

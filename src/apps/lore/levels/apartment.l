@@ -35,12 +35,13 @@
 (: boards (feel 'wood (texture 64 64 1.2 '((fill (rgb 0.5 0.34 0.2)) (noise 1 12 0.1) (fbm 16 3 0.1) (stripes 8 1 0 (shade 0.6))))))
 (: rug (feel 'soft (texture 32 32 0.8 '((fill (rgb 0.55 0.2 0.18)) (checker 8 8 (shade 0.85)) (noise 1 0.05) (fbm 8 3 0.08)))))
 (: cloth (feel 'soft (texture 32 32 0.5 '((fill (rgb 0.35 0.42 0.5)) (noise 1 0.08) (fbm 8 3 0.06)))))
+(: walnut (material 'wood 6 {'colour (rgb 0.26 0.15 0.09) 'grain 0.25}))
+(: lacquer (feel 'wood (texture 16 16 0.5 '((fill (grey 0.07)) (noise 2 0.06) (rows 0 1 (grey 0.12))))))
 (: oak (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.45 0.3 0.18)) (noise 1 10 0.1) (fbm 16 3 0.08)))))
 (: clear (texture 64 64 2 '((fill (rgb 0.82 0.88 0.88)) (fbm 32 3 0.05))))
-; ..and the painting over the sofa: blocks and a disc on a pale ground, a stripe across them
-(: abstract (texture 64 48 1.0 '((fill (rgb 0.9 0.87 0.79)) (noise 1 0.04) (rect 5 6 27 41 (rgb 0.72 0.2 0.14))
-                                 (disc 43 17 11 (rgb 0.14 0.24 0.52)) (rect 33 30 60 43 (grey 0.16))
-                                 (rect 0 25 64 28 (rgb 0.93 0.72 0.18)) (disc 43 17 4 (rgb 0.9 0.87 0.79)))))
+; ..and the paintings, each thrown anew every game from the templates
+(: wide-art (texture 96 64 1.0 '((art any 1))))
+(: tall-art (texture 64 96 1.0 '((art any 2))))
 
 ; the river: wandering across the plain along x, more the further from the cube. by the cube
 ; it parts in two channels sep x either side of its line, the island between
@@ -150,21 +151,25 @@
 ; the house: one room, open to the plain on the east, a sliding glass door in its back wall
 ; onto the yard; a bulb overhead. by the door a tv on a sideboard, a sofa and an easy chair
 ; turned to it, a table with a red plush mouse on it between them on a rug; a painting on the
-; far wall, bookshelves and a coat rack
-(: (piece t lo hi) (skin {'all t} (solid (box lo hi))))
+; far wall, bookshelves and a coat rack; across the room a dining table and its six chairs,
+; a larger painting over them
 (: house
    [(skin {'walls siding 'floor tar 'ceiling plaster} (solid (box [-116.2 -0.6 16.0] [-104.0 3.2 28.0])))
     (skin {'floor boards 'walls plaster 'ceiling plaster} (room [-116.0 hy 16.2] [-103.8 3.0 27.8]))
     (glazed clear (door [-116.1 hy 22.0] 1.8 2.2))
-    (drape rug [[[-115.0 0.07 22.8] [-110.6 0.07 22.8]] [[-115.0 0.07 27.4] [-110.6 0.07 27.4]]])
+    (furnish 'rug [-112.8 hy 25.1] 0 {'w 4.4 'd 4.6 'skin {'soft rug}})
     (furnish 'sideboard [-115.76 hy 25.3] 270 {'skin {'body oak 'top oak 'frame oak}})
     (furnish 'tv [-115.7 (hy + 0.8) 25.3] 270 {})
     (furnish 'sofa [-111.6 hy 25.3] 270 {'w 2.6 'skin {'soft cloth}})
-    (piece oak [-113.6 hy 24.5] [-112.8 0.42 26.1])
+    (furnish 'table [-113.2 hy 25.3] 90 {'w 1.6 'd 0.8 'h 0.42 'apron 0.05 'skin {'top oak 'frame oak}})
     (plush [-113.2 0.42 25.3] 0 'mouse)
-    (furnish 'painting [-111.2 hy 27.77] 0 {'w 1.3 'h 0.8 'low 1.2 'skin {'picture abstract 'frame (material 'wood 2 {'colour (rgb 0.12 0.1 0.09)})}})
+    (furnish 'painting [-111.2 hy 27.78] 0 {'w 1.8 'h 1.2 'low 1.0 'skin {'picture wide-art 'frame (material 'wood 2 {'colour (rgb 0.12 0.1 0.09)})}})
     (furnish 'armchair [-113.2 hy 27.0] 236 {'skin {'soft (material 'cloth 3 {'colour (rgb 0.45 0.32 0.2)})}})
     (map (z \ furnish 'shelf [-115.84 hy z] 270 {'h 2.0 'shelves 5 'fill 'books 'seed (int z) 'skin {'frame oak}}) [17.2 18.15])
+    (furnish 'table [-110.0 hy 19.4] 0 {'w 1.8 'd 0.95 'skin {'top walnut 'frame walnut}})
+    (map (q \ furnish 'chair [(q 0) hy (q 1)] (q 2) {'seed (q 3) 'skin {'frame lacquer 'soft lacquer}})
+         [[-110.5 18.55 0 1] [-109.5 18.55 0 2] [-110.5 20.25 180 3] [-109.5 20.25 180 4] [-111.2 19.4 90 5] [-108.8 19.4 270 6]])
+    (furnish 'painting [-110.0 hy 16.22] 180 {'w 1.6 'h 2.3 'low 0.55 'skin {'picture tall-art 'frame (material 'wood 4 {'colour (rgb 0.16 0.12 0.1)})}})
     (furnish 'coatrack [-115.5 hy 23.5] 0 {'fill 'coats 'skin {'soft (material 'cloth 5 {'colour (rgb 0.3 0.28 0.25)})}})
     (bulb [-110.0 2.8 22.0] (rgb 1.0 0.85 0.62))])
 
