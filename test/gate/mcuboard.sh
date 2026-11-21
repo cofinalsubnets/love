@@ -4,7 +4,8 @@
 # swd, resets, and reads the battery off the console; green is the battery's own `; all ../.. green`,
 # which it prints only when every check passed. a teensy41-usb host instead holds a teensy 4.1 on usb:
 # the running image reboots to its loader at 134 baud, src/tools/halfkay.l writes the .bin, and green is
-# love's shell answering on the usb console the host's tty fact names. an rp2350-uf2 host holds a pico 2
+# the kernel's shell answering on the usb console the host's tty fact names, a pin read back high
+# and low through the gpio words. an rp2350-uf2 host holds a pico 2
 # on usb, its usb fact the port's by-path name: 134 baud on the port's serial device reboots a running
 # image into the rom, the uf2 goes raw onto the port's drive (the rom takes blocks at any sector; the
 # drive's model is checked first), and the battery reports to whoever opens the console. without such
@@ -37,7 +38,7 @@ rm -rf "$sd"; mkdir -p "$sd"
 if [ "$cap" = teensy41-usb ]; then
   cp "$img" "$sd/firm.bin"
   cp "$ho/love" src/apps/swd.l test/gate/swdpress.l src/tools/halfkay.l "$sd/"
-  green='*40002*'
+  green='*40002*50001*60000*'
   # the console is the host's tty fact, BEE_TTY under bee --on; a button fact (a probe's line
   # on its program pin, `aux lovswd TTY`) presses it, so an image not ours or hung still loads
   cat > "$sd/run.sh" <<'EOF'
@@ -58,6 +59,11 @@ exec 3<>"$tty"
 timeout 10 cat <&3 > got.1 &
 sleep 1
 printf '(+ 40000 2)\r' >&3
+sleep 1
+# pin 13, the led, driven high then low and read back each time: 50001, then 60000
+printf '(+ 50000 (gpio_init 13, gpio_dir 13 1, gpio_put 13 1, gpio_get 13))\r' >&3
+sleep 1
+printf '(* 2 (+ 30000 (gpio_put 13 0, gpio_get 13)))\r' >&3
 wait
 tr -d '\r' < got.1
 EOF
@@ -144,7 +150,7 @@ case "$out" in
   *) echo "$out"; echo "FAIL $t: no green off the board (rc $rc)" >&2; exit 1 ;;
 esac
 if [ "$cap" = teensy41-usb ]; then
-  echo "$t: the .bin written by halfkay.l, love's shell on the usb console answered (+ 40000 2)"
+  echo "$t: the .bin written by halfkay.l, the kernel's shell on the usb console answered (+ 40000 2), pin 13 read back high then low"
 elif [ "$cap" = rp2350-uf2 ]; then
   echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; all"*) echo "$l" ;; esac; done
   echo "$t: the uf2 written through the rom's drive, the battery green on its usb console"
