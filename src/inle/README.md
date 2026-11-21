@@ -36,5 +36,5 @@ Bare-metal Teensy 4.1 (NXP i.MX RT1062, Cortex-M7 @ 600 MHz, ~1 MB SRAM):
 love LIVE ON SILICON -- all-mooncc `-t thumb2` build, XIP boot from the 8 MB
 FlexSPI NOR behind the config block + IVT, LPUART6 console on pins 0/1 at
 115200, image boot (a build-time qemu bake wakes in ~1 s where the on-device
-egg bake took ~55 s). `make` / `make flash` (teensy_loader_cli). See
+egg bake took ~55 s). `make` / `make flash` (src/tools/halfkay.l). See
 teensy41/README.md.
