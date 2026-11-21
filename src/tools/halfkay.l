@@ -3,6 +3,7 @@
 ;   love src/tools/halfkay.l find              the board's hidraw node and its output report's size
 ;   love src/tools/halfkay.l frame IN.bin OUT  the reports a write would send, end to end; no device
 ;   love src/tools/halfkay.l write IN.bin      wait for the board, write, start the program
+;   love src/tools/halfkay.l start             start the program the flash holds; no write
 ; the board is in HalfKay after its button, or after its running usb serial is set to 134 baud. an
 ; output report is 1088 bytes: the flash offset in three bytes low first, 61 zeros, 1024 of the
 ; image. the first write erases the whole flash, so block 0 always goes; after it a block of FFs
@@ -79,9 +80,16 @@
        ms (clock 0 - t0)
        (start fd (fs (#fs - 1)) node (clock 0 + t-gone) ? (say out "halfkay: \(k) blocks of \((#s + blk - 1) // blk) written from \(p) in \(ms) ms (write \(held 'k) waited \(held 'ms) ms), started\n", flush out, 0)
           (die "\(k) blocks written, but \(node) is still in HalfKay")))
+   (boot _)
+    (: node (await (clock 0 + t-node) @ n (string? n ? n (die "no board in HalfKay")))
+       _ (fits node)
+       fd (openfd ("/dev/" + node) 4 @ fd (charm? fd ? fd (die ("/dev/" + node + ": " + uerrno fd))))
+       (start fd (report 0xFFFFFF zz) node (clock 0 + t-gone) ? (say out "halfkay: started\n", flush out, 0)
+          (die "\(node) is still in HalfKay")))
    (main as)
     (as @ ["find"] (nodes 0 @ l (two? l ? (map (n \ say out "/dev/\(n) \(fits n)\n") l, flush out, 0) (die "no board in HalfKay")))
           ["frame" p q] (frames (image p) @ fs (uwrite q (join "" fs) ? 0 (die ("cannot write " + q))))
           ["write" p] (write p)
-          _ (die "usage: love src/tools/halfkay.l find | frame IN.bin OUT | write IN.bin"))
+          ["start"] (boot 0)
+          _ (die "usage: love src/tools/halfkay.l find | frame IN.bin OUT | write IN.bin | start"))
    (main >argv))
