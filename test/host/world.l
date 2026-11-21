@@ -455,7 +455,9 @@
        (lids 12.0 = 0) (lids 3.0 > 0) (sky-up > 200) (roof-up = 0) (east > west)
        ; ..the air's stir under its stars: earth's unless said, 0 an airless sky's
        (sl 'sky 'twinkle = 1.0) (lv "(room [0 0 0] [1 1 1]) (sky 2 'clear) (twinkle 0)" 'sky 'twinkle = 0.0)
-       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")))
+       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")
+       ; ..rested at the start unless the level says winded
+       (sl 'winded = 0) (lv "(room [0 0 0] [1 1 1]) winded" 'winded = 1)))
 ; a car: its door opens at the start and stays open while any of the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range

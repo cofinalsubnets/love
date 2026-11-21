@@ -9,6 +9,8 @@
 ;                                      north toward east, looking pitch degrees up
 ;   (entry NAME [x y z] bearing pitch)  another way into the level, as the start but named,
 ;                                      for another level's way out to arrive by
+;   winded                             the player starts out of breath, as after a run; none
+;                                      said, rested
 ;   (shot seconds [x y z] bearing pitch)  before the start, the level seen from there for
 ;                                      seconds, the shots in their order; a key skips them
 ;   (shot seconds (sky hour COVER) bearing pitch)  ..or that sky alone, nothing under it
@@ -316,7 +318,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard reach sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog dye twinkle ad feed stamp spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog dye twinkle ad feed stamp spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -344,6 +346,7 @@
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
  (entry nm at deg pitch) (: u "(entry NAME [x y z] bearing pitch)"
    (nom? nm ? (part 'entry [['name nm] ['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]) (no u nm)))
+ winded (part 'winded ())
  ; ..where another level is, and the way into it: a file beside this one, a name or ()
  (way-to u file nm) (? (!(string? file)) (no u file) (!(nom? nm || nm = ())) (no u nm) [['file file] ['entry nm]])
  (shot s w deg pitch) (: u "(shot seconds [x y z] bearing pitch), or (shot seconds (sky hour COVER) bearing pitch)"
@@ -1218,7 +1221,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'dye 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'sleep 'fall 'herald])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'dye 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'winded 'sleep 'fall 'herald])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -1238,6 +1241,7 @@
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
        'entries (map (e \ (: a (e 'at) {'name (e 'name) 'at [(a 0) (a 2)] 'y (a 1) 'deg (e 'deg) 'pitch (e 'pitch) 'bed (peep e 'bed 0) 'foot a}))
                      (of 'entry))
+       'winded (two? (of 'winded) ? 1 0)
        'sleeps (map (q \ {'at (q 'at) 'deg (q 'deg) 'file (q 'file) 'entry (q 'entry)}) (of 'sleep))
        'falls (map (q \ {'y (q 'y) 'file (q 'file) 'entry (q 'entry)}) (of 'fall))
        'heralds (map (h \ {'at (h 'at) 'size (h 'size) 'reach (h 'reach) 'tex (tname (h 'tex)) 'file (h 'file) 'entry (h 'entry)}) (of 'herald))

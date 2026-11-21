@@ -2331,7 +2331,7 @@
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
                                nm (o 'entry) came (peep o 'came 0)
-                               st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'puff (came ? 0.0 1.0) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
+                               st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'puff (came || !(lv 'winded) ? 0.0 1.0) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                _ (mesh-gpu st)         ; its helper built while loading, not in a frame

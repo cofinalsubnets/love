@@ -160,7 +160,7 @@
 
 (level "the apartment"
   (textures {'wall sand 'floor sand 'ceiling sand 'door oak})
-  (start [(home 0) 0 (home 1 - 1.2)] 280 -4)
+  (start [(home 0) 0 (home 1 - 1.2)] 280 -4) winded
   (sky 15.5 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.32 0.32 0.3))
   ; the plain, open to the sky, walled by nothing to see; the land on it, dunes and the river's
