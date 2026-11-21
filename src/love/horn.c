@@ -4,6 +4,8 @@
 //   (horn-in rate chans)  the capture device the same way, read; a dry one parks the reader
 //   (horn-lag port)       frames unplayed (out) or unread (in), the port's pending run
 //                         included; () for a non-horn
+//   (horn-rate _)         the rate a board's device plays, its roster's -D love_horn_rate;
+//                         () where the device takes any
 // a bio to io.c, so a full device answers 0 and the task parks: backpressure, never a drop.
 // the device, by __love_osv at run time:
 //   - inle: k_horn_* (inle/hda.c)
@@ -38,6 +40,9 @@ struct horn { struct bio b; word kind, rate, chans, wpos, t0, dir, dchans, dwid,
 // depend on the build box (love seed's fixpoint). a seat is freestanding, no open/ioctl: none
 #ifndef love_horn_seat
 #define love_horn_seat 0
+#endif
+#ifndef love_horn_rate
+#define love_horn_rate 0
 #endif
 #if love_horn_seat
 # define horn_alsa 0
@@ -722,7 +727,11 @@ static lvm(lvm_horn_lag) {
  else lag += io_wpending(g, (struct io*) h) / fb;
  love_musttail return Answer(putcharm((intptr_t) lag)); }
 
+static lvm(lvm_horn_rate) {
+ love_musttail return Answer(love_horn_rate ? putcharm(love_horn_rate) : ZeroPoint); }
+
 LvDef("horn", horn, 2, "horn");
+LvDef("horn-rate", horn_rate, 1, "horn");
 LvDef("horn-in", horn_in, 2, "horn");
 LvDef("horn-lag", horn_lag, 1, "horn");
 

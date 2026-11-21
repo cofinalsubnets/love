@@ -112,33 +112,47 @@
 
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed; a hard-panned voice
-   ; skips its far side. mixall sums the chunk in C in one call, left and right in one tray,
-   ; a voice's raw answer read in place; without it the trays sum in love, in the same order
+   ; skips its far side. tones-mix runs the chunk in C in one call, an ops voice by its twin
+   ; (ops.l's cv) and the rest as pieces their fns laid; mixall sums the pieces alone, and
+   ; without either the trays sum in love, all in the same order
    mixall (cite 'dsp 'mixall)
-   (mixdown vs base n)
-    (: ix (iota n + base)
-       z  (ix * 0.0)
+   tmix (cite 'dsp 'tones-mix)
+   techo (cite 'dsp 'tones-echo)
+   tws (cite 'dsp 'tones-ws)
+   ; ..g a number answers the packed bytes where tones-mix lays them, else left . right
+   (mixlay vs base n g ws)
+    (: c (tmix && n <= 4096)
+       (ixs _) (iota n + base)
+       (lr m) ((peep m (iota n) 0.0) . (peep m (iota n + n) 0.0))
        (side acc y g) (g = 0.0 ? acc (acc + y * g))
        (go l L R) (l @- (L . R)
-                   ((_ . f . yl . yr . _) . u) (f ix @ y            ; the wave, once: it is a C pass
+                   ((_ . f . yl . yr . _) . u) (f (ixs ()) @ y      ; the wave, once: it is a C pass
                                                   (go u (side L y yl) (side R y yr))))
        (pieces l) (l @- ()
-                   ([_ _ yl yr _ tp] . u) (map ([y o g] \ [y (yl * g) (yr * g) o]) (tp ix) + pieces u)
-                   ([_ _ yl yr r] . u) ([(r ix) yl yr 0] . pieces u)
-                   ((_ . f . yl . yr . _) . u) ((f ix @ y [(tray? y ? y (z + y)) yl yr 0]) . pieces u))
-       (mixall ? (mixall (pieces vs) n @ m ((peep m (iota n) 0.0) . (peep m (iota n + n) 0.0))) (go vs z z)))
+                   ([_ _ yl yr _ tp cv] . u) (c && cv ? ([cv yl yr] . pieces u)
+                                                (map ([y o g] \ [y (yl * g) (yr * g) o]) (tp (ixs ())) + pieces u))
+                   ([_ _ yl yr r cv] . u) ((c && cv ? [cv yl yr] [(r (ixs ())) yl yr 0]) . pieces u)
+                   ([_ _ yl yr r] . u) ([(r (ixs ())) yl yr 0] . pieces u)
+                   ((_ . f . yl . yr . _) . u) ((f (ixs ()) @ y [(tray? y ? y (y + 0.0 * ixs ())) yl yr 0]) . pieces u))
+       (? (c && (charm? g || gem? g)) (tmix (pieces vs) base n g ws)
+          c (lr (tmix (pieces vs) base n () ws))
+          mixall (lr (mixall (pieces vs) n))
+          (ixs () * 0.0 @ z (go vs z z))))
+   (mixdown vs base n) (mixlay vs base n () ())
    ; an ops voice heard again at each tap [frames-behind gain], from the chunks it already
-   ; laid rather than run again: [end fn gl gr () tp], tp the [tray offset gain] a chunk sums.
-   ; for a mixdown with mixall, whose chunks are all one length; fn is the voice unechoed
-   (echoed [end fn gl gr raw] taps)
-    (: mx (foldl max 0 (map cap taps)) box {'past ()}
+   ; laid rather than run again: [end fn gl gr () tp cv], tp the [tray offset gain] a chunk
+   ; sums and cv its twin echoed alike. for a mixdown with mixall or tones-mix, whose chunks
+   ; are all one length; fn is the voice unechoed
+   (echoed v taps)
+    (: end (v 0) fn (v 1) gl (v 2) gr (v 3) raw (v 4) cv (#v > 5 ? (v 5) ())
+       mx (foldl max 0 (map cap taps)) box {'past ()}
        (tp ix) (: f0 (peep ix 0 0) n #ix
                   r (f0 < end ? (raw ix))
                   past (filter (p \ p 0 + n > f0 - mx) (tray? r ? ([f0 r] . box 'past) (box 'past)))
                   _ (pin box 'past past)
                   (from d g) (map (p \ [(p 1) (f0 - d - p 0) g]) (filter (p \ p 0 < f0 - d + n && p 0 + n > f0 - d) past))
                   ((tray? r ? [[r 0 1.0]] ()) + catmap (t \ from (t 0) (t 1)) taps))
-       [(end + mx) fn gl gr () tp])
+       [(end + mx) fn gl gr () tp (techo && cv && techo cv taps)])
    ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
@@ -158,12 +172,15 @@
                  lay c 2 2 4 (clipv g R),
                  string c)
           (string (go 0))))
-   ; a song's next n frames out its port 'h at gain g; finished voices dropped, 'fpos moved on
+   ; a song's next n frames out its port 'h at gain g; finished voices dropped, 'fpos moved on.
+   ; the mixer's scratch is the song's: two sides, a voice's two, and 10 operators' 4096 each
    (song-out s n g) (: base (s 'fpos)
                        live (filter (p \ p 1 0 >= base) (s 'vs))
                        now (filter (p \ p 0 < base + n) live)
+                       ws (s 'mws || (tws && pin s 'mws (tws (14 * 4096)) 'mws))
+                       m (mixlay (map (p \ p 1) now) base n g ws)
                        (pins s 'vs live 'fpos (base + n),
-                        say (s 'h) (pack (mixdown (map (p \ p 1) now) base n) n g)))
+                        say (s 'h) (string? m ? m (pack m n g))))
 
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048
