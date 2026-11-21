@@ -144,7 +144,7 @@ case "$out" in
   *) echo "$out"; echo "FAIL $t: no green off the board (rc $rc)" >&2; exit 1 ;;
 esac
 if [ "$cap" = teensy41-usb ]; then
-  echo "$t: the .hex flashed through the loader, love's shell on the usb console answered (+ 40000 2)"
+  echo "$t: the .bin written by halfkay.l, love's shell on the usb console answered (+ 40000 2)"
 elif [ "$cap" = rp2350-uf2 ]; then
   echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; all"*) echo "$l" ;; esac; done
   echo "$t: the uf2 written through the rom's drive, the battery green on its usb console"
