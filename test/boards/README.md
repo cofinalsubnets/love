@@ -24,11 +24,14 @@ test_nucleo446_board runs firm-ram.bin from SRAM over swd on a host with nucleo4
 ## nrf52840/
 
 Seeed XIAO nRF52840 Sense (Cortex-M4F @ 64 MHz, 256 KB SRAM -- firmware only, no
-love). nucleo446's battery through `mooncc -t thumb2sp`, linked at 0x27000 above the
-UF2 bootloader's softdevice, flattened and packed by src/tools/uf2.l (family
-0xADA52840). UART0 console on D6/D7 at 115200, TIMER0 microseconds, the RGB LED.
-`make flash` copies firm.uf2 onto the bootloader's drive (double tap reset); gate
-test_nrf52840 builds it and verifies the boot surface. qemu has no nRF52 machine.
+love). No swd on the board and a UF2 bootloader that only writes flash, so the flash holds
+loader.c once, linked at 0x27000 above the bootloader's softdevice and packed by
+src/tools/uf2.l (family 0xADA52840): over its own usb serial port it takes firm-ram.pkt,
+nucleo446's battery through `mooncc -t thumb2sp` for SRAM's base, and runs it. usb.c is the
+nRF52's usbd under src/inle/usbcdc.h, both images' console; 134 baud on an image resets into the
+loader, on the loader brings up the UF2 drive. `make flash` copies loader.uf2 there; gate
+test_nrf52840 verifies both images, and test_nrf52840_board runs the battery from SRAM on a host
+with nrf52840-loader. qemu has no nRF52 machine.
 
 ## microbit/
 
