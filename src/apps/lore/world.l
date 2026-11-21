@@ -2201,10 +2201,14 @@
                                     (a + 2) (b + 2) (b + 3) -2 (a + 2) (b + 3) (a + 3) -2 (a + 2) (b + 3) (b + 2) -2 (a + 2) (a + 3) (b + 3) -2]))
                          ^P))
  ; ..a mode n at the steps s and time t: [its swing, how wide it swings, its colours]
+ ; ..a whole one an even number of half waves round, one more where it fits an odd, so the
+ ; loop meets itself smooth at the tether, its still points spread to fit
  (mode st n t0 s t) (: pl (t < t0 ? 0.0 (exp -((t - t0) / 1.2))) fit (fits? st n) ps (primes n)
-   a ((1.0 + 2.5 * pl) * min 1.5 (0.25 + 0.1 * n)) f (tau * (0.6 + 4.0 / n)) ph (pi * s / n) e (a * sin ph)
-   d (fit ? (e * cos (f * t)) (a * (0.5 + 0.5 * sin (0.9 * t + n)) * (0.6 * sin ph * cos (f * t) + 0.4 * sin (1.618 * ph + 2.3 * t))))
-   k ((1.0 + 0.8 * pl) * (fit ? (peep st 'solved 0 ? 0.75 0.5) 0.22)) j (int (floor (s / n)) % #ps)
+   S (st 'lvl 'resonance 'steps) hw (S // n + (S // n) % 2) w (fit ? (1.0 * S / hw) (1.0 * n))
+   a ((1.0 + 2.5 * pl) * min 1.5 (0.25 + 0.1 * n)) f (tau * (0.6 + 4.0 / n)) ph (pi * s / w) e (a * sin ph)
+   ; ..one that doesn't fit thrashes, held still at the tether so the loop never parts there
+   d (fit ? (e * cos (f * t)) (a * 2 (sin (pi * s / S)) * (0.5 + 0.5 * sin (0.9 * t + n)) * (0.6 * sin ph * cos (f * t) + 0.4 * sin (1.618 * ph + 2.3 * t))))
+   k ((1.0 + 0.8 * pl) * (fit ? (peep st 'solved 0 ? 0.75 0.5) 0.22)) j (int (floor (s / w)) % #ps)
    [d (fit ? (e * e) (s * 0.0 + a * a)) (map (q \ gem-tray [#ps] (map (p \ k * prime-c p q) ps) j) ^3)])
  (string-at st ts) (: r (st 'lvl 'resonance) m (r 'steps) L (st 'lvl 'surface 'lx) t (st 'mt) P (2 * m) w res-w
    I (iota P) s (I * (m / (1.0 * P))) V (iota (4 * P)) J (V // 4) C (V % 4) z (s * 0.0) g0 0.01
