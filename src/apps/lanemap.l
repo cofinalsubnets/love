@@ -58,8 +58,8 @@
       ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
-     ["what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l`"
-      ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/as.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
+     ["what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`"
+      ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]
      ["" ["src/love/holo/a64.l"] ["test_moon" "test_cca64"] ""]
      ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64" "test_ccrv32"] ""]

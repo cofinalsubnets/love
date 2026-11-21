@@ -1,10 +1,11 @@
 ; src/apps/harp/horn.l -- feeding the horn: the rate love plays at, and a pacer that keeps the
-; card's queue a little longer than the gap between feeds. every sample is a closure call, so
-; wasm plays at a third of the 48k and a small core at the 44.1k's half.
+; card's queue a little longer than the gap between feeds. a board's device names its rate
+; (horn-rate); else every sample is a closure call, so wasm plays at a third of the 48k and a
+; small core at the 44.1k's half.
 
 (module '(horn song-rate song-lead song-lead-max pacer pace! song-lead-of song-fill song-keep)
 (:
- song-rate (love-arch @ 'wasm 16000 'other 22050 48000)
+ song-rate (horn-rate () @ (r && charm? r) r (love-arch @ 'wasm 16000 'other 22050 48000))
  ; the queue must outlast the gap between feeds, which on a slow machine is a frame's paint;
  ; the pacer holds the gap at its recent worst, halving every two seconds of clock, and the
  ; lead is two and a half gaps, clamped to song-lead .. song-lead-max

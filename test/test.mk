@@ -702,8 +702,8 @@ test_microbit_board: test_microbit
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that firmware on a teensy 4.1, flashed over its usb on a host with teensy41-usb
 test_teensy41_board: test_teensy41
-	@echo TEST out/teensy41/love.hex "(on silicon)"
-	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.hex
+	@echo TEST out/teensy41/love.bin "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
 test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32 test_esp32c6 test_ch32v203 test_teensy41 test_playdate test_trinkey
 	@echo "test_boards: thirteen ports build and link -- mooncc and our linker, no emulator"
@@ -799,13 +799,14 @@ test_holo: host
 	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
+	@$(gsh) test/gate/machobind.sh "$m"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
-# as.l, x86-64 over holo: goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
+# the x86-64 assembler (dialect.l's lay over x64.l's table): goldens from /usr/bin/as; asrefuse, dialect, decode, objdump, the x86-64,
 # riscv and aarch64 tables both ways (x64codec, rvcodec, a64codec) and gas reading each of the
 # last two against llvm-mc (rvgas, a64gas) alongside
 test_as: host
 	@echo TEST test/holo/as.l
-	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l src/love/holo/as.l test/holo/as.l \
+	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/dialect.l src/love/holo/decode.l test/holo/as.l \
 	  | $(gsh) test/gate/run.sh as "$m" ", 0 failed"
 	@$(gsh) test/gate/asrefuse.sh "$m"
 	@$(gsh) test/gate/dialect.sh "$m" $(ho)
@@ -972,12 +973,14 @@ test_uulean:
 	@sh test/gate/skip.sh gate-skip "test_uulean: skipped (needs lean)"
 else
 test_uulean: host
-	@mkdir -p test/proof/lean
-	@echo 'LOVE	'test/proof/lean/uugen.lean "(src/tools/uu2lean.l on $m)"
-	@$m src/tools/uu2lean.l > test/proof/lean/uugen.lean
-	@echo TEST test/proof/lean/uugen.lean "(lean)"
-	@$(LEAN) test/proof/lean/uugen.lean > out/.uulean.out 2>&1; r=$$?; \
-	  if [ $$r -ne 0 ] || grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
+	@rm -rf out/uulean; mkdir -p out/uulean
+	@echo 'LOVE	'out/uulean "(src/tools/uu2lean.l on $m)"
+	@$m src/tools/uu2lean.l out/uulean > out/uulean/order
+	@echo TEST out/uulean "(lean, a module at a time, each over the ones before)"
+	@: > out/.uulean.out; for f in $$(cat out/uulean/order); do \
+	  LEAN_PATH=out/uulean $(LEAN) -o out/uulean/$$f.olean out/uulean/$$f.lean >> out/.uulean.out 2>&1 \
+	    || { cat out/.uulean.out; exit 1; }; \
+	done; if grep -q sorryAx out/.uulean.out; then cat out/.uulean.out; exit 1; fi
 endif
 
 # random IR via holo against objdump and llvm-mc, and the x86-64 encoder against itself
@@ -993,7 +996,7 @@ test_holofuzz: host
 	@LOVE_BUDGET_MB=400 timeout 2700 $m test/holo/fuzz/rvc.l \
 	  || { $(fuzzlate); echo "FAIL rvc -- an RVC squeeze changes what the word means"; exit 1; }
 	@echo TEST test/holo/fuzz/x64enc.l "(the x86-64 encoder's caches against its search, targets, emitter keys)"
-	@for p in order targets cached keyed; do \
+	@for p in order targets cached1 cached2 keyed; do \
 	   cat $(S)/love/holo/holo.l $(S)/love/holo/x64.l $(S)/love/holo/dialect.l $(S)/love/holo/decode.l test/holo/fuzz/x64enc.l \
 	     | X64ENC_PART=$$p LOVE_BUDGET_MB=400 timeout 300 $m \
 	     || { echo "FAIL x64enc $$p -- a cached lay disagrees with the search, a target, or the other order"; exit 1; }; \
@@ -1185,12 +1188,13 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 
-# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
 	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
@@ -1215,12 +1219,13 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
-# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling.
+# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
 	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 KTEST_MEM=2G \
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 

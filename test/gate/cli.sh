@@ -46,8 +46,7 @@ try 0 usage    -h
 try 0 'love '  -v
 try 0 1        -m 8m -e 1
 # -v and -h are NOT terminal and NOT exclusive: each prints, the walk carries on, and
-# the line running out with no program named is the 0. this is what readme.bin is cut
-# from, so a regression here silently rewrites the page baked into the binary.
+# the line running out with no program named is the 0.
 try 0 usage    -v -h                      # both, in the order given
 try 0 'love '  -h -v
 try 0 3        -v -e '1 + 2'              # a flag before a program does not eat it
