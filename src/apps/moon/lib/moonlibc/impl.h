@@ -459,6 +459,7 @@ struct _IO_FILE {
 #define NR_rt_sigsuspend  4199
 #define NR_tgkill         4266
 #define NR_gettid         4222
+#define NR_set_thread_area 4283
 #define NR_prctl          4192
 #define NR_getsid         4151
 #define NR_getpgid        4132
