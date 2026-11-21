@@ -1180,12 +1180,21 @@
  (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
    (tablet? sc ? (: sf (surf-of lv) (utime f (clock ()),
                     pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+ ; ..and what growing the trees pinned into the level, kept beside it and pinned back on a hit:
+ ; the brushes it added, the pits and embers, each tree's plane, trunk and shade
+ (burnt lv n0) {'bs (drop n0 (lv 'brushes)) 'pits (lv 'pits) 'embers (lv 'embers)
+                'trees (map (o \ [(o 'pl) (o 'trunk) (peep o 'shade ())]) (lv 'trees))}
+ (unburn lv b) (: ts (lv 'trees)
+   _ (each ^#ts (i \ (: o (ts i) q (b 'trees i) (pins o 'pl (q 0) 'trunk (q 1), atom? (q 2) || pin o 'shade (q 2)))))
+   (pins lv 'grown 1 'brushes (lv 'brushes + b 'bs) 'pits (b 'pits) 'embers (b 'embers)))
  (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" hit (string? k && scene-got f lv)
-   (tablet? hit ? hit
+   n0 #(lv 'brushes) hit (tablet? hit && tablet? (hit 'burnt) && hit)
+   (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) hit)
       (scene lv dir () tk @ sc
-        (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b
-                        (string? b && (scene-put f (zstd-pack b 3), scene-sweep d))),
-         sc))))
+        (: _ (pin sc 'burnt (burnt lv n0))
+          (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b
+                          (string? b && (scene-put f (zstd-pack b 3), scene-sweep d))),
+           sc)))))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
  ;     up and ahead there, unit; 'per how far along x and z a metre walked there goes;
