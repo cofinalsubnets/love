@@ -16,6 +16,7 @@
 (: nx 50 nz 13 cx (lx / nx) cz (lz / nz) wt 0.1)   ; the maze's rooms round and across, their size, its walls
 (: gis [1 2 3] gjs [6 7 8] gh 4.0)     ; the hall's rooms, clear of the river, and its height
 (: sx 90.0 hub ((lx - lz) / tau))      ; the lift's shaft up off the tube's inside, and how high the ring's middle is over it
+(: orb-r 6.0)                          ; the pink orb's radius
 
 ; the textures: grass, stone and the river's water; below, the rooms'
 ; wallpaper, carpet and ceiling tiles, and the well's concrete
@@ -24,7 +25,7 @@
             (stain 8 3 0.4 0.35 (mix (rgb 0.5 0.66 0.26) 0.7))))))
 (: stone (feel 'hard (texture 32 32 1.2 '((fill (grey 0.55)) (noise 1 0.06) (fbm 8 4 0.18) (stain 16 3 0.42 0.35 (shade 0.84)) (relief 1.5 2 0.12)))))
 (: water (texture 64 64 4
-          '((fill (rgb 0.16 0.36 0.5)) (fbm 16 4 0.25) (stain 16 3 0.42 0.35 (mix (rgb 0.4 0.6 0.72) 0.6)) (noise 1 0.03))))
+          '((fill (rgb 0.3 0.5 0.72)) (fbm 16 4 0.2) (stain 16 3 0.42 0.35 (mix (rgb 0.5 0.7 0.85) 0.6)) (noise 1 0.03))))
 (: paper (texture 64 64 1.6
           '((fill (rgb 0.8 0.73 0.44)) (stripes 8 2 0 (shade 0.95)) (fbm 16 3 0.06) (stain 16 3 0.4 0.4 (shade 0.92))
             (noise 1 0.03))))
@@ -50,7 +51,7 @@
 (: rs (wn * lz / lx) (rz x) (rs * (x - 10.0)))
 (: (around d l) (d - l * floor (d / l + 0.5)))
 (: (rd x z) (span (around (z - rz x) lz) / sqrt (1.0 + 2 rs)))
-(: (bed x z) (: d (rd x z) (swell x z * ease d 2.5 7.0 - 0.7 * (1.0 - ease d 1.8 4.2))))
+(: (bed x z) (: d (rd x z) (swell x z * ease d 2.5 7.0 - 1.2 * (1.0 - ease d 1.8 4.2))))
 (: (ground x z) (: f (max (span (x - sx) - 1.0) (span (around z lz) - 1.0))
    g (top + bed x z * ease (max (span (x - tx) - wh - 1.0) (span (z - tz) - wh - 1.0)) 2.0 8.0 * ease f 1.0 5.0)
    o (max (max (cx * <gis - x) (x - cx * (<gis + 3))) (max (cz * <gjs - z) (z - cz * (<gjs + 3))))
@@ -60,7 +61,7 @@
 
 ; a post standing on the ground at x z, and a plinth of grey stone, capped
 (: (post x z t) (: y (ground x z) (skin {'all t} (solid (box [(x - 0.2) (y - 0.5) (z - 0.2)] [(x + 0.2) (y + 1.8) (z + 0.2)])))))
-; ..the river's water, a strip down its middle a metre a row, cut where it goes round the
+; ..the river's water, clear, a strip down its middle a metre a row, cut where it goes round the
 ; tube past lz so none straddles it, each piece a row over the cut to meet the next and laid
 ; along from as far down the river as it starts; none by the well
 (: (well? p) (: z (around (p 2 - tz) lz) (span (p 0 - tx) < wh + 1.5 && span z < wh + 1.5)))
@@ -311,9 +312,9 @@
 (: cy (hub - 1.15))                     ; the container's floor
 (: hang (pocket [sx 0]
    [(void [(sx - 1.6) (top - 0.5) -1.6] [(sx + 1.6) (hub - 1.29) 1.6])   ; the shaft, its floor under the grass
-    (coarse 4 (glow (orb [sx hub 0] 6 pinkorb 0.06)))
-    (coarse 4 (glow (inward (orb [sx hub 0] 5.95 pinkin 0.06))))
-    (tether (hub + 1.21 - cy) (lift [sx (top + 0.16) 0] 1.6 (cy - top - 0.16) alu))   ; on its pad on the grass
+    (coarse 4 (glow (orb [sx hub 0] orb-r pinkorb 0.06)))
+    (coarse 4 (glow (inward (orb [sx hub 0] (orb-r - 0.05) pinkin 0.06))))
+    (sealed (tether (hub + 1.21 - cy) (lift [sx (top + 0.16) 0] 1.6 (cy - top - 0.16) alu)))   ; on its pad on the grass, shut till the string rings whole
     (void [(sx - 3.08) (hub - 1.35) -1.27] [(sx + 3.08) (hub + 1.34) 1.27])   ; a hair of air round the container, so its steel shows
     (skin {'all steel} (solid (box [(sx - 3.03) (hub - 1.3) -1.22] [(sx + 3.03) (hub + 1.29) 1.22])))
     (dark (skin {'walls paint 'floor ply 'ceiling paint} (room [(sx - 2.95) cy -1.14] [(sx + 2.95) (hub + 1.21) 1.14])))
@@ -323,15 +324,39 @@
     (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "earth.l" 'walk-in)   ; lain on, back to the station's walk-in
     (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [-(q 0) -(q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
 
+; ..the resonance: a string round the ring's middle, halfway out from the pink orb to the
+; grass, tied to the lift's tether, steps steps round; braziers at some steps, three across
+; the tube on the outside, each on a plinth its step in roman numerals on every side; and by
+; the lift's pad four wisps to set in them. a place clear of the river, the first of zs
+(: steps 210 step-l (lx / steps))
+(: (at-step n) (: x (sx + n * step-l) (x >= lx ? (x - lx) x)))
+(: (dry x zs) (foldl (\ a z (a = () && rd x z > 3.0 ? z a)) () zs))
+(: (roman n) (: (go n vs) (? (n = 0) "" (n >= vs 0 0) (vs 0 1 + go (n - vs 0 0) vs) (go n >vs))
+   (go n [[100 "C"] [90 "XC"] [50 "L"] [40 "XL"] [10 "X"] [9 "IX"] [5 "V"] [4 "IV"] [1 "I"]])))
+; ..a label's texture: three by five dots a letter, two texels a dot, light paint on stone
+(: (glyph c) (c @ 73 "111010010010111" 86 "101101101101010" 88 "101101010101101" 76 "100100100100111" 67 "111100100100111"))
+(: (label t) (: k #t x0 ((64 - 2 * (4 * k - 1)) // 2) y0 3
+   dots (catmap (i \ (: f (glyph (t i)) (map (d \ [(x0 + 2 * (4 * i + d % 3)) (y0 + 2 * (d // 3))]) (filter (d \ f d = 49) ^15)))) ^k)
+   (texture 64 16 0.8 ([['fill ['grey 0.5]] ['noise 1 0.06] ['fbm 8 3 0.1]] + map (q \ ['rect (q 0) (q 1) (q 0 + 2) (q 1 + 2) ['rgb 0.93 0.9 0.8]]) dots))))
+(: hearths [[4 0] [10 0] [35 0] [42 0] [70 0] [105 0] [21 1] [25 1] [84 1]])
+(: (hearth q) (: x (at-step (q 0)) z (dry x (q 1 = 1 ? [(lz / 2 - 2.0) (lz / 2 + 2.0) (lz / 2)] [2.5 (lz - 2.5) 4.0 (lz - 4.0)]))
+   y (ground x z) h 0.3 e 0.425 t (label (roman (q 0)))
+   [(skin {'all stone} (solid (box [(x - 0.42) (y - 0.2) (z - 0.42)] [(x + 0.42) (y + h) (z + 0.42)])))
+    (map (n \ decal [(x + e * n 0) (y + 0.14) (z + e * n 1)] [(n 0) 0 (n 1)] [0 1 0] 0.8 0.2 t) [[1 0] [-1 0] [0 1] [0 -1]])
+    (brazier [x (y + h) z] stone)]))
+(: wisps (map (i \ (: x (sx - 3.0 + 0.7 * i) z 1.8 (wisp [x (ground x z) z]))) ^4))
+
 (level "the ring"
   (surface 'torus lx lz)
   (textures {'wall paper 'floor carpet 'ceiling tiles 'door oak})
-  (start [(cx * (ci + 0.5)) 0 (cz * (cj + 1) - wt - 0.6)] 180 0)
+  ; ..while the resonance is tested, on the grass before the lift, the wisps at hand; the walk
+  ; begins in the closet as (start [(cx * (ci + 0.5)) 0 (cz * (cj + 1) - wt - 0.6)] 180 0)
+  (start [(sx - 6.0) (ground (sx - 6.0) 3.0) 3.0] 90 -10)
   (sky 13 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.78 0.72 0.5))
   (void [-4 -3 -4] [(lx + 4) (top + 14) (lz + 4)])
   (land grass (rows ground))
-  (map (w \ along (w 0) (flow [0.6 0] (drape water (w 1)))) waters)
+  (map (w \ along (w 0) (flow [0.6 0] (clear (drape water (w 1))))) waters)
   ; ..the graveyard and its plinth, the posts down the outside every sixteen metres, and round the tube every eight
   (plinth (yx - 3.0) yz)
   yard
@@ -359,4 +384,8 @@
   ; ..a speaker on the plinth facing the gate, one on the grass at the side of the lift's pad facing it, both heard up here alone, and the ring's middle
   (heard [-1000 top -1000] [1000 1000 1000]
     [(cabinet [(yx - 3.21) (ground (yx - 3.0) yz + 0.78) yz] [1 0]) (cabinet [sx (ground sx (lz - 2.2)) (lz - 2.2)] [0 1])])
-  hang)
+  hang
+  ; ..the resonance, halfway from the orb's skin to the grass, its braziers, and the wisps by the lift
+  (resonance [sx (hub - orb-r - 0.5 * (hub - top - orb-r)) 0] steps)
+  (map hearth hearths)
+  wisps)

@@ -863,6 +863,22 @@
    far0 (rch "(speaker [2 1 2])" 17.0) far1 (rch "(reach 20 (speaker [2 1 2]))" 17.0)
  (test (far0 = 0.0) (0.0 < far1)
        (has? (lv "(reach 0 (speaker [0 0 0]))") "(reach metres PARTS)")))
+; a resonance: a wisp let fall over a brazier kept in its bowl; the string whole at every
+; prime of its steps with 6 and 7 rung, not with 6 and a torn 4, and with 14 across the tube
+; and 6; a sealed lift's gates shut till then, and open once it is
+(: rsl (lv ("(surface 'torus 42 20) (void [-1 -1 -1] [43 6 21]) (solid (box [-1 -1 -1] [43 0 21])) (resonance [0 3 0] 42) "
+            + "(brazier [6 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [7 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [4 0 2] (texture 8 8 1 '((fill 0.5)))) "
+            + "(brazier [14 0 10] (texture 8 8 1 '((fill 0.5)))) (wisp [20 0 3]) (wisp [21 0 3]) "
+            + "(sealed (lift [30 0.16 4] 1.6 3 (texture 8 8 1 '((fill 0.5))))) (start [25 0 4] 0 0)"))
+   rst (world-new 8 8 rsl "") ws (filter (b \ b 'kind = 'wisp) (rst 'balls)) bs (rsl 'braziers)
+   (rgo n) (each ^n (_ \ (pin rst 'dt (1.0 / 30.0), world-move rst)))
+   (rset is) (: _ (each ws (b \ pins b 'in () 'p [(b 'p 0) 0.13 (b 'p 2 + 5.0)])) _ (each ^#is (k \ (: c (bs (is k)) (pins (ws k) 'in (is k) 'p [(c 0) (c 1 + 1.13) (c 2)]))))
+                (rgo 60, [(world-whole? rst) (rst 'lifts 0 'g)]))
+   _ (pins <ws 'p [7.0 2.0 2.0] 'v [0.0 0.0 0.0] 'rest 0) _ (rgo 30) kept (peep <ws 'in ())
+   r0 (rset []) r67 (rset [0 1]) r64 (rset [0 2]) r146 (rset [3 0])
+ (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
+       (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
+       (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
