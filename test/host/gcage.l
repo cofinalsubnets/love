@@ -1,6 +1,7 @@
 ; test/host/gcage.l -- a minor tenures only what outlived the minor before: a list kept across one
 ; minor stays young, one kept across two tenures, young a tenured tablet holds stays young
-; while it is replaced each minor, and lives whole through the minors that move it. not in the corpus: live-word counts
+; while it is replaced each minor, and lives whole through the minors that move it, nor
+; does one a tenuring holder took. not in the corpus: live-word counts
 ; differ by reader door. run: cat test/00-init.l test/host/gcage.l | out/love
 
 (: G_GC 3 G_OLD 8 G_MINOR 11
@@ -35,11 +36,17 @@
    _ (please ()) _ (pin t 'm (map (+ 3) ^10)) _ (please ()) _ (please ())
    s2 (net (t 'l)) s3 (net (t 'm))
 
+   ; a fresh list hung on a holder that tenures this minor survives once, its mints held apart too
+   h (pin {} 'x 0) _ (please ())
+   ms (map (_ \ mint 0) ^4000) _ (pin h 'l (map (x \ x) ms))
+   o5 (gget G_OLD) _ (please ()) o6 (gget G_OLD)
+
    (test (m1 = m0)                                  ; the churn took minors only
          (o1 - o0 < 4000)                           ; ..and tenured none of its lists
          (o2 - o1 > 4 * 4000)                       ; a list kept across two tenures
          (o4 - o3 < 4000)                           ; ..and none a tenured tablet held a minor
-         (s1 = 8002000) (s2 = 8006000) (s3 = 75),
+         (s1 = 8002000) (s2 = 8006000) (s3 = 75)
+         (o6 - o5 < 4000) (gget 10 < 1000) (#(h 'l) = #ms),
     test_fin (),
     puts "gcage: ok",
     putc 10))

@@ -328,19 +328,19 @@
   (falling? (take 20 vs))
   (rising? (rev (take 20 (rev vs))))))
 
-; the dial: play.l's i-sin, a triangle, its i-sqr, in three steps (a crossfade costs both
+; the dial: a sine, a triangle, a square, in three steps (a crossfade costs both
 ; shapes); the three share a phase, so a step lands on the same side of zero
 (: twopi 6.283185307179586
    (w ph m) (slop-song-wave ph 1.0 m)            ; f of 1: the phase is the argument
    (near a b) (|(a - b) < 0.000001)
    phs [0.0 0.125 0.25 0.375 0.5 0.625 0.75 0.875]
  (test
-  ; m 0 is i-sin, note for note; m 1 is i-sqr
+  ; m 0 is the sine, note for note; m 1 the square
   (all (p \ (near (w p 0.0) (sin (p * twopi)))) phs)
   (all (p \ (near (w p 1.0) (p < 0.5 ? 1.0 -1.0))) phs)
   ; they share a sign, to a tolerance: sin of pi is -1.2e-16, and the square has flipped
   (all (p \ (-0.000001 <= w p 0.0 * w p 1.0)) phs)
-  ; half way is the triangle in phase with both; play.l's i-tri is a quarter behind, which would cancel
+  ; half way is the triangle in phase with both; harp's tri is a quarter behind, which would cancel
   (near (w 0.0 0.5) 0.0) (near (w 0.25 0.5) 1.0)
   (near (w 0.5 0.5) 0.0) (near (w 0.75 0.5) -1.0)
   (near (w 0.125 0.5) 0.5)

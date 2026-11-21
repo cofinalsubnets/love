@@ -12,6 +12,7 @@ int main(void) {
   timer_init();
   puts_("\n; mooncc/nrf52840\n; core 64 MHz, ");
   puts_(clock_xtal() ? "crystal\n" : "rc -- no crystal\n");
+  puts_((uintptr_t) main >> 28 == 2u ? "; from sram\n" : "; from flash\n");   // where this code runs
   int r = run();
   puts_(r <= 100 ? "; all " : "; FAILED at ");
   putu((uint32_t)(r <= 100 ? r : r - 100));

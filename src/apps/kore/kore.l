@@ -291,6 +291,12 @@
    (bu-elf? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && b 5 = 1
                 && (b 4 = 1 || b 4 = 2))
    (bu-fs b) (b 4 = 2 ? elf64f elf32f)
+   ; readelf's and objdump's: a big-endian file read as its swap, its byte 5 still saying so
+   (bu-read? b) (20 <= #b && b 0 = 127 && b 1 = 69 && b 2 = 76 && b 3 = 70 && (b 5 = 1 || b 5 = 2)
+                && (b 4 = 1 || b 4 = 2))
+   ; the swap as holo reads one, its byte 5 little-endian again
+   (bu-le b) (b 5 = 2 ? (snip b 0 5 + "\x01" + snip b 6 #b) b)
+   (bu-in b) (52 < #b && b 5 = 2 && bu-read? b ? (elf-swap b @ s (snip s 0 5 + "\x02" + snip s 6 #s)) b)
    (bu-secs fs b)
     (: shoff (ld-f fs b 0 'e-shoff) n (ld-f fs b 0 'e-shnum) e (ld-n fs 'sh-ent)
        sx (ld-f fs b 0 'e-shstrx)
@@ -456,6 +462,8 @@
     ("0x" + radix f 16
      + (? (m = 40) (f >> 24 ? (", Version" + show (f >> 24) + " EABI"
                              + (? (f & 1024) ", hard-float ABI" (f & 512) ", soft-float ABI" "")) "")
+          (m = 8) ((f & 1 ? ", noreorder" "") + (f & 2 ? ", pic" "") + (f & 4 ? ", cpic" "")
+                   + (f >> 12 & 15 = 1 ? ", o32" "") + (f >> 28 @ 5 ", mips32" 7 ", mips32r2" ""))
           (m = 243) ((f & 1 ? ", RVC" "") + ([", soft-float ABI" ", single-float ABI" ", double-float ABI" ", quad-float ABI"] ((f & 6) >> 1))
                      + (f & 8 ? ", RVE" "") + (f & 16 ? ", TSO" ""))
           ""))
@@ -466,7 +474,7 @@
         map (i \ (say out (re-hex (b i) 2 + " "))) ^16,
         say out "\n",
         row "Class:" (e64 ? "ELF64" "ELF32"),
-        row "Data:" "2's complement, little endian",
+        row "Data:" ("2's complement, " + (b 5 = 2 ? "big" "little") + " endian"),
         row "Version:" (show (b 6) + (b 6 = 1 ? " (current)" "")),
         row "OS/ABI:" (re-osabi (b 7)),
         row "ABI Version:" (show (b 8)),
@@ -655,7 +663,10 @@
             (filter (sc \ (sc 2 = 2 || sc 2 = 11)) ss)))
    ; relocation type names by e_machine, llvm's own (llvm/BinaryFormat/ELFRelocs), the prefix apart
    re-rtypes
-    {62 ["R_X86_64_" {0 "NONE" 1 "64" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
+    {8 ["R_MIPS_" {0 "NONE" 1 "16" 2 "32" 3 "REL32" 4 "26" 5 "HI16" 6 "LO16" 7 "GPREL16" 8 "LITERAL"
+        9 "GOT16" 10 "PC16" 11 "CALL16" 12 "GPREL32" 37 "JALR" 38 "TLS_DTPMOD32" 39 "TLS_DTPREL32"
+        47 "TLS_TPREL32" 49 "TLS_TPREL_HI16" 50 "TLS_TPREL_LO16"}]
+     62 ["R_X86_64_" {0 "NONE" 1 "64" 2 "PC32" 3 "GOT32" 4 "PLT32" 5 "COPY" 6 "GLOB_DAT" 7 "JUMP_SLOT"
         8 "RELATIVE" 9 "GOTPCREL" 10 "32" 11 "32S" 12 "16" 13 "PC16" 14 "8" 15 "PC8" 16 "DTPMOD64"
         17 "DTPOFF64" 18 "TPOFF64" 19 "TLSGD" 20 "TLSLD" 21 "DTPOFF32" 22 "GOTTPOFF" 23 "TPOFF32"
         24 "PC64" 25 "GOTOFF64" 26 "GOTPC32" 27 "GOT64" 28 "GOTPCREL64" 29 "GOTPC64" 30 "GOTPLT64"
@@ -834,8 +845,8 @@
        (one f)
         (uread f @ r
            (atom? r ? (say err ("readelf: Error: '" + f + "': No such file\n"), 0)
-            (<>r @ b
-               (!(bu-elf? b) ? (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
+            (bu-in <>r @ b
+               (!(bu-read? b) ? (say err "readelf: Error: Not an ELF file - it has the wrong magic bytes at the start\n", 0)
                   (bu-fs b @ fs2
                      (two? >fs ? (say out ("\nFile: " + f + "\n")) 0,
                       h? ? (re-head fs2 b) 0,
@@ -853,9 +864,103 @@
    ; and aarch64's disassembled, a heading per symbol, a branch or rip target named by the symbol
    ; it lands in
    (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
-               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" "unknown"))
+               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" 8 "mips" "unknown"))
+   ; --macho: a mach-o's dyld_info streams, rebase, bind and weak bind, as llvm-objdump prints
+   ; them. -> ((seg addr vsz ((sect addr size) ..)) ..) and (dylib ..) and the stream pairs
+   (mo-str b i n) (: (go j) (j < n && b (i + j) != 0 ? (go (j + 1)) j) (snip b i (i + go 0)))
+   (mo-cmds b)
+    (: n (rdle b 16 4)
+       (go i at segs dys info)
+        (? (i = n) [(rev segs) (rev dys) info]
+           (: c (rdle b at 4)
+              nx (at + rdle b (at + 4) 4)
+              (? (c = 25)
+                 (: ns (rdle b (at + 64) 4)
+                    sc (map (k \ (at + 72 + 80 * k) @ q
+                                   [(mo-str b q 16) (rdle b (q + 32) 8) (rdle b (q + 40) 8)]) ^ns)
+                    (go (i + 1) nx ([(mo-str b (at + 8) 16) (rdle b (at + 24) 8) (rdle b (at + 32) 8) sc] . segs) dys info))
+                 (elem c [12 32 2147483672 2147483679 2147483683])      ; the load_dylib kin
+                 (go (i + 1) nx segs (mo-str b (at + rdle b (at + 8) 4) 1024 . dys) info)
+                 (c = 34 || c = 2147483682)                             ; dyld_info(_only)
+                 (go (i + 1) nx segs dys (map (k \ [(rdle b (at + 8 + 8 * k) 4) (rdle b (at + 12 + 8 * k) 4)]) ^3))
+                 (go (i + 1) nx segs dys info))))
+       (go 0 32 () () [[0 0] [0 0] [0 0]]))
+   mo-mask (2 ** 64 - 1)
+   (mo-uleb b p) (: (go p v sh) (: x (b p) v2 (v + (x & 127) * 2 ** sh)
+                                   (x < 128 ? [v2 (p + 1)] (go (p + 1) v2 (sh + 7))))
+                    (go p 0 0))
+   (mo-sleb b p) (: (go p v sh) (b p @ x (: v2 (v + (x & 127) * 2 ** sh)
+                                           (x < 128 ? [(x & 64 ? v2 - 2 ** (sh + 7) v2) (p + 1)]
+                                              (go (p + 1) v2 (sh + 7)))))
+                    (go p 0 0))
+   ; n entries from a, each step apart: -> (a' acc')
+   (mo-run n a step e acc) (n < 1 ? [a acc] (mo-run (n - 1) ((a + step) & mo-mask) step e (e a . acc)))
+   ; rebase: -> ((seg addr type) ..)
+   (mo-rebases b segs o z)
+    (: (sa i) (segs i 1)
+       (go p si a ty acc)
+        (? (o + z <= p) (rev acc)
+           (: x (b p) im (x & 15) p1 (p + 1) (e v) [si v ty]
+              (x & 240 @
+                 0 (rev acc)
+                 16 (go p1 si a im acc)
+                 32 (mo-uleb b p1 @ [v q] (go q im (sa im + v) ty acc))
+                 48 (mo-uleb b p1 @ [v q] (go q si ((a + v) & mo-mask) ty acc))
+                 64 (go p1 si (a + 8 * im) ty acc)
+                 80 (mo-run im a 8 e acc @ [a2 c] (go p1 si a2 ty c))
+                 96 (mo-uleb b p1 @ [n q] (mo-run n a 8 e acc @ [a2 c] (go q si a2 ty c)))
+                 112 (mo-uleb b p1 @ [v q] (go q si ((a + 8 + v) & mo-mask) ty (e a . acc)))
+                 128 (mo-uleb b p1 @ [n q] (mo-uleb b q @ [k r] (mo-run n a (8 + k) e acc @ [a2 c] (go r si a2 ty c))))
+                 (udie 1 ("objdump: rebase opcode " + show x)))))
+       (go o 0 0 1 ()))
+   ; bind: -> ((seg addr type addend ordinal symbol weak) ..)
+   (mo-binds b segs o z)
+    (: (sa i) (segs i 1)
+       (go p si a ty ad od sy wk acc)
+        (? (o + z <= p) (rev acc)
+           (: x (b p) im (x & 15) p1 (p + 1) (e v) [si v ty ad od sy wk]
+              (x & 240 @
+                 0 (rev acc)
+                 16 (go p1 si a ty ad im sy wk acc)
+                 32 (mo-uleb b p1 @ [v q] (go q si a ty ad v sy wk acc))
+                 48 (go p1 si a ty ad (im = 0 ? 0 (im - 16)) sy wk acc)
+                 64 (: s (mo-str b p1 (o + z - p1)) (go (p1 + #s + 1) si a ty ad od s (im & 1) acc))
+                 80 (go p1 si a im ad od sy wk acc)
+                 96 (mo-sleb b p1 @ [v q] (go q si a ty v od sy wk acc))
+                 112 (mo-uleb b p1 @ [v q] (go q im (sa im + v) ty ad od sy wk acc))
+                 128 (mo-uleb b p1 @ [v q] (go q si ((a + v) & mo-mask) ty ad od sy wk acc))
+                 144 (go p1 si (a + 8) ty ad od sy wk (e a . acc))
+                 160 (mo-uleb b p1 @ [v q] (go q si ((a + 8 + v) & mo-mask) ty ad od sy wk (e a . acc)))
+                 176 (go p1 si (a + 8 + 8 * im) ty ad od sy wk (e a . acc))
+                 192 (mo-uleb b p1 @ [n q] (mo-uleb b q @ [k r] (mo-run n a (8 + k) e acc @ [a2 c] (go r si a2 ty ad od sy wk c))))
+                 (udie 1 ("objdump: bind opcode " + show x)))))
+       (go o 0 0 1 0 0 "" 0 ()))
+   (mo-hex a) ("0x" + string (cask (: h (zpad 8 (radix a 16)) (map (i \ (h i @ c (c > 96 ? (c - 32) c))) ^#h))))
+   (mo-sect segs si a) (: f (filter (sc \ sc 1 <= a && a < sc 1 + sc 2) (segs si 3)) (two? f ? <<f ""))
+   (mo-at segs e) (urpad 8 (segs <e 0) + " " + urpad 18 (mo-sect segs <e (e 1)) + " " + mo-hex (e 1))
+   (mo-type t) (t @ 1 "pointer" 2 "text abs32" 3 "text rel32" "unknown")
+   (mo-dylib dys od)
+    (od @ 0 "this-image" -1 "main-executable" -2 "flat-namespace" -3 "weak"
+          (od <= #dys && 0 < od ? (: p (dys (od - 1)) l (last (split "/" p)) <(split "." l)) "unknown"))
+   (mo-dump b f ts)
+    (: cs (mo-cmds b) segs <cs dys <>cs inf <>>cs
+       (want t) (elem t ts)
+       _ (say out (f + ":\n"))
+       _ (want "--rebase" ? (say out "\nRebase table:\nsegment  section            address     type\n",
+                            each (mo-rebases b segs <(inf 0) <>(inf 0))
+                                 (e \ say out (mo-at segs e + "  " + mo-type (e 2) + "\n"))) 0)
+       _ (want "--bind" ? (say out "\nBind table:\nsegment  section            address    type       addend dylib            symbol\n",
+                          each (mo-binds b segs <(inf 1) <>(inf 1))
+                               (e \ say out (mo-at segs e + " " + urpad 8 (mo-type (e 2)) + " " + upad 8 (show (e 3)) + " "
+                                             + urpad 16 (mo-dylib dys (e 4)) + " " + e 5 + (e 6 = 1 ? " (weak_import)" "") + "\n"))) 0)
+       _ (want "--weak-bind" ? (say out "\nWeak bind table:\nsegment  section            address     type       addend   symbol\n",
+                               each (mo-binds b segs <(inf 2) <>(inf 2))
+                                    (e \ say out (mo-at segs e + "  " + urpad 8 (mo-type (e 2)) + " " + upad 8 (show (e 3)) + "   "
+                                                  + e 5 + "\n"))) 0)
+       0)
+
    (od-dis b ss m)
-    (: fs (bu-fs b) sy (ld-syms "objdump" b) rv? (m = 243) a6? (m = 183) wd? (rv? || a6?)
+    (: fs (bu-fs b) sy (ld-syms "objdump" (bu-le b)) rv? (m = 243) a6? (m = 183) mi? (m = 8) wd? (rv? || a6? || mi?)
        ; x86's bytes one by one, and data's; riscv's and aarch64's a word or halfword as a number,
        ; longer ones by halves
        (hexb s) (xa-join " " (map (c \ zpad 2 (radix c 16)) (chars s)))
@@ -880,10 +985,11 @@
                        (" <" + <>l + (<l = a ? "" ("+" + od-hex (a - <l))) + ">")))
            at (foldl (\ t l (pin t <l (peep t <l () + [<>l]))) {} labs)
            (row r)
-            (: a (addr + <r) x ((? rv? rv-od a6? a64-od x64-od) r a sym)
-               _ (each (peep at a ()) (n \ say out ("\n" + zpad 16 (radix a 16) + " <" + n + ">:\n")))
+            (: a (addr + <r) x ((? rv? rv-od a6? a64-od mi? mips-od x64-od) r a sym)
+               _ (each (peep at a ()) (n \ say out ("\n" + zpad (b 4 = 2 ? 16 8) (radix a 16) + " <" + n + ">:\n")))
                h (urpad (8 - #(radix a 16)) "" + radix a 16 + ": ")
-               by ((wd? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
+               ; mips's bytes one by one, as llvm writes a big-endian word
+               by ((wd? && !mi? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
                c0 (#h + #by) pad (col c0 "")
                t0 ((c0 + #pad) // 8 * 8 + 8)
                tx <x
@@ -907,29 +1013,36 @@
            (data? o) (100 = foldl (\ k p (<p <= addr + o ? (p 1) k)) 120 maps)
            ; a word ISA's rows a symbol or mapping at a time, where llvm counts its zero runs
            cuts (sort (filter (o \ 0 < o && o < sc 5) (map (l \ <l - addr) (catall [labs maps]))) + [(sc 5)])
-           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
+           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) mi? (mips-disasm bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
                           (a64-disasm bs addr lo hi))
            (wrows _) (foldl (\ acc hi (acc + dis (two? acc ? (last acc @ r (<r + r 1)) 0) hi)) () cuts)
            (each (wd? ? (wrows 0) (catmap split (x64-disasm bs addr))) row))
        (each (filter (sc \ sc 2 = 1 && sc 3 & 4 != 0 && 0 < sc 5) ss) one))
    (objdump-main as)
-    (: bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w '("-r" "--reloc" "-d" "--disassemble"))) as)
-       _ (two? bad ? (udie 1 ("objdump: " + <bad + " is not here (-r, -d)")) 0)
+    (: mo ["--macho" "--bind" "--rebase" "--weak-bind"]
+       bad (filter (w \ 1 < #w && w 0 = 45 && !(elem w ("-r" . "--reloc" . "-d" . "--disassemble" . mo))) as)
+       _ (two? bad ? (udie 1 ("objdump: " + <bad + " is not here (-r, -d, --macho --bind --rebase --weak-bind)")) 0)
        fs (filter (w \ !(1 < #w && w 0 = 45)) as)
+       ts (filter (w \ elem w >mo) as)
+       mac? (elem "--macho" as && two? ts)
        r? (elem "-r" as || elem "--reloc" as) d? (elem "-d" as || elem "--disassemble" as)
        _ (r? && d? ? (udie 1 "objdump: -d with -r is not here") 0)
-       _ ((r? || d?) && two? fs ? 0 (udie 1 "Usage: objdump -r|-d FILE.."))
+       _ ((mac? || r? || d?) && two? fs ? 0
+          (udie 1 "Usage: objdump -r|-d FILE.. | objdump --macho [--bind] [--rebase] [--weak-bind] FILE.."))
        (val y a) ((two? y ? (y 1) "*ABS*")
                   + (charm? a && !(a = 0) ? ((a < 0 ? "-0x" "+0x") + radix (a < 0 ? (0 - a) a) 16) ""))
        (one f)
         (uread f @ rd
            (atom? rd ? (say err ("objdump: error: '" + f + "': No such file or directory\n"), 1)
-            (<>rd @ b
-               (!(bu-elf? b) ? (say err ("objdump: error: '" + f + "': The file was not recognized as a valid object file\n"), 1)
+            (bu-in <>rd @ b
+               (? mac? (#b < 32 || rdle b 0 4 != 4277009103
+                          ? (say err ("objdump: error: '" + f + "': object is not a Mach-O file type.\n"), 1)
+                          (mo-dump b f ts))
+                  !(bu-read? b) (say err ("objdump: error: '" + f + "': The file was not recognized as a valid object file\n"), 1)
                   (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
                      rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
                      _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
-                     _ (d? && !(elem m [62 183 243]) ? (udie 1 ("objdump: -d reads x86-64, aarch64 and riscv here, not " + od-fmt b)) 0)
+                     _ (d? && !(elem m [62 183 243 8]) ? (udie 1 ("objdump: -d reads x86-64, aarch64, riscv and mips here, not " + od-fmt b)) 0)
                      _ (d? ? (od-dis b ss m) 0)
                      _ (each (d? ? () rs) (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
                                                 + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),
