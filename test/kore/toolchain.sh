@@ -46,7 +46,7 @@ if [ "$(uname -m)" = x86_64 ]; then
     ( cd "$ho/.kore-thin-kore" && LOVE_NO_IMAGE= "$ma" ar t vmlinux.a ) > "$o"
     ( cd "$ho/.kore-thin-llvm" && llvm-ar t vmlinux.a ) > "$g"; same "ar t (thin)"
   fi
-  "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (borrow (name "holo")) _ (borrow (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (quote ("__love_start")) () (quote ("__love_start")) () () () () ())))' >/dev/null 2>&1
+  "$m" -l "$ho/.mooncc-cat.l" -e '(: _ (borrow (name "holo")) _ (borrow (name "moon")) (write-bytes "'"$ho"'/.kore-crt0.o" (objelf (intern "x64") crt0 () (quote ("__love_start" "__love_main")) () (quote ("__love_start" "__love_main")) () () () () ())))' >/dev/null 2>&1
   [ -s "$ho/.kore-crt0.o" ] || fail "kore ld: crt0 lay"
   moonc "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-mc.elf" >/dev/null 2>&1 || fail "kore ld: mooncc link"
   korerun ld "$ho/.kore-crt0.o" "$ho/.kore-arm.o" "$ho/.kore-arf.o" -o "$ho/.kore-ld.elf" || fail "kore ld"

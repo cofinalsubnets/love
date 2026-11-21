@@ -144,23 +144,34 @@ $$(R)/$$(o)/$1.o: $3
 endef
 
 # p_lay -- one object laid from holo IR, so no assembler runs. $1 stem, $2 the mk*.l driver
-# (whose name is the function too), $3 that function's arguments.
+# (whose name is the function too), $3 that function's arguments, $4 any shared .l laid ahead
+# of the driver (../armboot.l).
 define p_lay
-$$(R)/$$(o)/$1.o: $2.l $$(p_be_l) $$(lay_l) $$(lv)
+$$(R)/$$(o)/$1.o: $2.l $4 $$(p_be_l) $$(lay_l) $$(lv)
 	@echo 'HOLO	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@cd $$(R) && { echo "(borrow 'holo)"; cat $$(be_lc) $$(kore_lc); echo "(borrow 'kore)"; \
-	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) $$(p_src)/$2.l; \
+	  cat $$(filter-out $$(kore_lc),$$(lay_lc)) $$(addprefix $$(p_src)/,$4) $$(p_src)/$2.l; \
 	  echo '($2 $3)'; } | out/love
 endef
 
-# p_link -- the link driver's cat. $1 its stem. an explicit target, never a pattern rule:
-# a pattern-MADE prerequisite is an INTERMEDIATE make deletes after the link, and the cat
-# would then run again on every build.
+# p_ramchk -- a ram image's boot surface: $1 the .bin, $2 its sram's top, $3 where .data is
+# copied to. sp in sram, a thumb entry inside the bytes it carries, and those all below $3
+define p_ramchk
+	@python3 -c "import struct; b=open('$1','rb').read(); \
+	  sp,e=struct.unpack_from('<II',b,0); end=0x20000000+len(b); \
+	  ok = 0x20000000<sp<=$2 and (e&1)==1 and 0x20000000<e<end and end<=$3; \
+	  print('ram image: sp %08x entry %08x, %d bytes --'%(sp,e,len(b)), 'ok' if ok else 'BAD'); \
+	  exit(0 if ok else 1)" || { echo "FAIL ram image layout"; exit 1; }
+endef
+
+# p_link -- the link driver's cat. $1 its stem, $2 any shared .l laid ahead of it
+# (../boardld.l). an explicit target, never a pattern rule: a pattern-MADE prerequisite is an
+# INTERMEDIATE make deletes after the link, and the cat would then run again on every build.
 define p_link
-$$(R)/$$(o)/$1.l: $1.l $$(link_l)
+$$(R)/$$(o)/$1.l: $1.l $2 $$(link_l)
 	@echo 'CAT	'$$@
 	@mkdir -p $$(R)/$$(o)
 	@{ echo "(borrow 'holo)"; cat $$(kore_l); echo "(borrow 'kore)"; \
-	   cat $$(filter-out $$(kore_l),$$(link_l)) $$<; } > $$@
+	   cat $$(filter-out $$(kore_l),$$(link_l)) $2 $1.l; } > $$@
 endef

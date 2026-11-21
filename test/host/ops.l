@@ -90,5 +90,24 @@
    (kv v) (mkvoice 10 v 12000)
    kit [{'s "chime" 'note 4} {'s "box" 'note 0 'slide 7} {'s "bd"} {'s "sn"} {'s "cp"} {'s "tri" 'note -12 'legato 0.05}]
    _ (test (all (x \ (: a (kv x) y ((a 1) (iota 1800)) (two? a && 0.01 < sqrt (amax (y * y))))) kit))
+   ; tones-mix against the pieces mixall sums and pack lays, chunk by chunk to the byte: a box by
+   ; its twin, a chime echoed past its end, a drone looped every 2900 frames, and a wind's closure
+   tmx (cite 'dsp 'tones-mix) tlp (cite 'dsp 'tones-loop) mxa (cite 'dsp 'mixall)
+   (mv v at) (mkvoice at v 12000)
+   a1 (mv {'s "box" 'note 3 'gain 0.6 'pan 0.3} 50)
+   e1 (echoed (mv {'s "chime" 'note -5 'gain 0.5 'legato 0.3} 400) [[700 0.45] [1900 0.2]])
+   d0 (ops-voice [{'f 110.0 'trem 3.0 'trate 0.4 'vib 0.002 'vrate 0.3 'segs [[0.0 1 1.0 0.0 0.0]]}] 0 100000000 1.0 1.0 12000)
+   (lp ix) (ix % 2900)
+   d1 [(d0 0) (ix \ d0 1 (lp ix)) 0.4 0.4 (ix \ d0 4 (lp ix)) (tlp (d0 5) 2900)]
+   w1 (mv {'s "wind" 'note -12 'gain 0.3 'legato 2.0} 200)
+   mws ((cite 'dsp 'tones-ws) (14 * 4096))
+   (lr2 m) ((peep m (iota 1000) 0.0) . (peep m (iota 1000 + 1000) 0.0))
+   (chunk c) (: base (c * 1000) ix (iota 1000 + base) wy (w1 1 ix)
+      lv ([[(a1 4 ix) (a1 2) (a1 3) 0]] + map (p \ [(p 0) (e1 2 * p 2) (e1 3 * p 2) (p 1)]) (e1 5 ix)
+          + [[(d1 4 ix) (d1 2) (d1 3) 0] [wy (w1 2) (w1 3) 0]])
+      cv [[(a1 5) (a1 2) (a1 3)] [(e1 6) (e1 2) (e1 3)] [(d1 5) (d1 2) (d1 3)] [wy (w1 2) (w1 3) 0]]
+      bl (pack (lr2 (mxa lv 1000)) 1000 9000.0) bc (tmx cv base 1000 9000.0 mws)
+      (string? bc && bl = bc && any (i \ bc i != 0) ^4000))
+   _ (test (#a1 = 6 && #e1 = 7 && ?(e1 6) && ?(d1 5) && #w1 = 4) (all chunk ^12))
    ((test_fin ()),
     puts "ops: ok\n"))

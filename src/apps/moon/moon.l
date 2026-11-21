@@ -339,17 +339,27 @@
                             "\t.base64 \"\(b64s (snip <>r k (k + n)))\""))))
        ls (gsplit txt 10)
        (any (ln \ starts? (xa-trim ln) ".incbin") ls ? (xa-join "\n" (map one ls)) txt))
-   ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
-   (asmwrap s) "__asm__(\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s)))\");\n"
+   ; an assembly source's text as gen hands it to gas-top, its carriage returns dropped
+   (asmtext s) (gsplit s 13 @ l (two? >l ? (cats l) s))
    ; a .S: the assembly lexed on its own terms, preprocessed as C is (includes, macros, #if),
-   ; spelled back into lines, and taken as a .s is
-   (asmcpp src s ds is vb)
+   ; spelled back into lines, and taken as a .s is. it goes a block of q bytes at a time, cut
+   ; at line ends, so the tokens alive are one block's
+   (asmcpp src s ds is vb) (asmcppk src s ds is vb 65536)
+   (asmcppk src s ds is vb q)
     (: d2 ("__ASSEMBLER__=1" . ds)
-       lx (clexasm (deftext d2 + s) (1 - #d2) (elem "__aarch64__" ds || elem "__arm__" ds))
-       _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
-       pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
-       (okv? pp || ccdie pp src "cc: preprocessor error in \(src)",
-        asmwrap (incbins (asmspell <>pp) is src)))
+       txt (deftext d2 + s)
+       ar (elem "__aarch64__" ds || elem "__arm__" ds)
+       (incf name sys?) (incload vb is (cdir src) name sys?)
+       st (cppopen src)
+       sink (jug 0)
+       (lay pp) (okv? pp || ccdie pp src "cc: preprocessor error in \(src)", say sink (asmspell <>pp))
+       (go i ln)
+        (#txt <= i ? (lay (cppclose st), slurp sink)
+           (clexasmk txt i (i + q) ln ar @ lx
+              (okv? lx || ccdie lx src "cc: lex error in \(src)",
+               lay (cppfeed st <>lx incf),
+               go (lx 2) (lx 3))))
+       (go 0 (1 - #d2)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one; a
    ; space where the source had one and between two words that would paste (v0.16b stays one)
    (asmspell ts)
@@ -401,7 +411,10 @@
                   !vb ()
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
-       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
+       ; an assembly source is one file-scope asm of its whole text, and no C is read
+       asm (dotS? src || dots? src)
+       atx (asm && asmtext (incbins (dotS? src ? (asmcpp src <>r ds9 is vb) <>r) is src))
+       txt (asm ? "" <>r)
        lx (mprof 'lex (_ \ clexw (deftext ds9 + txt) (1 - #ds9)))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
@@ -409,7 +422,7 @@
        ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1 'dbg dbg}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
-        (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
+        (ps 1 @ a (<ps . (<a . (asm ? (<>a + [['tasm atx]]) (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a)) . >>a) . >>ps))))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
    ; other section(NAME) the TU used, in declaration order (its address is the program's to fix).
    ; the wide tuples are named once, here; `[]` is strict, so a changed arity refuses
@@ -620,7 +633,8 @@
    ; ldlink binds the static exe. __love_start is weak here (calls main); moonlibc overrides it.
    ; x64's entry serves every kernel: linux zeroes rdi, freebsd hands the vector base there with
    ; a pad word maybe below argc, so zero says linux and freebsd pushes once to restore parity.
-   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits
+   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits. dyld's exe enters
+   ; at __love_main (macho.l's lc_main), so an ELF and a mach-o carry the same code bytes
    crt0 '((cmp r6 0)
           (br ne c0-fb)
           (mov r6 sp)
@@ -634,6 +648,14 @@
           (li r5 0)
           (call __love_start)
           (mov r6 r0) (li r0 1) (sys)
+          ;; main(argc, argv, envp, apple) on an aligned stack; argv still points into the
+          ;; kernel's block, so argc is the word below it. one kernel: 4 says which
+          (label __love_main)
+          (lea r6 r5 -8)
+          (and sp sp -16)
+          (li r5 4)
+          (call __love_start)
+          (mov r6 r0) (li r0 33554433) (sys)
           (label __love_start)
           (push r6)
           (lea r5 r6 8)
@@ -655,20 +677,6 @@
                 (call main)
                 (pop r6)
                 (ret))
-   ; dyld's exe enters by lc_main as main(argc, argv, envp, apple) on an aligned stack;
-   ; argv still points into the kernel's block, so argc is the word below it
-   crt0-macmain '((lea r6 r5 -8)
-                  (and sp sp -16)
-                  (li r5 4)
-                  (call __love_start)
-                  (mov r6 r0) (li r0 33554433) (sys)
-                  (label __love_start)
-                  (push r6)
-                  (lea r5 r6 8)
-                  (ld r6 r6 0)
-                  (call main)
-                  (pop r6)
-                  (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -1220,8 +1228,8 @@
        ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
        _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
        c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
-             mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
-       ent (dx ? ["_start" "atexit"] '("__love_start"))
+             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       ent (? dx ["_start" "atexit"] (tgt = 'x64 && !(mac? && !dyld?)) '("__love_start" "__love_main") '("__love_start"))
        all (arm? || so ? srcs
                    (["crt0" (elf-flat (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
@@ -1231,7 +1239,7 @@
        set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm?))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
+             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)) prod)
              (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()) (elem 'sfp xk))
              (ldlink tgt pie org set prod rdme (elem 'sfp xk)))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree

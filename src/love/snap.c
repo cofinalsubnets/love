@@ -1506,9 +1506,12 @@ void image_drop(word const *pool) {
  img_touch_out(L);
  img_lazy_disarm(L), alloc(L, 0); }
 
-// arm: whole pages shut, the ragged edges decoded now. 0 declines, and the caller decodes eagerly
+// arm: whole pages shut, the ragged edges decoded now. 0 declines, and the caller decodes eagerly.
+// LOVE_EAGER_WAKE declines always, for a debugger that stops on each first touch's fault
 static int img_lazy_arm(struct img_lazy *L) {
  if (img_lazy_on) return 0;
+ char const *ew = getenv("LOVE_EAGER_WAKE");
+ if (ew && *ew && *ew != '0') return 0;
  uintptr_t ps = (uintptr_t) getauxval(6);         // AT_PAGESZ
  if (!ps) ps = 4096;
  uintptr_t b = (uintptr_t) L->base, e = (uintptr_t) (L->base + L->nw);

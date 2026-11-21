@@ -23,7 +23,6 @@
 #define TICKS_BASE      0x40108000u
 #define SIO_BASE        0xd0000000u
 #define PPB_BASE        0xe0000000u
-#define VTOR_ADDR       (PPB_BASE + 0xed08u)
 #define CPACR_ADDR      (PPB_BASE + 0xed88u)
 
 // RESETS

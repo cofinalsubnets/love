@@ -1,45 +1,18 @@
 // rp2040 bare-metal arch backend, no pico SDK: vectors, crt0, clocks, UART0 console, the
 // timer and SIO GPIO, for a cortex-M0+ booting from flash XIP
 #include <stdint.h>
+#define CRT0_V6M
 #include "rp2040.h"
-
-// linker bounds (rp2040.lds)
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
+#include "../crt0.h"
 
 int main(void);
 
-// --- fault diagnostics ----------------------------------------------------
-// ARMv6-M has no CFSR/BFAR: halt and let SWD read the stacked frame
-void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
-
-// spins: wfe/wfi have no thumb1 row in holo yet
-static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
-
-// --- crt0 / reset ---------------------------------------------------------
-// boot2 has loaded SP from vectors[0]
+// boot2, or the rom's warm entry, has loaded sp from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(VTOR_ADDR) = 0x10000100u;
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
+  crt0(1);
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
-
-// --- vector table (at 0x10000100) -----------------------------------------
-// system vectors only: no peripheral IRQ is enabled
-__attribute__((section(".vectors"), used))
-void *const vectors[] = {
-  (void *) __stack_top__,   // 0  initial SP
-  reset_handler,            // 1  reset
-  default_handler,          // 2  NMI
-  isr_hardfault,            // 3  HardFault
-  0, 0, 0, 0, 0, 0, 0,      // 4..10 reserved
-  default_handler,          // 11 SVCall
-  0, 0,                     // 12..13 reserved
-  default_handler,          // 14 PendSV
-  default_handler,          // 15 SysTick
-};
 
 // --- clocks: XOSC (12 MHz) + PLL_SYS -> 125 MHz clk_sys; clk_peri off XOSC --
 void clocks_init(void) {
@@ -153,12 +126,14 @@ static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flus
   flush(), boot2(); }
 
 void chip_uid(uint8_t id[8]) {
+  // from sram no boot2 ran and xip came up in reset: the rom's own slow xip goes back instead
+  int const sram = (uintptr_t) chip_uid >> 28 == 2u;
   uint32_t b2[64];
-  for (uint32_t i = 0; i < 64; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
+  for (uint32_t i = 0; i < 64 && !sram; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
   // the ram copy is past a bl's reach from flash: by register
   void (*volatile const ram)(uint8_t *, romfn, romfn, romfn, romfn) = flash_uid_ram;
   ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
-      (romfn) ((uintptr_t) b2 | 1u)); }
+      sram ? rom_fn('C' | 'X' << 8) : (romfn) ((uintptr_t) b2 | 1u)); }
 
 // --- into the rom's usb boot: reset_usb_boot, by its two-letter code ------
 void rom_bootsel(void) {

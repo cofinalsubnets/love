@@ -56,6 +56,11 @@ love_noinline static int image_put(struct g *g, struct image_opt const *o) {
     alloc(tmp, 0); }
   return alloc(buf, 0), rc; }
 
+// the container's own writer: every link carries both, so their code is the same in each
+int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win) {
+  int rc = image_lay_elf(src, dst, buf, len, win);
+  return rc > 0 ? image_lay_macho(src, dst, buf, len, win) : rc; }
+
 // `bake PATH`: the path goes on the stack for image_put; the rc rides g->b
 struct g *image_dump(struct g *g, char const *path, struct image_opt const *o) {
   g = strof(g, path);

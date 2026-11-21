@@ -60,6 +60,8 @@
    ; a segment's address for file offset f: the next page at or after v plus f's place in a
    ; page, the least fresh-page address with p_vaddr = p_offset (mod a). a < 2 packs tight.
    (ld-lift a v f) (a < 2 ? v (ld-align a v + f % a))
+   ; an executable's header room: the elf header, n phdrs, and netbsd's note
+   (ld-ehsz w32 n nb?) ((w32 ? 52 64) + (w32 ? 32 56) * n + (nb? ? 24 0))
    ; relocation arithmetic is modular; % truncates, so a negative sum is folded up
    (ld-u64 v) (v % 18446744073709551616 @ r
                  (r < 0 ? (r + 18446744073709551616) r))
@@ -568,10 +570,11 @@
    ; pin every section's load address: hdrsz of headers, text, rodata, data, then the nif
    ; region, 16-aligned and packed so the __start_/__stop_ bracket reads one array. bss is
    ; the caller's. salign is the grain the lanes are cut on (a page, or 1 to pack). dense 0
-   ; writes a cut's gap as zeros; 1 keeps the file offset and lifts only the address.
-   ; -> (end nifstart o0 d0 t1 o1); under dense 1 an end is not the next start.
+   ; writes a cut's gap as zeros; 1 keeps the file offset and lifts only the address; 2 lifts
+   ; by the address, as ldlink's script does. -> (end nifstart o0 d0 t1 o1); under dense an
+   ; end is not the next start.
    (ldlay objs base hdrsz salign dense)
-    (: (cut v f) (dense ? (ld-lift salign v f) (ld-align salign v))
+    (: (cut v f) (? (dense = 2) (ld-lift salign v v) dense (ld-lift salign v f) (ld-align salign v))
        t1 (ldlayn 'text (ldlay1 'text (base + hdrsz) objs) objs)
        o0 (cut t1 (t1 - base))
        o1 (ldlayn 'rodata (ldlay1 'rodata o0 objs) objs)
@@ -802,7 +805,9 @@
    ; names the first global), then the globals that won. st_size rides through from the object.
    ; lanesx maps a lane to its section index in the image, a named lane by its home. mksym/esz
    ; are the class's entry writer and stride. -> (bytes strs nlocal)
-   (ldstab objs glo lanesx mksym esz)
+   (ldstab objs glo lanesx mksym esz) (ld-stab (ldsyrows objs glo lanesx) mksym esz)
+   ; the symbols a link keeps, locals first: (name bind type shndx addr size) each
+   (ldsyrows objs glo lanesx)
     (: (lx se) (o-has? lanesx (se 0) ? (peep lanesx (se 0) 0)
                   (peep lanesx (se 4) 0))
        (one ob acc)
@@ -823,8 +828,10 @@
                          ([nm bind typ (lx se) ad (sy 5)] . a)))))
            (go 1 acc))
        all (foldl (\ a ob (one ob a)) () objs)
-       locs (filter (e \ <>e = 0) all)
-       ord (locs + filter (e \ 0 < <>e) all)
+       (filter (e \ <>e = 0) all + filter (e \ 0 < <>e) all))
+   ; the rows as .symtab and .strtab bytes, and the first global's index
+   (ld-stab ord mksym esz)
+    (: locs (filter (e \ <>e = 0) ord)
        str (o-strtab (map cap ord))
        ; the NULL entry counts as a local
        [(ld-zeros esz + catall (o-mapi (\ i e (mksym (<>str i) (e 1) (e 2)
@@ -1347,8 +1354,6 @@
        ; em_386 and em_arm: ELF32 headers, symbols and REL fields; rv32, xtensa and mips the headers and symbols
        w32 (elem mach '(3 40 94 8) || target = 'rv32)
        _ (w32 && pie ? (scare 'link-i386-pie target))
-       shf (w32 ? elf-shdr32 elf-shdr)
-       phf (w32 ? elf32-phdr elf64-phdr)
        ; the largest page a kernel may map with: two segments sharing one overlap.
        ; aarch64 meets 4K, 16K and 64K kernels.
        pg (mach = 183 ? 65536 4096)
@@ -1361,18 +1366,11 @@
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
        bsd? (elem mach '(62 183 243 3) || target = 'arm)
        nb? (wx? && bsd?)
-       hdrsz ((w32 ? 52 64) + (w32 ? 32 56) * ((wx? ? 4 1) + (img? ? 1 0) + (nb? ? 1 0) + (tls? ? 1 0)) + (nb? ? 24 0))
-       nbo (hdrsz - 24)
-       nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
-                              '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
-                  
+       hdrsz (ld-ehsz w32 ((wx? ? 4 1) + ?img? + ?nb? + ?tls?) nb?)
        nrel (pie ? (ld-nabs objs) 0)
        tal (ld-tlsalign objs)
        sv (ld-script objs (ld-dscript objs base hdrsz pg wx? pie nrel tal) ld-homesec)
        end (sv "__end") n0 (sv "__n0") o0 (sv "__o0") d0 (sv "__d0") t1 (sv "__t1") o1 (sv "__o1")
-       ; the address the cuts skipped, which the file does not carry: from d0 on an offset is
-       ; `addr - base - sk`, o0's is `t1 - base`
-       sk ((o0 - t1) + (d0 - o1))
        ; the template, a symbol's offset its address less tp: x64's thread pointer is the
        ; block's end on its alignment, a64's lies a 16-byte control block (aligned) before it
        tl0 (sv "__tl0") tl1 (sv "__tl1")
@@ -1384,18 +1382,9 @@
        dend (sv "__dend")
        ; .bss: p_memsz runs to bend, p_filesz stops at dend
        bend (sv "__bend")
-       ; .image last, past .bss, so `love bake` can grow it at the file's tail; its own segment,
-       ; or the .bss gap would be file zeros. no .image section, no segment.
-       ioff (dend - base - sk)
+       ; .image last, past .bss, so `love bake` can grow it at the file's tail
        iaddr (img? ? (sv "__ia") dend)
        iend (img? ? (sv "__ie") dend)
-       isz (iend - iaddr)
-       endf (img? ? (ioff + isz) ioff)
-       ; .image's bytes start up to 15 above iaddr, on its 16 grain, and its headers name that
-       ; start: one beginning below it is an image the wake cannot find
-       ist (img? ? (ld-align 16 iaddr) iaddr)
-       isho (ioff + (ist - iaddr))
-       iszr (iend - ist)
        relbox (pie ? {0 ()})    ; abs64 sites
        glo (ldsyms objs)
        ; the entry: `_start` when defined, else the first object's text (mooncc's crt0)
@@ -1413,13 +1402,44 @@
        tail (tl1 < r0 ? [(ld-zeros (r0 - tl1))])
        rtab ((pie ? (catall (map le64 (rev (relbox 0))))) + ld-zeros (dend - r1))
        ei (img? ? (ldemit cx 'image iaddr objs ()) [iaddr])
-       ; -- the section headers and symbol table, past p_filesz. every loaded byte has a
-       ; covering section, as strip rebuilds a file from its sections. --
        lanesx {'text 1 'rodata 2 'data 3 'nifs 4 'bss 6 'image 7}
-       st (ldstab objs glo lanesx (w32 ? elf-sym32 elf-sym) (w32 ? 16 24))
+       (elf-pack {'w32 w32 'mach mach 'target target 'sf sf 'pie pie 'tls? tls? 'img? img? 'wx? wx?
+                  'bsd? bsd? 'nb? nb? 'pg pg 'base base 'hdrsz hdrsz 'ent ent
+                  't1 t1 'o0 o0 'o1 o1 'd0 d0 'ed <ed 'n0 n0 'en <en 'r0 r0 'r1 r1 'dend dend 'bend bend
+                  'iaddr iaddr 'iend iend 'tl0 tl0 'tl1 tl1 'tal tal
+                  'rows (ldsyrows objs glo lanesx) 'cmt (ld-comment objs prod) 'readme readme
+                  'body (>etd + tbz + tail + [rtab]) 'image >ei}))
+
+   ; the file from a lay: its addresses, its bytes from past the header to .love.rela's
+   ; end (body) and from iaddr (image), the symbols as ldsyrows answers them
+   (elf-pack L)
+    (: w32 (L 'w32) mach (L 'mach) target (L 'target) sf (L 'sf) pie (L 'pie) tls? (L 'tls?)
+       img? (L 'img?) wx? (L 'wx?) bsd? (L 'bsd?) nb? (L 'nb?) pg (L 'pg) base (L 'base)
+       hdrsz (L 'hdrsz) ent (L 'ent) t1 (L 't1) o0 (L 'o0) o1 (L 'o1) d0 (L 'd0) n0 (L 'n0)
+       r0 (L 'r0) r1 (L 'r1) dend (L 'dend) bend (L 'bend) iaddr (L 'iaddr) iend (L 'iend)
+       tl0 (L 'tl0) tl1 (L 'tl1) tal (L 'tal) readme (L 'readme) cmt (L 'cmt)
+       shf (w32 ? elf-shdr32 elf-shdr)
+       phf (w32 ? elf32-phdr elf64-phdr)
+       ; the address the cuts skipped, which the file does not carry: from d0 on an offset is
+       ; `addr - base - sk`, o0's is `t1 - base`
+       sk ((o0 - t1) + (d0 - o1))
+       ; .image its own segment, or the .bss gap would be file zeros. no .image section, no segment
+       ioff (dend - base - sk)
+       isz (iend - iaddr)
+       endf (img? ? (ioff + isz) ioff)
+       ; .image's bytes start up to 15 above iaddr, on its 16 grain, and its headers name that
+       ; start: one beginning below it is an image the wake cannot find
+       ist (img? ? (ld-align 16 iaddr) iaddr)
+       isho (ioff + (ist - iaddr))
+       iszr (iend - ist)
+       nbo (hdrsz - 24)
+       nbnote (nb? ? (catall [(le32 7) (le32 4) (le32 1)                 ; namesz descsz netbsd_tag
+                              '(78 101 116 66 83 68 0 0) (le32 1000000000)]))   ; "NetBSD\0\0", 10.0
+       st (ld-stab (L 'rows) (w32 ? elf-sym32 elf-sym) (w32 ? 16 24))
        ; e_shstrndx and .symtab's sh_link are fixed at 10 and 9, so new sections go last.
        ; an object says love_nifs, a C identifier, so GNU ld synthesizes its brackets; the
        ; binary may say .love.nifs, ldres defining the pair itself.
+       en (L 'en)
        shstr (o-strtab ('(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
                           ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident")
                         + (tls? ? '(".tdata"))))
@@ -1427,7 +1447,7 @@
        symo (ld-align 8 endf) symz #<st
        stro (symo + symz) strz #<>st
        ssto (stro + strz) sstz #<shstr
-       cmt (ld-comment objs prod) cmto (ssto + sstz) cmtz #cmt
+       cmto (ssto + sstz) cmtz #cmt
        rdm (string? readme ? (o-strbytes readme))
        rdmo (cmto + cmtz) rdmz #rdm
        nsh ((0 < rdmz ? 13 12) + ?nb? + ?tls?)
@@ -1436,8 +1456,8 @@
                      ; a lane's offset follows the last byte before it, so no gap is unowned
                     (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
-                    (shf (snm 2) 1 3 d0 (d0 - base - sk) (<ed - d0) 0 0 16 0)
-                    (shf (snm 3) 1 3 (min n0 <en) (min n0 <en - base - sk) (<en - min n0 <en) 0 0 16 0)   ; from the first row, if any
+                    (shf (snm 2) 1 3 d0 (d0 - base - sk) (L 'ed - d0) 0 0 16 0)
+                    (shf (snm 3) 1 3 (min n0 en) (min n0 en - base - sk) (en - min n0 en) 0 0 16 0)   ; from the first row, if any
                     (shf (snm 4) 1 2 r0 (r0 - base - sk) (r1 - r0) 0 0 16 0)     ; the -pie table (empty non-pie)
                     (shf (snm 5) 8 3 dend (dend - base - sk) (bend - dend) 0 0 16 0)
                     (shf (snm 6) 1 3 ist isho iszr 0 0 16 0)
@@ -1466,7 +1486,7 @@
        ; ei_osabi = 9 (freebsd) in e_ident[7]: freebsd refuses an unbranded exe, linux ignores it
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (elf-order mach
-        (hdr9 . ((nb? ? [nbnote]) + >etd + tbz + tail + [rtab] + >ei
+        (hdr9 . ((nb? ? [nbnote]) + L 'body + L 'image
                   + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
                      (ld-zeros (shto - (rdmo + rdmz))) sht]))))
 

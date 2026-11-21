@@ -21,6 +21,6 @@
             "__asm__(\".text\\n.balign 16\\n.globl \" GparkSym \"\\n\" GparkSym \":\\n\"\n"
             (cats (lines (bytes t))) "    );\n"]))
    gpark-h (cats ["// gpark_gen.h -- laid by src/love/gpark.l, `make mx`, from glaze.l's gpark. edit that.\n"
-                  "#if defined(__APPLE__)\n#define GparkSym \"_love_gpark\"\n#else\n#define GparkSym \"love_gpark\"\n#endif\n"
+                  "#if defined(__APPLE__) && !defined(__mooncc__)\n#define GparkSym \"_love_gpark\"\n#else\n#define GparkSym \"love_gpark\"\n#endif\n"
                   (cats (map arm rows)) "#endif\n"])
    gpark-ok (all (r \ 0 < #(bytes <r)) rows))

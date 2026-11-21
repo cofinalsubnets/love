@@ -188,6 +188,7 @@ static long k_uargs(struct k_uctx const *c, long n, uint64_t a, uint64_t b, uint
     break;
    case NR_clock_gettime: ok = k_uokw(c, b, sizeof(struct timespec), true); break;
    case NR_uname: ok = k_uokw(c, a, sizeof(struct utsname), true); break;
+   case NR_sysinfo: ok = k_uokw(c, a, sizeof(struct k_sysinfo), true); break;
    case NR_inle_spawn: ok = k_uok(c, a, b) && k_uok(c, d, e) && k_uok(c, f, g); break;
    case NR_fcntl: ok = b == F_DUPFD || b == F_DUPFD_CLOEXEC || b == F_GETFD || b == F_SETFD
                        || b == F_GETFL || b == F_SETFL; break;

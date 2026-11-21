@@ -1,5 +1,5 @@
 // gpark_gen.h -- laid by src/love/gpark.l, `make mx`, from glaze.l's gpark. edit that.
-#if defined(__APPLE__)
+#if defined(__APPLE__) && !defined(__mooncc__)
 #define GparkSym "_love_gpark"
 #else
 #define GparkSym "love_gpark"

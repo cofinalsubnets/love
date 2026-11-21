@@ -3,11 +3,9 @@
 // boot. the vector table, the image definition and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "rp2350.h"
+#include "../crt0.h"
 #include "../../../src/inle/bput.h"
 
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[];
-extern void *const vectors[];
 void arm_dsb_isb(void);
 void arm_wfi(void);
 
@@ -28,9 +26,7 @@ void cmain(void) {
   // the fpu on before any float code: thumb2sp rides the S registers
   REG(CPACR_ADDR) |= (0xFu << 20);
   arm_dsb_isb();
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
-  REG(VTOR_ADDR) = (uint32_t) (uintptr_t) vectors;
+  crt0(8);
   clocks_init();
   main();
   for (;;) arm_wfi(); }

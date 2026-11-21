@@ -73,10 +73,7 @@
 #define TIMER_CC0       (TIMER0 + 0x540u)
 
 // --- core ----------------------------------------------------------------
-#define SCB_VTOR   0xE000ED08u
 #define SCB_CPACR  0xE000ED88u
-#define NVIC_ICER0 0xE000E180u
-#define NVIC_ICPR0 0xE000E280u
 
 // mkboot.l
 void arm_dsb_isb(void);
