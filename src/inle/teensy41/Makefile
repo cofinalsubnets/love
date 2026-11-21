@@ -47,11 +47,13 @@ $(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob
 	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
 # the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
 # agree; it bakes a cat under qemu-arm. the lib alone by default: kore's heap and a major's
-# copy of it pass the 16 MB (k_cat=out/.kore-cat.l takes it anyway)
+# copy of it pass the 16 MB (k_cat=out/.kore-cat.l takes it anyway). baked under LOVE_NO_GLAZE:
+# a cortex-m has no a32 state, so it cannot enter an arm native's stub, and the cat refuses a
+# bake that loaded the glaze
 k_cat = $(o)/lib-cat.l
-$(R)/$(o)/lib-cat.l:
+$(R)/$(o)/lib-cat.l: Makefile
 	@mkdir -p $(dir $@)
-	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(cite (quote glaze) (quote srcdrop) ())\n' > $@
+	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(? (cite (quote glaze)) (puts "lib-cat: the glaze is loaded, and a cortex-m cannot enter its natives", putc 10, quit 1) 0)\n' > $@
 k_xo = $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o
 $(R)/$(o)/baker: $(k_xo) $(lv)
 	@echo MOON	$@
@@ -59,7 +61,7 @@ $(R)/$(o)/baker: $(k_xo) $(lv)
 	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/noblob.o -o $(o)/baker
 $(R)/$(o)/love.img: $(R)/$(o)/baker $(R)/$(k_cat)
 	@echo BAKE	$@ "(qemu-arm)"
-	@cd $(R) && LOVE_NO_IMAGE=1 qemu-arm $(o)/baker bake -l $(k_cat) $(o)/love.img > $(o)/bake.log 2>&1 \
+	@cd $(R) && LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 qemu-arm $(o)/baker bake -l $(k_cat) $(o)/love.img > $(o)/bake.log 2>&1 \
 	   && test -s $(o)/love.img || { tail -20 $(R)/$(o)/bake.log; exit 1; }
 $(eval $(call p_lay,love-img,mkimg,"$(o)/love.img" "$(o)/love-img.o"))
 $(R)/$(o)/love-img.o: $(R)/$(o)/love.img
