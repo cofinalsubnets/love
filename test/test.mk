@@ -17,7 +17,7 @@
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_mips test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_mips test_mips_router test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -598,6 +598,9 @@ test_xtensa: host
 # holo's mips backend: its law as one big-endian linux program on qemu-mips, its table against llvm
 test_mips: host
 	@$(gsh) test/gate/mips.sh "$m" $(ho)
+# ..by hand, not in test_extra: test_ccmips's hosted programs on a mips-exec box, a router, held to qemu-mips
+test_mips_router: test_ccmips
+	@$(gsh) test/gate/mipsrouter.sh $(ho)/love $(ho)
 # lane j links the leaves and longjmp out of the isa's own archives
 test_thumb1 test_thumb2 test_thumb2sp: test_%: host out/rt/%/top.a out/rt/%/proc.a
 	@$(gsh) test/gate/thumb.sh $* $(ho)
@@ -1075,13 +1078,12 @@ test_kernel_vmx: host $(S)/tools/ktest.l
 	 KTEST_CAP=vt-x KTEST_CORPUS=test/kernel/vmx-lane.l \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "vmx: guest ran, cpuid exited"
 
-# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes.
-# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
+# a mooncc-built C program at /proc/initrd run in ring 3, then love itself as processes
 test_kernel_uproc: host $(S)/tools/ktest.l
 	@$(MAKE) -s $(k_elf)
 	@mkdir -p $(ko)/uproc && $(ho)/love mooncc test/kernel/c/hello.c -o $(ko)/uproc/hello
 	@echo TEST $(k_elf) "(C programs and love as x64 processes: ring 3, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello KTEST_MEM=2G \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc/hello \
 	   $m $(S)/tools/ktest.l $(k_elf) - $a "uproc: ok"
 
 # an empty boot line is a pier on the console: keys by qemu's monitor, lush, exit, reset
@@ -1171,13 +1173,13 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@echo TEST $(ko)/love-a64.elf "(the WARM lane: serial, headless, -kernel; kvm on a kvm-a64 host, else TCG, ceiling 900s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 
-# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own.
-# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
+# test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
+# tcg here, never a kvm-a64 host: under kvm love processes, a bake among them, may segfault (status 139)
 test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
 	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello KTEST_MEM=2G \
+	@KTEST_CAP=tcg-here KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
 	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
@@ -1203,12 +1205,11 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
 # no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling.
-# 2G: the bake forks, and a fork's eager copy holds two of its heaps at once
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
 	@echo TEST $(ko)/love-rv64.elf "(C programs and love as rv64 processes: U-mode, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 KTEST_MEM=2G \
+	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-rv64/hello KTEST_CEIL=3000 \
 	   $m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64 "uproc: ok"
 endif
 
