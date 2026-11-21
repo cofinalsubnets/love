@@ -1658,7 +1658,8 @@
  mouse-k 0.0025
  (world-look st dx dy) (two? (st 'cut) || peep st 'eye 'walk != 'walk ? st (walk-look st dx dy {'mouse mouse-k 'up 1.3 'down -1.2}))
  ; ..the world's own keys, over view's
- world-binds {101 'tap 112 'where 119 'forward 87 'sprint 75 'sprint 115 'back 97 'strafe-left 100 'strafe-right 32 'jump 13 'choose 10 'choose 49 'weep 50 'leave}
+ world-binds {101 'tap 112 'where 119 'forward 87 'sprint 75 'sprint 115 'back 97 'strafe-left 100 'strafe-right 32 'jump 13 'choose 10 'choose 49 'weep 50 'leave
+              83 'sprint-back 74 'sprint-back 65 'sprint-left 68 'sprint-right 72 'turn-left 76 'turn-right 85 'look-up 78 'look-down}
  ; ..each action as far as the time since the last frame, 'dt, carries it; a step is a
  ; way to go, summed for the frame's walk. any key during the shots skips them
  (world-step st a) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st)
@@ -1666,6 +1667,7 @@
    (up u) (pin st 'mu (peep st 'mu 0 + u))
    (? (two? (st 'cut)) (cue st) (charm? (st 'dlg)) (grave-key st a) (peep st 'eye 'walk != 'walk) (kneeling-key st a)
       (a @ 'forward (go 1 0) 'sprint (pin (go 1 0) 'run-at (st 'mt)) 'back (go -1 0) 'strafe-left (go 0 -1) 'strafe-right (go 0 1)
+           'sprint-back (pin (go -1 0) 'run-at (st 'mt)) 'sprint-left (pin (go 0 -1) 'run-at (st 'mt)) 'sprint-right (pin (go 0 1) 'run-at (st 'mt))
       'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
       'tap (touch st @ () st t t)
@@ -2540,8 +2542,8 @@
                                (world-watch (world-size st w (h // 2)))))
                'stick [119 115 97 100 87] 'tap world-tap
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
-               'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
-               'walking (view-walking + ['sprint 'strafe-left 'strafe-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
+               'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
+               'walking (view-walking + ['sprint 'strafe-left 'strafe-right 'sprint-back 'sprint-left 'sprint-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
                'tick (st \ (walk-dt st,
                             world-move st,
                             (st 't % watch-every @ 0 (world-watch st))))
@@ -2563,7 +2565,7 @@
    (? (atom? g) st
       (: p (g 0) l2 (world-tick o p)
          (string? l2 ? (say err ("world: " + p + ": " + l2 + "\n"), flush err, st) (world-go (pins o 'level p 'entry (g 1) 'came 1) l2)))))
- world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, W or K sprint, a d sidestep, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, a d sidestep, with shift a sprint, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--sway" 'sway 1) view-window view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])

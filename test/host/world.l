@@ -598,6 +598,13 @@
        (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
        (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
+;; ..with shift, back and to either side a sprint too, and a turn or a look the same as without
+(: gs (world-read "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 200] 0 0))")
+   (went a) (: st (world-new 8 8 gs "") x0 (st 'px) z0 (st 'pz)
+     _ (each ^10 (_ \ (world-step st a, pin st 'dt (1.0 / 30.0), world-move st))) (sqrt (2 (st 'px - x0) + 2 (st 'pz - z0))))
+ (test (world-kb 65 = 'sprint-left) (world-kb 68 = 'sprint-right) (world-kb 83 = 'sprint-back) (world-kb 74 = 'sprint-back)
+       (world-kb 72 = world-kb 104) (world-kb 76 = world-kb 108) (world-kb 85 = world-kb 117) (world-kb 78 = world-kb 110)
+       (1.5 * went 'back < went 'sprint-back) (1.5 * went 'strafe-left < went 'sprint-left) (1.5 * went 'strafe-right < went 'sprint-right)))
 ;; ..laid along: u how far down its rows from s, v across a row from its middle, in texels
 (: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
    sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
