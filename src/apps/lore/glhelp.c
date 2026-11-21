@@ -169,7 +169,7 @@ struct helper {
  GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz, us_zk;
  GLuint kt[2]; int kv[2], ks;   // the frames kept unread, none of it the cpu's: a copy each, the next drawn over neither
  GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot
- int opend; GLint u_sp;   // ..laid there for the next frame's sky, where it goes under glass too
+ int opend; GLint u_sp; int sW, sH;   // ..laid there for the next frame's sky, where it goes under glass too
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -276,7 +276,7 @@ static char const ufsrc[] =
 static char const sfsrc[] =
  "#version 300 es\n"
  "precision highp float; precision highp int; uniform sampler2D t; uniform sampler2D ov; uniform vec4 r; uniform vec2 wh; uniform int swz; uniform float zk; out vec4 o;\n"
- "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y) / zk, uv = (p - r.xy) / (r.zw - r.xy);\n"
+ "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y) / zk, ts = vec2(textureSize(t, 0)), uv = clamp((p - r.xy) / (r.zw - r.xy), 0.5 / ts, 1.0 - 0.5 / ts);\n"
  " vec4 k = texture(t, uv); o = vec4(swz != 0 ? k.bgr : k.rgb, 1.0);\n"
  " if (swz > 1 && abs(k.a * 255.0 - 254.0) < 0.5) { vec4 s = texture(ov, uv); if (s.a > 0.5) o = vec4(s.rgb, 1.0); } }\n";
 // ..spots: a pixel's index and its word, laid on a texture of the frame's size
@@ -510,14 +510,15 @@ static void cmd_win(struct helper *H, unsigned long xid) {
  dprintf(H->out, "ok\n"); }
 
 // ..texture t over the rect x0 y0 x1 y1 of the picture's window, top down, each of its pixels
-// zk of the surface's; swizzled, the frame's own
-static void lay(struct helper *H, GLuint t, int swz, float x0, float y0, float x1, float y1) {
+// zk of the surface's; swizzled, the frame's own; padded, its edges run on over all the window
+static void lay(struct helper *H, GLuint t, int swz, int pad, float x0, float y0, float x1, float y1) {
  int const k = H->zk;
  glBindTexture(GL_TEXTURE_2D, t);
  glUniform1i(H->us_swz, swz);
  glUniform4f(H->us_r, x0, y0, x1, y1); glUniform2f(H->us_wh, (float) H->vw, (float) H->vh); glUniform1f(H->us_zk, (float) k);
  glViewport(0, 0, H->vw, H->vh);
- glScissor((GLint) x0 * k, H->vh - (GLint) y1 * k, (GLsizei) (x1 - x0) * k, (GLsizei) (y1 - y0) * k);
+ if (pad) glScissor(0, H->vh - H->sH * k, H->sW * k, H->sH * k);
+ else glScissor((GLint) x0 * k, H->vh - (GLint) y1 * k, (GLsizei) (x1 - x0) * k, (GLsizei) (y1 - y0) * k);
  glDrawArrays(GL_TRIANGLES, 0, 3); }
 
 // ..words w by h at p, as the texture shown
@@ -591,7 +592,7 @@ static void cmd_show(struct helper *H, char *l) {
  if (H->hook && !onwin(H, W, Hh)) { H->hook(H->ctx, 1, 0, 0); dprintf(H->out, "ok\n"); return; }
  EGLint sw = W, sh = Hh;
  if (H->hook) eglQuerySurface(H->d, H->ws, EGL_WIDTH, &sw), eglQuerySurface(H->d, H->ws, EGL_HEIGHT, &sh);
- H->vw = sw, H->vh = sh, H->zk = sw / W < sh / Hh ? sw / W : sh / Hh;
+ H->vw = sw, H->vh = sh, H->sW = W, H->sH = Hh, H->zk = sw / W < sh / Hh ? sw / W : sh / Hh;
  if (H->zk < 1) H->zk = 1;
  glBindFramebuffer(GL_FRAMEBUFFER, 0);
  glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
@@ -600,14 +601,14 @@ static void cmd_show(struct helper *H, char *l) {
  glEnable(GL_SCISSOR_TEST);
  if (kept && ns) glActiveTexture(GL_TEXTURE1), glBindTexture(GL_TEXTURE_2D, H->ot), glActiveTexture(GL_TEXTURE0);
  GLuint t = kept ? H->kt[kept - 1] : put(H, p, w, h);
- if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh));
+ if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, 1, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh));
  char *s = l + k;
  for (int i = 0, x0, y0, x1, y1, j; i < n; i++, s += j) {
   if (sscanf(s, "%d %d %d %d%n", &x0, &y0, &x1, &y1, &j) != 4 || x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 || x1 > W || y1 > Hh) break;
   size_t const m = 4 * (size_t) (x1 - x0) * (y1 - y0);
   unsigned char const *q = bytes(H, at, m);
   if (!q || !(t = put(H, q, x1 - x0, y1 - y0))) break;
-  lay(H, t, 0, (float) x0, (float) y0, (float) x1, (float) y1);
+  lay(H, t, 0, 0, (float) x0, (float) y0, (float) x1, (float) y1);
   at += m; }
  glDisable(GL_SCISSOR_TEST);
  eglSwapBuffers(H->d, H->ws);
