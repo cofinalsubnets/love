@@ -248,6 +248,7 @@ static long k_umem(struct k_uctx *c, long n, uint64_t a, uint64_t b, long d, lon
     if (hi > k_utop - k_ustack - 4096) return -ENOMEM;
     long r = k_umlay(c, lo, b, d, e & MAP_ANONYMOUS, f, g);
     if (r < 0) return k_umem(c, NR_munmap, lo, hi - lo, 0, 0, 0, 0), r;
+    k_tlbi_all();                                  // the walker sees the descriptors as set
     c->mnext = hi + 4096;
     return (long) lo; }
   if (a & 4095 || hi <= lo || hi > k_utop) return -EINVAL;
