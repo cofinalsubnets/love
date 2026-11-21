@@ -118,7 +118,7 @@ uint64_t k_asmops_probe(void *va, uintptr_t p, volatile uint64_t *block) {
   k_semihost_exit(block);
   k_psci_system_reset();
   return k_rd_ctr_el0() + k_rd_mair_el1() + k_rd_ttbr1_el1() + k_rd_ttbr0_el1() + k_rd_tpidr_el1()
-       + k_rd_cntfrq_el0() + k_rd_cntpct_el0() + k_at_s1e1w_par(va); }
+       + k_rd_cntfrq_el0() + k_rd_cntpct_el0() + k_rd_far_el1() + k_at_s1e1w_par(va); }
 void const *const k_asmops_keep[] = {
   (void const*) k_isb,
   (void const*) k_dsb_ish,
@@ -151,6 +151,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_rd_tpidr_el1,
   (void const*) k_rd_cntfrq_el0,
   (void const*) k_rd_cntpct_el0,
+  (void const*) k_rd_far_el1,
   (void const*) k_at_s1e1w_par
 };
 
@@ -168,7 +169,7 @@ uint64_t k_asmops_probe(uintptr_t p, uint64_t bits) {
   k_sie_off();
   k_ebreak();
   k_unimp();
-  return k_rd_time() + (uint64_t) k_sbi(SBI_TIME, 0, bits, 0); }
+  return k_rd_time() + k_rd_stval() + (uint64_t) k_sbi(SBI_TIME, 0, bits, 0); }
 void const *const k_asmops_keep[] = {
   (void const*) k_wait,
   (void const*) k_fence,
@@ -184,6 +185,7 @@ void const *const k_asmops_keep[] = {
   (void const*) k_ebreak,
   (void const*) k_unimp,
   (void const*) k_rd_time,
+  (void const*) k_rd_stval,
   (void const*) k_sbi
 };
 

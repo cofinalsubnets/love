@@ -72,6 +72,9 @@ static inline void k_ic_iallu(void) {
 
 static inline void k_tlbi_all(void) {
   asm volatile ("dsb ish\n tlbi vmalle1is\n dsb ish\n isb" ::: "memory"); }
+// the address a data abort was at
+static inline uint64_t k_rd_far_el1(void) {
+  uint64_t v; asm volatile ("mrs %0, far_el1" : "=r"(v)); return v; }
 
 // __clear_cache's two halves
 static inline void k_dc_cvau(uintptr_t p) {         // clean D to unification

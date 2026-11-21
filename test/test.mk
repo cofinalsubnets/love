@@ -1200,7 +1200,7 @@ test_kernel_rv64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
-# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling
+# no image rides in, so the first love process bakes one as a process: ~20 min of tcg, hence the ceiling.
 test_kernel_uproc_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
 	@mkdir -p $(ko)/uproc-rv64 && $(ho)/love mooncc -t rv64 test/kernel/c/hello.c -o $(ko)/uproc-rv64/hello
