@@ -497,12 +497,11 @@
           [[(mesh-pack (mesh-join (map tongue ps))) 3.0]] [[(mesh-pack (mesh-halo (map tip ps) 0.12 c)) 0.7]]))
  ; ..the cuts' rims smouldering: a band of embers just in from each edge, glowing and breathing
  ember-c [1.0 0.36 0.08]
- (ember-light lv es) (: p (es 0 'rim 0) k (inside (room-at lv (p 0) (p 2)))
-   (band e) (: rs (e 'rim) n (e 'n) m (#rs - 1) c (c* (1.0 / m) (foldl c+ [0.0 0.0 0.0] (take m rs)))
-     (lift x) (c+ x (c* 0.004 n)) (v x) (x + [0.0 0.0] + n + ember-c)
-     (mesh (map (v * lift) rs + map (x \ v (lift (lerp c x 0.8))) rs)
-           (catmap (j \ (: a j b (j + 1) ia (j + m + 1) ib (j + m + 2) [[a b ib -1] [a ib ia -1] [a ib b -1] [a ia ib -1]])) ^m)))
-   (light [{'at (catmap (e \ map (e 'rim) [0 4 8 12]) es) 'c ember-c 'r 2.2 'soft 0.3 'keep k}] ['breathe]
+ (ember-light lv es) (: p (es 0 'qs 0 0) k (inside (room-at lv (p 0) (p 2)))
+   (band e) (: qs (e 'qs) n (e 'n) (v x) (c+ x (c* 0.004 n) + [0.0 0.0] + n + ember-c)
+     (mesh (catmap (map v) qs)
+           (catmap (j \ (: a (4 * j) b (a + 1) ia (a + 2) ib (a + 3) [[a b ib -1] [a ib ia -1] [a ib b -1] [a ia ib -1]])) ^#qs)))
+   (light [{'at (catmap (e \ map (j \ e 'qs j 0) (filter (j \ j % 12 = 0) ^#(e 'qs))) es) 'c ember-c 'r 2.2 'soft 0.3 'keep k}] ['breathe]
           [[(mesh-pack (mesh-join (map band es))) 2.5]] ()))
  (sign-light lv s) (: a (s 'at) sn (s 'n)
    hg (? (atom? sn) (hang lv (a 0) (a 1)) (: n (unit sn) [[(a 0) 0.0 (a 1)] n [-(n 2) 0.0 (n 0)]]))
@@ -848,23 +847,46 @@
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under
  ; the level's sun a hole where it stands, each piece of its wood cast down along the sun: a
  ; thick one's to a slot hole-d deep, over a dark shaft deep enough to fall through, a thin
- ; one's to a black sheet on the ground; its cuts' rims
- hole-d 0.2 shaft-d 150.0 hole-r 0.12 ember-r 0.04
+ ; one's to a black sheet on the ground
+ hole-d 0.2 shaft-d 150.0 hole-r 0.12
  (plane-at c at) (: n0 (unit (cross (c- (c 1) (c 0)) (c- (c 2) (c 0)))) n (dot n0 (c- at (c 0)) > 0.0 ? (c* -1.0 n0) n0)
                    [n (dot n (c 0) - dot n at)])
  ; ..where a piece of radius r crossing the plane meets it, round its rim
- (rim q pl) (: p (q 0) r (q 1) d (q 2) u (side d) v (cross d u) n (pl 0)
-   (map (k \ (: a (2.0 * pi * k / 16.0) x (c+ p (c+ (c* (r * cos a) u) (c* (r * sin a) v)))
-              (c- x (c* ((dot n x - pl 1) / dot n d) d)))) ^17))
+ ; ..the cut's edge, each piece's segments [a b] where it meets the plane facing n, as bands
+ ; [a b a' b'] in from it a little, where they lie within no other piece's cut, so where pieces
+ ; cross the plane together only the edge of the wood they make smoulders
+ (edges ps n) (: u (side n) v (cross n u) (fl p) [(dot p u) (dot p v)]
+   fs (map (sg \ map (s \ map fl s) sg) ps)
+   (in? p f) (#(filter (s \ (: a (s 0) b (s 1) ((a 1 > p 1) != (b 1 > p 1) && p 0 < a 0 + (p 1 - a 1) * (b 0 - a 0) / (b 1 - a 1)))) f) % 2 = 1)
+   (wide f) (: (span k) (: l (catmap (s \ map (q \ q k) s) f) (foldl max -1e18 l - foldl min 1e18 l))
+              (min 0.035 (0.2 * min (span 0) (span 1))))
+   ; ..each segment's way in, and at each end the ways in of the segments meeting there, summed
+   (key p) (show (map (k \ floor (p k * 1e5 + 0.5)) ^3))
+   (band i) (: f (fs i) bw (wide f)
+     ss (filter (s \ !(any (j \ j != i && in? (fl (lerp (s 0) (s 1) 0.5)) (fs j)) ^#fs)) (ps i))
+     ws (map (s \ (: m (lerp (s 0) (s 1) 0.5) w0 (unit (cross n (c- (s 1) (s 0)))) (in? (fl (c+ m (c* 1e-3 w0))) f ? w0 (c* -1.0 w0)))) ss)
+     acc (foldl (\ t j (: w (ws j) (foldl (\ t p (: k (key p) (pin t k (c+ w (peep t k [0.0 0.0 0.0]))))) t (take 2 (ss j))))) {} ^#ss)
+     (in p) (c+ p (c* bw (unit (acc (key p)))))
+     (map (s \ [(s 0) (s 1) (in (s 0)) (in (s 1))]) ss))
+   {'qs (catmap band ^#ps) 'n n})
  (hole-of ss g sun) (: y0 (g - hole-d)
    (cast p) (c- p (c* ((p 1 - g) / sun 1) sun))
    (brush sh) {'air 1 'shape sh 'cuts () 'skin () 'whole 0 'open 0 'sheer 0 'src () 'xf [1.0 0.0 0.0 1.0 0.0 0.0]}
-   ; ..a slot: the piece's ends cast, round them a rounded end of k steps, a square one for k 0
-   (slot k s) (: a (cast (s 0)) b (cast (s 1)) r (s 2) dx (b 0 - a 0) dz (b 2 - a 2) l (sqrt (2 dx + 2 dz))
+   ; ..each joint's radius between the pieces' that meet there, as the wood is swept
+   (jk p) (show p) rin (foldl (\ t s (pin t (jk (s 1)) (s 2))) {} ss) rout (foldl (\ t s (pin t (jk (s 0)) (s 2))) {} ss)
+   (at-a s) (0.5 * (s 2 + peep rin (jk (s 0)) (s 2))) (at-b s) (0.5 * (s 2 + peep rout (jk (s 1)) (s 2)))
+   ; ..the hull of points in plan, round from the lowest
+   (hull ps) (: (turn o a b) ((a 0 - o 0) * (b 1 - o 1) - (a 1 - o 1) * (b 0 - o 0))
+               (half l) (foldl (\ h p (: (pop h) (two? h && two? >h && turn (>h 0) (h 0) p <= 0.0 ? (pop >h) h) (p . pop h))) () l)
+               q (sort ps) lo (half q) hi (half (rev q))
+               (rev (drop 1 lo) + rev (drop 1 hi)))
+   ; ..a slot: the piece's ends cast, round them a rounded end of k steps, a square one for k 0,
+   ; each as wide as the wood at that joint
+   (slot k s) (: a (cast (s 0)) b (cast (s 1)) ra (at-a s) rb (at-b s) dx (b 0 - a 0) dz (b 2 - a 2) l (sqrt (2 dx + 2 dz))
      u (l > 1e-6 ? [(dx / l) (dz / l)] [1.0 0.0]) w [-(u 1) (u 0)]
-     (pt p su sw) [(p 0 + r * (su * u 0 + sw * w 0)) (p 2 + r * (su * u 1 + sw * w 1))]
-     (end p t0) (map (j \ pt p (cos (t0 + pi * j / k)) (sin (t0 + pi * j / k))) ^(k + 1))
-     (k @ 0 [(pt a -1.0 -1.0) (pt b 1.0 -1.0) (pt b 1.0 1.0) (pt a -1.0 1.0)] (end b (-0.5 * pi) + end a (0.5 * pi))))
+     (pt p r su sw) [(p 0 + r * (su * u 0 + sw * w 0)) (p 2 + r * (su * u 1 + sw * w 1))]
+     (end p r t0) (map (j \ pt p r (cos (t0 + pi * j / k)) (sin (t0 + pi * j / k))) ^(k + 1))
+     (hull (k @ 0 [(pt a ra -1.0 -1.0) (pt b rb 1.0 -1.0) (pt b rb 1.0 1.0) (pt a ra -1.0 1.0)] (end b rb (-0.5 * pi) + end a ra (0.5 * pi)))))
    ps (map (slot 2) (filter (s \ s 2 >= hole-r) ss)) xs (catmap (q \ map (c \ c 0) q) ps) zs (catmap (q \ map (c \ c 1) q) ps)
    lo [(foldl min 1e9 xs) (y0 - shaft-d) (foldl min 1e9 zs)] hi [(foldl max -1e9 xs) (y0 + 0.02) (foldl max -1e9 zs)]
    ; ..dark up the slots' walls but not the ground beside them, a face tested a way out from it,
@@ -880,7 +902,7 @@
      c (o 'burnt || o 'hole ? (bough-sheared g pl) ())
      (mv s) [(c+ (s 0) at) (c+ (s 1) at) (s 2)]
      _ (pins o 'pl pl 'trunk (map mv (tablet? c ? (c 'trunk) (bough-solid g))))
-     es (two? pl ? (map (q \ {'rim (map (x \ c+ x at) (rim q pl)) 'n (pl 0)}) (filter (q \ q 1 >= ember-r) (c 'cuts))) ())
+     es (two? pl ? (edges (map (sg \ map (s \ map (c+ at) s) sg) (bough-edges g pl)) (pl 0) @ e (two? (e 'qs) ? [e] ())) ())
      h (o 'hole && tablet? c ? (: s (sun ()) (s 1 > 0.05 ? [(hole-of (map mv (c 'segs)) (at 1) s)] ())) ())
      _ (atom? h || pin o 'shade (map (q \ map (p \ [(p 0 - at 0) (p 1 - at 2)]) q) (<h 'shade)))
      [es h])

@@ -309,12 +309,14 @@
 ;   (furnish KIND [x y z] bearing {PARAM v ..})  a piece of furniture, the middle of its foot
 ;                                      at x y z, its user facing the bearing: 'table 'desk
 ;                                      'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter
-;                                      'crate 'carton 'stand 'sofa; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
+;                                      'crate 'carton 'stand 'sofa 'armchair 'sideboard 'tv
+;                                      'coatrack 'painting; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
 ;                                      'panels 'trestle 'pedestal 'star or (), 'leg 'inset
 ;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
 ;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
-;                                      'fill-w slot as line-up does, 'seed, and 'skin of
-;                                      'top 'frame 'body 'soft 'feet, each a texture, a skin
+;                                      'fill-w slot as line-up does, or a coatrack's 'coats,
+;                                      'seed, and 'skin of 'top 'frame 'body 'soft 'feet, a
+;                                      tv's 'screen and a painting's 'picture, each a texture, a skin
 ;                                      or a kind; 'feet a star's casters, the frame's unless said
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
@@ -830,6 +832,10 @@
                                     ['patches 3 0.2 (sh 0.8)]] 'soft])]
    'card [{'colour (rgb 0.62 0.47 0.3) 'tape (rgb 0.7 0.58 0.4) 'metres 0.5}
           (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 2 0.06) ['patches 4 0.15 (sh 0.9)] ['rows 14 18 (g 'tape)]] 'soft])]
+   'screen [{'colour (rgb 0.025 0.03 0.035) 'metres 1.0}
+            (g \ [16 16 (g 'metres) [['fill (g 'colour)] '(noise 2 0.03)] 'hard])]
+   'canvas [{'colour (rgb 0.86 0.83 0.76) 'metres 0.5}
+            (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 1 0.05) '(noise 6 1 0.04)] 'soft])]
    'bark [{'colour (rgb 0.3 0.29 0.27) 'streak 0.3 'marks 0.0 'metres 1.0}
           (g \ [32 64 (g 'metres) [['fill (g 'colour)] ['noise 1 8 (g 'streak)] '(noise 3 0.1) ['patches 4 0.25 (sh 0.85)] ['noise 6 1 (g 'marks)]] 'wood])]}
  (material k s o) (: u "(material KIND seed {PARAM v ..})"
@@ -930,7 +936,12 @@
    'crate {'w 0.5 'd 0.35 'h 0.3 'top 0.015 'slats 0 'skin {'frame 'wood}}
    'carton {'w 0.5 'd 0.4 'h 0.35 'skin {'body 'card}}
    'stand {'w 1.2 'd 0.9 'h 1.02 'low 0.72 'lip 0.05 'skin {'frame 'wood 'body 'slats}}
-   'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}}
+   'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}
+   'armchair {'w 0.95 'd 0.9 'h 0.95 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}
+   'sideboard {'w 1.6 'd 0.45 'h 0.8 'top 0.03 'low 0.14 'leg 0.025 'drawers 0 'doors 3 'skin {'body 'wood 'top 'plank 'frame 'wood}}
+   'tv {'w 1.1 'd 0.06 'h 0.74 'low 0.08 'skin {'body 'metal 'screen 'screen}}
+   'coatrack {'w 0.5 'd 0.5 'h 1.8 'leg 0.022 'fill () 'skin {'frame 'wood 'soft 'cloth}}
+   'painting {'w 1.0 'd 0.04 'h 0.75 'low 1.2 'skin {'frame 'wood 'picture 'canvas}}}
  furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'low 'lip 'seed 'skin]
  book-colours [(rgb 0.36 0.09 0.07) (rgb 0.1 0.2 0.36) (rgb 0.14 0.3 0.16) (rgb 0.55 0.45 0.2) (rgb 0.2 0.2 0.22) (rgb 0.6 0.3 0.12)]
  (furnish k at deg st) (: u "(furnish KIND [x y z] bearing {PARAM v ..})" o (P at u) dd (N deg u)
@@ -970,8 +981,10 @@
          ; ..books under a gap gp: each its own height, depth and cover
          (books gp bk) (\ a dg e w (: bh (gp * pick e 'h [0.6 0.9]) bd (2.0 * D * pick e 'd [0.6 0.85]) c (bk (int (#bk * dice e 'c)))
                                      (fit c (box [(a 0 - 0.5 * w) (a 1) (o 2 + D - bd)] [(a 0 + 0.5 * w - 0.002) (a 1 + bh) (o 2 + D)]))))
+         ; ..a picture laid on a face toward the user, its middle at x y, the role r's texture
+         (face x y w h r) (decal [(o 0 + x) (o 1 + y) (o 2 - D - 0.003)] [0.0 0.0 -1.0] [0.0 1.0 0.0] w h (tex-by (peep sks r 'canvas)))
          parts
-          (k @
+          ((k = 'armchair ? 'sofa k) @
            'chair (: S (g 'seat) [(bx (0.0 - W) (S - T) (0.0 - D) W S D 'soft) (legs (S - T))
                                   (g 'back > 0.0 ? [(bx (0.0 - W) S (0.0 - D) W H (0.06 - D) 'soft)] ())
                                   (g 'arms > 0.0 ? (map (sx \ bx (sx * W - 0.03) (S + 0.2) (0.0 - D) (sx * W + 0.03) (S + 0.24) (0.6 * D) 'frame) [-1 1]) ())])
@@ -1011,6 +1024,31 @@
                     (bx (0.0 - W) (S - 0.12) (0.0 - D) W H (0.22 - D) 'soft)
                     (aw > 0.0 ? [(bx (0.0 - W) (S - 0.12) (0.22 - D) (aw - W) (S + 0.2) D 'soft)
                                  (bx (W - aw) (S - 0.12) (0.22 - D) W (S + 0.2) D 'soft)] ())])
+           ; ..a sideboard: short legs under a body of doors or drawers, its top over them
+           'sideboard (: lo (g 'low) y (H - T)
+                        [(map (c \ post (c 0 * (W - 0.05)) (c 1 * (D - 0.05)) lo) [[-1 -1] [1 -1] [-1 1] [1 1]])
+                         (bx (0.0 - W) lo (0.0 - D) W y D 'body) (fronts lo y)
+                         (bx (-0.01 - W) y (-0.01 - D) (W + 0.01) H D 'top)])
+           ; ..a television: a foot, a neck up to its panel low over it, the screen across the panel's front
+           'tv (: lo (g 'low) ph (H - lo)
+                 [(bx -0.2 0.0 -0.1 0.2 0.015 0.1 'body) (bx -0.03 0.015 -0.015 0.03 (lo + 0.1) 0.015 'body)
+                  (bx (0.0 - W) lo (0.0 - D) W H D 'body) (face 0.0 (lo + 0.5 * ph) (2.0 * W - 0.05) (ph - 0.05) 'screen)])
+           ; ..a coat rack: crossed feet, a pole, pegs four ways at the top and four between lower
+           ; down, and with 'fill 'coats a coat hung from one
+           'coatrack (: L2 (2.0 * L) (peg dx dz y) (bx (min 0.0 (dx * 0.16) - 0.012) (y - 0.012) (min 0.0 (dz * 0.16) - 0.012)
+                                                     (max 0.0 (dx * 0.16) + 0.012) (y + 0.012) (max 0.0 (dz * 0.16) + 0.012) 'frame)
+                       [(bx (0.0 - W) 0.0 -0.025 W 0.04 0.025 'frame) (bx -0.025 0.0 (0.0 - D) 0.025 0.04 D 'frame)
+                        (bx (0.0 - L2) 0.0 (0.0 - L2) L2 H L2 'frame) (bx (-1.5 * L2) (H - 0.03) (-1.5 * L2) (1.5 * L2) (H + 0.03) (1.5 * L2) 'frame)
+                        (map (q \ peg (q 0) (q 1) (H - 0.12)) [[1 0] [-1 0] [0 1] [0 -1]])
+                        (map (q \ peg (q 0) (q 1) (H - 0.4)) [[0.7 0.7] [-0.7 0.7] [0.7 -0.7] [-0.7 -0.7]])
+                        (g 'fill = 'coats ? [(bx 0.05 (H - 1.05) -0.22 0.17 (H - 0.14) 0.22 'soft) (bx 0.03 (H - 0.2) -0.12 0.19 (H - 0.08) 0.12 'soft)] ())])
+           ; ..a painting hung low up its wall, the back of it at +z against it: a frame round the
+           ; picture on its front
+           'painting (: lo (g 'low) f 0.045
+                       [(bx (0.0 - W) lo (0.0 - D) W (lo + H) D 'frame)
+                        (bx (-0.01 - W) lo (-0.012 - D) W (lo + f) (0.0 - D) 'frame) (bx (0.0 - W) (lo + H - f) (-0.012 - D) (W + 0.01) (lo + H) (0.0 - D) 'frame)
+                        (bx (-0.01 - W) lo (-0.012 - D) (f - W) (lo + H) (0.0 - D) 'frame) (bx (W - f) lo (-0.012 - D) (W + 0.01) (lo + H) (0.0 - D) 'frame)
+                        (face 0.0 (lo + 0.5 * H) (2.0 * (W - f)) (H - 2.0 * f) 'picture)])
            ; ..a table, desk, stool or bench: a top on legs, an apron under it, a panel m high at the back
            (: y (H - T) a (g 'apron) m (g 'modesty)
              [(bx (0.0 - W) y (0.0 - D) W H D 'top) (legs y)
