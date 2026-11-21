@@ -50,6 +50,9 @@ void __love_tlscopy(void *tp) {
 /* a program with a pt_tls gets the main thread's copy and its thread pointer; one without
  * keeps the main thread's at 0 */
 static void __love_tlsinit(void) {
+#ifdef __mips__
+  sc1(NR_set_thread_area, 0);                   /* exec keeps the parent's tp_value */
+#endif
 #if defined(__x86_64__) || defined(__aarch64__)
   unsigned long phdr = 0, phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {
