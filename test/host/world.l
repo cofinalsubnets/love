@@ -827,6 +827,14 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; a speaker's reach: the loop gone fifteen metres off a plain one, still heard there off one
+; reaching twenty
+(: (rch sp x) (: l (lv ("(room [0 0 0] [40 4 4]) (deck [1 0 1] [2 1 2]) " + sp + " (start [1.5 0 2.5] 180 -30)"))
+                 st (world-new 8 8 l "") _ (world-step st 'tap) _ (pins st 'px x 'py 0.0 'pz 2.0)
+                 _ (each ^4 (_ \ hum-bus st 480)) b (hum-bus st 480) (atom? b ? 0.0 (max (amax <b) -(amin <b))))
+   far0 (rch "(speaker [2 1 2])" 17.0) far1 (rch "(reach 20 (speaker [2 1 2]))" 17.0)
+ (test (far0 = 0.0) (0.0 < far1)
+       (has? (lv "(reach 0 (speaker [0 0 0]))") "(reach metres PARTS)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving

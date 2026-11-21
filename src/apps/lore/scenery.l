@@ -64,6 +64,8 @@
 ;                                      ten metres off
 ;   (heard [x y z] [x y z] PARTS)      the speakers among PARTS heard only inside the box,
 ;                                      fading out past it as a hum does
+;   (reach metres PARTS)               the speakers among PARTS heard that far off, not ten,
+;                                      whole as much further in
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -300,7 +302,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard reach sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -353,6 +355,8 @@
  (speaker at) (part 'speaker [['at (P at "(speaker [x y z])")]])
  (heard lo hi ps) (: u "(heard [x y z] [x y z] PARTS)" a (P lo u) b (P hi u)
    (map (p \ kind? p ['speaker] ? (with (with p 'lo (lo2 a b)) 'hi (hi2 a b)) p) (flat ps)))
+ (reach m ps) (: u "(reach metres PARTS)"
+   (? (!(charm? m || gem? m) || m <= 0) (no u m) (map (p \ kind? p ['speaker] ? (with p 'far (1.0 * m)) p) (flat ps))))
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
@@ -1247,7 +1251,7 @@
        'fences (map (q \ {'pts (q 'pts) 'h (q 'h) 'tex (tname (q 'tex)) 'wood (peep q 'wood 0)}) (of 'fence))
        'gates (map (g \ {'a (g 'at) 'b (g 'np) 'h (g 'h) 'swing (g 'swing) 'tex (tname (g 'tex))}) (of 'gate))
        'graves (map (g \ {'at (g 'at) 'deg (g 'deg) 'name (g 'name)}) (of 'grave))
-       'speakers (map (q \ {'at (q 'at) 'lo (q 'lo) 'hi (q 'hi)}) (of 'speaker))
+       'speakers (map (q \ {'at (q 'at) 'lo (q 'lo) 'hi (q 'hi) 'far (peep q 'far ())}) (of 'speaker))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})

@@ -361,16 +361,22 @@
      (: a (q 0) b (q 1) k ((y - a 1) / max 1e-9 (b 1 - a 1)) [(a 0 + k * (b 0 - a 0)) (a 2 + k * (b 2 - a 2)) (q 2)]))
    (level v) (: n (max 1e-9 (sqrt (2 (v 0) + 2 (v 2)))) [(v 0 / n) 0.0 (v 2 / n)])
    (out p) (cen (p 1) @ () (level (c- p f)) c (level [(p 0 - c 0) 0.0 (p 2 - c 1)]))
+   ; ..a fan about its first point ps 0, each point its colour, both sides
+   (fan ps cs) (: n (unit (cross (c- (ps 2) (ps 0)) (c- (ps 1) (ps 0)))) k #ps
+     (mesh (map (i \ ps i + [0.0 0.0] + n + cs i) ^k) (catmap (i \ [[0 (i + 1) (i + 2) -1] [0 (i + 2) (i + 1) -1]]) ^(k - 2))))
+   ; ..a leaf out from p along o: rounded, widest a third along, lifted as it goes, darker at
+   ; its stalk and lighter at its tip
    (leaf p o k) (: a (k % 2 @ 0 0.6 -0.6) L (0.13 + 0.06 * h01 (k + 300)) u [(o 0 * cos a + o 2 * sin a) 0.0 (o 2 * cos a - o 0 * sin a)]
-     w [(u 2) 0.0 -(u 0)] b (c+ p (c* vine-r u)) m (c+ b (c+ (c* (0.5 * L) u) [0.0 (0.3 * L) 0.0])) e (c+ b (c+ (c* L u) [0.0 (0.2 * L) 0.0]))
-     l (c+ m (c* (0.35 * L) w)) r (c+ m (c* (-0.35 * L) w)) uv [[0.0 0.0] [0.0 0.0] [0.0 0.0] [0.0 0.0]] c (c* (0.8 + 0.4 * h01 (k + 500)) vine-leaf)
-     (mesh-join [(mesh-quad [b l e r] uv -1 c) (mesh-quad [b r e l] uv -1 c)]))
-   ; ..a flower facing out from p along o: five petals round a yellow eye, a little proud
+     w [(u 2) 0.0 -(u 0)] b (c+ p (c* vine-r u)) c (c* (0.8 + 0.4 * h01 (k + 500)) vine-leaf)
+     (at t s) (c+ b (c+ (c* (t * L) u) (c+ [0.0 (L * (t - 0.8 * t * t)) 0.0] (c* (s * L) w))))
+     (fan [b (at 0.3 0.32) (at 0.65 0.26) (at 1.0 0.0) (at 0.65 -0.26) (at 0.3 -0.32)] [(c* 0.75 c) c c (c* 1.15 c) c c]))
+   ; ..a flower facing out from p along o: five rounded petals round a yellow eye, a little
+   ; proud, each darker toward the eye
    (flower p o k) (: w [(o 2) 0.0 -(o 0)] up [0.0 1.0 0.0] R (0.07 + 0.03 * h01 (k + 700)) m (c+ p (c* (vine-r + 0.012) o))
-     pc (vine-petals (int (4.0 * h01 (k + 900)) % 4)) uv [[0.0 0.0] [0.0 0.0] [0.0 0.0] [0.0 0.0]] (two q c) [(mesh-quad q uv -1 c) (mesh-quad (rev q) uv -1 c)]
-     (at a r) (c+ m (c+ (c* (r * cos a) w) (c* (r * sin a) up))) a0 (tau * h01 (k + 800))
-     (mesh-join (catmap (j \ (: a (a0 + tau * j / 5.0) (two [m (at (a - 0.45) (0.55 * R)) (at a R) (at (a + 0.45) (0.55 * R))] pc))) ^5
-                 + two (map (j \ at (a0 + tau * j / 4.0) (0.012 + 0.2 * R)) ^4) vine-eye)))
+     pc (vine-petals (int (4.0 * h01 (k + 900)) % 4)) pb (c* 0.72 pc)
+     (at a r) (c+ m (c+ (c* (r * cos a) w) (c* (r * sin a) up))) a0 (tau * h01 (k + 800)) e (0.012 + 0.2 * R)
+     (mesh-join (map (j \ (: a (a0 + tau * j / 5.0) (fan [m (at (a - 0.5) (0.5 * R)) (at (a - 0.24) (0.95 * R)) (at (a + 0.24) (0.95 * R)) (at (a + 0.5) (0.5 * R))] [pb pc pc pc pc]))) ^5
+                 + [(fan (map (j \ at (a0 + tau * j / 6.0) e) ^6) (map (_ \ vine-eye) ^6))])))
    (strand j) (: th0 (tau * (j + 0.4 * h01 j) / vine-n) tn (1.0 + 0.6 * h01 (j + 10)) dl (1.2 * h01 (j + 20))
      up (filter two? (map (i \ (: y (y0 + i * vine-st) (cen y @ () () c (: th (th0 + tau * tn * (y - y0) / (top - y0) + 0.3 * sin (2.7 * y + j)) r (c 2 + vine-r)
                                                                          [(c 0 + r * sin th) y (c 1 + r * cos th)]))))
@@ -2131,7 +2137,8 @@
          (? (atom? heard) ()
             (: y (foldl (\ a q (a + (q 1 + (q 2 - q 1) * r) * (q 3 0) t)) (iota n * 0.0) heard) (y . y))))))
  ; ..the loop as loud as the nearest speaker is to the listener's head, eased from the last
- ; tic's over this one, its clock going on heard or not; a speaker with a box heard in it alone.
+ ; tic's over this one, its clock going on heard or not; a speaker with a box heard in it alone,
+ ; and one with a 'far heard that far off, whole loop-near as much of the way in.
  ; each where the level has it, one in the pocket brought up out of it, so a speaker by the
  ; lift's foot is heard on the lift
  loop-near 1.5 loop-far 10.0 loop-gain 0.6
@@ -2140,7 +2147,7 @@
    (w d l) (tablet? sf ? (d - l * floor (d / l + 0.5)) d)
    p (own [(st 'px) (st 'py) (st 'pz)])
    (one q) (: a (own (q 'at)) dx (w (a 0 - p 0) (peep sf 'lx 0.0)) dy (a 1 - p 1) dz (w (a 2 - p 2) (peep sf 'lz 0.0))
-     d (sqrt (2 dx + 2 dy + 2 dz)) u (min 1.0 (max 0.0 ((loop-far - d) / (loop-far - loop-near))))
+     d (sqrt (2 dx + 2 dy + 2 dz)) F (peep q 'far () @ () loop-far f f) N (loop-near * F / loop-far) u (min 1.0 (max 0.0 ((F - d) / (F - N))))
      (2 u * (q 'lo @ () 1.0 (hum-in q p))))
    (foldl (\ a q (max a (one q))) 0.0 (st 'lvl 'speakers)))
  (loop-bus st n) (: m (st 'music)
