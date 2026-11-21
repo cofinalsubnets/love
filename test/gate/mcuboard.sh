@@ -4,7 +4,7 @@
 # runs its sram image over swd, the flash never written; else it flashes the image over swd and
 # resets. either way it reads the battery off the console; green is the battery's own `; all ../.. green`,
 # which it prints only when every check passed. a teensy41-usb host instead holds a teensy 4.1 on usb:
-# the running image reboots to its loader at 134 baud, teensy_loader_cli flashes the .hex, and green is
+# the running image reboots to its loader at 134 baud, src/tools/halfkay.l writes the .bin, and green is
 # love's shell answering on the usb console the host's tty fact names. an rp2350-uf2 host holds a pico 2
 # on usb, its usb fact the port's by-path name: 134 baud on the port's serial device reboots a running
 # image into the rom, the uf2 goes raw onto the port's drive (the rom takes blocks at any sector; the
@@ -41,21 +41,20 @@ esac
 sd=$ho/board-$cap
 rm -rf "$sd"; mkdir -p "$sd"
 if [ "$cap" = teensy41-usb ]; then
-  cp "$img" "$sd/firm.hex"
-  cp "$ho/love" src/apps/swd.l test/gate/swdpress.l "$sd/"
+  cp "$img" "$sd/firm.bin"
+  cp "$ho/love" src/apps/swd.l test/gate/swdpress.l src/tools/halfkay.l "$sd/"
   green='*40002*'
   # the console is the host's tty fact, BEE_TTY under bee --on; a button fact (a probe's line
   # on its program pin, `aux lovswd TTY`) presses it, so an image not ours or hung still loads
   cat > "$sd/run.sh" <<'EOF'
 tty=${BEE_TTY:-} button=${BEE_BUTTON:-}
 [ -n "$tty" ] || { echo "the host gives no tty fact"; exit 1; }
-command -v teensy_loader_cli >/dev/null || { echo "no teensy_loader_cli on the host"; exit 1; }
 if [ -n "$button" ]; then
   ./love swdpress.l $button > press.log 2>&1 || { tail -3 press.log; echo "the button press failed"; exit 1; }
 else
   stty -F "$tty" 134 2>/dev/null || true
 fi
-timeout 90 teensy_loader_cli --mcu=TEENSY41 -w -v firm.hex > flash.log 2>&1 \
+timeout 90 ./love halfkay.l write firm.bin > flash.log 2>&1 \
   || { tail -5 flash.log; echo "the flash failed (an image that is not ours, or hung, wants the button)"; exit 1; }
 n=0
 until [ -e "$tty" ]; do n=$((n + 1)); [ $n -gt 60 ] && { echo "the usb console never came up"; exit 1; }; sleep 1; done
@@ -201,7 +200,7 @@ case $img in
            esac ;;
 esac
 if [ "$cap" = teensy41-usb ]; then
-  echo "$t: the .hex flashed through the loader, love's shell on the usb console answered (+ 40000 2)"
+  echo "$t: the .bin written by halfkay.l, love's shell on the usb console answered (+ 40000 2)"
 elif [ "$cap" = trinkey-samba ]; then
   echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; from"*|"; all"*) echo "$l" ;; esac; done
   echo "$t: the image into sram by the bootloader's sam-ba, the flash untouched, the battery green on its usb console"

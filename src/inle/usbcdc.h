@@ -167,7 +167,7 @@ static void ucdc_setup(uint32_t s0, uint32_t s1) {
   usbhw_ep0_stall(); }
 
 // endpoint 0's data out landed: a line coding
-// 134 baud is the loaders' ask for the bootloader (teensy_loader_cli -s), taken once the
+// 134 baud is the loaders' ask for the bootloader (as Teensyduino's), taken once the
 // status stage is out
 static void ucdc_ep0_out(uint8_t const *src, uint32_t n) {
   if (ucdc_lc_wanted == 2) { ucdc_fn2_coding(src, n); ucdc_lc_wanted = 0; return; }
