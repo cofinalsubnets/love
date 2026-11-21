@@ -1171,7 +1171,7 @@ test_kernel_a64: host $(S)/tools/ktest.l
 	@$m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64
 
 # test_kernel_uproc's laws on a64: its own mooncc-built C program, EL0, address spaces of their own
-# tcg here, never a kvm-a64 host: under kvm a love process starves beside a spinning one, and segfaults
+# tcg here, never a kvm-a64 host: under kvm love processes segfault (status 139) at earlyten's 2G budget
 test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
