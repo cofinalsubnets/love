@@ -9,7 +9,10 @@
 // UCDC_ACM2 adds a second cdc-acm port there instead, a uart's bytes (the second port's half)
 #include <stdint.h>
 
-enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = 4096 };   // ucdc_rxn a power of two
+#ifndef UCDC_RXN
+#define UCDC_RXN 4096
+#endif
+enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = UCDC_RXN };   // ucdc_rxn a power of two, UCDC_RXN a board's
 
 // the controller's: control transfers on endpoint 0, then the data endpoints
 static void usbhw_ep0_in(void const *src, uint32_t n);   // n bytes in (n may be 0), status out

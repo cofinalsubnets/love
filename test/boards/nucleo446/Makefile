@@ -24,19 +24,19 @@ default: nucleo446
 nucleo446: $(R)/$(o)/firm.hex $(R)/$(o)/firm-ram.bin
 smoke: $(R)/$(o)/smoke.elf
 
-$(eval $(call p_obj,nucleo446,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc)))
+$(eval $(call p_obj,nucleo446,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h ../crt0.h $(S)/inle/bput.h $(mc),$(nu_cc)))
 $(eval $(call p_obj,main,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc)))
 # the -D QSMOKE twin, the same two sources through the same cc
-$(eval $(call p_obj,nucleo446-q,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
+$(eval $(call p_obj,nucleo446-q,test/boards/nucleo446/nucleo446.c,nucleo446.c nucleo446.h ../crt0.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
 $(eval $(call p_obj,main-q,test/boards/nucleo446/main.c,main.c nucleo446.h ../battery.h $(S)/inle/bput.h $(mc),$(nu_cc) -D QSMOKE))
 
 # boot.o: the vector table, crt0, the fault shim and the asm helpers, laid from holo IR --
 # no gas. src/inle/teensy41/mkboot.l is the same shape with the i.MX ROM blocks on top.
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",../armboot.l))
 
 # the link is ours: nlink.l drives holo's ldbare32 with the F4's memory map, in place of
 # arm-none-eabi-ld + nucleo446.lds.
-$(eval $(call p_link,nlink))
+$(eval $(call p_link,nlink,../boardld.l))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/nlink.l $(lv)

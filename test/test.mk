@@ -648,6 +648,14 @@ test_rp2040: host
 test_rp2040_board: test_rp2040
 	@echo TEST out/rp2040/love-ram.bin "(on silicon, from sram)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ rp2040-swd out/rp2040/love-ram.bin
+# test_trinkey -- the neokey trinkey m0 (samd21), all-mooncc thumb1, two sram stages, their layout verified
+test_trinkey: host
+	@echo TEST out/trinkey/firm-ram.bin
+	@$(MAKE) -C test/boards/trinkey || { echo "FAIL trinkey build (the layout verify is inside)"; exit 1; }
+	@echo "test_trinkey: firmware (all-mooncc thumb1, its usb cdc ours), OUR linker and flatten, two sram stages laid around the bootloader's, verified"
+test_trinkey_board: test_trinkey
+	@echo TEST out/trinkey/firm-ram.bin "(on silicon, from sram)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ trinkey-samba out/trinkey/firm-ram.bin
 # test_rp2350 -- the pico 2 (arm), all-mooncc thumb2sp: its battery and the swd probe, image defs verified
 test_rp2350: host
 	@echo TEST out/rp2350/firm.uf2
@@ -687,8 +695,8 @@ test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.hex "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.hex
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
-test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate
-	@echo "test_boards: eleven ports build and link -- mooncc and our linker, no emulator"
+test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32c6 test_ch32v203 test_teensy41 test_playdate test_trinkey
+	@echo "test_boards: twelve ports build and link -- mooncc and our linker, no emulator"
 test_mps2_build test_virt_build: test_%_build: host
 	@echo TEST out/$*/love.elf '(build)'
 	@$(MAKE) -C src/inle/$* || { echo "FAIL $* build"; exit 1; }

@@ -69,11 +69,8 @@
 #define GPREGRET_UF2   0x57u     // come up as the uf2 drive
 
 // --- core ----------------------------------------------------------------
-#define SCB_VTOR   0xE000ED08u
 #define SCB_AIRCR  0xE000ED0Cu
 #define SCB_CPACR  0xE000ED88u
-#define NVIC_ICER0 0xE000E180u
-#define NVIC_ICPR0 0xE000E280u
 
 // mkboot.l
 void arm_dsb_isb(void);
