@@ -236,7 +236,7 @@
        (digend j) (j < n && dig? (src j) ? (digend (j + 1)) j)
        ; does the last token, a number, end flush at i?
        (numat? i acc) (0 < i && !(ws? (src (i - 1))) && two? acc &&
-                       elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo) &&
+                       elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo ppnum) &&
                        4 < #(<acc) && string? ((<acc) 4) && 0 < #((<acc) 4) &&
                        ((<acc) 4 @ sp (#sp <= i && snip src (i - #sp) i = sp)))
        ; is the line being lexed a directive (its first token `#`)? there a `#` is # or ##
@@ -392,10 +392,10 @@
                                          (0 < w & 2147483648 ? (w - 4294967296) w)))
                                  (go j line (['num v line () (snip src i j)] . acc)))
                               (go (i + 1) line (['p "'" line] . acc))))
-                 ; a pp-number runs on through identifier chars (C11 6.4.8): a number flush
-                 ; against an identifier run, or digits past its suffix (7ef00000), becomes
-                 ; ('ppnum spelling), no number to the parser
-                 ((idh? c || dig? c) && numat? i acc)
+                 ; a pp-number runs on through identifier chars and dots (C11 6.4.8): a number flush
+                 ; against an identifier run, digits past its suffix (7ef00000) or a dot (2.6.39)
+                 ; becomes ('ppnum spelling), no number to the parser
+                 ((idh? c || dig? c || c = 46) && numat? i acc)
                   (: (pr j) (? (j < n && (idc? (src j) || src j = 46)) (pr (j + 1)) j)
                      j0 (pr i)
                      sp ((<acc) 4 + snip src i j0)

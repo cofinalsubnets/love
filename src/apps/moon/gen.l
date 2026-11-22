@@ -2821,8 +2821,41 @@
        (go 0 ""))
    ; an "i" operand: a constant -> the number, an address constant (a global, a function, a
    ; string, &a.b[k]) -> its "label+k" text, else 'no. a name a local shadows is no constant
+   ; an integer some of whose bits no constant decides: (value unknown-mask) as 64 unsigned bits, or () -- a
+   ; ?: on a runtime test keeps the bits its arms agree on, & | ^ and a shift by a constant carry the
+   ; mask, any other operator wants both sides whole. nothing is evaluated that a constant is not
+   (kbits w64 e)
+    (: top 18446744073709551616
+       (ok? n) (cint? n && 0 <= n && n < top)
+       (bxor a b) ((a | b) - (a & b))
+       (clr a m) (a - (a & m))
+       (pair v m) (ok? v && ok? m ? [(clr v m) m] ())
+       (num2 f a b) (: x (kbits w64 a) y (kbits w64 b) (two? x && two? y ? (f (x 0) (x 1) (y 0) (y 1)) ()))
+       (u64 v) ['cast 'ullong ['num v]]
+       (whole op va vb) (cfold w64 ['bin op (u64 va) (u64 vb)] @ r (pair r 0))
+       (cfold w64 e @ c
+          (? (cint? c) (pair c 0)
+             !(two? e) ()
+             (e @ ('cond c9 a b)
+                   (zfold w64 c9 @ t
+                      (cint? t ? (kbits w64 (t != 0 ? a b))
+                         (num2 (va \ ma \ vb \ mb \ pair va (ma | mb | bxor va vb)) a b)))
+                  ('cast . t . a . _)
+                   (kbits w64 a @ x
+                      (two? x ? (pair (cfold w64 ['cast t ['num (x 0)]]) (cfold w64 ['cast t ['num (x 1)]])) ()))
+                  ('bin . op . a . b . _)
+                   (num2 (va \ ma \ vb \ mb \
+                            (? (ma = 0 && mb = 0) (whole op va vb)
+                               (op = '&) (pair (va & vb) ((ma & (vb | mb)) | (mb & (va | ma))))
+                               (op = '|) (pair (va | vb) (clr (ma | mb) (va | vb)))
+                               (op = '^) (pair (bxor va vb) (ma | mb))
+                               (elem op '(shl shr) && mb = 0) (: v2 (whole op va vb) m2 (whole op ma vb)
+                                                             (two? v2 && two? m2 ? (pair (v2 0) (m2 0)) ()))
+                               ()))
+                         a b)
+                  ()))))
    (asmk g env e)
-    (: k (memk g e)
+    (: k (memk g e @ k0 (cint? k0 ? k0 (kbits !(ilp32? g) e @ r (two? r && r 1 = 0 ? (r 0) k0))))
        ; a block-scope static is its data label
        (stat x) (? !(two? x) x
                    (<x = 'var) (assoc <>x env @ (_ . 'g . l . _) ['var l]   ; a lo env's
@@ -2865,18 +2898,29 @@
    (asmfsafe txt fs)
     (any (w \ 0 <= findsub txt w) asmsp ? fs (map (f \ (two? f && <f = 'raw ? (f + ['fsafe]) f)) fs))
    (rawclean fs) (map (f \ (two? f && <f = 'raw && 2 < #f ? [<f <>f] f)) fs)
+   ; -S's side table: each blob laid while 'on, with the text it was written in. only a text of
+   ; data directives is kept, whose bytes any assembler lays alike; an instruction's stay bytes
+   asmtx {}
+   (asmdirs? s) ((: n #s
+                    (at i) (? (n <= i) 1 (elem (s i) [32 9 10]) (at (i + 1)) (s i = 46) (eol i) 0)
+                    (eol i) (? (n <= i) 1 (s i = 59) 0 (s i = 10) (at i) (eol (i + 1)))
+                    (at 0)))
+   (asmkeep bs txt) (peep asmtx 'on 0 && asmdirs? txt ? (pin asmtx 'l ([bs txt] . peep asmtx 'l ()), bs) bs)
    (asmbody g tgt neutral? txt)
     ; one blob resolves its labels inside it; an absolute label (pushl's) wants the link, so a
     ; template carrying one takes the runs path, its labels the function's own
     (neutral? || gas-plain? tgt txt && !(any (f \ two? f && <f = 'pushl) (gas-text tgt txt)) ?
-       [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
+       [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmkeep (asmho tgt prog (cg-refs prog {})) txt))]]
        (: pf "\(nlab g "\(g 'fn).asm")."
           r (gas-top-in tgt txt "" [1 6] pf (peep (g 'sects) (g 'fn) ".text"))
           _ (two? (r 4) ? (scare 'gas-alias <>(<(r 4))))      ; a template's alias has no C name to land on
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
           ; the prefix rides along: what dead code removes of the home, the record follows out
           (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf (r 3)] . g 'fasecs),
-           asmruns tgt home)))
+           ; a template that is one run and no more stands as its text under -S
+           (: rs (asmruns tgt home)
+              _ (two? rs && atom? >rs && two? <rs && <(<rs) = 'raw ? (asmkeep ((<rs) 1) txt) 0)
+              rs))))
    ; the canary sits at fp-16, under the frame link (fnreset keeps the cell): set from the guard
    ; at entry, compared on every way out. one blob each, every register it borrows put back
    (sspblob g k)
@@ -3134,7 +3178,8 @@
                                                ; x64's %a of an address constant is rip-relative, as gcc spells it, but under a
                                                ; segment, which holo lays only absolute; %P and %c stay absolute
                                                (md = 97 && tgt = 'x64 && !(cint? v) && findsub tmpl "s:" < 0) "\(v)(%rip)"
-                                               (gas-imm tgt v md)))
+                                               ; an immediate is spelled signed, as gcc and clang lay it
+                                               (gas-imm tgt (cint? v && 9223372036854775807 < v ? (v - 18446744073709551616) v) md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
                          ; a v register: plain is v, s h d b q its scalar views; x64's is xmm, x too
