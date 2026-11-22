@@ -1089,6 +1089,26 @@ for dt in x64 a64; do
   grep -q 'nop\|\.quad' "$ho/.dso.s" && fail "-t $dt -S: a template that is not all data, or names a symbol, stood as text"
 done
 (cd "$ho" && moonrun -S .dso.c && [ -s .dso.s ]) || fail "-S with no -o did not lay FILE.s"
+# an "i" operand some runtime test cannot move is a constant: the bits its ?: arms differ in are
+# masked away (arm64's PIE_E0 under lpa2); one a runtime value reaches still refuses
+cat > "$ho/.kb.c" <<'DSEOF'
+extern int rt(void); extern _Bool ng;
+/* a pte: two runtime terms under bits no index reads, and the four an index is made of */
+#define PTE(x) ((ng ? (1UL << 11) : 0) | (rt() ? 0UL : (3UL << 8)) | (1UL << 10) | (x))
+#define IDX(p) ((((p) & (1UL << 54)) >> (54 - 3)) | (((p) & (1UL << 53)) >> (53 - 2)) | (((p) & (1UL << 51)) >> (51 - 1)) | (((p) & (1UL << 6)) >> 6))
+#define B(i) ((((i) & 8UL) << 51) | (((i) & 4UL) << 51) | (((i) & 2UL) << 50) | (((i) & 1UL) << 6))
+#define T(perm, i) (((perm) & 0xfUL) << (IDX(PTE(B(i))) * 4))
+int main(void) {
+  asm volatile("\n.ascii \"->K %0\"" : : "i" (T(0x8UL, 5) | T(0xcUL, 7) | T(0x8UL, 13) | T(0xcUL, 15) | T(0xaUL, 8) | T(0xeUL, 10) | T(0x8UL, 12) | T(0xcUL, 14)));
+#ifdef BAD
+  asm volatile("\n.ascii \"->B %0\"" : : "i" (PTE(0) >> 8));
+#endif
+  return 0;
+}
+DSEOF
+# arm64's PIE_E1 under lpa2, the value clang lays: 0xcc880e0ac0800000, spelled signed
+moonrun -S -o "$ho/.kb.s" "$ho/.kb.c" && grep -q '^\.ascii "->K [$]-3708698853797527552"' "$ho/.kb.s" || fail "an asm immediate its runtime terms are masked out of is not folded to clang's value"
+moonrun -DBAD -S -o "$ho/.kb.s" "$ho/.kb.c" > "$ho/.kb.err" 2>&1; grep -q 'not a constant' "$ho/.kb.err" || fail "an asm immediate a runtime bit reaches was not refused"
 dsrt x64 "$(command -v as)" "$ho/.dso.c" test/cc/*.c
 dsrt a64 "$(command -v aarch64-linux-gnu-as)" "$ho/.dso.c" test/cc/*.c
 echo "mooncc: -S assembles to -c's object by holo and by gas, an offsets template its text"
@@ -2279,6 +2299,11 @@ long keep(long a, long n) { long s = 0; for (long i = 0; i < n; i++) s += g(i + 
 long early(long x) { if (x < 0) return -1; return g(x) + 1; }
 asm(".globl lone\n.type lone, %function\nlone: ret\n.size lone, .-lone");
 EOF
+# -msign-return-address is -mbranch-protection's older spelling: non-leaf lays pac-ret's object, all refuses
+printf 'int g(int); int f(int x) { return g(x) + 1; }\n' > "$ho/.sra.c"
+moonrun -t a64 -mbranch-protection=pac-ret -c -o "$ho/.sra1.o" "$ho/.sra.c" && moonrun -t a64 -msign-return-address=non-leaf -c -o "$ho/.sra2.o" "$ho/.sra.c" &&
+  cmp -s "$ho/.sra1.o" "$ho/.sra2.o" || fail "-msign-return-address=non-leaf is not -mbranch-protection=pac-ret"
+moonrun -t a64 -msign-return-address=all -c -o /dev/null "$ho/.sra.c" > /dev/null 2>&1; [ $? -eq 2 ] || fail "-msign-return-address=all not refused"
 moonrun -t a64 -O2 -mcmodel=tiny -fasynchronous-unwind-tables -mbranch-protection=pac-ret -c "$ho/.uwt.c" -o "$ho/.uwt.o" \
   || fail "mooncc -t a64: -mcmodel=tiny -fasynchronous-unwind-tables"
 uw=$(readelf -wF "$ho/.uwt.o")

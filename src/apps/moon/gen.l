@@ -2821,8 +2821,41 @@
        (go 0 ""))
    ; an "i" operand: a constant -> the number, an address constant (a global, a function, a
    ; string, &a.b[k]) -> its "label+k" text, else 'no. a name a local shadows is no constant
+   ; an integer some of whose bits no constant decides: (value unknown-mask) as 64 unsigned bits, or () -- a
+   ; ?: on a runtime test keeps the bits its arms agree on, & | ^ and a shift by a constant carry the
+   ; mask, any other operator wants both sides whole. nothing is evaluated that a constant is not
+   (kbits w64 e)
+    (: top 18446744073709551616
+       (ok? n) (cint? n && 0 <= n && n < top)
+       (bxor a b) ((a | b) - (a & b))
+       (clr a m) (a - (a & m))
+       (pair v m) (ok? v && ok? m ? [(clr v m) m] ())
+       (num2 f a b) (: x (kbits w64 a) y (kbits w64 b) (two? x && two? y ? (f (x 0) (x 1) (y 0) (y 1)) ()))
+       (u64 v) ['cast 'ullong ['num v]]
+       (whole op va vb) (cfold w64 ['bin op (u64 va) (u64 vb)] @ r (pair r 0))
+       (cfold w64 e @ c
+          (? (cint? c) (pair c 0)
+             !(two? e) ()
+             (e @ ('cond c9 a b)
+                   (zfold w64 c9 @ t
+                      (cint? t ? (kbits w64 (t != 0 ? a b))
+                         (num2 (va \ ma \ vb \ mb \ pair va (ma | mb | bxor va vb)) a b)))
+                  ('cast . t . a . _)
+                   (kbits w64 a @ x
+                      (two? x ? (pair (cfold w64 ['cast t ['num (x 0)]]) (cfold w64 ['cast t ['num (x 1)]])) ()))
+                  ('bin . op . a . b . _)
+                   (num2 (va \ ma \ vb \ mb \
+                            (? (ma = 0 && mb = 0) (whole op va vb)
+                               (op = '&) (pair (va & vb) ((ma & (vb | mb)) | (mb & (va | ma))))
+                               (op = '|) (pair (va | vb) (clr (ma | mb) (va | vb)))
+                               (op = '^) (pair (bxor va vb) (ma | mb))
+                               (elem op '(shl shr) && mb = 0) (: v2 (whole op va vb) m2 (whole op ma vb)
+                                                             (two? v2 && two? m2 ? (pair (v2 0) (m2 0)) ()))
+                               ()))
+                         a b)
+                  ()))))
    (asmk g env e)
-    (: k (memk g e)
+    (: k (memk g e @ k0 (cint? k0 ? k0 (kbits !(ilp32? g) e @ r (two? r && r 1 = 0 ? (r 0) k0))))
        ; a block-scope static is its data label
        (stat x) (? !(two? x) x
                    (<x = 'var) (assoc <>x env @ (_ . 'g . l . _) ['var l]   ; a lo env's

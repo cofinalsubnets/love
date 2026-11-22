@@ -1599,6 +1599,10 @@
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
           ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ; its older spelling: non-leaf is pac-ret, all would sign a leaf
+          (("-msign-return-address=" + w) . r)
+           (flags r (pin t 'bp (w @ "non-leaf" (bpof "pac-ret") "none" ()
+                                   _ (udie 2 "cc: -msign-return-address=\(w) -- mooncc lays: none non-leaf"))))
           ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
