@@ -21,7 +21,10 @@
 //         64 flat (the colours answered as one row of w*h, not [h w]),
 //         128 seen (a texture's index plus 2^24 drawn only behind the nearest lens, plus
 //         2 * 2^24 only before it: through a pane the one, else the other; a lens a glass
-//         less 2^24, the only glass that counts);
+//         less 2^24, the only glass that counts),
+//         256 edge (an untextured triangle's u an edge: of its second colour it takes
+//         0.5 + u, 0 to 1, in the sun's stead, so a cloud's edge is a pixel's however far
+//         apart its corners);
 //         and an exposure k, a colour c 0 to 255 shown as 255 (1 - e^(-k c / 255)), 0 none;
 //         and a shadow's bias, in the sun's depth;
 //         and the eye's right and up, its near and far, a lead and a soft (view depth): a batch
@@ -33,7 +36,7 @@
 //         sun, 16 numbers, and depth, a depth answer through sun, say it sees past
 #include "love.h"
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_edge = 256, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11,   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
        rz_par = 32768, rz_band = 32, rz_pv = 9, rz_bk = 32768 };   // a frame big enough to share, in bands of rows;
                        // rz_bk: past any frame's count of bands, rz_side_max / rz_band
@@ -71,6 +74,7 @@ struct rz {
 
 static love_inline intptr_t rz_ifloor(flo_t x) { intptr_t const i = (intptr_t) x; return i - (x < (flo_t) i); }
 static love_inline flo_t rz_num(struct tray *v, uintptr_t i) { return tray_get_flo(v, i); }
+static love_inline flo_t rz_unit(flo_t x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
 // texture t of the list: its levels, each a rank-2 tray of colours; none if it is not one
 static int rz_level(word e, struct rz_tex *lv) {
@@ -184,7 +188,7 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
  int64_t const *const ex = t->ex, *const ey = t->ey, *const ec = t->ec;
  intptr_t const x0 = t->x0, x1 = t->x1;
  int const nk = t->nk, persp = t->persp, shade = t->shade, zo = t->zo;
- int const cls = r->cls, gzp = r->gzp, dith = (r->flags & rz_dither) != 0, under = r->flags & rz_under;
+ int const cls = r->cls, gzp = r->gzp, dith = (r->flags & rz_dither) != 0, under = r->flags & rz_under, edge = !nlv && (r->flags & rz_edge);
  intptr_t const glass = r->glass, add = r->add;
  flo_t const tone = r->tone, *const u8 = r->u8, *const tl = r->tl;
  // the row's run inside all three edges, found by exact division: the box outside is never walked
@@ -213,7 +217,7 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
    else if (z < dz[x] && !(under && o[x] >= 0) && (!cls || (cls == 1 ? gz && z > gz[x] : !gz || z < gz[x])))
     dz[x] = z, td[x >> 3] = 1; }
   return; }
- int const plain = !under && !cls && !glass && !add && !fs && !(tone > 0) && !dith && !shade;   // none of those asked a pixel
+ int const plain = !under && !cls && !glass && !add && !fs && !(tone > 0) && !dith && !shade && !edge;   // none of those asked a pixel
  if (plain && !nlv) {
   for (intptr_t x = xs; x < xe; x++) {
    float const z = (float) a[0];
@@ -243,7 +247,7 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
   if (a[0] >= -1 && a[0] <= 1   // inside all three edges: the run is exact
       && z < dz[x] && !(under && o[x] >= 0) && (!cls || (cls == 1 ? gz && z > gz[x] : !gz || z < gz[x]))) {
   flo_t const w = 1 / a[1], s = persp ? w : 1,
-              sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : 1;
+              sun = shade ? rz_vis(r, a[10] * s, a[11] * s, a[12] * s) : edge ? rz_unit((flo_t) 0.5 + a[2] * s) : 1;
   flo_t c[3] = { (a[4] + a[7] * sun) * s * 255, (a[5] + a[8] * sun) * s * 255, (a[6] + a[9] * sun) * s * 255 };
   int hole = 0;
   flo_t tint[3] = { 1, 1, 1 };
@@ -760,8 +764,63 @@ static lvm(lvm_lace) {
   else { flo_t const v = toflo(c); for (uintptr_t i = 0; i < n; i++) d[i * k + j] = v; } }
  love_musttail return Answer(word(o)); }
 
+// (abut l): the trays of the list l laid one after another, as one float tray; () when one
+// is not a tray
+static lvm(lvm_abut) {
+ uintptr_t n = 0;
+ for (word l = Sp[0]; chainp(l); l = B(l)) {
+  if (!galaxyp(A(l))) love_musttail return Answer(ZeroPoint);
+  n += tray_nelem(tray(A(l))); }
+ uintptr_t const w = b2w(tray_bytes(love_R, 1, n));
+ Have(w);
+ struct tray *o = ini_tray((struct tray*) Hp, love_R, 1); Hp += w;
+ o->shape[0] = n;
+ flo_t *d = tray_data(o);
+ for (word l = Sp[0]; chainp(l); l = B(l)) {
+  struct tray *const t = tray(A(l));
+  uintptr_t const m = tray_nelem(t);
+  for (uintptr_t i = 0; i < m; i++) *d++ = tray_get_flo(t, i); }
+ love_musttail return Answer(word(o)); }
+
+// (mix-quads x C W q): x at the n points of each quad q names, one after another: point j
+// of quad i the sum over t of W t j times x at C t (q i), taken in t's order; C a list of
+// trays over all the quads, W one of trays n long; () when they are not, or a name is past
+// them or x
+static lvm(lvm_mix_quads) {
+ word const x = Sp[0], q = Sp[3];
+ if (!galaxyp(x) || !galaxyp(q)) love_musttail return Answerp(3, ZeroPoint);
+ uintptr_t const nx = tray_nelem(tray(x)), nq = tray_nelem(tray(q));
+ uintptr_t n = 0, nc = (uintptr_t) -1;
+ int seen = 0;
+ word c = Sp[1], w = Sp[2];
+ for (; chainp(c) && chainp(w); c = B(c), w = B(w)) {
+  if (!galaxyp(A(c)) || !galaxyp(A(w))) love_musttail return Answerp(3, ZeroPoint);
+  uintptr_t const m = tray_nelem(tray(A(w))), l = tray_nelem(tray(A(c)));
+  if (seen && m != n) love_musttail return Answerp(3, ZeroPoint);
+  n = m, seen = 1, nc = l < nc ? l : nc;
+  for (uintptr_t i = 0; i < l; i++)
+   if ((uintptr_t) tray_get_int(tray(A(c)), i) >= nx) love_musttail return Answerp(3, ZeroPoint); }
+ if (chainp(c) || chainp(w)) love_musttail return Answerp(3, ZeroPoint);
+ for (uintptr_t i = 0; i < nq; i++)
+  if ((uintptr_t) tray_get_int(tray(q), i) >= nc) love_musttail return Answerp(3, ZeroPoint);
+ uintptr_t const sz = b2w(tray_bytes(love_R, 1, n * nq));
+ Have(sz);
+ struct tray *o = ini_tray((struct tray*) Hp, love_R, 1); Hp += sz;
+ o->shape[0] = n * nq;
+ flo_t *d = tray_data(o);
+ for (uintptr_t p = 0; p < n * nq; p++) d[p] = 0;
+ struct tray *const v = tray(Sp[0]), *const tq = tray(Sp[3]);
+ for (c = Sp[1], w = Sp[2]; chainp(c); c = B(c), w = B(w)) {
+  struct tray *const tc = tray(A(c)), *const tw = tray(A(w));
+  for (uintptr_t i = 0; i < nq; i++) {
+   flo_t const a = tray_get_flo(v, (uintptr_t) tray_get_int(tc, (uintptr_t) tray_get_int(tq, i)));
+   for (uintptr_t j = 0; j < n; j++) d[i * n + j] += tray_get_flo(tw, j) * a; } }
+ love_musttail return Answerp(3, word(o)); }
+
 // FIXME namespace these
 LvDef("facets", raster, 8, "lore");
 LvDef("frame-bytes", frame_bytes, 3, "lore");
 LvDef("frame-paint", frame_paint, 5, "lore");
 LvDef("lace", lace, 1, "lore");
+LvDef("abut", abut, 1, "lore");
+LvDef("mix-quads", mix_quads, 4, "lore");

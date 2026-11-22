@@ -22,7 +22,8 @@
 //                     the sun's view, kept: its depths, SW x SH floats from OFF rows top first,
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   sky ID TONE       the next frame's sky: buf ID drawn last, only where the frame is bare,
-//                     exposed by TONE, onto a glow kept there or through a glass's tint
+//                     exposed by TONE, onto a glow kept there or through a glass's tint; its
+//                     u an edge, as facets's flag 256 takes it
 //   spots W H NS OFF  the next frame's spots, W by H, as show takes them: NS pixels' indices
 //                     then their words, floats at OFF, laid in its sky in the sky's stead
 //   glow RX RY RZ UX UY UZ ZN ZF LEAD SOFT
@@ -208,9 +209,9 @@ static char const vsrc[] =
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
 // added where something drew), 3 the same glass on what is bare (the tint kept, the sheen),
-// 4 its mark on what is bare, half an alpha, 5 the sky under what is bare, asking a copy of
-// the marks: 254 its alpha where it was bare alone, 253 onto a glow or through a glass; a spot
-// laid for it there in its stead
+// 4 its mark on what is bare, half an alpha, 5 the sky under what is bare, its u an edge as
+// facets's 256 takes it, asking a copy of the marks: 254 its alpha where it was bare alone,
+// 253 onto a glow or through a glass; a spot laid for it there in its stead
 static char const fsrc[] =
  "#version 300 es\n"
  "#extension GL_EXT_blend_func_extended : enable\n"
@@ -229,7 +230,7 @@ static char const fsrc[] =
  "#else\n"
  "out vec4 o; vec4 o1;\n"
  "#endif\n"
- "void main(){ vec3 c = (col + scol * (sun != 0 ? vis() : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
+ "void main(){ vec3 c = (col + scol * (sun != 0 ? vis() : mode == 5 ? clamp(0.5 + uv.x, 0.0, 1.0) : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
  " if (cls != 0) { float d = texelFetch(lz, ivec2(gl_FragCoord.xy), 0).r, z = gl_FragCoord.z;\n"
  "  if (cls == 1 ? !(d < 1.0 && z > d) : !(d >= 1.0 || z < d)) discard; }\n"
  " if (has != 0) { vec4 k = texture(tx, uv / ts); if (k.a < 0.5) discard; if (gl) t = k.rgb; else c *= k.rgb; }\n"

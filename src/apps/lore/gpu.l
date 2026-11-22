@@ -41,8 +41,8 @@
 ;                                (): one named alike holds alike, so is not summed again, and
 ;                                one named 'once is laid anew each frame, unsummed, in a slot
 ;                                of its own. sk [verts tris tone] a sky drawn under what is bare
-;                                as facets draws it with flags 96, its pixels bare alone 2^32
-;                                more, or ()
+;                                as facets draws it with flags 352, 11 a vertex, its pixels bare
+;                                alone 2^32 more, or ()
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
@@ -207,7 +207,7 @@
  ; ..the sky, laid each frame, and the spots in it a frame w by h asks
  (sky! s sk w h) (? !(two? sk) ()
    (: _ (#sk > 3 && two? (sk 3) ? (gpu-spots (s 'g) w h (sk 3)) ())
-     (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r)))
+     (once s 'sky (sk 0) (sk 1) 11 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r)))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
  (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
  ; ..the textures, each laid again only when it is not the one laid

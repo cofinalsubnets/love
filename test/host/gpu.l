@@ -89,13 +89,13 @@
            (lit fl sun) (apart (facets W H -1 mat [sv11] [tris] X [(so fl) (sun 0) (sun 1)]) (gpu-facets s W H -1 mat [sv11] [tris] X [(so fl) (sun 0) (sun 1)] () () ()))
            su [(lit 64 [sv sd]) (lit 192 [sv sd]) (lit 64 [() ()]) (lit 64 [sv sd])]
            ; ..a sky under what is bare, as a sky after the scene: onto the glow kept there, through
-           ; the glass, and where the frame was bare alone, 2^32 more
-           skv (gem-tray [32] [-1.0 -1.0 0.95  0.0 0.0  0.2 0.4 0.9   1.0 -1.0 0.95  0.0 0.0  0.3 0.5 0.8
-                                1.0  1.0 0.95  0.0 0.0  0.6 0.7 0.9  -1.0  1.0 0.95  0.0 0.0  0.1 0.2 0.5])
+           ; the glass, and where the frame was bare alone, 2^32 more; a cloud's edge down its middle
+           skv (gem-tray [44] [-1.0 -1.0 0.95  -2.0 0.0  0.2 0.4 0.9  0.6 0.5 0.0   1.0 -1.0 0.95  2.0 0.0  0.3 0.5 0.8  0.6 0.5 0.0
+                                1.0  1.0 0.95  2.0 0.0  0.6 0.7 0.9  0.3 0.2 0.0  -1.0  1.0 0.95  -2.0 0.0  0.1 0.2 0.5  0.3 0.2 0.0])
            skt (iota 8 * 0 + gem-tray [8] [0 1 2 -1  0 2 3 -1])
            (under T) (: sc (facets W H -1 mat [verts gv] T X (o 64))
                       gf (gpu-facets s W H -1 mat [verts gv] T X (o 64) () [skv skt 1.5] ())
-                      [(apart (facets W H sc mat [skv] [skt] [] (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 1.5])) gf)
+                      [(apart (facets W H sc mat [skv] [skt] [] [(gem-tray [7] [0.0 0.0 0.0 0.0 0.0 352.0 1.5])]) gf)
                        (net (gf >> 32 = 1) != net (sc = -1)) (net (sc = -1))])
            sk [(under [ta tg]) (under [ta tr])]
            ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
