@@ -1898,7 +1898,7 @@
        ; the others sit back from it, so only their differences mean anything (`(662b-661b) / 4`).
        ; anything unmeasurable between leaves the expression refused
        (vat e acc) (trap val e (\ a b (gtoks (ssub e) @ ts (lbloffs ts acc @ m (two? m ? (gimm (lsub ts m)) (scare a b))))))
-       (lsub ts m) (map (t \ lkey t @ k (two? (assoc k m) ? ['num (assoc k m @ x <>x)] t)) ts)
+       (lsub ts m) (map (t \ (t = ['sym "."] ? "." (lkey t)) @ k (two? (assoc k m) ? ['num (assoc k m @ x <>x)] t)) ts)
        ; a backward local label or a named one, by the name its line lays
        (lkey t) (t @ ('lref v 98) (show v) ('sym s) (s != "." ? s ()) _ ())
        ; a line's leading labels and the rest -> [names rest]
@@ -1930,7 +1930,8 @@
                               (go >l 1 (off + k) (map (v \ [v (0 - (off + k))]) (filter (v \ !(two? (assoc v m))) hit) + m))))))))
            (skip l d) (? (atom? l) 'none (d = 0) l
                          (dname <l @ w (skip >l (? (w = ".popsection") (d + 1) (w = ".pushsection") (d - 1) d))))
-           (go acc () 0 ()))
+           ; `.` is here: the walk measures from the start, every label behind it
+           (any (t \ t = ['sym "."]) ts ? (go acc 1 0 [["." 0]]) (go acc () 0 ())))
        ; `.reloc off, type, expr` on the zero word just laid at off -> acc with that word as its
        ; expression; the offset measured back to the section's one opening, else ()
        gf-rtys {"R_AARCH64_PREL32" [4 " - ."] "R_AARCH64_ABS32" [4 ""] "R_AARCH64_ABS64" [8 ""]}
