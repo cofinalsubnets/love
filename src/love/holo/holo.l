@@ -165,7 +165,7 @@
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
              'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'addpc 1 'l32r 2
              'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'testb 2 'zxl1 1 'zxl2 1 'zxml 3 'ldu1l 3 'ldu2l 3 'ldxbl 5 'ldxhl 5 'set 2 'set1 2 'br 2 'br8 2
-             'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
+             'asis 1 'la 2 'lal 3 'lalp 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
@@ -312,7 +312,7 @@
    ;; chunk and pessimistic distance, or () to keep it; any width (riscv drops a whole jal).
    ;; `longs` names labels that stay long (the object writer's weak set, kept as relocations).
    ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there,
-   ;; and (flal f g k p) a single's bits k.
+   ;; and so (lalp d l p), and (flal f g k p) a single's bits k.
    ;; its span may cross aligns, each counted at its widest pad on top of the distance.
    ;; 'fuse, (\ cmp br rel -> bytes | ()): one encoding of a cmp and the br right after it, asked
    ;; only where nothing on either path reads the flags the pair no longer sets.
@@ -370,8 +370,8 @@
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
-                        (elem <ins '(jmp br lal flal))
-                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) 'lal (pool-of (ins 3) era) (pool-of (ins 4) era))
+                        (elem <ins '(jmp br lal lalp flal))
+                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) ('lal || 'lalp) (pool-of (ins 3) era) (pool-of (ins 4) era))
                            sc (imm? t ? (short-of ins (rev c) (t - pa)))
                            (two? sc ?
                               (: r (revonto sc items 0)          ; <r counts bytes, not items

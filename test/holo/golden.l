@@ -1460,6 +1460,12 @@
    _ (chk-eq "t2.rlx.lal.mid" 2008 (#(txl 'r0 'p 1000)))
    _ (chk-eq "t2.rlx.lal.far" 4212 (#(txl 'r0 'p 2100)))
    _ (chk-eq "t2.rlx.lal.num" "45f27860c1f23420" (snip (hexs (txl 'r0 305419896 2100)) 0 16))
+   ;; lalp is lal near; far it loads the pool word from the pc, lap's pair and an ldr, no absolute half
+   (txp d n) (tx ([['lalp d 'x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
+   _ (chk-eq "t2.rlx.lalp.near" "004800bf01020304" (hexs (txp 'r0 0)))
+   _ (chk-eq "t2.rlx.lalp.far" "41f26800c0f2000078440068" (snip (hexs (txp 'r0 2100)) 0 24))
+   _ (chk-eq "t2.rlx.lalp.far.len" 4216 (#(txp 'r0 2100)))
+   _ (chk-eq "t2.rlx.lalp.far.hi" "41f26c08c0f20008f844d8f80080" (snip (hexs (txp 'r8 2100)) 0 28))
 
    ;; -- the thumb1 backend: armv6-m, 16-bit, two-address, low registers, no movw/movt (`li`
    ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc
