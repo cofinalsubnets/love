@@ -22,7 +22,10 @@
 //                     the sun's view, kept: its depths, SW x SH floats from OFF rows top first,
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   sky ID TONE       the next frame's sky: buf ID drawn last, only where the frame is bare,
-//                     exposed by TONE, onto a glow kept there or through a glass's tint
+//                     exposed by TONE, onto a glow kept there or through a glass's tint; its
+//                     u an edge, as facets's flag 256 takes it
+//   spots W H NS OFF  the next frame's spots, W by H, as show takes them: NS pixels' indices
+//                     then their words, floats at OFF, laid in its sky in the sky's stead
 //   glow RX RY RZ UX UY UZ ZN ZF LEAD SOFT
 //                     the next frame's glows as facets has them: a buf all glow turned to face
 //                     the eye, each vertex u along R and v along U; a glow seen as much as what is
@@ -68,7 +71,7 @@ enum {
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
- GL_TEXTURE6 = 0x84C6, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
+ GL_TEXTURE6 = 0x84C6, GL_TEXTURE7 = 0x84C7, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
  GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11, GL_ANY_SAMPLES_PASSED = 0x8C2F, GL_QUERY_RESULT = 0x8866, GL_POINTS = 0 };
@@ -167,6 +170,7 @@ struct helper {
  GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz, us_zk;
  GLuint kt[2]; int kv[2], ks;   // the frames kept unread, none of it the cpu's: a copy each, the next drawn over neither
  GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot
+ int opend; GLint u_sp; int sW, sH;   // ..laid there for the next frame's sky, where it goes under glass too
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -205,8 +209,9 @@ static char const vsrc[] =
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
 // added where something drew), 3 the same glass on what is bare (the tint kept, the sheen),
-// 4 its mark on what is bare, half an alpha, 5 the sky under what is bare, asking a copy of
-// the marks: 254 its alpha where it was bare alone, 253 onto a glow or through a glass
+// 4 its mark on what is bare, half an alpha, 5 the sky under what is bare, its u an edge as
+// facets's 256 takes it, asking a copy of the marks: 254 its alpha where it was bare alone,
+// 253 onto a glow or through a glass; a spot laid for it there in its stead
 static char const fsrc[] =
  "#version 300 es\n"
  "#extension GL_EXT_blend_func_extended : enable\n"
@@ -214,7 +219,7 @@ static char const fsrc[] =
  "uniform sampler2D tx; uniform vec2 ts; uniform int has; uniform vec3 fog; uniform vec2 fz; uniform float tone; uniform int mode;\n"
  "uniform highp sampler2D fbt; uniform highp sampler2D gbt; uniform int fg;\n"
  "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
- "uniform highp sampler2D dz; uniform vec4 gz;\n"
+ "uniform highp sampler2D dz; uniform vec4 gz; uniform highp sampler2D ov5; uniform int sp;\n"
  "float lit(int i, int j, float z) { return i < 0 || j < 0 || i >= ss.x || j >= ss.y || z <= texelFetch(sm, ivec2(i, j), 0).r ? 1.0 : 0.0; }\n"
  "float vis() { float sx = (lp.x * 0.5 + 0.5) * float(ss.x) - 0.5, sy = (0.5 - lp.y * 0.5) * float(ss.y) - 0.5, fi = floor(sx), fj = floor(sy),\n"
  "  fx = sx - fi, fy = sy - fj, z = lp.z - bias; int i = int(fi), j = int(fj);\n"
@@ -225,7 +230,7 @@ static char const fsrc[] =
  "#else\n"
  "out vec4 o; vec4 o1;\n"
  "#endif\n"
- "void main(){ vec3 c = (col + scol * (sun != 0 ? vis() : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
+ "void main(){ vec3 c = (col + scol * (sun != 0 ? vis() : mode == 5 ? clamp(0.5 + uv.x, 0.0, 1.0) : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
  " if (cls != 0) { float d = texelFetch(lz, ivec2(gl_FragCoord.xy), 0).r, z = gl_FragCoord.z;\n"
  "  if (cls == 1 ? !(d < 1.0 && z > d) : !(d >= 1.0 || z < d)) discard; }\n"
  " if (has != 0) { vec4 k = texture(tx, uv / ts); if (k.a < 0.5) discard; if (gl) t = k.rgb; else c *= k.rgb; }\n"
@@ -235,6 +240,7 @@ static char const fsrc[] =
  "  if (d > -1.0 && d < 1.0) c *= clamp((2.0 * gz.x * gz.y / (gz.y + gz.x - d * (gz.y - gz.x)) - w + gz.z) / gz.w, 0.0, 1.0); }\n"
  " if (mode == 5) { ivec2 p = ivec2(gl_FragCoord.xy); vec4 k = texelFetch(fbt, p, 0); float A = floor(k.a * 255.0 + 0.5);\n"
  "  if (A > 192.0) discard;\n"
+ "  if (sp != 0) { vec4 s = texelFetch(ov5, p, 0); if (s.a > 0.5) c = floor(s.rgb * 255.0 + 0.5); }\n"
  "  vec3 g = floor(vec3(k.b, k.g, k.r) * 255.0 + 0.5); float a = 254.0 / 255.0;\n"
  "  if (g != vec3(0.0)) c += g, a = 253.0 / 255.0;\n"
  "  else if (A > 0.0) { vec4 f = texelFetch(gbt, p, 0); vec3 v; float sh;\n"
@@ -271,7 +277,7 @@ static char const ufsrc[] =
 static char const sfsrc[] =
  "#version 300 es\n"
  "precision highp float; precision highp int; uniform sampler2D t; uniform sampler2D ov; uniform vec4 r; uniform vec2 wh; uniform int swz; uniform float zk; out vec4 o;\n"
- "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y) / zk, uv = (p - r.xy) / (r.zw - r.xy);\n"
+ "void main(){ vec2 p = vec2(gl_FragCoord.x, wh.y - gl_FragCoord.y) / zk, ts = vec2(textureSize(t, 0)), uv = clamp((p - r.xy) / (r.zw - r.xy), 0.5 / ts, 1.0 - 0.5 / ts);\n"
  " vec4 k = texture(t, uv); o = vec4(swz != 0 ? k.bgr : k.rgb, 1.0);\n"
  " if (swz > 1 && abs(k.a * 255.0 - 254.0) < 0.5) { vec4 s = texture(ov, uv); if (s.a > 0.5) o = vec4(s.rgb, 1.0); } }\n";
 // ..spots: a pixel's index and its word, laid on a texture of the frame's size
@@ -373,6 +379,7 @@ static int setup(struct helper *H, int x) {
  H->u_bb = glGetUniformLocation(H->prog, "bb"); H->u_br = glGetUniformLocation(H->prog, "br");
  H->u_bu = glGetUniformLocation(H->prog, "bu"); H->u_gz = glGetUniformLocation(H->prog, "gz");
  glUniform1i(glGetUniformLocation(H->prog, "dz"), 6);
+ glUniform1i(glGetUniformLocation(H->prog, "ov5"), 7); H->u_sp = glGetUniformLocation(H->prog, "sp");
  glPixelStorei(GL_PACK_ALIGNMENT, 4); glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
  glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
  return 1; }
@@ -504,14 +511,15 @@ static void cmd_win(struct helper *H, unsigned long xid) {
  dprintf(H->out, "ok\n"); }
 
 // ..texture t over the rect x0 y0 x1 y1 of the picture's window, top down, each of its pixels
-// zk of the surface's; swizzled, the frame's own
-static void lay(struct helper *H, GLuint t, int swz, float x0, float y0, float x1, float y1) {
+// zk of the surface's; swizzled, the frame's own; padded, its edges run on over all the window
+static void lay(struct helper *H, GLuint t, int swz, int pad, float x0, float y0, float x1, float y1) {
  int const k = H->zk;
  glBindTexture(GL_TEXTURE_2D, t);
  glUniform1i(H->us_swz, swz);
  glUniform4f(H->us_r, x0, y0, x1, y1); glUniform2f(H->us_wh, (float) H->vw, (float) H->vh); glUniform1f(H->us_zk, (float) k);
  glViewport(0, 0, H->vw, H->vh);
- glScissor((GLint) x0 * k, H->vh - (GLint) y1 * k, (GLsizei) (x1 - x0) * k, (GLsizei) (y1 - y0) * k);
+ if (pad) glScissor(0, H->vh - H->sH * k, H->sW * k, H->sH * k);
+ else glScissor((GLint) x0 * k, H->vh - (GLint) y1 * k, (GLsizei) (x1 - x0) * k, (GLsizei) (y1 - y0) * k);
  glDrawArrays(GL_TRIANGLES, 0, 3); }
 
 // ..words w by h at p, as the texture shown
@@ -585,7 +593,7 @@ static void cmd_show(struct helper *H, char *l) {
  if (H->hook && !onwin(H, W, Hh)) { H->hook(H->ctx, 1, 0, 0); dprintf(H->out, "ok\n"); return; }
  EGLint sw = W, sh = Hh;
  if (H->hook) eglQuerySurface(H->d, H->ws, EGL_WIDTH, &sw), eglQuerySurface(H->d, H->ws, EGL_HEIGHT, &sh);
- H->vw = sw, H->vh = sh, H->zk = sw / W < sh / Hh ? sw / W : sh / Hh;
+ H->vw = sw, H->vh = sh, H->sW = W, H->sH = Hh, H->zk = sw / W < sh / Hh ? sw / W : sh / Hh;
  if (H->zk < 1) H->zk = 1;
  glBindFramebuffer(GL_FRAMEBUFFER, 0);
  glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
@@ -594,14 +602,14 @@ static void cmd_show(struct helper *H, char *l) {
  glEnable(GL_SCISSOR_TEST);
  if (kept && ns) glActiveTexture(GL_TEXTURE1), glBindTexture(GL_TEXTURE_2D, H->ot), glActiveTexture(GL_TEXTURE0);
  GLuint t = kept ? H->kt[kept - 1] : put(H, p, w, h);
- if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh));
+ if (t) lay(H, t, kept ? 1 + (ns > 0) : 0, 1, (float) ax, (float) ay, (float) (ax + W), (float) (ay + Hh));
  char *s = l + k;
  for (int i = 0, x0, y0, x1, y1, j; i < n; i++, s += j) {
   if (sscanf(s, "%d %d %d %d%n", &x0, &y0, &x1, &y1, &j) != 4 || x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0 || x1 > W || y1 > Hh) break;
   size_t const m = 4 * (size_t) (x1 - x0) * (y1 - y0);
   unsigned char const *q = bytes(H, at, m);
   if (!q || !(t = put(H, q, x1 - x0, y1 - y0))) break;
-  lay(H, t, 0, (float) x0, (float) y0, (float) x1, (float) y1);
+  lay(H, t, 0, 0, (float) x0, (float) y0, (float) x1, (float) y1);
   at += m; }
  glDisable(GL_SCISSOR_TEST);
  eglSwapBuffers(H->d, H->ws);
@@ -660,6 +668,12 @@ static void cmd_sun(struct helper *H, char *args) {
 static void cmd_sky(struct helper *H, int id, double tone) {
  H->sky = id, H->stone = (float) tone, H->spend = 1;
  dprintf(H->out, "ok\n"); }
+// ..ns spots at off for the next frame w by h, laid in its sky as it is drawn
+static void cmd_spots(struct helper *H, int w, int h, int ns, size_t off) {
+ unsigned char const *sp = ns > 0 && w > 0 && h > 0 ? bytes(H, off, 8 * (size_t) ns) : NULL;
+ H->opend = sp && spots(H, sp, ns, w, h);
+ glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glUseProgram(H->prog);
+ dprintf(H->out, H->opend ? "ok\n" : "err spots\n"); }
 
 static int words(char *s, double *v, int max);
 static void cmd_glow(struct helper *H, char *args) {
@@ -869,10 +883,14 @@ static void cmd_frame(struct helper *H, char *args) {
   glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); mode(H, 5);
   glUniform1i(H->u_has, 0); glUniform1i(H->u_cls, 0); glUniform1i(H->u_sun, 0); glUniform1i(H->u_fg, H->fglass);
   glUniform2f(H->u_fz, 0, 0); glUniform1f(H->u_tone, H->stone);
-  glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, H->gr); glActiveTexture(GL_TEXTURE0);
+  glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, H->gr);
+  int const sp = H->opend && H->ow == w && H->oh == h;
+  if (sp) glActiveTexture(GL_TEXTURE7), glBindTexture(GL_TEXTURE_2D, H->ot);
+  glActiveTexture(GL_TEXTURE0); glUniform1i(H->u_sp, sp);
   glBindVertexArray(sb->vao);
   for (int r = 0; r < sb->nrun; r++) glDrawElements(GL_TRIANGLES, sb->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) sb->runs[r].at));
-  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); }
+  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); }
+ H->opend = 0;
  // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
  if ((int) v[10] & 512) {
   glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDepthMask(0);
@@ -943,6 +961,7 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "win ", 4)) cmd_win(H, strtoul(l + 4, NULL, 10));
   else if (!strncmp(l, "show ", 5)) cmd_show(H, l + 5);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
+  else if (!strncmp(l, "spots ", 6) && sscanf(l + 6, "%d %d %d %ld", &a, &b, &c, &off) == 4) cmd_spots(H, a, b, c, (size_t) off);
   else if (!strncmp(l, "glow ", 5)) cmd_glow(H, l + 5);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);

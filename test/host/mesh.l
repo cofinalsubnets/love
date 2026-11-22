@@ -179,14 +179,14 @@
        ; ..its corners in two bytes each, and one triangle's six padded to a word
        (j "accessors" 3 "componentType" = 5123) (: m1 [(gm 0) [(gm 1 0)]] g1 (mesh-glb-of m1 "one") (#g1 % 4 = 0 && mesh-glb g1 1 = m1 1))))
 ;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
-;; seen both ways shows the same, but for where the pixels fall
+;; seen both ways shows the same, but for where the pixels fall across a cloud's edge
 (: wq (sky-weather 1) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
    (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4 ()))
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
    gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
- (test (#both > 8000) (gap < 0.025)))
+ (test (#both > 8000) (gap < 0.04)))
 ;; ..and seen only through glass, the sky still drawn behind it: a clear pane all round the
 ;; eye leaves no pixel bare, each the sky's through it
 (: nr (1.0 * 1790812800 + 12.0 * 3600.0) wr (sky-weather 1) lr (sky-light (sky-sun nr 0.0 0.65) wr nr)

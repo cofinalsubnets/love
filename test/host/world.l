@@ -76,9 +76,9 @@
 ; the light: a failing strip mostly on; the door's lamps red while shut, green once open
 (: st (at 80 48) f (world-pens st) sc (st 'sc)
    up (world-pens (pins (at 80 48) 'ph 1.2 'pz 5.0))
-   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0) ^600)
+   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0 {}) ^600)
    bad (map (k \ k 2) ks)
-   open (world-ks sc 0.0 [1.0] 0.0)
+   open (world-ks sc 0.0 [1.0] 0.0 {})
    east (world-pens (pins (at 80 48) 'th (pi / 2.0) 'pz 7.0 'px -0.6))
    (pink? c) ((c >> 16 & 255) > (c >> 8 & 255) + 40 && (c & 255) > (c >> 8 & 255))
    n #(sc 'lights)
@@ -598,6 +598,25 @@
        (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
        (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
+;; ..with shift, back and to either side a sprint too, and a turn or a look the same as without
+(: gs (world-read "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 200] 0 0))")
+   (went a) (: st (world-new 8 8 gs "") x0 (st 'px) z0 (st 'pz)
+     _ (each ^10 (_ \ (world-step st a, pin st 'dt (1.0 / 30.0), world-move st))) (sqrt (2 (st 'px - x0) + 2 (st 'pz - z0))))
+ (test (world-kb 65 = 'sprint-left) (world-kb 68 = 'sprint-right) (world-kb 83 = 'sprint-back) (world-kb 74 = 'sprint-back)
+       (world-kb 72 = world-kb 104) (world-kb 76 = world-kb 108) (world-kb 85 = world-kb 117) (world-kb 78 = world-kb 110)
+       (1.5 * went 'back < went 'sprint-back) (1.5 * went 'strafe-left < went 'sprint-left) (1.5 * went 'strafe-right < went 'sprint-right)))
+;; the sun's disc seen through glass whole, as bare it is: every pixel of it the one tinted
+;; colour, drawn here and on a gpu where there is one
+(: sg "(: t (texture 8 8 1 '((fill (grey 0.5))))) (level \"t\" (sky 12 'clear) (street [-60 0 -60] [60 40 60]) (start [0 0 0] 0 0) "
+   (sun-at x) (: st (world-new 320 200 (world-read (sg + x + ")")) "") s (st 'sc 'sky 'lt 'sun)
+     (pins st 'th (atan2 (s 0) (s 2)) 'ph (asin (s 1)), world-pens st))
+   ; ..bare, then behind a pane 3 m out toward -z, where the noon sun lies
+   (spread _) (: sb (sun-at "") sp (sun-at "(window [-6 0 -3] [6 30 -2.96] t)")
+                 dk (iota ((sb >> 16 & 255 >= 250) * (sb >> 8 & 255 >= 250))) gd (sp dk >> 8 & 255)
+                 [#dk (amax gd - amin gd) (amax gd)])
+   g0 (getenv "LORE_GPU") cp (: _ (setenv "LORE_GPU" "0") (spread ())) gp (: _ (setenv "LORE_GPU" "1") (spread ()))
+   _ (setenv "LORE_GPU" g0)
+ (test (20 < cp 0) (cp 1 <= 2) (cp 2 < 200) (20 < gp 0) (gp 1 <= 2) (gp 2 < 200)))
 ;; ..laid along: u how far down its rows from s, v across a row from its middle, in texels
 (: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
    sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
@@ -863,6 +882,32 @@
    far0 (rch "(speaker [2 1 2])" 17.0) far1 (rch "(reach 20 (speaker [2 1 2]))" 17.0)
  (test (far0 = 0.0) (0.0 < far1)
        (has? (lv "(reach 0 (speaker [0 0 0]))") "(reach metres PARTS)")))
+; a resonance: a wisp let fall over a brazier kept in its bowl; the string whole at every
+; prime of its steps with 6 and 7 rung, not with 6 and a torn 4, and with 14 across the tube
+; and 6; a sealed lift's gates shut till then, and open once it is
+(: rsl (lv ("(surface 'torus 42 20) (void [-1 -1 -1] [43 6 21]) (solid (box [-1 -1 -1] [43 0 21])) (resonance [0 3 0] 42) "
+            + "(brazier [6 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [7 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [4 0 2] (texture 8 8 1 '((fill 0.5)))) "
+            + "(brazier [14 0 10] (texture 8 8 1 '((fill 0.5)))) (wisp [20 0 3]) (wisp [21 0 3]) "
+            + "(sealed (lift [30 0.16 4] 1.6 3 (texture 8 8 1 '((fill 0.5))))) (start [25 0 4] 0 0)"))
+   rst (world-new 8 8 rsl "") ws (filter (b \ b 'kind = 'wisp) (rst 'balls)) bs (rsl 'braziers)
+   (rgo n) (each ^n (_ \ (pin rst 'dt (1.0 / 30.0), world-move rst)))
+   (rset is) (: _ (each ws (b \ pins b 'in () 'p [(b 'p 0) 0.13 (b 'p 2 + 5.0)])) _ (each ^#is (k \ (: c (bs (is k)) (pins (ws k) 'in (is k) 'p [(c 0) (c 1 + 1.13) (c 2)]))))
+                (rgo 60, [(world-whole? rst) (rst 'lifts 0 'g)]))
+   _ (pins <ws 'p [7.0 2.0 2.0] 'v [0.0 0.0 0.0] 'rest 0) _ (rgo 30) kept (peep <ws 'in ())
+   r0 (rset []) r67 (rset [0 1]) r64 (rset [0 2]) r146 (rset [3 0])
+ (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
+       (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
+       (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
+; a camera's feed: shot from where the camera stands while its monitor is in view; with
+; cards, now and then snow, a card held, snow, and the camera again
+(: cl (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (cards [(texture 8 8 1 '((fill 0.3)))] 2 1 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   cs (world-new 32 20 cl "") cq (cs 'sc 'feeds 0) _ (world-pens cs) c0 (peep cq 'shot-t ())
+   phs (map (_ \ (pin cs 'mt (cs 'mt + 0.1), world-pens cs, cq 'ph)) ^50)
+ (test (cl 'ads 0 'cam 1 = 0.0) (#(cl 'ads 0 'cards 0) = 1) (c0 != ()) (elem 'in phs) (elem 'card phs) (elem 'out phs) (phs 49 = 'cam)
+       (has? (lv "(camera [0 0 0] 0 0 (ball [0 0 0]))") "(camera [x y z] bearing pitch FEED)")
+       (has? (lv "(cards [] 1 1 (ball [0 0 0]))") "(cards [TEXTURE ..] every hold FEED)")
+       (has? (lv "(watch [0 0 0] 1 [3 2] 30 (ball [0 0 0]))") "(watch [x y z] radius [near far] cone FEED)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving

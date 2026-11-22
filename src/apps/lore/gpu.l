@@ -41,8 +41,8 @@
 ;                                (): one named alike holds alike, so is not summed again, and
 ;                                one named 'once is laid anew each frame, unsummed, in a slot
 ;                                of its own. sk [verts tris tone] a sky drawn under what is bare
-;                                as facets draws it with flags 96, its pixels bare alone 2^32
-;                                more, or ()
+;                                as facets draws it with flags 352, 11 a vertex, its pixels bare
+;                                alone 2^32 more, or ()
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
@@ -144,6 +144,10 @@
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
     (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
  (gpu-drop g id) (ask g "drop \(show id)")
+ ; ..spots [S C] for the next frame w by h, laid in its sky
+ (gpu-spots g w h sp) (: I (iota (sp 0 >= 0)) ns #I c (cask (8 * ns))
+   _ (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
+   (ns @ 0 () (put! g c, ask g "spots \(show w) \(show h) \(show ns) 0")))
  (gpu-base g w h t) (: c (cask (4 * w * h)) _ ((cite 'guts 'pinv) c 0 4 4 t)
    (put! g c, ask g "base \(show w) \(show h) 0"))
  (gpu-under g cs ds)
@@ -200,8 +204,10 @@
  ; ..the sun's view, laid again only when it moves
  (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
- ; ..the sky, laid each frame
- (sky! s sk) (? !(two? sk) () (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r))
+ ; ..the sky, laid each frame, and the spots in it a frame w by h asks
+ (sky! s sk w h) (? !(two? sk) ()
+   (: _ (#sk > 3 && two? (sk 3) ? (gpu-spots (s 'g) w h (sk 3)) ())
+     (once s 'sky (sk 0) (sk 1) 11 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r)))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
  (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
  ; ..the textures, each laid again only when it is not the one laid
@@ -225,7 +231,7 @@
            (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 y (string? u ? u (sky! s sk) @ () (glow! s o) r r)
+                 y (string? u ? u (sky! s sk w h) @ () (glow! s o) r r)
                  ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
                  ; or one that says its spots; but every 'read'th, which a feed in view reads back
                  rd (peep s 'read 0) kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) && !(0 < rd && s 'fr % rd = 0) ? 512 0)
