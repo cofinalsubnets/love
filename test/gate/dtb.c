@@ -153,7 +153,7 @@ int main(void) {
     ck("bare.args", 0, (uint64_t) kboot.cmdline[0]); }
 
   { // a bootargs longer than the buffer is cut and terminated, never run past
-    char big[400]; unsigned i;
+    char big[sizeof kboot.cmdline + 100]; unsigned i;
     uint64_t reg[2] = { 0x80000000, 0x08000000 };
     for (i = 0; i < sizeof big - 1; i++) big[i] = 'x';
     big[sizeof big - 1] = 0;

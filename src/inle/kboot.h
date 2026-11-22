@@ -20,7 +20,7 @@ struct k_boot {
  } fb;
  bool has_fb; // FIXME how is this different from fb.base == NULL
  uint64_t date;                      // the wall date at boot, unix seconds; 0 = unknown, kmain asks the rtc
- char cmdline[256];                  // "" is a plain boot: the console shell
+ char cmdline[1024];                 // "" is a plain boot: the console shell; the pi's firmware leads with ~230 of its own
  // a heap image the door carries (the wasm page's), woken before baked_pick; 0 = none
  void const *image;
  uintptr_t image_len;

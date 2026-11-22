@@ -89,7 +89,6 @@
 #define TIM_EGR_UG  (1u << 0)
 
 // --- core ----------------------------------------------------------------
-#define SCB_VTOR  0xE000ED08u
 #define SCB_CPACR 0xE000ED88u
 
 // mkboot.l

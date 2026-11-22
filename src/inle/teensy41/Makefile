@@ -58,8 +58,8 @@ $(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
 	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
 
-# .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash. The .bin is the
-# verification surface: byte offsets ARE flash offsets.
+# The .bin is what `make flash` writes and the verification surface: byte offsets ARE flash
+# offsets. The .hex (Intel HEX) is the same image for a loader that wants one.
 $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
 	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
@@ -113,7 +113,7 @@ $(R)/$(kd)/love.hex: $(R)/$(kd)/love.elf $(R)/$(o)/ocopy.l
 
 # Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
 flash: $(R)/$(o)/love.hex
-	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/love.hex
+	cd $(R) && out/love src/tools/halfkay.l write $(o)/love.bin
 
 # PSRAM smoke test (bake-free fast iteration): probe + pattern-test the FlexSPI2 PSRAM
 # chips, report over serial. `make psramtest` then `make flashpsram`.
@@ -122,7 +122,7 @@ $(eval $(call p_obj,psram,src/inle/teensy41/psram.c,psram.c psram.h teensy41.h $
 $(eval $(call p_obj,psram-test,src/inle/teensy41/psram-test.c,psram-test.c psram.h teensy41.h $(S)/inle/bput.h $(mc),$(te_cc)))
 psramtest: $(R)/$(o)/psram-test.hex
 flashpsram: $(R)/$(o)/psram-test.hex
-	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/psram-test.hex
+	cd $(R) && out/love src/tools/halfkay.l write $(o)/psram-test.bin
 
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
@@ -130,3 +130,4 @@ $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
 	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/psram-test.elf $(o)/psram-test.bin

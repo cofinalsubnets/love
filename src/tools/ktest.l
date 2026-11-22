@@ -76,8 +76,10 @@
    ; qemu loads -initrd only for a linux kernel: the virts' elf takes it over fw_cfg
    media (? img? (: d (iso + ".dtb")
                     _ (uwrite d (fdt 0x20000000))
+                    ; the pi's firmware leads the line with its own k=v words (~230 bytes): more here
                     ["-kernel" iso "-dtb" d "-append"
-                     (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))])
+                     (join " " (map (k \ "bcm2709.k\(show k)=0x\(show (k * 1234567))") ^16)
+                      + " " + (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l")))])
             elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
                   + (env-of "KTEST_INITRD" @ f
                       (!(string? f) ? ()

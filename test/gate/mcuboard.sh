@@ -4,12 +4,19 @@
 # runs its sram image over swd, the flash never written; else it flashes the image over swd and
 # resets. either way it reads the battery off the console; green is the battery's own `; all ../.. green`,
 # which it prints only when every check passed. a teensy41-usb host instead holds a teensy 4.1 on usb:
-# the running image reboots to its loader at 134 baud, teensy_loader_cli flashes the .hex, and green is
+# the running image reboots to its loader at 134 baud, src/tools/halfkay.l writes the .bin, and green is
 # love's shell answering on the usb console the host's tty fact names. an rp2350-uf2 host holds a pico 2
 # on usb, its usb fact the port's by-path name: 134 baud on the port's serial device reboots a running
 # image into the rom, the uf2 goes raw onto the port's drive (the rom takes blocks at any sector; the
-# drive's model is checked first), and the battery reports to whoever opens the console. without such
-# a host the gate skips loudly.
+# drive's model is checked first), and the battery reports to whoever opens the console. a
+# trinkey-samba host holds a neokey trinkey m0 on usb, its usb fact the port's by-path name: 134
+# baud (ours) or 1200 (an arduino sketch's) puts it in its uf2 bootloader, whose sam-ba takes the
+# image's first stage into sram and starts it (test/gate/samba.sh); its usb console takes the
+# second, stage2.pkt beside the image, and the battery reports there. an nrf52840-loader host
+# holds a xiao nrf52840 whose flash holds test/boards/nrf52840/loader.c, its usb fact the port's
+# by-path name: 134 baud on a running image resets it into the loader, which takes the .pkt
+# beside the image into sram and runs it, and the battery reports on the image's usb console.
+# without such a host the gate skips loudly.
 # the cap names the board, so what follows from its chip is here: where flash and sram start, openocd's
 # target, love's flasher. how the host reaches it is the host's facts: probe, `lovswd TTY` (the
 # love swd probe, test/boards/rp2040/probe.c), `gpio CHIP SWCLK SWDIO NRST` (love's bit wire on the
@@ -28,6 +35,8 @@ case $cap in
   microbit-swd) chip=nrf52 at=0x00000000 ram=0x20000000 tgt='-f target/nrf52.cfg' ;;
   teensy41-usb) ;;
   rp2350-uf2) model=RP2350 ;;
+  trinkey-samba) ;;
+  nrf52840-loader) ;;
   *) echo "FAIL $t: no board known for $cap" >&2; exit 1 ;;
 esac
 "$ho/love" bee --on "$cap" --probe >/dev/null 2>&1 || gate_skip "$t: skipped (no host with $cap answers)"
@@ -36,21 +45,20 @@ esac
 sd=$ho/board-$cap
 rm -rf "$sd"; mkdir -p "$sd"
 if [ "$cap" = teensy41-usb ]; then
-  cp "$img" "$sd/firm.hex"
-  cp "$ho/love" src/apps/swd.l test/gate/swdpress.l "$sd/"
+  cp "$img" "$sd/firm.bin"
+  cp "$ho/love" src/apps/swd.l test/gate/swdpress.l src/tools/halfkay.l "$sd/"
   green='*40002*'
   # the console is the host's tty fact, BEE_TTY under bee --on; a button fact (a probe's line
   # on its program pin, `aux lovswd TTY`) presses it, so an image not ours or hung still loads
   cat > "$sd/run.sh" <<'EOF'
 tty=${BEE_TTY:-} button=${BEE_BUTTON:-}
 [ -n "$tty" ] || { echo "the host gives no tty fact"; exit 1; }
-command -v teensy_loader_cli >/dev/null || { echo "no teensy_loader_cli on the host"; exit 1; }
 if [ -n "$button" ]; then
   ./love swdpress.l $button > press.log 2>&1 || { tail -3 press.log; echo "the button press failed"; exit 1; }
 else
   stty -F "$tty" 134 2>/dev/null || true
 fi
-timeout 90 teensy_loader_cli --mcu=TEENSY41 -w -v firm.hex > flash.log 2>&1 \
+timeout 90 ./love halfkay.l write firm.bin > flash.log 2>&1 \
   || { tail -5 flash.log; echo "the flash failed (an image that is not ours, or hung, wants the button)"; exit 1; }
 n=0
 until [ -e "$tty" ]; do n=$((n + 1)); [ $n -gt 60 ] && { echo "the usb console never came up"; exit 1; }; sleep 1; done
@@ -83,6 +91,67 @@ upto 15 "$tty" || { echo "the console never came up on $usb"; exit 1; }
 sleep 1
 stty -F "$tty" raw -echo clocal || exit 1
 timeout 5 cat "$tty" | tr -d '\r'
+EOF
+elif [ "$cap" = trinkey-samba ]; then
+  cp "$img" "$sd/firm.bin"
+  cp "${img%/*}/stage2.pkt" test/gate/samba.sh "$sd/"
+  green='*; all * green*'
+  cat > "$sd/run.sh" <<'EOF'
+usb=${BEE_USB:-}
+[ -n "$usb" ] || { echo "the host gives no usb fact"; exit 1; }
+tty=/dev/serial/by-path/$usb:1.0
+# the port's device: 239a:00ff is the bootloader, 1209:0001 ours
+dev() { q=$(readlink -f "$tty" 2>/dev/null) && [ -e "$q" ] && d=$(readlink -f "/sys/class/tty/${q##*/}/device/..") \
+  && echo "$(cat "$d/idVendor"):$(cat "$d/idProduct")"; }
+upto() { n=0; until [ "$(dev)" = "$2" ]; do n=$((n + 1)); [ $n -gt $(($1 * 4)) ] && return 1; sleep 0.25; done; }
+if [ "$(dev)" != 239a:00ff ]; then
+  for b in 134 1200; do
+    [ -e "$tty" ] && stty -F "$tty" $b 2>/dev/null
+    upto 8 239a:00ff && break
+  done
+fi
+dev_now=$(dev); [ "$dev_now" = 239a:00ff ] || { echo "no bootloader on $usb (${dev_now:-no device}: a sketch that is not ours, or a wedged hub, wants a double tap)"; exit 1; }
+sleep 1
+# the first stage's base is its stack's top, its first word
+base=0x$(od -An -tx4 -N4 firm.bin | tr -d ' ')
+timeout 60 sh samba.sh "$tty" $base firm.bin > samba.log 2>&1 || { tail -3 samba.log; echo "the sram load failed"; exit 1; }
+cat samba.log
+upto 15 1209:0001 || { echo "the image's console never came up on $usb"; exit 1; }
+sleep 1
+stty -F "$tty" raw -echo clocal || exit 1
+exec 3<>"$tty"
+timeout 8 cat <&3 > got.1 &
+sleep 0.5
+cat stage2.pkt >&3
+wait
+exec 3>&-
+tr -d '\r' < got.1
+EOF
+elif [ "$cap" = nrf52840-loader ]; then
+  cp "${img%.bin}.pkt" "$sd/firm.pkt"
+  green='*; all * green*'
+  cat > "$sd/run.sh" <<'EOF'
+usb=${BEE_USB:-}
+[ -n "$usb" ] || { echo "the host gives no usb fact"; exit 1; }
+tty=/dev/serial/by-path/$usb:1.0
+# the port's product: "love loader" the flash's, "love board" an image
+prod() { q=$(readlink -f "$tty" 2>/dev/null) && [ -e "$q" ] && cat "$(readlink -f "/sys/class/tty/${q##*/}/device/..")/product"; }
+upto() { n=0; until [ "$(prod)" = "$2" ]; do n=$((n + 1)); [ $n -gt $(($1 * 4)) ] && return 1; sleep 0.25; done; }
+[ "$(prod)" = "love board" ] && { stty -F "$tty" 134 2>/dev/null; upto 10 "love loader"; }
+p=$(prod); [ "$p" = "love loader" ] || { echo "no loader on $usb (${p:-no device}): the flash wants loader.uf2, a write gwen says go to"; exit 1; }
+sleep 0.5
+stty -F "$tty" raw -echo clocal || exit 1
+exec 3<>"$tty"
+timeout 5 cat <&3 > got.0 &
+sleep 0.3
+cat firm.pkt >&3
+wait
+exec 3>&-
+tr -d '\r' < got.0
+upto 15 "love board" || { echo "the image's console never came up on $usb"; exit 1; }
+sleep 0.5
+stty -F "$tty" raw -echo clocal || exit 1
+timeout 8 cat "$tty" | tr -d '\r'
 EOF
 else
 cp "$img" "$sd/firm.bin"
@@ -161,7 +230,13 @@ case $img in
            esac ;;
 esac
 if [ "$cap" = teensy41-usb ]; then
-  echo "$t: the .hex flashed through the loader, love's shell on the usb console answered (+ 40000 2)"
+  echo "$t: the .bin written by halfkay.l, love's shell on the usb console answered (+ 40000 2)"
+elif [ "$cap" = trinkey-samba ]; then
+  echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; from"*|"; all"*) echo "$l" ;; esac; done
+  echo "$t: the image into sram by the bootloader's sam-ba, the flash untouched, the battery green on its usb console"
+elif [ "$cap" = nrf52840-loader ]; then
+  echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; from"*|"; all"*) echo "$l" ;; esac; done
+  echo "$t: the image into sram by the flash's loader over usb, the flash untouched, the battery green on its usb console"
 elif [ "$cap" = rp2350-uf2 ]; then
   echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; from"*|"; all"*) echo "$l" ;; esac; done
   echo "$t: the sram uf2 through the rom's drive, the flash untouched, the battery green on its usb console"
