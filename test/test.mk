@@ -1198,7 +1198,7 @@ test_kernel_uproc_a64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@mkdir -p $(ko)/uproc-a64 && $(ho)/love mooncc -t a64 test/kernel/c/hello.c -o $(ko)/uproc-a64/hello
 	@echo TEST $(ko)/love-a64.elf "(C programs and love as a64 processes: EL0, address spaces of their own)"
-	@KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
+	@KTEST_CEIL=1800 KTEST_CORPUS=test/kernel/uproc-lane.l KTEST_INITRD=$(ko)/uproc-a64/hello \
 	   $m $(S)/tools/ktest.l $(ko)/love-a64.elf - a64 "uproc: ok"
 endif
 ifeq ($(QEMU_A64),)
