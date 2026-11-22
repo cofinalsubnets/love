@@ -1535,8 +1535,32 @@
    ; the gpu adds as strong as they are, once relit so it knows them
    (hall-of c) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
      (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1)]] (lit-named pk (relit pk (c 'lit)))))
+   ; ..and on a gpu that keeps a scene, each laid in it once the cells first let it be seen,
+   ; marked down while they do not; but one lit here frame by frame, which it sees and lays
+   ; with the rest; and with them each light's shines and glows at full strength, which it
+   ; takes as strong as the light
+   sg (gk && st 'gpu 'g != () && #dk <= 128 && #ks <= 1024)
+   mo (sg && !(tablet? sf))
+   (kept? c) (: pk (c 'pk) lv (peep pk 'live () @ () (: _ (relit pk (c 'lit)) (pk 'live)) l l)
+               (atom? (lv 'r) || two? (mesh-lamp-slots pk)))
+   can (filter (i \ !(hid && cks i 'deep) && !(cut? i)) ^#cks)
+   ht (sg ? (peep sc 'held () @ () (: t {} (pin sc 'held t, t)) t t) {})
+   _ (sg ? (each (filter (i \ !(peep ht i 0) && kept? (cks i)) can) (i \ pin ht i 1)) 0)
+   held (sg ? (sort (keys ht)) ())
+   vis (: z (iota #cks * 0.0) (atom? can ? z (pin z (int (gem-tray [#can] can)) 1.0)))
+   (scene _) (: (ball c) (: m (c 'mid) [(m 0) (m 1) (m 2) (c 'rad)])
+     (map (i \ (: b (hall-of (cks i)) [(b 0) (b 1) (b 2) (#b > 3 ? (b 3) ()) (ball (cks i)) -1 1.0 0 i])) held
+      + shone 'shine 0 + shone 'glow 1))
+   (shone key g) (catmap (i \ map (q \ (: b (named (q 0) (shine-at (q 0) 1.0 key) [key 1.0]) [(b 0) (b 1) (b 2) () (pk-ball (q 0)) i (q 1) g -1]))
+                                  (sc 'lights i key))
+                         ^#ks)
+   ; ..a packed mesh's ball, kept
+   (pk-ball pk) (pk 'ball @ () (: c (pk 'cols) lo (map (k \ amin (c k)) ^3) hi (map (k \ amax (c k)) ^3)
+                                  b (map (k \ 0.5 * (lo k + hi k)) ^3 + [(0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))])
+                                (pin pk 'ball b, b))
+                 b b)
    hall (map (q \ hall-of (cks (q 1)))
-             (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
+             (sort (map (i \ [(far (cks i)) i]) (filter (i \ !(peep ht i 0) && seen? (cks i)) can))))
    ; ..each door slid open along its wall into the wall's thickness, or one opened by hand
    ; swung on its hinge away from who opened it
    sw (peep st 'swing {})
@@ -1545,25 +1569,28 @@
      c (iota (pk 'n) * 8 + 5)
      v (foldl (\ v k (pin v (c + k) ((1.0 - t) * b 0 (c + k) + t * ob 0 (c + k)))) (b 0) ^3)
      (swung [v (b 1)] pk d (w * t * swing-wide)))
-   (door i) (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i) A (d 'ax @ 'z 0 2) ix (iota (pk 'n) * 8)
-              (d 'hand @ 1 (hinged b pk d i) [(pin (b 0) (ix + A) (pk 'cols A + ds i * (d 'w - 0.05))) (b 1)]))
+   (door i) (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i) A (d 'ax @ 'z 0 2)
+              (d 'hand @ 1 (hinged b pk d i) (lit-shifted b pk A (ds i * (d 'w - 0.05)))))
    ; ..a glazed one with the glass, after what is seen through it
    (glazed? i) (lv 'doors i 'glass != ())
    doors (map door (filter (i \ !(glazed? i)) ^#(lv 'doors))) glazed (map door (filter glazed? ^#(lv 'doors)))
    ; ..each car where it has got to along its track, its door's leaves slid apart; none once gone
    (moved b pk k o) [(pin (b 0) (iota (pk 'n) * 8 + k) (pk 'cols k + o)) (b 1)]
+   ; ..or on a gpu, off a surface, laid once by its name x and moved there by the gpu
+   (shifted b pk k o x) (mo ? (named pk b x + [() (map (j \ j = k ? (1.0 * o) 0.0) ^3)]) (moved b pk k o))
+   (lit-shifted b pk k o) (shifted b pk k o (mesh-lit-ks pk dk))
    (leaf c s j) (s 'o + (2 * j - 1) * s 'door * (0.5 * c 'dw - 0.05))
    cars (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i) k (c 'ax @ 'z 0 2) o (s 'o)
                          (s 'ph = 'gone ? ()
-                            [(moved (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)]
-                            + map (j \ moved (relit (cs 'door j) (cs 'door-lit j)) (cs 'door j) k (leaf c s j)) ^2
-                            + [(moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)]
-                            + (tablet? (cs 'props) ? [(moved (relit (cs 'props 'pk) (cs 'props 'lit)) (cs 'props 'pk) k o)] ()))))
+                            [(lit-shifted (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)]
+                            + map (j \ lit-shifted (relit (cs 'door j) (cs 'door-lit j)) (cs 'door j) k (leaf c s j)) ^2
+                            + [(shifted (shine-at (cs 'bar) 3.0 'bar) (cs 'bar) k o 'bar)]
+                            + (tablet? (cs 'props) ? [(lit-shifted (relit (cs 'props 'pk) (cs 'props 'lit)) (cs 'props 'pk) k o)] ()))))
                ^#(lv 'cars))
    ; ..and its glass, drawn late
    cpanes (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i)
-                         (s 'ph = 'gone ? () ([(moved (relit (cs 'pane) (cs 'pane-lit)) (cs 'pane) (c 'ax @ 'z 0 2) (s 'o))]
-                                              + map (j \ moved (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
+                         (s 'ph = 'gone ? () ([(lit-shifted (relit (cs 'pane) (cs 'pane-lit)) (cs 'pane) (c 'ax @ 'z 0 2) (s 'o))]
+                                              + map (j \ lit-shifted (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
                   ^#(lv 'cars))
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
@@ -1588,7 +1615,7 @@
    ; ..a lift's platform where it has got to, each leaf of its gates swung out as far as it
    ; is open, its pad and tether
    lifts (catmap (i \ (: q (sc 'lifts i) s (st 'lifts i) c (lv 'lifts i) f (q 'fix) u (1.0 - s 'g) w (2 u * (3.0 - 2.0 * u))
-                            ([(moved (relit (q 'pk) (q 'lit)) (q 'pk) 1 (s 'o)) (relit (f 'pk) (f 'lit))]
+                            ([(lit-shifted (relit (q 'pk) (q 'lit)) (q 'pk) 1 (s 'o)) (relit (f 'pk) (f 'lit))]
                              + map (k \ (: l (q 'leaves k) (leaf-swung (relit (l 'pk) (l 'lit)) (l 'pk) c (lift-leaves k) w (s 'o))))
                                    ^#lift-leaves)))
                     ^#(lv 'lifts))
@@ -1602,9 +1629,14 @@
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
    ; ..what moves laid on a surface frame by frame, what stands laid with the scene
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
-   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
+   pre (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors)
+   sp (bd spins) gz (bd glazed) cp (bd cpanes)
+   all (pre + hall + sheets + (sg ? () (by 'shine)) + sp + glass + gz + cp + (sg ? () (by 'glow))
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)) + bd (strings-at st))
-   _ (gk ? (pins v 'keys (map (b \ b 2) all) 'lamps (map (b \ #b > 3 ? (b 3) ()) all) 'dks dk) 0)
+   _ (gk ? (pins v 'keys (map (b \ b 2) all) 'lamps (map (b \ #b > 3 ? (b 3) ()) all) 'dks dk 'offs (map (b \ #b > 4 ? (b 4) ()) all)
+                 'scene (sg ? {'key [#held (gpu-name st (cks 0 'pk))] 'make scene 'vis vis 'kb ks
+                               'at [(#pre + #hall) (#pre + #hall + #sheets + #sp + #glass + #gz + #cp)]}
+                             ())) 0)
    ; ..the frame kept for a feed's next
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] tx fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare
     @ f (tray? f && !cam? ? (pin st 'framed f, f) f)))
