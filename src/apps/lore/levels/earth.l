@@ -488,8 +488,8 @@
 (: (officedoor x y z) (fit {'all wood} (box [(x - 0.45) (y - 0.05) (z - 1.0)] [(x + 0.45) y (z + 1.0)])))
 (: (copier x y z) [(fit {'all greysteel} (box [(x - 0.5) (y - 1.0) (z - 0.35)] [(x + 0.5) (y - 0.06) (z + 0.35)]))
                    (fit {'all screen} (box [(x - 0.45) (y - 0.06) (z - 0.3)] [(x + 0.45) y (z + 0.3)]))])
-; ..a swivel chair, its back to the desk
-(: (chair x y z) (furnish 'chair [x (y - 0.45) z] 180 {'w 0.5 'd 0.5 'h 0.95 'top 0.08 'leg 0.03 'legs 'star
+; ..a swivel chair facing deg
+(: (chair x y z deg) (furnish 'chair [x (y - 0.45) z] deg {'w 0.5 'd 0.5 'h 0.95 'top 0.08 'leg 0.03 'legs 'star
                                                        'skin {'soft cloth 'frame greysteel 'feet screen}}))
 (: (tile x y z) (fit {'all ceiltile} (box [(x - 0.3) (y - 0.02) (z - 0.3)] [(x + 0.3) y (z + 0.3)])))
 (: (monitor x y z) [(fit {'all screen} (box [(x - 0.26) y (z - 0.03)] [(x + 0.26) (y + 0.34) (z + 0.03)]))
@@ -497,8 +497,10 @@
 ; ..a piece by its name, turned deg about its middle
 (: (piece p) (: k (p 0) x (p 1) y (p 2) z (p 3)
    (turn (p 4) [x z] [(k @ 'slab (slab x y z 3.2 3.2) 'desk (desk x y z) 'cabinet (cabinet x y z) 'door (officedoor x y z)
-                          'copier (copier x y z) 'chair (chair x y z) 'tile (tile x y z) (monitor x y z))])))
+                          'copier (copier x y z) 'chair (chair x y z 180) 'tile (tile x y z) (monitor x y z))])))
 
+; ..a chair at the desk at x z on the floor at y, turned to it as one was left, a little askew and pulled out
+(: (sat x y z) (: k (sin (1.7 * x + 0.91 * y + 0.3 * z)) (chair (x + 0.12 * k) (y + 0.453) (z - 0.9 - 0.1 * k * k) (24.0 * k))))
 ; the tower's floors, four metres each, the offices between [-9.7 -9.7] and [9.7 9.7], the
 ; ground floor's south window parted for the door; the furniture a hair over the carpet, so
 ; it does not cut the floor
@@ -509,9 +511,9 @@
     (window [-8 (y + 0.9) 9.7] [8 (y + 2.9) 10] glass)
     (window [-10 (y + 0.9) -8] [-9.7 (y + 2.9) 8] glass) (window [9.7 (y + 0.9) -8] [10 (y + 2.9) 8] glass)
     (strip-light [-4 (y + 3.7) 0]) (strip-light [3 (y + 3.7) -5])
-    (desk -6 (y + 0.753) 7.5) (chair -6 (y + 0.453) 6.6) (monitor -6 (y + 0.756) 7.7)
-    (desk -2 (y + 0.753) 7.5) (chair -2 (y + 0.453) 6.6)
-    (desk -6 (y + 0.753) -7.5) (cabinet -9.2 (y + 1.303) -4) (cabinet -9.2 (y + 1.303) -3.4)]))
+    (desk -6 (y + 0.753) 7.5) (sat -6 y 7.5) (monitor -6 (y + 0.756) 7.7)
+    (desk -2 (y + 0.753) 7.5) (sat -2 y 7.5)
+    (desk -6 (y + 0.753) -7.5) (sat -6 y -7.5) (cabinet -9.2 (y + 1.303) -4) (cabinet -9.2 (y + 1.303) -3.4)]))
 ; ..the stairs up from floor k: twenty-two treads of 4/22 m up and a quarter along, by turns
 ; north up the east side and south up the middle, through a hole in the floor over them; skip
 ; the steps left out
@@ -1046,11 +1048,11 @@
          [[7.5 7.5 27.7] [-7.5 7.5 27.7] [-7.5 -7.5 27.7] [2.5 -7.5 25.5] [-2.5 2.5 26.2]])
     (map (w \ (skin {'all cladding} (solid (box (w 0) (w 1)))))
          [[[-10 24 -10] [-4 26.2 -9.7]] [[-10 24 9.7] [-2 25.4 10]] [[9.7 24 -10] [10 27.7 -6]] [[-10 24 1] [-9.7 25 6]]])
-    (desk -5 24.75 -6) (chair -4.4 24.45 -5.2) (cabinet 1 25.3 8.5)
+    (desk -5 24.75 -6) (chair -4.4 24.45 -5.2 160) (cabinet 1 25.3 8.5)
     ; ..the next floor in three plates, its stairs with steps gone
     (slab 6.5 28 6.25 7 7.5) (slab -5.5 28 6 9 8) (slab -5.75 28 -5.25 7.5 8.5)
     (stair 7 [7 8 15])
-    (desk 6 28.95 7) (chair -6 28.6 5) (tile 4 28.4 4)
+    (desk 6 28.95 7) (chair -6 28.6 5 180) (tile 4 28.4 4)
     ; ..the next drifted apart, and rubble up from it
     (slab 5.8 32 -6.3 7.2 6.6) (slab -5.4 32.2 -7.35 8.8 5.7) (slab -4.75 31.8 6.6 6.5 7.2)
     (map (b \ (skin {'all cast} (solid (box [(b 0 - 0.6) (b 2 - 0.8) (b 1 - 0.6)] [(b 0 + 0.6) (b 2) (b 1 + 0.6)]))))
