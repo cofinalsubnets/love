@@ -33,6 +33,11 @@ port, and the flash is not written again. The loader is `love loader` on the bus
 its vectors' address: it leaves the clocks, caches and PSRAM as the loader set them, and its
 heap starts above its own bytes. It says `; from sram` or `; from flash` at boot.
 
+The PSRAM kernel wakes a smaller image than the flash one: the lush cat (`out/.lush-cat.l`,
+kore's head with no door), so lush, its builtins and `love`, and no `ls` or `cat`. Its own
+bytes come out of the heap's 16 MB, and over all of kore a major collection has no to-space.
+The flash kernel carries the whole kore cat.
+
 ## Console
 
 Two at once, the same shell on both. The Teensy's own USB is a CDC-ACM port (`usb.c`,

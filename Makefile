@@ -432,10 +432,13 @@ $(ho)/.dist-cat.l: $(distfiles) $(ho)/.dist.list $(ho)/.carry.list
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 # the kore set alone, the cat a small kernel bakes (src/inle/teensy41's): what kmain's own egg
-# lane loads, the crew left to /love
-out/.kore-cat.l: $(korefiles) out/lib/korelist.h
+# lane loads, the crew left to /love. the lush cat is kore's head with no door: the shell, its
+# builtins and love, for a kernel that lives in its own ram
+out/.kore-cat.l: $(korefiles)
+out/.lush-cat.l: $(kore_head)
+out/.kore-cat.l out/.lush-cat.l: out/lib/korelist.h
 	@echo '$(t_cat)	'$@
-	@for f in $(korefiles); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
+	@for f in $(filter %.l,$^); do printf '\n(cite (quote verbs) (quote mark) "%s")\n' $$f; cat $$f; done > $@
 	@printf '\n(cite (quote verbs) (quote mark) ())\n' >> $@
 	@printf '\n(cite (quote glaze) (quote srcdrop) ())\n' >> $@
 out/lib/distlist.h: Makefile
