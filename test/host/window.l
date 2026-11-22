@@ -6,6 +6,8 @@
 (borrow 'window)
 (borrow 'synth)   ; synth-trows
 (borrow 'xwire)
+; a nest that is not there, so no scene is kept in the user's, here or in a child
+(setenv "LOVE_NEST" (cwd 0 + "/out/.window-nest-" + show (getpid 0)))
 (borrow 'gpu)
 ; a key the keymap makes a ctrl is ctrl's, wherever it sits: caps lock as ctrl
 (: xkm {66 [65507 0] 25 [119 87]}

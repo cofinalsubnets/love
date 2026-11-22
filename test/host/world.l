@@ -3,6 +3,8 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
 (borrow '(world mesh neon posix bough gesture))
+; a nest that is not there, so no scene is kept in the user's or read from it
+(setenv "LOVE_NEST" (cwd 0 + "/out/.world-nest-" + show (getpid 0)))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -243,12 +245,12 @@
  (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
        (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
        (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
-; a plush lies where it is put facing its bearing, a turn swinging that on, its model read
-; from its file and set on the floor, the ball it is taken for half its height; one whose file
+; a plush lies where it is put facing its bearing, a turn swinging that on, its model made
+; by name and set on the floor, the ball it is taken for half its height; one whose file
 ; will not read is a ball. a click takes it like a ball, held it looks back at the player,
 ; and thrown it lands upright and stops
 (: (pud t) (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) " + t + " (start [5 0 1.5] 0 0))"))
-   pua (pud "(plush [5 0 3] 180 \"mouse.glb\")") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 \"mouse.glb\"))")
+   pua (pud "(plush [5 0 3] 180 'mouse)") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 'mouse))")
    pus (world-new 80 50 pua "src/apps/lore/levels/") pm (pus 'sc 'plushes 0) pk (pm 'pk) pt (pk 'tris) pb (pus 'balls 0) py0 (pb 'p 1)
    pno (world-new 80 50 (pud "(plush [5 0 3] 0 \"none.glb\")") "test/lore/")
    plo (map (k \ amin (pk 'cols k)) ^3) phi (map (k \ amax (pk 'cols k)) ^3) r (pm 'r)
@@ -256,7 +258,7 @@
    _ (pgo 2) _ (pin pus 'ph (-38.0 * pi / 180.0)) _ (world-mouse pus 'press 1) _ (world-mouse pus 'release 1)
    _ (pgo 2) ph1 (pb 'held) phq (pb 'q) _ (pin pus 'ph 0.4) _ (world-mouse pus 'press 1) _ (pgo 4) _ (world-mouse pus 'release 1)
    _ (pgo 80) pq (pb 'q) pp (pb 'p)
- (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'file = "mouse.glb")
+ (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'toy = 'mouse)
        (pb 'kind = 'plush) (0.05 < r) (r < 0.3) (py0 = r) (pb 'r = r) (1000 < pk 'n) (amax pt = pk 'n - 1) (amin pt = -1)
        (mag (plo 1 + r) < 1e-6) (mag (phi 1 - r) < 1e-6) (foldl max 0.0 (map abs [(plo 0) (phi 0) (plo 2) (phi 2)]) = pm 'w)
        (pno 'balls 0 'r = 0.12) (pno 'sc 'plushes 0 'r = 0.12)
@@ -453,7 +455,9 @@
        (lids 12.0 = 0) (lids 3.0 > 0) (sky-up > 200) (roof-up = 0) (east > west)
        ; ..the air's stir under its stars: earth's unless said, 0 an airless sky's
        (sl 'sky 'twinkle = 1.0) (lv "(room [0 0 0] [1 1 1]) (sky 2 'clear) (twinkle 0)" 'sky 'twinkle = 0.0)
-       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")))
+       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")
+       ; ..rested at the start unless the level says winded
+       (sl 'winded = 0) (lv "(room [0 0 0] [1 1 1]) winded" 'winded = 1)))
 ; a car: its door opens at the start and stays open while any of the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range
@@ -684,6 +688,14 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; the street's traffic and a music box: each heard, under the clip, keeping its memory from
+; one chunk to the next; the box's reverb left from right
+(: (sw nm) (: st (world-new 8 8 (lv ("(room [0 0 0] [8 3 8]) (hum '" + nm + " [0 0 0] [8 3 8])")) "") _ (pins st 'px 4 'py 1.6 'pz 4)
+              bs (map (_ \ hum-bus st 1600) ^900) (pk f) (foldl (\ a b (max a (f b))) 0.0 bs)
+              (top x) (max (amax x) -(amin x))
+              [(pk (b \ top <b)) (pk (b \ top (<b - >b))) (keys (st 'hum 'mem))])
+   tr (sw "traffic") mb (sw "musicbox")
+ (test (0.05 < tr 0) (tr 0 < 1.0) (tr 2 = ['traffic]) (0.05 < mb 0) (mb 0 < 1.0) (0.0 < mb 1) (mb 2 = ['musicbox])))
 ; deep chunks: a room under the land far from its one opening is left out from above the
 ; ground, one near the opening is not, and nothing is from in the opening or under the ground
 (: (dpb l) (atom? l ? (show l) ("[" + join " " (map dpb l) + "]"))
@@ -795,6 +807,22 @@
    _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
  (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
        (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
+; a feed: its ad its placeholder till a frame is seen, then that frame, the placeholder's green
+; in it, and the overlay's own colour where it is not a hole; a stamp's time hh:mm:ss
+(: fq "(: m (texture 8 4 1 '((fill (rgb 0 1 0))))) (: o (texture 8 4 1 '((fill hole) (rect 0 0 4 4 (rgb 1 0 0))))) "
+   fl (world-read (fq + "(level \"t\" (room [0 0 0] [4 3 4]) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m)) (start [2 0 1] 0 0))"))
+   (lq s) (world-read (fq + "(level \"t\" " + s + ")"))
+   fst (world-new 16 16 fl "") f1 (world-pens fst) f2 (world-pens fst)
+   sl (lq "(room [0 0 0] [4 3 4]) (stamp [0 0] 1 {48 \"111101101101111\"} (rgb 1 1 1) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m))) (start [2 0 1] 0 0)")
+   sst (world-new 16 16 sl "") _ (world-pens sst) _ (world-pens sst) ss (sst 'sc 'feeds 0 'st)
+   (ch c k) (c >> k & 255)
+   row (map (x \ peep f2 (8 * 16 + x) 0) ^16)
+ (test (#(fst 'sc 'feeds) = 1) (ch (peep f1 (8 * 16 + 8) 0) 8 > ch (peep f1 (8 * 16 + 8) 0) 16)
+       (any (c \ ch c 8 > ch c 16 + 40) row) (any (c \ ch c 16 > ch c 8 + 40) row)
+       (#ss = 8 && ss 2 = 58 && ss 5 = 58 && all (c \ 48 <= c && c <= 57) (map ss [0 1 3 4 6 7]))
+       (has? (lq "(room [0 0 0] [1 1 1]) (stamp [0 0] 1 {} (rgb 1 1 1) (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(stamp [x y] size FONT (rgb r g b) FEED)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [] (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(feed [TEXTURE ..] AD)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [m] (room [0 0 0] [1 1 1]))") "(feed [TEXTURE ..] AD)")))
 ; a vined tree: not climbed till the loop first plays, a tap on the deck, and then not till
 ; its vines have grown to the fork, drawn as they go
 (: vwl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (vined (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))) (deck [5 0 -1] [6 1 1]) (start [6 0 0] 0 0)")
@@ -827,6 +855,14 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; a speaker's reach: the loop gone fifteen metres off a plain one, still heard there off one
+; reaching twenty
+(: (rch sp x) (: l (lv ("(room [0 0 0] [40 4 4]) (deck [1 0 1] [2 1 2]) " + sp + " (start [1.5 0 2.5] 180 -30)"))
+                 st (world-new 8 8 l "") _ (world-step st 'tap) _ (pins st 'px x 'py 0.0 'pz 2.0)
+                 _ (each ^4 (_ \ hum-bus st 480)) b (hum-bus st 480) (atom? b ? 0.0 (max (amax <b) -(amin <b))))
+   far0 (rch "(speaker [2 1 2])" 17.0) far1 (rch "(reach 20 (speaker [2 1 2]))" 17.0)
+ (test (far0 = 0.0) (0.0 < far1)
+       (has? (lv "(reach 0 (speaker [0 0 0]))") "(reach metres PARTS)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
@@ -1034,4 +1070,25 @@
 (: n {'n 0} l (world-reading "(: a 1) (level \"t\" (room [0 0 0] [2 2 2]))" (_ \ _ \ pin n 'n (n 'n + 1)))
    (test (tablet? l) (n 'n = 2)))
 
+; a scene kept: where a nest is, the first scene is stowed in its cache and the next read back
+; from there, the same but for its memo, spent
+(: kd (cwd 0 + "/out/.world-kept-" + show (getpid 0)) n0 (getenv "LOVE_NEST")
+   _ (hark ["rm" "-rf" kd], mkdir kd 448, setenv "LOVE_NEST" kd)
+   ; ..each read afresh, as a run reads its file: a scene pins what it grows into its level
+   (klv _) (world-read "(level \"t\" (room [0 0 0] [6 3 6]) (lamp [3 2.5 3]) (start [3 0 1] 0 0))")
+   ka (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   kf (filter (f \ #f > 6 && snip f (#f - 6) #f = ".scene") (readdir (kd + "/cache/lore/")))
+   kb (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
+   (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
+   ks (filter (k \ k != 'memo) (sort (keys ka)))
+   ; ..and a tree's trunk grown into its level on a hit as on a miss
+   (tlv _) (world-read "(level \"t\" (room [-9 0 -9] [9 4 9]) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (start [6 0 0] 0 0))")
+   _ (mkdir kd 448, setenv "LOVE_NEST" kd) ta (world-new 40 25 (tlv ()) "test/lore/") tb (world-new 40 25 (tlv ()) "test/lore/")
+   _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
+   (trunk st) (<(st 'lvl 'trees) 'trunk)
+ (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
+       (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
+       (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
+(test_fin ())
 (puts "world: ok\n")

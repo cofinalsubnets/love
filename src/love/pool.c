@@ -10,11 +10,13 @@
 // piece of the work, never n / width, so the answer is the same at any width.
 // the width: min(LOVE_THREADS, physical cores, chunks, cpus spare). spare is what the box
 // left idle over the window since the last read (/proc/stat's idle and iowait, a BSD's
-// kern.cp_time idle), plus what
-// we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
-// cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
-// drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
-// load (the laws, and the measure's forced widths).
+// kern.cp_time idle), plus what we took ourselves, in whole cpus; and 1 whenever
+// /proc/pressure/cpu says tasks waited for a cpu over more than PoolPsi of the window. where
+// the load cannot be read (android denies an app /proc/stat, and there one app has the
+// screen) every cpu is spare. read at most every 50 ms through held fds; it drops at once and
+// grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is
+// read each call: 1 is off, N a cap, N! exactly N whatever the load (the laws, and the
+// measure's forced widths).
 // serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"
@@ -133,11 +135,12 @@ static uint64_t pool_self(void) {
  struct rusage u;
  if (getrusage(RUSAGE_SELF, &u)) return 0;
  return (uint64_t) (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000000u + (uint64_t) (u.ru_utime.tv_usec + u.ru_stime.tv_usec); }
-// the whole cpus the box can spare now, from the window since the last read; 1 at the first
+// the whole cpus the box can spare now, from the window since the last read; 1 at the first,
+// and all of them where no load can be read
 static int pool_ask(struct pool *p, uint64_t t) {
  uint64_t idle, tot, self = pool_self(), psi;
  int ok = 1, ask = 1;
- if (!(__love_osv == 1 ? pool_stat(p->fd, &idle, &tot) : pool_cptime(&idle, &tot))) return 1;
+ if (!(__love_osv == 1 ? pool_stat(p->fd, &idle, &tot) : pool_cptime(&idle, &tot))) return p->ncpu;
  psi = pool_num(p->fp, "total=", 0, &ok);   // the first line is "some": its total, us of stall
  if (p->tot0 && tot > p->tot0 && t > p->at) {
   uint64_t win = (t - p->at) / 1000,           // us

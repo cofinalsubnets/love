@@ -15,6 +15,9 @@ static inline uint64_t k_rd_satp(void) {
 static inline void k_wr_satp(uint64_t v) {
   asm volatile ("csrw satp, %0\n\tsfence.vma" :: "r"(v) : "memory"); }
 static inline void k_sfence(void) { asm volatile ("sfence.vma" ::: "memory"); }
+// the address a fault was at
+static inline uint64_t k_rd_stval(void) {
+  uint64_t v; asm volatile ("csrr %0, stval" : "=r"(v)); return v; }
 // fence.i: what was written as data now runs
 static inline void k_fence_i(void) { asm volatile ("fence.i" ::: "memory"); }
 // which counters U reads: cycle, time, instret

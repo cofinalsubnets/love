@@ -68,6 +68,7 @@
                12 ['\ 'x [(iop 0) 'x (pick '(1 2)) (pick '(1 2))]]                                 ; the tower ((op x k) k): every arithmetic lane must decline
                ['\ 'x ['? '(< x 1) (bleaf 0) (xpr 2 bleaf iop)]])                                  ; branchy fall-through
    (try f i a) (i % 14 @ 1 (f a a) 10 (f gfz0 a) (f a))   ; two ints for the n-ary leaf, (f n) for the frame call-out
+   fires (trap (_ \ ev 'fires) 0 (a \ b \ {}))                 ; no glaze loaded, no counter: zero fires
    n0 (peep fires () 0)
    (run i) (: s (shape i)  f (ev s)
               (puts (show i + " " + show s + " => " + show (try f i 0) + " | " + show (try f i 1) + " | " + show (try f i 4) + " | " + show (try f i 100) + " ~" + show (peep FZL 'n 0) + "\n")))
