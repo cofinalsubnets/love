@@ -11,7 +11,7 @@
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
 ; horizon too: sky-lit's csun then sky-orb-cloud's
 (module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-ends sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
-         sky-irr sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
+         sky-irr sky-gpu sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow '(view vec starmap))
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
@@ -229,6 +229,17 @@
    f (paint-mix lt wx R sim 1.0 T) c0 (f 0.0)
    sd (thick-sd (two? (lt 'turn) ? (p * orb-k) (deck-fp p dy)))
    [c0 (c+ (f 1.0) (c* -1.0 c0)) ((T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq sd))])
+ ; ..what a gpu takes to draw the deck a ray at a time as sky-colour-at does, a list of
+ ; numbers and the cloud map: the eye's ex ez, the edge, each layer's drift in its map's
+ ; texels, the sun, the light, the cover, and the weather's fall, smog and dye; () under a 'turn
+ (sky-gpu lt wx ex ez sim) (? (two? (lt 'turn)) ()
+   (: n (1.0 * cloud-n) (dr r k o) (: x (sim * lap wx r k * k + o) (x - n * floor (x / n)))
+      s (lt 'sun) d (peep wx 'dye ()) (f x) (1.0 * x)
+      [(map f ([ex ez (edge wx sim) (dr 0.006 16.0 0.0) (dr 0.0025 16.0 0.0) (dr 0.011 37.0 11.3) (dr -0.004 37.0 -5.1)
+               (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'sunk)]
+              + lt 'sunc + [(lt 'cover)] + lt 'amb
+              + [(sky-cover wx sim) (wx 'cover) (sky-fall wx) (peep wx 'smog 0.0) (two? d ? 1 0)]
+              + (two? d ? d [1.0 1.0 1.0]))) (sky-maps () 'cloud)]))
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim) (paint lt wx dx dy dz ex ez sim 0.0 0.0)
  ; ..down rays a scene keeps, laid once by sky-rays, B its light's 'turn

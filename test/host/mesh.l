@@ -189,10 +189,10 @@
  (test (#both > 8000) (gap < 0.04)))
 ;; ..and its mesh for a gpu names no corner it lacks, cut and fanned quads and all, or the
 ;; gpu's helper refuses it
-(: wq (sky-weather 1) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
+(: _ (setenv "LORE_SKY_PX" "0") wq (sky-weather 1) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
    v (mesh-view 640 400 [0.0 0.0 0.0] 0.35 0.3 1.5 0.1 100.0)
    m (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4 {} 2 0 v) nv (#(m 0) // 11)
-   t (m 1) J (iota (#t // 4)) (c k) (t (4 * J + k))
+   t (m 1) J (iota (#t // 4)) (c k) (t (4 * J + k)) _ (setenv "LORE_SKY_PX" "1")
  (test (nv > 0) (all (k \ 0 <= amin (c k) && amax (c k) < nv) ^3)))
 ;; ..and seen only through glass, the sky still drawn behind it: a clear pane all round the
 ;; eye leaves no pixel bare, each the sky's through it
