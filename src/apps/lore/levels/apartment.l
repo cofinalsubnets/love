@@ -141,6 +141,11 @@
 (: yx0 sx0 yx1 -116.2 yz0 sz0 yz1 sz1 yh 5.0)
 (: yxs (map (i \ yx0 + 4.0 * i) ^5) yzs (map (i \ yz0 + 4.0 * i) ^5) yard-mid [-124.2 2.5 22.0])
 (: (yard-pane lo hi) (lens yard-mid (window lo hi pane)))
+; ..the east side's glass alone, cutting nothing: by the house its sheet 5 mm past the yard's
+; edge and a centimetre on into the house, its foot down past the yard's floor; over the house
+; 2 cm past that edge and down into the house's top, past the corners' glass. so it meets the
+; house with no gap, and on no plane the house's faces are
+(: (yard-glass lo hi) (yard-pane lo hi @ q (q 1)))
 (: (post x z) (skin {'all iron} (solid (box [(x - 0.07) 0 (z - 0.07)] [(x + 0.07) (yh + 0.1) (z + 0.07)]))))
 (: (bays bs f) (map (i \ f (bs i) (bs (i + 1))) ^(#bs - 1)))
 (: yard
@@ -149,9 +154,9 @@
     (bays yxs (\ a b (yard-pane [a hy yz0] [b yh (yz0 + 0.06)])))
     (bays yxs (\ a b (yard-pane [a hy (yz1 - 0.06)] [b yh yz1])))
     (bays yzs (\ a b (yard-pane [yx0 hy a] [(yx0 + 0.06) yh b])))
-    (yard-pane [(yx1 - 0.06) hy yz0] [yx1 yh 16.0]) (yard-pane [(yx1 - 0.06) hy 28.0] [yx1 yh yz1])
-    (yard-pane [(yx1 - 0.06) 3.2 16.0] [yx1 yh 28.0])
-    (yard-pane [yx0 (yh - 0.06) yz0] [yx1 yh yz1])
+    (yard-glass [(yx1 - 0.025) (hy - 0.1) yz0] [(yx1 + 0.035) yh 16.01]) (yard-glass [(yx1 - 0.025) (hy - 0.1) 27.99] [(yx1 + 0.035) yh yz1])
+    (yard-glass [(yx1 - 0.01) 3.19 15.98] [(yx1 + 0.05) yh 28.02])
+    (yard-pane [yx0 (yh - 0.06) yz0] [(yx1 + 0.02) yh yz1])
     (map (x \ [(post x (yz0 - 0.07)) (post x (yz1 + 0.07))]) yxs)
     (map (z \ [(post (yx0 - 0.07) z) (post (yx1 + 0.07) z)]) [yz0 yz1])
     (headstone [-131.0 hy 15.2] 45 granite)

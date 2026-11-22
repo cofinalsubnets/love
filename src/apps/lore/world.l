@@ -196,11 +196,19 @@
  (brush-of r) (r 'land @
    () (: sh (r 'shape)
          b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-         (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0) 'sheer (peep r 'sheer 0)))
+         (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0) 'sheer (peep r 'sheer 0)
+               'opening (peep r 'opening 0)))
    rs (pins (brush-land rs) 'skin (r 'skin) 'sig (foldl (\ a q (a + q 0 + 3.1 * q 1 + 7.3 * q 2)) 0.0 (cats rs))))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min (p 0) (q 0)) (d 'y) (min (p 2) (q 2))] [(max (p 0) (q 0)) (d 'y + d 'h) (max (p 2) (q 2))]))
- (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
+ ; ..a window's opening or a doorway with no skin of its own takes the skin of what it cuts:
+ ; of the last brush before it its box overlaps more than a hair, a solid before an air
+ (brushes-of lv) (: (over a b) (all (k \ a 'lo k + 1e-4 < b 'hi k && b 'lo k + 1e-4 < a 'hi k) ^3)
+   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b
+                     (: os (filter (q \ two? (q 'skin) && q 'land = () && over q b) bs) s (filter (q \ q 'air = 0) os)
+                        (two? os ? (pins b 'skin (<(rev (two? s ? s os)) 'skin)) b)))
+   ws (rev (foldl (\ a b (skinned (rev a) b . a)) () (map brush-of (lv 'brushes))))
+   (ws + map (d \ skinned ws (pins (doorway d) 'opening 1)) (lv 'doors)))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
  ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else

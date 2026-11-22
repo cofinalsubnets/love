@@ -669,6 +669,15 @@
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
+;; ..an opening with no skin takes the skin of what it cuts, so shows no plain texture; seams
+;; finds one with nothing to take
+(borrow "src/apps/lore/seams.l")
+(: ow "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (start [2 0 1] 0 0) "
+   (op w) (: st (world-new 8 8 (world-read (ow + w + ")")) "") [st (filter (b \ peep b 'opening 0 = 1) (st 'sc 'brushes))])
+   a (op "(skin {'all t} (room [0 0 0] [4 3 4])) (window [1 0 1.9] [3 2.5 2] t)")
+   b (op "(room [0 0 0] [4 3 4]) (window [1 0 1.9] [3 2.5 2] t)")
+ (test (#(a 1) = 1) (two? (a 1 0 'skin)) (seams (a 0) = ())
+       (#(b 1) = 1) (b 1 0 'skin = ()) (#(seams (b 0)) = 1) (seams (b 0) 0 'classes = ['floor])))
 ;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
 ;; as a drape
 (: ld "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) "
@@ -1070,6 +1079,13 @@
        (has? (pl "(plant [0 0 0] 3 'kudzu)") "a SPECIES") (has? (pl "(plant [0 0 0] 3 {'like 'oak 'hue 1})") "a plant takes")
        (has? (pl "(plant [0 0 0] 3 {'levels [{'n 2 'hue 1}]})") "a level takes")
        (has? (pl "(plant [0 0 0] 3 {'leaf {'kind 'scale}})") "a leaf's 'kind") (has? (pl "(plant [0 0 0] 'x 'oak)") "(plant [x y z]")))
+;; a tree cut through its trunk and its crotch: each cut's face, charred at its middle, wound
+;; as the wood round it is, so it closes the cut seen from outside
+(: bt (bough-grow [7 1.0 1.0]) m (bough-burnt bt 0 1.0 [[0.0 1.0 0.0] 4.2]) v (m 0)
+   (way t) (: p (i \ take 3 (v (t i))) N (drop 5 (take 8 (v (t 0)))) (dot (cross (c- (p 1) (p 0)) (c- (p 2) (p 0))) N > 0.0 ? 1 -1))
+   (cap? t) (drop 8 (v (t 0)) = [0.05 0.035 0.03])
+   cs (filter cap? (m 1)) ws (filter (t \ !(cap? t)) (m 1))
+ (test (#cs > 0) (all (t \ way t = -1) cs) (2 * #(filter (t \ way t = -1) ws) > #ws)))
 ; produce: every kind a closed thing, its rows its profile's, each row's last point its first,
 ; resting where it was put; a seed the same one and another not; a 'like changing one; a pile a
 ; painted sheet and whole ones gapped apart, thrown by its seed; the sheet and things swung by a
