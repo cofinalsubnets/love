@@ -373,15 +373,27 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    ; bool/true/false bare, as C23; an iso -std keeps them plain names
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
+   (cc-pre {'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
+    (un ? (stddefs tgt sw + booldefs dia) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
                  ; our libc carries its whole surface on every kernel: a source asks it, not the kernel
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
+                 (elem tgt '(x64 a64 rv64 wasm) ? '("__SIZEOF_INT128__=16") ())))      ; the wide pair (gen's d128 lane), as gcc's
+   ; a define's name and body, a bare name's body 1
+   (dparts d) (d @ (n + "=" + b) [n b] _ [d "1"])
+   ; under -Werror a -D that gives a predefine another body is an error, as gcc's and clang's
+   ; redefinition warning is; a -U ahead of it says the change is meant
+   (redef pre ds us)
+    (? (atom? ds) 0
+       (string? <ds)
+        (: nb (dparts <ds) n (nb 0)
+           hit (filter (p \ dparts p @ q (q 0 = n && q 1 != nb 1)) pre)
+           (two? hit && !(elem n us) ? (udie 1 "cc: \(n) redefined on the command line (-Werror)") (redef pre >ds us)))
+       (redef pre >ds (<ds 1 . us)))
+   (cc-defs t) (: pre (cc-pre t) ds (t 'ds) _ (t 'werr ? (redef pre ds ()) 0) (pre + ds))
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
@@ -1550,6 +1562,7 @@
           ("-mindirect-branch-cs-prefix" . r) (flags r (fpush (xkon t 'cs) 'x6f "-mindirect-branch-cs-prefix"))
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
+          ("-Werror" . r) (flags r (pin t 'werr 1))
           ((a . r) && tol? a) (flags r t)
           ((a . r) && (fok? a || mok? a)) (flags r t)
           ; a bare `-` is an input, the source on stdin

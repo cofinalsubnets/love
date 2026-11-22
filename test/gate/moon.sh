@@ -1012,6 +1012,12 @@ done
 printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3] * t[b & 3]; }\n' > "$ho/.rz.c"
 moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
+# under -Werror a -D that gives a predefine another body is an error, unless a -U ahead means it
+moonrun -Werror -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
+[ $r -eq 1 ] && grep -q '__SIZEOF_INT128__ redefined' "$ho/.fl.err" || fail "-Werror -D of a predefine: exit $r, not refused by name"
+moonrun -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine refused without -Werror"
+moonrun -Werror -U__SIZEOF_INT128__ -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine refused after its -U"
+moonrun -Werror -D__SIZEOF_INT128__=16 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine's own body refused"
 # what mooncc does not honour refuses by name, exit 2
 for fl in -mcmodel=large -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?

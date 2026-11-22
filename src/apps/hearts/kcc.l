@@ -42,7 +42,7 @@
    ; predefines true, false and bool, which linux/stddef.h declares; it has __int128 but not clang's
    ; typedefs; and the overlay answers _THIS_IP_ without &&label, which mooncc lacks
    cv (split "." (getenv "HEARTS_CLANG_VERSION" @ v (string? v && 0 < #v ? v "22.1.8")))
-   ident ["-D__clang__=1" ("-D__clang_major__=" + cv 0) ("-D__clang_minor__=" + cv 1) ("-D__clang_patchlevel__=" + cv 2)
+   ident ["-U" "__GNUC__" "-U" "__GNUC_MINOR__" "-U" "__GNUC_PATCHLEVEL__" "-D__clang__=1" ("-D__clang_major__=" + cv 0) ("-D__clang_minor__=" + cv 1) ("-D__clang_patchlevel__=" + cv 2)
           "-D__GNUC__=4" "-D__GNUC_MINOR__=2" "-D__GNUC_PATCHLEVEL__=1" "-U" "true" "-U" "false" "-U" "bool"
           "-D__uint128_t=unsigned __int128" "-D__int128_t=__int128" "-I" (here + "/overlay")]
    ; flags mooncc refuses that change nothing it lays: the endianness and target it already has,
