@@ -109,7 +109,7 @@ EOF2
   ecmp "$ho/love" -S
   ecmp "$ho/love" -R .comment -S
   ecmp "$ho/love" --set-section-flags .love.rela=noload --set-section-flags '.rel*'=noload
-  ecmp "$ho/love" --remove-section='.love.R*' --remove-section='!.love.README' -R .comment -w --strip-unneeded-symbol='lv_*'
+  ecmp "$ho/love" --remove-section='.love.[ir]*' --remove-section='!.love.rela' -R .comment -w --strip-unneeded-symbol='lv_*'
 fi
 
 echo "$name: $n flattens byte-identical to $oc, $m elf rewrites to llvm's, two refusals held, i386 and a thumb2 bcc linked bare"

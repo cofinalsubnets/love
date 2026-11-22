@@ -1,12 +1,9 @@
-// xiao nrf52840 arch backend, the C half (no sdk): the crystal, the UART0 console on D6/D7,
-// TIMER0's microseconds and the RGB LED. vectors, crt0 and the asm helpers are mkboot.l's
+// xiao nrf52840 arch backend, the C half (no sdk): the crystal, the console on usb.c, TIMER0's
+// microseconds and the RGB LED. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "nrf52840.h"
+#include "../crt0.h"
 #include "../../../src/inle/bput.h"
-
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[];
-extern void *const vectors[];
 
 int main(void);
 
@@ -26,14 +23,11 @@ void hardfault_report(uint32_t *frame) {
 // interrupts off and cleared first, since this table has none past the system sixteen
 void cmain(void) {
   arm_irq_off();
-  for (uint32_t i = 0; i < 8; i++) REG(NVIC_ICER0 + 4u * i) = 0xFFFFFFFFu, REG(NVIC_ICPR0 + 4u * i) = 0xFFFFFFFFu;
   REG(SCB_CPACR) |= (0xFu << 20);
   arm_dsb_isb();
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
-  REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
+  crt0(8);
   clocks_init();
-  serial_init();
+  timer_init();
   main();
   for (;;) arm_wfi(); }
 
@@ -47,37 +41,7 @@ int clock_xtal(void) {
   uint32_t s = REG(CLOCK_HFCLKSTAT);
   return (s & HFCLKSTAT_RUNNING) && (s & HFCLKSTAT_XTAL); }
 
-// --- UART0 console, 115200 8N1 -------------------------------------------
-void serial_init(void) {
-  REG(GPIO_OUTSET(P1)) = 1u << TX_PIN;              // idle high before the uart takes it
-  REG(GPIO_DIRSET(P1)) = 1u << TX_PIN;
-  REG(GPIO_CNF(P1, RX_PIN)) = 3u << 2;              // input, pulled up: an open pin reads idle
-  REG(UART_ENABLE) = 0;
-  REG(UART_PSELTXD) = PSEL_P1(TX_PIN);
-  REG(UART_PSELRXD) = PSEL_P1(RX_PIN);
-  REG(UART_PSELRTS) = PSEL_OFF;
-  REG(UART_PSELCTS) = PSEL_OFF;
-  REG(UART_BAUDRATE) = UART_BAUD_115200;
-  REG(UART_CONFIG) = 0;
-  REG(UART_ENABLE) = 4;
-  REG(UART_TXDRDY) = 0, REG(UART_RXDRDY) = 0;
-  REG(UART_STARTTX) = 1;
-  REG(UART_STARTRX) = 1; }
-
-// the first byte has no TXDRDY before it, so each waits after its own write
-void serial_putc(int c) {
-  REG(UART_TXD) = (uint32_t)(c & 0xff);
-  for (uint32_t i = 0; i < 1000000u && !REG(UART_TXDRDY); i++) {}
-  REG(UART_TXDRDY) = 0; }
-
-int serial_rx_ready(void) {
-  if (REG(UART_ERROR)) REG(UART_ERRORSRC) = REG(UART_ERRORSRC), REG(UART_ERROR) = 0;
-  return REG(UART_RXDRDY) != 0; }
-
-int serial_getc(void) {
-  while (!serial_rx_ready()) {}
-  REG(UART_RXDRDY) = 0;
-  return (int)(REG(UART_RXD) & 0xffu); }
+void serial_putc(int c) { usb_putc(c); }
 
 // ms since boot off TIMER0 at 1 MHz (16 MHz / 2^4)
 void timer_init(void) {
@@ -99,9 +63,14 @@ void led_init(void) {
 
 void led_put(uint32_t pin, int on) { REG(on ? GPIO_OUTCLR(P0) : GPIO_OUTSET(P0)) = 1u << pin; }
 
-// the bootloader's drive without the reset button's double tap
-void reboot_uf2(void) {
-  REG(POWER_GPREGRET) = GPREGRET_UF2;
+// off the bus first, so the host sees the port go; the reset comes up in the flash's app
+void reset(void) {
+  usb_off();
   arm_dsb_isb();
   REG(SCB_AIRCR) = 0x05FA0004u;                     // vectkey, sysresetreq
   for (;;) {} }
+
+// the bootloader's drive without the reset button's double tap
+void reboot_uf2(void) {
+  REG(POWER_GPREGRET) = GPREGRET_UF2;
+  reset(); }

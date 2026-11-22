@@ -2069,6 +2069,18 @@
                                             (loc () 6) (ret (var "y"))))))))
       (<>(cparse-o <>(clex src) 'x64 'moon {}) = <>(cparse <>(clex src)))))
 
+; --- a .S preprocessed in blocks: every block size spells one text. the cuts fall inside a
+; macro call's arguments, after a name that may open one, in an #if, a comment and a splice ---
+(: src ("#define PTR .quad\n#define F(a, b) a + b\n#define G F\n/* a comment\n   over lines */ .text\n"
+        + "#if 1\nx:\t.long F(1,\n   2)\n#else\n\t.long 9\n#endif\n\t.ascii \"a/*b\" ; # gas's\n"
+        + "\t.byte 1, \\\n   2\n\tG\n\t(3, 4)\n1:\tPTR 1b\n#ifdef NOPE\n\tnope\n#endif\n"
+        + "\t.asciz \"s\" \"t\"\n\tmov $1, %eax // c\n")
+   (sp q) (asmcppk "<law>" src () () () q)
+   whole (sp 1073741824)
+   (test
+      (whole = "\n.text\nx: .long 1 +\n2\n.ascii \"a/*b\" ;\n.byte 1, 2\nF\n(3, 4)\n1: .quad 1b\n.asciz \"st\"\nmov $1, %eax")
+      (sp 1 = whole) (sp 7 = whole) (sp 64 = whole) (sp 65536 = whole)))
+
 (test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "test/law/moon: ok")
 (put err 10)

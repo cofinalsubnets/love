@@ -68,7 +68,7 @@
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]
      ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
-     ["" ["src/love/holo/mips.l" "src/love/holo/decode.l" "test/holo/mipsrun.l" "test/holo/mipscodec.l" "test/holo/mipslink.l" "test/holo/mipsrel.c" "test/holo/mipsrela.s" "test/holo/mipsrelg.s" "test/holo/mipsrelb.c" "test/holo/mipsrelm.c" "test/gate/mips.sh"] ["test_mips" "test_ccmips"] ""]
+     ["" ["src/love/holo/mips.l" "src/love/holo/decode.l" "test/holo/mipsrun.l" "test/holo/mipscodec.l" "test/holo/mipslink.l" "test/holo/mipsrel.c" "test/holo/mipsrela.s" "test/holo/mipsrelg.s" "test/holo/mipsrelb.c" "test/holo/mipsrelm.c" "test/holo/mipstp.c" "test/gate/mips.sh"] ["test_mips" "test_ccmips"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
      ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]
@@ -84,7 +84,7 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_ch32v203" "test_ch32v203_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32" "test_esp32_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_ch32v203" "test_ch32v203_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees

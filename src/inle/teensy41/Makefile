@@ -1,66 +1,29 @@
-# Teensy 4.1 (i.MX RT1062) build -- love compiled END TO END by mooncc. `make -C
-# src/inle/teensy41` from the project root. Every C file -- the runtime's seven, the lm
-# floor, libc, teensy41.c, main.c -- goes through `mooncc -t thumb2`; boot.o (the
-# ROM-facing FlexSPI/IVT/vector blocks + crt0 + the asm helpers) is laid from holo IR by
-# mkboot.l, the baked heap image by mkimg.l, tlink.l LINKS over holo's ldbare32 and
-# ocopy.l writes the .hex and .bin over holo's copy.l -- so the port owes no gas, no ld, no linker script and
-# no objcopy. No libgcc either: mooncc's thumb2 lanes are self-contained (zero __aeabi_*).
-# The one outside program left is qemu, and only to BAKE the heap image (src/inle/mps2 runs the
-# baker; no qemu leaves the blob empty and the device egg-boots).
-#
-# The default target also VERIFIES the boot image: FCFB tag at flash offset 0, IVT header
-# at 0x1000, and a thumb-bit entry pointing into .startup -- the exact fields whose
-# mislayout cost first silicon its boot.
+# teensy 4.1 (i.mx rt1062): the inle kernel, kmain over this board's drivers, all compiled by
+# mooncc. `make -C src/inle/teensy41` from the project root. boot.o (the rom-facing flexspi,
+# ivt and vector blocks, crt0, the asm helpers) is laid from holo ir by mkboot.l, the baked
+# image by mkimg.l; tlink.l links over holo's ldbare32 and ocopy.l writes the .hex and .bin,
+# so the port owes no gas, ld, linker script or objcopy. qemu-arm only bakes the image.
+# the build checks the boot image: the fcfb tag at 0, the ivt at 0x1000, a thumb-bit entry
 p_tgt = thumb2
 p_be  = thumb2
-lib_h = out/lib/egg.h out/lib/post.h out/lib/prel.h out/lib/ev.h out/lib/love_version.h
 include ../port.mk
 
-te_cc = $(MOONCC) -t thumb2 -D tco=1 -D __STDC_HOSTED__=0 -I. -Isrc/love -Iout/lib
-
-objs = $(love_o) $(heap_o) $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(libc_o) \
-  $(R)/$(o)/teensy41.o $(R)/$(o)/usb.o $(R)/$(o)/sd.o $(R)/$(o)/psram.o $(R)/$(o)/main.o $(R)/$(o)/boot.o \
-  $(R)/$(o)/love-img.o
-
-.PHONY: teensy41 flash psramtest flashpsram
-default: teensy41
-teensy41: $(R)/$(o)/love.hex
-
-$(foreach u,$(love_m),$(eval $(call p_obj,$u,src/love/$u.c,\
-  $(S)/love/$u.c $(love_dep),$(te_cc))))
-$(eval $(call p_heap,$(te_cc),))
-$(foreach m,$(libc_m),$(eval $(call p_obj,$m,src/apps/moon/lib/moonlibc/string/$m.c,\
-  $(S)/apps/moon/lib/moonlibc/string/$m.c $(libc_dep),$(te_cc) -Isrc/apps/moon/include)))
-$(eval $(call p_obj,teensy41,src/inle/teensy41/teensy41.c,teensy41.c teensy41.h $(S)/inle/bput.h $(S)/love/love.h $(mc),$(te_cc)))
-$(eval $(call p_obj,sd,src/inle/teensy41/sd.c,sd.c teensy41.h $(mc),$(te_cc)))
-$(eval $(call p_obj,usb,src/inle/teensy41/usb.c,usb.c teensy41.h $(S)/inle/usbcdc.h $(mc),$(te_cc)))
-$(eval $(call p_obj,main,src/inle/teensy41/main.c,main.c teensy41.h $(S)/inle/bput.h $(S)/inle/ffalloc.h $(S)/love/love.h $(lib_hR) $(mc),$(te_cc)))
+.PHONY: kernel flash psramtest flashpsram
+default: kernel
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
 # holo IR -- no gas. src/inle/mps2/mkstart.l is the same shape with one section,
 # test/boards/rp2040/mkboot2.l the named-section one.
 $(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
 
-# the baked heap image: src/inle/mps2's qemu baker dumps it (a build-time bake), and mkimg.l
-# lays the blob as an object in place of `ld -r -b binary`. FORCE keeps the delegation
-# live -- the mps2 makefile's own deps decide whether the qemu bake re-runs.
-$(R)/out/mps2/love.img: FORCE
-	@$(MAKE) --no-print-directory -C $(S)/inle/mps2 img
-$(eval $(call p_lay,love-img,mkimg,"out/mps2/love.img" "$(o)/love-img.o"))
-$(R)/$(o)/love-img.o: $(R)/out/mps2/love.img
-
 # the link is ours: tlink.l drives holo's ldbare32 with the XIP flash map, in place of
 # arm-none-eabi-ld + teensy41.lds.
 $(eval $(call p_link,tlink))
 $(eval $(p_ocopy))
 
-$(R)/$(o)/love.elf: $(objs) $(R)/$(o)/tlink.l $(lv)
-	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(objs:$(R)/%=%)
-
-# .hex (Intel HEX) is what teensy_loader_cli / the Teensy Loader GUI flash. The .bin is the
-# verification surface: byte offsets ARE flash offsets.
-$(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
+# the .bin is what `make flash` writes and the check, its byte offsets flash offsets; the
+# .hex is the same image for a loader that wants one
+define te_flat
 	@echo LOVE	$@
 	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
 	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
@@ -70,63 +33,66 @@ $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
 	  ok = fcfb==0x42464346 and ivt==0x432000D1 and (entry&1)==1 and 0x60000000<entry<0x60800000; \
 	  print('boot image: FCFB@0 %08x IVT@1000 %08x entry %08x --'%(fcfb,ivt,entry), 'ok' if ok else 'BAD'); \
 	  sys.exit(0 if ok else 1)" || { echo "FAIL boot image layout"; exit 1; }
-
-# the kernel face: kmain over these drivers, linked from the arm love's own objects (the root's
-# xa=arm lane), so the image that love bakes is the one this wakes. `make kernel`
-kd = $(o)/k
+endef
+# kmain over these drivers, linked from the arm love's own objects (the root's xa=arm
+# lane), so the image that love bakes is the one this wakes
 k_cc = $(MOONCC) -t arm -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include
 k_hdr = $(addprefix $(R)/out/lib/,baked.h distlist.h korelist.h crewlist.h seat.h tasks.h)
 k_inle = kmain sys hda
+k_ih = $(wildcard $(S)/inle/*.h)                  # kboot.h lays the record kern.c fills
 k_brd = kern teensy41 usb sd psram
-k_objs = $(k_inle:%=$(R)/$(kd)/%.o) $(k_brd:%=$(R)/$(kd)/%.o) $(R)/$(o)/boot.o $(R)/$(kd)/love-img.o
-$(foreach u,$(k_inle),$(eval $(call p_obj,k/$u,src/inle/$u.c,$(S)/inle/$u.c $(S)/inle/k.h $(mc) $(k_hdr),$(k_cc))))
-$(foreach u,$(k_brd),$(eval $(call p_obj,k/$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(S)/inle/k.h $(mc),$(k_cc))))
+k_objs = $(k_inle:%=$(R)/$(o)/%.o) $(k_brd:%=$(R)/$(o)/%.o) $(R)/$(o)/boot.o $(R)/$(o)/love-img.o
+$(foreach u,$(k_inle),$(eval $(call p_obj,$u,src/inle/$u.c,$(S)/inle/$u.c $(k_ih) $(mc) $(k_hdr),$(k_cc))))
+$(foreach u,$(k_brd),$(eval $(call p_obj,$u,src/inle/teensy41/$u.c,$u.c teensy41.h psram.h $(k_ih) $(mc),$(k_cc))))
 $(k_hdr) $(R)/out/rt/arm.list $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o $(R)/out/.kore-cat.l: FORCE
 	@$(MAKE) --no-print-directory -C $(R) xa=arm $(patsubst $(R)/%,%,$@)
 # the image: the arm love relinked over noblob.o, as the kernel is, so the carried-c digests
-# agree; it bakes a cat under qemu-arm. the lib alone by default: kore's heap and a major's
-# copy of it pass the 16 MB (k_cat=out/.kore-cat.l takes it anyway)
-k_cat = $(kd)/lib-cat.l
-$(R)/$(kd)/lib-cat.l:
+# agree; it bakes a cat under qemu-arm: kore's, so lush and the tools are there at boot
+# (k_src=out/teensy41/lib-cat.l bakes the lib alone). baked under LOVE_NO_GLAZE: a cortex-m has
+# no a32 state, so it cannot enter an arm native's stub, and the cat's last form refuses a bake
+# that loaded the glaze
+k_src = out/.kore-cat.l
+k_cat = $(o)/k-cat.l
+$(R)/$(o)/lib-cat.l: Makefile
 	@mkdir -p $(dir $@)
-	@printf '\n(cite (quote verbs) (quote mark) ())\n\n(cite (quote glaze) (quote srcdrop) ())\n' > $@
+	@printf '\n(cite (quote verbs) (quote mark) ())\n' > $@
+$(R)/$(k_cat): $(R)/$(k_src) Makefile
+	@mkdir -p $(dir $@)
+	@{ cat $(R)/$(k_src); printf '\n(? (cite (quote glaze)) (puts "k-cat: the glaze is loaded, and a cortex-m cannot enter its natives", putc 10, quit 1) 0)\n'; } > $@
 k_xo = $(R)/out/x-arm/o.list $(R)/out/x-arm/o/love/noblob.o
-$(R)/$(kd)/baker: $(k_xo) $(lv)
+$(R)/$(o)/baker: $(k_xo) $(lv)
 	@echo MOON	$@
 	@mkdir -p $(dir $@)
-	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/noblob.o -o $(kd)/baker
-$(R)/$(kd)/love.img: $(R)/$(kd)/baker $(R)/$(k_cat)
+	@cd $(R) && $(MOONCC) -t arm $$(cat out/x-arm/o.list) out/x-arm/o/love/noblob.o -o $(o)/baker
+$(R)/$(o)/love.img: $(R)/$(o)/baker $(R)/$(k_cat)
 	@echo BAKE	$@ "(qemu-arm)"
-	@cd $(R) && LOVE_NO_IMAGE=1 qemu-arm $(kd)/baker bake -l $(k_cat) $(kd)/love.img > $(kd)/bake.log 2>&1 \
-	   && test -s $(kd)/love.img || { tail -20 $(R)/$(kd)/bake.log; exit 1; }
-$(eval $(call p_lay,k/love-img,mkimg,"$(kd)/love.img" "$(kd)/love-img.o"))
-$(R)/$(kd)/love-img.o: $(R)/$(kd)/love.img
-.PHONY: kernel
-kernel: $(R)/$(kd)/love.hex
-$(R)/$(kd)/love.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(lv)
+	@cd $(R) && LOVE_NO_IMAGE=1 LOVE_NO_GLAZE=1 qemu-arm $(o)/baker bake -l $(k_cat) $(o)/love.img > $(o)/bake.log 2>&1 \
+	   && test -s $(o)/love.img || { tail -20 $(R)/$(o)/bake.log; exit 1; }
+$(eval $(call p_lay,love-img,mkimg,"$(o)/love.img" "$(o)/love-img.o"))
+$(R)/$(o)/love-img.o: $(R)/$(o)/love.img
+kernel: $(R)/$(o)/love.hex
+$(R)/$(o)/love.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
-	@cd $(R) && out/love $(o)/tlink.l $(kd)/love.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
+	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
 	   out/x-arm/o/love/noblob.o $$(cat out/rt/arm.list) $$(cat out/rt/arm.list)
-$(R)/$(kd)/love.hex: $(R)/$(kd)/love.elf $(R)/$(o)/ocopy.l
-	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(kd)/love.elf $(kd)/love.hex
+$(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
+	$(te_flat)
 
-# Flash a connected Teensy 4.1 (tap the on-board button to enter the bootloader):
+# flash the kernel to a connected teensy 4.1 (the button, or 134 baud, enters the loader)
 flash: $(R)/$(o)/love.hex
-	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/love.hex
+	cd $(R) && out/love src/tools/halfkay.l write $(o)/love.bin
 
-# PSRAM smoke test (bake-free fast iteration): probe + pattern-test the FlexSPI2 PSRAM
-# chips, report over serial. `make psramtest` then `make flashpsram`.
+# the psram smoke test, no bake: probes and pattern-tests the flexspi2 chips, says so on the
+# uart. `make psramtest` then `make flashpsram`
+$(eval $(call p_obj,psram-test,src/inle/teensy41/psram-test.c,psram-test.c psram.h teensy41.h $(S)/inle/bput.h $(mc),$(k_cc)))
 pt_objs = $(R)/$(o)/psram.o $(R)/$(o)/psram-test.o $(R)/$(o)/teensy41.o $(R)/$(o)/boot.o
-$(eval $(call p_obj,psram,src/inle/teensy41/psram.c,psram.c psram.h teensy41.h $(mc),$(te_cc)))
-$(eval $(call p_obj,psram-test,src/inle/teensy41/psram-test.c,psram-test.c psram.h teensy41.h $(S)/inle/bput.h $(mc),$(te_cc)))
 psramtest: $(R)/$(o)/psram-test.hex
 flashpsram: $(R)/$(o)/psram-test.hex
-	teensy_loader_cli --mcu=TEENSY41 -w -v $(R)/$(o)/psram-test.hex
-
+	cd $(R) && out/love src/tools/halfkay.l write $(o)/psram-test.bin
 $(R)/$(o)/psram-test.elf: $(pt_objs) $(R)/$(o)/tlink.l $(lv)
 	@echo HOLO	$@
 	@cd $(R) && out/love $(o)/tlink.l $(o)/psram-test.elf $(pt_objs:$(R)/%=%)
 $(R)/$(o)/psram-test.hex: $(R)/$(o)/psram-test.elf $(R)/$(o)/ocopy.l
 	@echo LOVE	$@
 	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/psram-test.elf $(o)/psram-test.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/psram-test.elf $(o)/psram-test.bin

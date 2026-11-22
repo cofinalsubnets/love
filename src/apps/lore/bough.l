@@ -191,19 +191,24 @@
    ws (atom? cr ? ss (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) ss))
    (mesh-join (map (m \ clip (turned m) pl) ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ws)))))
  ; ..the wood as runs of tube, the crotch's own cut back to its box, all turned to face out;
- ; and one leaflet in five, a little larger, both sides, each facing up so either side
- ; takes the light from above
+ ; and one leaflet in eight, larger, both sides, each facing up so either side takes the light
+ ; from above: an ovate leaf, base, side, tip and side, darker at its base and lighter at its
+ ; tip, its halves' normals tipped apart as if folded down its midrib. a plant's own 'every and
+ ; 'grow are as many times fewer and larger, the crown as full
  (bough-mesh seed tex ts) (: tr (tree-of seed) cr (crotch tr tex ts)
    (flip m) (mesh (m 0) (map (t \ [(t 0) (t 2) (t 1) (t 3)]) (m 1)))
    ss (atom? cr ? (tr 'segs) (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) (tr 'segs)))
    wood (flip (mesh-join ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ss))))
-   ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % peep tr 'every 5 = 0))) n #ix (g q) (tr q ix) f (peep tr 'grow 1.7)
+   ev (int (1.6 * peep tr 'every 5 + 0.5)) ix (iota ((tr 'kind = 2.0) * (iota #(tr 'kind) % ev = 0))) n #ix (g q) (tr q ix) f (1.26 * peep tr 'grow 1.7)
    P [(g 'x) (g 'y) (g 'z)] A [(f * g 'ax) (f * g 'ay) (f * g 'az)] W [(f * g 'sx) (f * g 'sy) (f * g 'sz)]
    (corner u s) (map (j \ P j + u * A j + s * W j) ^3) C [(corner -0.5 -1.0) (corner -0.5 1.0) (corner 0.5 0.0)]
+   K [(corner -0.5 0.0) (corner -0.05 -1.0) (corner 0.5 0.0) (corner -0.05 1.0)]
    (e q j) (C q j - C 0 j) N0 [(e 2 1 * e 1 2 - e 2 2 * e 1 1) (e 2 2 * e 1 0 - e 2 0 * e 1 2) (e 2 0 * e 1 1 - e 2 1 * e 1 0)]
    up ((N0 1 >= 0.0) * 2.0 - 1.0) L (up / (sqrt (2 (N0 0) + 2 (N0 1) + 2 (N0 2)) + 1e-12)) N (map (j \ N0 j * L) ^3)
+   wl (1.0 / (sqrt (2 (W 0) + 2 (W 1) + 2 (W 2)) + 1e-12)) (tip k) (map (j \ (N j + k * wl * W j) * 0.958) ^3)
+   Ns [N (tip -0.3) N (tip 0.3)] ks [0.78 1.0 1.14 1.0]
    sh (g 'shade) lc (peep tr 'leafc [0.24 0.4 0.13]) col [(lc 0 * sh) (lc 1 * sh) (lc 2 * sh)]
-   (vert i q) (: c (C q) (r T) (T i) [(r (c 0)) (r (c 1)) (r (c 2)) 0.0 0.0 (r (N 0)) (r (N 1)) (r (N 2)) (r (col 0)) (r (col 1)) (r (col 2))])
-   leaves (mesh (map (t \ vert (t // 3) (t % 3)) ^(3 * n))
-                (map (t \ (: o (3 * (t // 2)) (t % 2 @ 0 [o (o + 1) (o + 2) -1] [o (o + 2) (o + 1) -1]))) ^(2 * n)))
+   (vert i q) (: c (K q) m (Ns q) k (ks q) (r T) (T i) [(r (c 0)) (r (c 1)) (r (c 2)) 0.0 0.0 (r (m 0)) (r (m 1)) (r (m 2)) (k * r (col 0)) (k * r (col 1)) (k * r (col 2))])
+   leaves (mesh (map (t \ vert (t // 4) (t % 4)) ^(4 * n))
+                (catmap (i \ (: o (4 * i) [[o (o + 1) (o + 2) -1] [o (o + 2) (o + 3) -1] [o (o + 2) (o + 1) -1] [o (o + 3) (o + 2) -1]])) ^n))
    (mesh-join [wood leaves]))))

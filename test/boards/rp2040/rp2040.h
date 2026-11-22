@@ -22,7 +22,6 @@
 #define WATCHDOG_BASE   0x40058000u
 #define SIO_BASE        0xd0000000u
 #define PPB_BASE        0xe0000000u
-#define VTOR_ADDR       (PPB_BASE + 0xed08u)   // M0PLUS_VTOR
 
 // RESETS
 #define RESETS_RESET      (RESETS_BASE + 0x0u)

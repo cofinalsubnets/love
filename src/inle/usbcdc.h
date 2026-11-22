@@ -9,7 +9,10 @@
 // UCDC_ACM2 adds a second cdc-acm port there instead, a uart's bytes (the second port's half)
 #include <stdint.h>
 
-enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = 4096 };   // ucdc_rxn a power of two
+#ifndef UCDC_RXN
+#define UCDC_RXN 4096
+#endif
+enum { ucdc_pkt = 64, ucdc_tx = 1024, ucdc_rxn = UCDC_RXN };   // ucdc_rxn a power of two, UCDC_RXN a board's
 
 // the controller's: control transfers on endpoint 0, then the data endpoints
 static void usbhw_ep0_in(void const *src, uint32_t n);   // n bytes in (n may be 0), status out
@@ -164,7 +167,7 @@ static void ucdc_setup(uint32_t s0, uint32_t s1) {
   usbhw_ep0_stall(); }
 
 // endpoint 0's data out landed: a line coding
-// 134 baud is the loaders' ask for the bootloader (teensy_loader_cli -s), taken once the
+// 134 baud is the loaders' ask for the bootloader (as Teensyduino's), taken once the
 // status stage is out
 static void ucdc_ep0_out(uint8_t const *src, uint32_t n) {
   if (ucdc_lc_wanted == 2) { ucdc_fn2_coding(src, n); ucdc_lc_wanted = 0; return; }

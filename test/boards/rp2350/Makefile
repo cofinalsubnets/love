@@ -22,16 +22,16 @@ pobjs = $(R)/$(o)/rp2350.o $(R)/$(o)/probe.o $(R)/$(o)/pusb.o $(R)/$(o)/rt.o $(R
 default: rp2350
 rp2350: $(R)/$(o)/firm.uf2 $(R)/$(o)/firm-ram.uf2 $(R)/$(o)/probe.uf2
 
-$(eval $(call p_obj,rp2350,test/boards/rp2350/rp2350.c,rp2350.c rp2350.h $(S)/inle/bput.h $(mc),$(rp_cc)))
+$(eval $(call p_obj,rp2350,test/boards/rp2350/rp2350.c,rp2350.c rp2350.h ../crt0.h $(S)/inle/bput.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,main,test/boards/rp2350/main.c,main.c rp2350.h ../battery.h $(S)/inle/bput.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,usb,test/boards/rp2040/usb.c,../rp2040/usb.c rp2350.h $(S)/inle/usbcdc.h $(mc),$(rp_cc) -D 'UCDC_PRODUCT="love board"'))
 # the swd probe, ../rp2040's, on this chip
 $(eval $(call p_obj,probe,test/boards/rp2040/probe.c,../rp2040/probe.c rp2350.h $(mc),$(rp_cc)))
 $(eval $(call p_obj,pusb,test/boards/rp2040/usb.c,../rp2040/usb.c rp2350.h $(S)/inle/usbcdc.h $(mc),$(rp_cc) -D UCDC_ACM2))
 
-$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o"))
+$(eval $(call p_lay,boot,mkboot,"$(o)/boot.o",../armboot.l))
 
-$(eval $(call p_link,rlink))
+$(eval $(call p_link,rlink,../boardld.l))
 $(eval $(p_ocopy))
 
 $(R)/$(o)/firm.elf: $(objs) $(R)/$(o)/rlink.l $(lv)

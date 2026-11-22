@@ -178,13 +178,26 @@
                    (neon [x 15.75 21.35] [s 0 0] 0.85 "食" (rgb 1 0.2 0.55))
                    (neon [x 14.65 21.35] [s 0 0] 0.85 "品" (rgb 1 0.2 0.55))
                    (neon [x 13.75 21.35] [s 0 0] 0.55 "中心" (rgb 0.3 0.85 1))])
-; ..the boards, bright as their own light: red and blue, a disc and a pointer and lines of
-; type; the spinner's magenta and its yellow
-(: adredblue (texture 128 64 13
-              '((fill (rgb 0.95 0.08 0.12)) (poly 50 0 128 0 128 64 78 64 (rgb 0.08 0.22 1))
-                (disc 28 32 20 (grey 0.97)) (disc 28 32 14 (rgb 0.08 0.22 1)) (poly 23 23 38 32 23 41 (grey 0.97))
-                (rect 74 10 122 19 (grey 0.97)) (rect 80 25 118 30 (grey 0.97)) (rect 84 35 120 40 (grey 0.97))
-                (rect 88 47 122 56 (rgb 1 0.85 0.2)))))
+; ..the board a security monitor: what the eye saw a frame before, framed as a camera's
+; picture is, its brackets, its labels and the hour stamped on it in a pixel font three by
+; five, s texels a dot; the red dot blinking. before the first frame, no signal
+(: dots {48 "111101101101111" 49 "010110010010111" 50 "111001111100111" 51 "111001111001111" 52 "101101111001001"
+         53 "111100111001111" 54 "111100111101111" 55 "111001001001001" 56 "111101111101111" 57 "111101111001111"
+         65 "010101111101101" 67 "111100100100111" 69 "111100111100111" 71 "111100101101111" 73 "111010010010111"
+         76 "100100100100111" 77 "101111111101101" 78 "110101101101101" 79 "111101101101111" 82 "110101110101101"
+         83 "111100111001111" 58 "000010000010000" 45 "000000111000000"})
+(: (type x y s text c) (catmap (k \ (: g (peep dots (text k) "")
+                                    (catmap (i \ (g i = 49 ? [['rect (x + (4 * k + i % 3) * s) (y + (i // 3) * s) (x + (4 * k + i % 3 + 1) * s) (y + (i // 3 + 1) * s) c]] ()))
+                                            ^#g)))
+                         ^#text))
+(: camwhite '(grey 0.92))
+(: (corner x y dx dy) [['rect (min x (x + 18 * dx)) (min y (y + 2 * dy)) (max x (x + 18 * dx)) (max y (y + 2 * dy)) camwhite]
+                       ['rect (min x (x + 2 * dx)) (min y (y + 12 * dy)) (max x (x + 2 * dx)) (max y (y + 12 * dy)) camwhite]])
+(: (camover rec) (texture 192 104 13
+                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1
+                   + (rec ? [['disc 17 17 4 '(rgb 0.95 0.1 0.08)]] ()) + type 25 12 2 "REC" camwhite)))
+(: camfeed [(camover 1) (camover 0)])
+(: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
 ; ..a black board, a radio mast on it in neon green: two legs braced across and crossed, a
 ; mast and its tip
 (: admast (texture 128 128 9
@@ -703,11 +716,15 @@
   (mattress [0.9 -9 -6.3] 90)
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
-  ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
+  ; the street over the hall, under a smoggy purple dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall, painted a half court with its hoop on the wall
   (sky 18.35 'mostly)
   (smog 0.9)
+  (dye (rgb 0.5 0.22 0.72))
+  ; ..and all through it far traffic, and a music box now and then
+  (hum 'traffic [-1000 -1000 -1000] [1000 1000 1000])
+  (hum 'musicbox [-1000 -1000 -1000] [1000 1000 1000])
   (skin {'floor roadmetal 'walls facade} (street [-45 8.85 8.2] [45 45 47]))
   (skin {'all paving} (solid (box [-45 8.85 8.2] [45 9 22])))
   (skin {'all paving} (solid (box [-45 8.85 32.2] [-31 9 33])))
@@ -799,8 +816,6 @@
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a stuffed Mitty someone left out on top of the arch, looking out over the street
-  (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
   ; wing, three windows up over each doorway into its glow
@@ -895,8 +910,8 @@
   (shopsign -34.41 -1 1)
   (skin {'all darkmetal} (solid (box [-39.2 22.5 16.8] [-38.8 25 17.2])))
   (spinner [-39 25 17] 5 3.5 spin1 spin2)
-  ; ..the advertisements: red and blue across that block's face
-  (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 adredblue)
+  ; ..across that block's face a security monitor showing the street what the eye sees
+  (stamp [120 12] 2 dots (rgb 0.92 0.92 0.92) (feed camfeed (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 nosignal)))
   ; ..and high on the east wall over the road a square black board, a green radio mast on it sending three
   ; rings of magenta waves out each side in turn, GTX in orange neon under it
   (ad [44.97 28 25] [-1 0 0] [0 1 0] 9 9 admast)

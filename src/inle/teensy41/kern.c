@@ -100,3 +100,13 @@ void te_main(void) {
   kboot.image_len = (uintptr_t) (_binary_love_img_end - _binary_love_img_start);
   bput_s(serial_putc, "; psram "), bput_n(serial_putc, mb, 10), bput_s(serial_putc, " MB, kmain next\n");
   kmain(); }
+
+// kmain's gpio words over teensy41.c's pin map, the board's own numbers
+long k_gpio(int op, unsigned pin, int v) {
+  if (!gpio_ok(pin)) return -1;
+  switch (op) {
+    case 0: gpio_init(pin); return (long) pin;
+    case 1: gpio_set_dir(pin, v); return v;
+    case 2: gpio_put(pin, v); return v;
+    case 3: return gpio_get(pin);
+    default: return -1; } }

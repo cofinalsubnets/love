@@ -1565,7 +1565,7 @@ Still open on this side (g-21's probes):
 ## assembly sources
 
 **Landed 2026-09-28.** `mooncc x.s` and `mooncc x.S` lay an object, and link beside C. A `.s` is
-its text as one file-scope asm (`asmwrap`, moon.l); a `.S` is lexed on assembly's terms first
+its text as one file-scope asm (`asmtext`, moon.l: handed to gen whole, no C read); a `.S` is lexed on assembly's terms first
 (`clexasm`: `1b`/`2f` one word, `$ @ \` punctuators, `#` past a line's first token or opening a
 non-directive line is gas's comment, and each line opens with a mark cpp carries through), run
 through the C preprocessor as a C file is -- includes, macros, `#if`, `__ASSEMBLER__` defined --

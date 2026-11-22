@@ -86,12 +86,6 @@ out/lib/love_version.h: $(R)/VERSION
 	@printf '#define LvVersion "%s"\n' "$$(cat $(R)/VERSION)" > $@
 	@echo '$(t_sh)	'$@
 
-out/lib/readme.bin: $(love0) $(S)/love/boot/post.l $(R)/VERSION
-	@mkdir -p out/lib
-	@printf 'love %s\n' "$$(cat $(R)/VERSION)" > $@
-	@$(love0) -h </dev/null >> $@
-	@echo 'LOVE	'$@
-
 ho = out$(hsuf)
 # the link the profiles are taken of: love.raw less the hot.prof and hot.calls it carries, so
 # each is a function of the rest of the tree, never of itself, and one pass is its fixed point. an eager
@@ -237,6 +231,9 @@ $(love0): $(love0_o)
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love0_o)
 endif
+# love's objects take linux's predefines on every host: moonlibc picks the running kernel at
+# run time, so a mac's or a BSD's rebuild compiles the same objects. a link still names its own
+moonc = $(moon0) -os linux
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
@@ -278,7 +275,7 @@ $$($(2))/sys.o: $$(holocat_dep) $$(love0)
 endef
 
 moon_d = $(ho)/moon
-$(eval $(call moonlane,moon,moon_d,moon0,hosta))
+$(eval $(call moonlane,moon,moon_d,moonc,hosta))
 mksys_l = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/asbook.l \
           src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l src/love/holo/thumb2.l \
           src/love/holo/elf.l src/love/holo/obj.l src/apps/moon/lib/mksys.l
@@ -303,10 +300,10 @@ moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonl
 # out/moonlibc.o LEADS: a job pool fills in prerequisite order, and its groups are the long
 # pole (six ISAs' runtime members, ~200 s of cpu cold) -- behind the TU list they start as
 # they finish and run alone. ahead of them they ride beside them, and -j loses that time.
-$(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+$(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # love for macos: love.raw's objects in its order, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), so the code is the same bytes in both. unbaked -- the image is its own binary's,
 # so the bake runs on the box (test_macos_love)
@@ -315,10 +312,10 @@ $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) $(kart_doom_o) out/src.o out/root
 	@mkdir -p $(dir $@)
 	@$(moon0) -os macos -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
-$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o out/lib/readme.bin $(moonlibc_src)
+$(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -364,7 +361,7 @@ crewfiles ?= src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/
   src/apps/libra/salt.l src/apps/libra/spans.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l src/apps/harp/horn.l \
-  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/toys.l src/apps/stow.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/wharf.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/hexedit.l src/apps/mc.l src/apps/help.l \
   src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/crypt.l src/apps/login.l src/apps/lore/saver.l src/apps/greet.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc) $(kore_net)
@@ -577,9 +574,9 @@ $(xd)/rootfs.o: out/rootfs.tar src/tools/mkblob.l $(holocat_dep) $(love0)
 $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@echo 'HOLO	'$@
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
-$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o out/lib/readme.bin
+$(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o
 	@echo 'MOON	'$@
-	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -freadme=out/lib/readme.bin -o $@
+	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -o $@
 # baked where it runs, so a kernel transposed from it wakes as the host lane's does
 $(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
 	@echo 'BAKE	'$@
@@ -894,7 +891,7 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 	@mkdir -p "$$(dir $$@)"
 	@LOVE_NO_IMAGE= $$(love0) -l $$< -q -e '(lay-vec "$$@" "$$($(4))")' && test -s $$@
 endef
-$(eval $(call kart,kart,moon_d,moon0,hosta))
+$(eval $(call kart,kart,moon_d,moonc,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
 # the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
@@ -919,7 +916,7 @@ kart_doom_o = $(moon_d)/inle/doom.o $(moon_d)/inle/doomsnd.o \
 $(moon_d)/doom/%.o: $(doom_d)/%.c $(moon0_dep)
 	@echo 'DOOM	'$@
 	@mkdir -p "$(dir $@)"
-	@$(moon0) $(kart_inc) -c $< $@
+	@$(moonc) $(kart_inc) -c $< $@
 $(moon_d)/doom/wad.o: $(dl)/doom1.wad src/tools/mkblob.l $(holocat_dep) $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"

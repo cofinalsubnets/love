@@ -31,15 +31,16 @@ static int vfs_tar_walk(struct vfs *v, unsigned char const *t, uintptr_t n, stru
 
 bool vfs_untar(struct vfs *v, char const *pre, unsigned char const *z, uintptr_t zn,
                unsigned char const *tar, uintptr_t tn) {
- if (!tree_open(&v->src, z, zn, v->grab)) return false;
- int n1 = (int) v->src.n;
- if (n1 <= 0) return false;
+ // a link that carries no tree has the tar's rows alone, or none
+ if (zn && !tree_open(&v->src, z, zn, v->grab)) return false;
+ int n1 = zn ? (int) v->src.n : 0;
+ if (zn && n1 <= 0) return false;
  int n2 = tn ? vfs_tar_walk(v, tar, tn, NULL, NULL) : 0;
  if (n2 < 0) return false;
  int n = n1 + n2;
  uintptr_t pn = strlen(pre);
- struct vfs_brow *rows = v->grab((uintptr_t) n * sizeof *rows);
- char **lnks = v->grab((uintptr_t) n * sizeof *lnks);
+ struct vfs_brow *rows = v->grab((uintptr_t) (n + 1) * sizeof *rows);
+ char **lnks = v->grab((uintptr_t) (n + 1) * sizeof *lnks);
  if (!rows || !lnks) return false;
  memset(lnks, 0, (uintptr_t) n * sizeof *lnks);
  for (int i = 0; i < n1; i++) {
