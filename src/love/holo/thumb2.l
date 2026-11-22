@@ -67,7 +67,9 @@
       (: ty (sh @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift sh))
          base (look thumb-alu op 'badop)
          (t32 ((base | rn a) << 16 | ((k >> 2 & 7) << 12 | (rn d << 8 | ((k & 3) << 6 | (ty << 4 | rn b)))))))
-   ;; addw/subw (T4) #imm12; wider chunks by 4095 -- no flags written, and only the first step reads a
+   ;; addw/subw (T4) #imm12; under 1 MB add.w/sub.w (T3) of the high bits, a modified immediate
+   ;; since they span 8, then addw/subw of the low 12; sp or pc, or wider, chunks by 4095. no
+   ;; flags written, and only the first step reads a
    (thumb-addsub-imm op d a imm)
       (: pos (imm < 0 ? -imm imm)
          fop (imm < 0 ? (op @ 'add 'sub 'sub 'add op) op)
@@ -87,6 +89,9 @@
             (dn <= 7 && rn a = 13 && fop = 'add && pos <= 1020 && pos % 4 = 0)   ; add Rd, sp, #imm8*4
              (t16 (0xA800 | (dn << 8 | (pos >> 2))))
             (pos <= 4095) (one a pos)
+            (pos < 1048576 && dn < 13 && rn a < 13)
+             (: lo (pos & 4095)
+                (thumb-dpimm (fop @ 'add 0xF100 0xF1A0) dn (rn a) (thumb-mimm (pos - lo)) + (lo = 0 ? () (one d lo))))
             (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
    (thumb-mimm n)

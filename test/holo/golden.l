@@ -1306,6 +1306,14 @@
       ("t2.s.set"    "00f2010040f2000108bf40f20101" ((add r0 r0 1) (set eq r1))) ; addw: set reads them
       ("t2.leasp"    "04a8" ((lea r0 sp 16))) ; add r0, sp, #16
       ("t2.leasp.w"  "0df20040" ((lea r0 sp 1024))) ; addw r0, sp, #1024
+      ;; past imm12 and under 1 MB: add.w/sub.w of the high bits, then addw/subw of the low 12
+      ("t2.addfar"     "01f5104000f23430" ((add r0 r1 37684)))      ; add.w r0, r1, #0x9000 ; addw r0, r0, #0x334
+      ("t2.addfar.k"   "01f58050"         ((add r0 r1 4096)))       ; add.w r0, r1, #0x1000
+      ("t2.addfar.top" "04f57f2909f6ff79" ((add r9 r4 1048575)))    ; add.w r9, r4, #0xff000 ; addw r9, r9, #0xfff
+      ("t2.addfar.in"  "03f50053"         ((add r3 r3 8192)))       ; add.w r3, r3, #0x2000
+      ("t2.subfar"     "a2f51042a2f23432" ((sub r2 r2 37684)))      ; sub.w r2, r2, #0x9000 ; subw r2, r2, #0x334
+      ("t2.addfar.neg" "a6f58055a5f20105" ((add r5 r6 -4097)))      ; sub.w r5, r6, #0x1000 ; subw r5, r5, #1
+      ("t2.leasp.far"  "0df6ff7000f28930" ((lea r0 sp 5000)))       ; sp keeps the chain: addw #4095 ; addw #905
       ("t2.leax.1"   "0844" ((leax r0 r1 r0 1 0))) ; add r0, r1 (t2, no flags)
       ("t2.leax.4"   "01eb8000" ((leax r0 r1 r0 4 0))) ; add.w r0, r1, r0, lsl #2
       ("t2.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
