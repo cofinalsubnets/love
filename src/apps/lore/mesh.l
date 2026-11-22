@@ -251,7 +251,7 @@
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
-         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0))]))
+         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e]))
           (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
@@ -272,8 +272,10 @@
         (2 (e 0 - q 0) + 2 (e 2 - q 2) > 2 sky-move) (pins sm 'all -1e9 'e e))
    (pins sm 'lt [(lt 'sun) (lt 'expo)] 'sim sim))
  (sky-grid v lt wx e sim k f sm) (sky-mesh v lt wx e sim k sm @ () f m
-   (facets (v 'w) (v 'h) f (v 'cam) (m 0) (m 1) () [(gem-tray [7] [0.0 0.0 0.0 0.0 0.0 352.0 (m 2)])]))
- ; ..its mesh, facets's verts and tris and the tone, or () where no block is in view
+   (: J (iota (#(m 0) // 11) * 11) at (foldl (\ a k (pin a (J + k) (e k))) (m 0 * 0.0) ^3)
+     (facets (v 'w) (v 'h) f (v 'cam) (m 0 + at) (m 1) () [(gem-tray [7] [0.0 0.0 0.0 0.0 0.0 352.0 (m 2)])])))
+ ; ..its mesh, facets's verts and tris and the tone, the places from the eye, or () where no
+ ; block is in view
  (sky-mesh v lt wx e sim k sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (2 m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
@@ -372,13 +374,13 @@
         ; and the edge along the curves through the 4 by 4 about them
         (by x C V0 V1) (abut [x (mix-quads x C V0 E) (mix-quads x C V1 B)])
         (lin x) (by x Q W Wf)
-        [(lin (d 0)) (lin (d 1)) (lin (d 2)) (by (c 6) St (gd 9) (gd 10))
-         (lin (c 0)) (lin (c 1)) (lin (c 2)) (lin (c 3)) (lin (c 4)) (lin (c 5)) tris])
-     ; ..its columns kept while no ask is new and the view has not turned, and laid where the
-     ; eye is now
+        [(lace [(lin (d 0)) (lin (d 1)) (lin (d 2)) (by (c 6) St (gd 9) (gd 10)) 0.0
+                (lin (c 0)) (lin (c 1)) (lin (c 2)) (lin (c 3)) (lin (c 4)) (lin (c 5))]) tris])
+     ; ..kept while no ask is new and the view has not turned, its places from the eye, so a
+     ; gpu keeps it as the eye moves
      mk [key (tablet? sm ? (peep sm 'ver 0) ())]
      mv (? (tablet? sm && peep sm 'mk () = mk) (sm 'mv) (: m (build ()) (? (tablet? sm) (pins sm 'mk mk 'mv m) 0, m)))
-     (#N @ 0 () [(lace [(mv 0 + e 0) (mv 1 + e 1) (mv 2 + e 2) (mv 3) 0.0 (mv 4) (mv 5) (mv 6) (mv 7) (mv 8) (mv 9)]) (mv 10) (1.5 * lt 'expo)]))
+     (#N @ 0 () [(mv 0) (mv 1) (1.5 * lt 'expo)]))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
  ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly

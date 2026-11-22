@@ -42,7 +42,7 @@
 ;                                one named 'once is laid anew each frame, unsummed, in a slot
 ;                                of its own. sk [verts tris tone] a sky drawn under what is bare
 ;                                as facets draws it with flags 352, 11 a vertex, its pixels bare
-;                                alone 2^32 more, or ()
+;                                alone 2^32 more, or (); [.. spots e] its places from the eye at e.
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
@@ -204,10 +204,14 @@
  ; ..the sun's view, laid again only when it moves
  (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
- ; ..the sky, laid each frame, and the spots in it a frame w by h asks
+ ; ..the sky, laid again only as its mesh is new, drawn from the eye each frame, and the spots
+ ; in it a frame w by h asks
  (sky! s sk w h) (? !(two? sk) ()
    (: _ (#sk > 3 && two? (sk 3) ? (gpu-spots (s 'g) w h (sk 3)) ())
-     (once s 'sky (sk 0) (sk 1) 11 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r)))
+      e (#sk > 4 ? (sk 4) [0.0 0.0 0.0])
+      q (? (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
+           (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
+     (q @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
  (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
  ; ..the textures, each laid again only when it is not the one laid
