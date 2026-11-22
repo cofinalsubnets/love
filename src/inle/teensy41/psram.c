@@ -190,3 +190,5 @@ uint32_t psram_init(void) {
     REG(FS2_FLSHA2CR0) = size2 << 10;
     fs2_command(4, size1 << 20); }               // chip 2 into QPI
   return size1 + size2; }
+
+uint32_t psram_mb(void) { return (REG(FS2_FLSHA1CR0) + REG(FS2_FLSHA2CR0)) >> 10; }

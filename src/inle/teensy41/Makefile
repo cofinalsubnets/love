@@ -3,12 +3,14 @@
 # ivt and vector blocks, crt0, the asm helpers) is laid from holo ir by mkboot.l, the baked
 # image by mkimg.l; tlink.l links over holo's ldbare32 and ocopy.l writes the .hex and .bin,
 # so the port owes no gas, ld, linker script or objcopy. qemu-arm only bakes the image.
-# the build checks the boot image: the fcfb tag at 0, the ivt at 0x1000, a thumb-bit entry
+# the build checks the boot image: the fcfb tag at 0, the ivt at 0x1000, a thumb-bit entry.
+# `make loader` builds loader.c, a flash image that takes the kernel into the psram over usb,
+# and `make ram` that kernel, love-ram.pkt: the same objects linked at the psram's base
 p_tgt = thumb2
 p_be  = thumb2
 include ../port.mk
 
-.PHONY: kernel flash psramtest flashpsram
+.PHONY: kernel flash psramtest flashpsram loader ram flashloader
 default: kernel
 
 # boot.o: the ROM-facing FlexSPI/IVT/vector blocks, crt0 and the asm helpers, laid from
@@ -25,9 +27,9 @@ $(eval $(p_ocopy))
 # .hex is the same image for a loader that wants one
 define te_flat
 	@echo LOVE	$@
-	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/love.elf $(o)/love.hex
-	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love.elf $(o)/love.bin
-	@python3 -c "import sys,struct; b=open('$(R)/$(o)/love.bin','rb').read(); \
+	@cd $(R) && out/love $(o)/ocopy.l -O ihex $(o)/$1.elf $(o)/$1.hex
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/$1.elf $(o)/$1.bin
+	@python3 -c "import sys,struct; b=open('$(R)/$(o)/$1.bin','rb').read(); \
 	  fcfb=struct.unpack_from('<I',b,0)[0]; ivt=struct.unpack_from('<I',b,0x1000)[0]; \
 	  entry=struct.unpack_from('<I',b,0x1004)[0]; \
 	  ok = fcfb==0x42464346 and ivt==0x432000D1 and (entry&1)==1 and 0x60000000<entry<0x60800000; \
@@ -76,7 +78,38 @@ $(R)/$(o)/love.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(l
 	@cd $(R) && out/love $(o)/tlink.l $(o)/love.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
 	   out/x-arm/o/love/noblob.o $$(cat out/rt/arm.list) $$(cat out/rt/arm.list)
 $(R)/$(o)/love.hex: $(R)/$(o)/love.elf $(R)/$(o)/ocopy.l
-	$(te_flat)
+	$(call te_flat,love)
+
+# the resident loader, the flash's image when kernels come over usb: one write, then none
+$(eval $(call p_obj,loader,src/inle/teensy41/loader.c,loader.c teensy41.h psram.h $(S)/inle/bput.h $(mc),$(k_cc)))
+$(eval $(call p_obj,usb-l,src/inle/teensy41/usb.c,usb.c teensy41.h $(k_ih) $(mc),$(k_cc) -D TE_LOADER))
+l_objs = $(R)/$(o)/loader.o $(R)/$(o)/teensy41.o $(R)/$(o)/usb-l.o $(R)/$(o)/psram.o $(R)/$(o)/boot.o
+loader: $(R)/$(o)/loader.hex
+$(R)/$(o)/loader.elf: $(l_objs) $(R)/$(o)/tlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/tlink.l $(o)/loader.elf $(l_objs:$(R)/%=%)
+$(R)/$(o)/loader.hex: $(R)/$(o)/loader.elf $(R)/$(o)/ocopy.l
+	$(call te_flat,loader)
+flashloader: $(R)/$(o)/loader.hex
+	cd $(R) && out/love src/tools/halfkay.l write $(o)/loader.bin
+
+# the kernel for the psram: the flash kernel's objects under tlink.l's -ram map, flattened, and
+# wrapped as the loader takes it: 'L', the length, the bytes, their sum, each word little-endian.
+# the check: a stack in ocram2, a thumb entry inside the bytes, and under 4 MB of them
+ram: $(R)/$(o)/love-ram.pkt
+$(R)/$(o)/love-ram.elf: $(k_objs) $(R)/out/rt/arm.list $(k_xo) $(R)/$(o)/tlink.l $(lv)
+	@echo HOLO	$@
+	@cd $(R) && out/love $(o)/tlink.l -ram $(o)/love-ram.elf $(k_objs:$(R)/%=%) $$(cat out/x-arm/o.list) \
+	   out/x-arm/o/love/noblob.o $$(cat out/rt/arm.list) $$(cat out/rt/arm.list)
+$(R)/$(o)/love-ram.pkt: $(R)/$(o)/love-ram.elf $(R)/$(o)/ocopy.l
+	@echo LOVE	$@
+	@cd $(R) && out/love $(o)/ocopy.l -O binary $(o)/love-ram.elf $(o)/love-ram.bin
+	@python3 -c "import struct; b=open('$(R)/$(o)/love-ram.bin','rb').read(); \
+	  sp,e=struct.unpack_from('<II',b,0); end=0x70000000+len(b); \
+	  ok = 0x20200000<sp<=0x20280000 and (e&1)==1 and 0x70000000<e<end and len(b)<(4<<20); \
+	  open('$(R)/$(o)/love-ram.pkt','wb').write(b'L'+struct.pack('<I',len(b))+b+struct.pack('<I',sum(b)&0xFFFFFFFF)); \
+	  print('psram image: sp %08x entry %08x, %d bytes --'%(sp,e,len(b)), 'ok' if ok else 'BAD'); \
+	  exit(0 if ok else 1)" || { echo "FAIL psram image layout"; exit 1; }
 
 # flash the kernel to a connected teensy 4.1 (the button, or 134 baud, enters the loader)
 flash: $(R)/$(o)/love.hex
