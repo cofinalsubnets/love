@@ -2791,6 +2791,13 @@
        (fit c) (c @ 73 (addi v) 74 (addi (0 - v)) 75 (a64bm? v 32) 76 (a64bm? v 64)
                     77 (mov1 32) 78 (mov1 64) 90 (v = 0) 105 1 110 1 0)
        (any fit (map c9 ^#c9)))
+   ; x86: some immediate letter of the set reaches v -- I J a shift's 0-31 and 0-63, K a signed
+   ; byte, L a zero-extending mask, M 0-3, N an unsigned byte, e Z a signed and unsigned 32, i n anything
+   (x86fit? c9 v)
+    (: (fit c) (c @ 73 (0 <= v <= 31) 74 (0 <= v <= 63) 75 (-128 <= v <= 127) 76 (elem v '(255 65535 4294967295))
+                    77 (0 <= v <= 3) 78 (0 <= v <= 255) 101 (-2147483648 <= v <= 2147483647)
+                    90 (0 <= v <= 4294967295) 105 1 110 1 0)
+       (any fit (map c9 ^#c9)))
    ; v at z bits is a logical immediate: a rotated run of ones in an element repeated across it
    (a64bm? v z)
     (: u (v & ((1 << z) - 1))
@@ -3097,8 +3104,10 @@
            (: e <><l k (wmem (asmc g <<l) <<l e)
               v (elem k '(imm either) ? (asmk g env e) 'no)
               (k @ 'bad (asmno g "an asm input constrained \"\(<<l)\"")
-                   'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
-                   'either ((a64? g ? (cint? v && a64fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
+                   'imm (? (v = 'no) (asmno g "an asm immediate input that is not a constant")
+                           (x64t? g && cint? v && !(x86fit? <<l v)) (asmno g "an asm immediate \"\(<<l)\" of \(v)")
+                           (iconv >l (['m v 0 0] . acc)))
+                   'either ((? (a64? g) (cint? v && a64fit? <<l v) (x64t? g) (cint? v && x86fit? <<l v) (charm? v)) ? (iconv >l (['m v 0 0] . acc)) (iconv >l (['i (pinof 'pick e) e (asmw g env e)] . acc)))
                    'mem (iconv >l ((riptext e @ v (v ? ['g v 0 0] ['b 'pick ['addr e] 0])) . acc))
                    (iconv >l (['i (pinof (apw k e) e) e (asmw g env e)] . acc)))))
        os (oconv <>>s ())
@@ -3977,7 +3986,7 @@
                    (glb? l) (any glbl? l)
                    ; ..and ends at its first way out, a later case reached by the dispatch alone -- when its
                    ; labels are single and distinct, so a duplicate stays for the checker to name
-                   (out? it) (it = '(brk) || exits? it)
+                   (out? it) (it @ ('brk) 1 ('blk items) (two? items && out? (last items)) (exits? it))
                    ls (filter (it \ elem <it '(case dflt)) items)
                    one (all (it \ (it @ ('case _) 1 ('dflt) 1 ())) ls && #(uniq (map show ls)) = #ls)
                    (? (k < 0 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
