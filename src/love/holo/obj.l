@@ -754,8 +754,11 @@
        (foldl (\ acc pc (@ acc [cur at bs]
                           (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops (x ? 8 4) cur n)]))))
               [(o-ehvis st0) lo ()] pcs @ r (r 2)))
-   ; the .eh_frame lane for the functions uw names, () where none is laid; x: x64's, else a64's
-   (o-eh lanes uw x)
+   ; the .eh_frame lane for the functions uw names, () where none is laid; x: x64's, else a64's.
+   ; df: the same rows as .debug_frame, for -g: no augmentation, each fde's cie and pc relocated
+   x-dcie [20 0 0 0 255 255 255 255 1 0 1 120 16 12 7 8 144 1 0 0 0 0 0 0]
+   o-dcie [12 0 0 0 255 255 255 255 1 0 1 124 30 12 31 0]
+   (o-eh lanes uw x df)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
                   rl (map cap (filter (r \ elem (r 1) (x ? '(rel32) '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
@@ -768,12 +771,19 @@
           (: (one acc f)
               (@ acc [bs rs]
                  (@ f [lo k hi s rl lb]
-                    (: ins (o-ehrows x s lo hi rl lb k)
-                       fo #bs n (13 + #ins) pad ((4 - n % 4) % 4)
-                       [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
-                        ([(fo + 8) 'secrel32 k 0 0] . rs)])))
-             r (foldl one [(x ? x-cie o-cie) ()] fns)
-             [".eh_frame" 1 2 8 <r (rev <>r) {}])))
+                    ; under -g a function whose rows refuse lays no fde, and gdb unwinds it as it can
+                    (: ins (df ? (trap (_ \ o-ehrows x s lo hi rl lb k) 0 (_ \ _ \ 'none)) (o-ehrows x s lo hi rl lb k))
+                       fo #bs
+                       (? (ins == 'none) acc
+                          df (: n (20 + #ins) pad ((8 - (4 + n) % 8) % 8)
+                                [(bs + le32 (n + pad) + le32 0 + le64 0 + le64 (hi - lo) + ins + o-zeros pad)
+                                 ([(fo + 8) 'abs64 k 0 0] . [(fo + 4) 'abs32 (name ".dbg.frame") 0 0] . rs)])
+                          (: n (13 + #ins) pad ((4 - n % 4) % 4)
+                             [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
+                              ([(fo + 8) 'secrel32 k 0 0] . rs)])))))
+             r (foldl one [(? df (x ? x-dcie o-dcie) (x ? x-cie o-cie)) ()] fns)
+             (? df [".debug_frame" 1 0 8 <r (rev <>r) {(name ".dbg.frame") 0}]
+                [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
    ; -g's line tables, after the lay: each mark lo laid is a label .dl.K:LINE:FILE (.dlf.K: a
    ; body's `{`), each code lane with one a sequence, and a bare compile unit (name, dir, the
@@ -881,7 +891,9 @@
                    w (o-walk be <p >p gbset 1 (exec? s ? rset drset))
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
-       lanes1 ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       ; -g's third word: the unit's unwind tables are .eh_frame, else -g lays .debug_frame
+       df (5 < #ax && two? (ax 5) && !(ax 5 2))
+       lanes1 ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
        lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0)) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)

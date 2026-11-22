@@ -1,7 +1,8 @@
 #!/bin/sh
 # test/gate/dwarf.sh -- mooncc -g through the link: each unit's debug sections laid past the
 # image and relocated, judged by llvm-dwarfdump --verify on x64, a64 and rv64, and by gdb on
-# this box breaking by line in each unit. a link of objects without -g lays none; strip takes them.
+# this box breaking by line in each unit and unwinding by .debug_frame. a link of objects
+# without -g lays none; strip takes them.
 # skips a leg whose oracle is missing.
 # usage: dwarf.sh OUTDIR
 . test/gate/skip.sh
@@ -45,6 +46,12 @@ for t in x64 a64 rv64; do
   fi
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
+# x64 and a64 lay .debug_frame under -g; a function whose rows refuse lays none, never failing
+# the compile: raster.c's rz_row is one on a64
+for t in x64 a64; do
+  [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; }
+done
+mc -t a64 -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
 
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
@@ -55,10 +62,12 @@ mc -os linux "$d/t0.o" "$d/u0.o" -o "$d/two0"
 "$ho/love" readelf -S "$d/two.s" | grep -q debug && { echo "FAIL $name: strip -g leaves debug"; exit 1; }
 
 if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
-  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break u.c:2' -ex 'break t.c:6' -ex run -ex continue ./two.x64 ) > "$d/gdb.out" 2>&1
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break u.c:2' -ex 'break t.c:6' -ex run -ex continue -ex bt -ex finish ./two.x64 ) > "$d/gdb.out" 2>&1
   grep -q 'Breakpoint 2, dist () at .*t.c:6' "$d/gdb.out" && grep -q 'Breakpoint 1, twice () at .*u.c:2' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb by line"; exit 1; }
+  grep -q '^#1  0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" && grep -q '^0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" \
+    || { cat "$d/gdb.out"; echo "FAIL $name: gdb's bt and finish by .debug_frame"; exit 1; }
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds"

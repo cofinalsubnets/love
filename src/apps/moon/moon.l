@@ -566,7 +566,7 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
-                          (dbg ? [src (cwd 0)])]   ; -g: the unit and its dir, for obj.l's line tables
+                          (dbg ? [src (cwd 0) (ua || us)])]   ; -g: the unit, its dir, and whether .eh_frame serves its unwind
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
@@ -577,8 +577,8 @@
                           (objsecs32n tgt s32 fns gns wks anames)))
                     (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
                               fns gns wks locs anames asmax
-                              ; the functions C laid, not the asm's, under unwind tables
-                              (ua || us ? (fnames + lnames + map cap xfns) ()))))
+                              ; the functions C laid, not the asm's, under unwind tables or -g
+                              (ua || us || dbg ? (fnames + lnames + map cap xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
