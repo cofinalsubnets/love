@@ -30,7 +30,7 @@
    (bq-world nm)
     (: d (bq-root + "/" + nm) r (d + "/repo")
        _ (map (\ p (mkdir p 493)) [d (d + "/.love") (d + "/.love/etc")])
-       _ (bq-put (d + "/.love/etc/bee.l") "(heavy-max 1)\n")
+       _ (bq-put (d + "/.love/etc/bee.l") "(heavy-max 1)\n(heavy-load 1000000)\n") ; never held back by the box's own load
        w {'dir d 'repo r 'locks (d + "/locks") 'env ("HOME=" + bq-sq d + " LOVE_NEST=" + bq-sq (d + "/.love") + " BEE_LOCKS=" + bq-sq (d + "/locks"))}
        _ (hark ["git" "init" "-q" "-b" "test" r])
        _ (bq-put (r + "/f") "one\n")
