@@ -27,7 +27,10 @@
    ; clang only where it is asked for, logged where lg; else the line fails by name
    (clang lg why)
     (? (getenv "HEARTS_KCC_CLANG" = "1")
-        (: _ (lg ? (log why) 0) p (spawn ("clang" . av)) (quit (charm? p && 0 <= p ? (wait p) 127)))
+        ; the config's flags are the ones mooncc said yes to: clang's line leaves out those it refuses
+        (: _ (lg ? (log why) 0)
+           cav (filter (a \ !(starts? a "-fdiagnostics-show-context=" || starts? a "-falign-jumps=")) av)
+           p (spawn ("clang" . (cav + ["-Wno-unknown-warning-option"]))) (quit (charm? p && 0 <= p ? (wait p) 127)))
        (: t (string? tg ? tg "no target")
           _ (say err "kcc: \(t): \(why): not mooncc's, and clang is not asked (HEARTS_KCC_CLANG=1)\n")
           _ (flush err)
