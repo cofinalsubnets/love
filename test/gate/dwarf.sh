@@ -52,6 +52,13 @@ for t in x64 a64; do
   [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; }
 done
 mc -t a64 -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
+# the hole kept in sight: raster.c's a64 functions that lay no fde
+holes=-
+if [ -n "$dd" ]; then
+  nf=`"$ho/love" nm "$d/raster.o" | awk '$2 ~ /^[Tt]$/' | wc -l`
+  ne=`"$dd" --debug-frame "$d/raster.o" | grep -c ' FDE '`
+  holes=`expr $nf - $ne`
+fi
 
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
@@ -70,4 +77,4 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds; a64 raster.c: $holes function(s) without an fde"
