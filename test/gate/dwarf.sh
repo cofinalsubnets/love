@@ -43,6 +43,13 @@ for t in x64 a64 rv64; do
     "$dd" --verify "$d/two.$t" > "$d/v.$t" 2>&1 || { cat "$d/v.$t"; echo "FAIL $name: $t --verify"; exit 1; }
     n=`"$dd" --debug-info "$d/two.$t" | grep -c DW_TAG_compile_unit`
     [ "$n" = 2 ] || { echo "FAIL $name: $t has $n units, not 2"; exit 1; }
+    # a subprogram for each function laid, named, at its body's line
+    "$dd" --debug-info "$d/two.$t" > "$d/i.$t"
+    for f in dist:4 main:9 twice:1; do
+      grep -A1 "DW_AT_name.*\"${f%:*}\")" "$d/i.$t" | grep -q "DW_AT_low_pc" \
+        && grep -A4 "DW_AT_name.*\"${f%:*}\")" "$d/i.$t" | grep -q "DW_AT_decl_line.*(${f#*:})" \
+        || { echo "FAIL $name: $t's subprogram ${f%:*} at line ${f#*:}"; exit 1; }
+    done
   fi
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
@@ -69,9 +76,11 @@ mc -os linux "$d/t0.o" "$d/u0.o" -o "$d/two0"
 "$ho/love" readelf -S "$d/two.s" | grep -q debug && { echo "FAIL $name: strip -g leaves debug"; exit 1; }
 
 if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
-  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break u.c:2' -ex 'break t.c:6' -ex run -ex continue -ex bt -ex finish ./two.x64 ) > "$d/gdb.out" 2>&1
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break u.c:2' -ex 'break t.c:6' -ex 'info scope twice' -ex run -ex continue -ex bt -ex finish ./two.x64 ) > "$d/gdb.out" 2>&1
   grep -q 'Breakpoint 2, dist () at .*t.c:6' "$d/gdb.out" && grep -q 'Breakpoint 1, twice () at .*u.c:2' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb by line"; exit 1; }
+  grep -q 'Symbol v is' "$d/gdb.out" || grep -q 'No locals' "$d/gdb.out" || grep -q 'contains no locals' "$d/gdb.out" \
+    || { cat "$d/gdb.out"; echo "FAIL $name: gdb finds no scope for twice"; exit 1; }
   grep -q '^#1  0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" && grep -q '^0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb's bt and finish by .debug_frame"; exit 1; }
 else

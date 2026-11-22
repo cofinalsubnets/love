@@ -63,20 +63,28 @@
                (has? x ? (cut x) x))
    ; past allocation the marks leave the forms, each run held by the form after it, and come back
    ; ahead of that very form once the tail is laid (dlin), so no pass from there on sees one. a
-   ; form a pass remade loses its marks, never its code
+   ; form a pass remade hands its marks to the next form, in the order dlout saw, that survived
    (dlout g fs)
     (: (go l ms) (l @ (f . u) (? (dlab? f) (go u (f . ms))
                                         (two? ms) (: _ (pin g 'dlp ([f (rev ms)] . g 'dlp)) (f . go u ()))
                                         (f . go u ()))
                             _ ())
-       _ (pin g 'dlp ())
-       (any dlab? fs ? (go fs ()) fs))
+       _ (pins g 'dlp () 'dlo ())
+       (any dlab? fs ? (pin g 'dlo (filter (f \ !(dlab? f)) fs), go fs ()) fs))
    (dlin g fs)
     (g 'dlp @ () fs
-       ps (: t (foldl (t \ p \ (show <p @ k (pin t k (p . peep t k ())))) {} ps)
+       ps (: (book l key) (foldl (t \ x \ (show (key x) @ k (pin t k (x . peep t k ())))) {} l)
+             now (book fs 1) own (book ps cap)
+             (alive? f) (any (h \ h == f) (peep now (show f) ()))
+             (mk f) (filter (p \ <p == f) (peep own (show f) ()) @ (p . _) <>p _ ())
+             ; the marks by the form that lays them, a remade one's riding to the next that survived
+             t {}
+             _ (foldl (\ pend f (: m (pend + mk f)
+                                   (? (alive? f) ((two? m ? (show f @ k (pin t k ([f m] . peep t k ())))), ()) m)))
+                      () (g 'dlo))
              (hit f) (filter (p \ <p == f) (peep t (show f) ()) @ (p . _) <>p _ ())
              (go l) (l @ (f . u) (hit f + (f . go u)) _ ())
-             _ (pin g 'dlp ())
+             _ (pins g 'dlp () 'dlo ())
              (go fs)))
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7

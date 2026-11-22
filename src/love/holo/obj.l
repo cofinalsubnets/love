@@ -786,9 +786,10 @@
                 [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
    ; -g's line tables, after the lay: each mark lo laid is a label .dl.K:LINE:FILE (.dlf.K: a
-   ; body's `{`), each code lane with one a sequence, and a bare compile unit (name, dir, the
-   ; lanes as its ranges) over them. dl: (unit dir)
-   (o-dwarf lanes dl fnl)
+   ; body's `{`), each code lane with one a sequence, and a compile unit (name, dir, the lanes
+   ; as its ranges) over them, a subprogram for each function laid, at its body's `{`. dl:
+   ; (unit dir eh?), gfn the global functions
+   (o-dwarf lanes dl fnl gfn)
     (: (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(_):\(n):\(f)" [o 0 (read n) f] ())
                                 (starts? s ".dl.") (s @ ".dl.\(_):\(n):\(f)" [o 1 (read n) f] ())
                                 ()))
@@ -834,12 +835,34 @@
                               [(bs + o-zeros 16) ([(#bs + 8) 'abs64 k (q 1 - a0) 0] . [#bs 'abs64 k (0 - a0) 0] . rels)])))
                  [() ()] sqs)
        rgl [".debug_ranges" 1 0 1 (<rg + o-zeros 16) (rev <>rg) {(name ".dbg.ranges") 0}]
-       ab [".debug_abbrev" 1 0 1 [1 17 0 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0 0] () {(name ".dbg.abbrev") 0}]
+       ; 1 the unit, 2 a global function, 3 a static one: name, pc and length, the body's `{`
+       ; as its place, the cfa its frame base
+       sub (\ ex ([46 0 3 8 17 1 18 6 58 15 59 15] + (ex ? [63 25] ()) + [64 24 0 0]))
+       ab [".debug_abbrev" 1 0 1 ([1 17 1 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0 2] + sub 1 + [3] + sub () + [0])
+           () {(name ".dbg.abbrev") 0}]
+       ; per code lane, its functions by pc: (lo label length name file line global?)
+       (fns i l)
+        (: lb (l 6)
+           (one nm) (: k (name nm) e (fn-end nm)
+                       (o-has? lb k && o-has? lb e ?
+                          (: lo (lb k) hi (lb e)
+                             ds (sort (filter two? (map (x \ row x (lb x) @ r (two? r && lo <= <r && <r < hi ? r)) (keys lb))))
+                             d (filter (r \ r 1 = 0) ds @ b (two? b ? <b (two? ds ? <ds ())))
+                             [[lo k (hi - lo) nm (two? d ? [(peep fix (d 3) 1) (d 2)] [1 0]) (elem nm gfn)]])))
+           (sort (catmap one (uniq fnl))))
+       fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
        pre (le16 4 + le32 0 + [8] + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
-       cu (pre + le32 0 + le64 0 + le32 0)
+       cu0 (pre + le32 0 + le64 0 + le32 0)
+       (die acc f)
+        (@ acc [bs rels]
+           (@ f [_ k n nm fl ex]
+              [(bs + uleb (ex ? 2 3) + str nm + le64 0 + le32 n + uleb <fl + uleb (fl 1) + [1 156])
+               ([(4 + #bs + 1 + #(str nm)) 'abs64 k 0 0] . rels)]))
+       ds (foldl die [cu0 ()] fs)
+       cu (<ds + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)
-              [[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
-               [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] {}]
+              ([[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
+                [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev <>ds) {}]
        (atom? sqs ? () [ab inf ln rgl]))
 
    ; -- the general object: a list of sections, each (name type flags align forms), each one
@@ -894,7 +917,7 @@
        ; -g's third word: the unit's unwind tables are .eh_frame, else -g lays .debug_frame
        df (5 < #ax && two? (ax 5) && !(ax 5 2))
        lanes1 ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
-       lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0)) lanes1)
+       lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0) funcnames) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (lnt i)
