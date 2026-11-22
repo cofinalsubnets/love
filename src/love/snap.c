@@ -1536,6 +1536,12 @@ void image_warm(void) {}
 static int img_lazy_arm(struct img_lazy *L) { (void) L; return 0; }
 #endif
 
+// the nursery a woken image is seeded with: half its live set, within appel's room under a budget
+static uintptr_t img_seed(struct g *g, uintptr_t nw) {
+ uintptr_t want = nw >> 1, room = g->budget > 2 * nw ? (g->budget - 2 * nw) / 4 : 0;
+ if (g->budget && want > room) want = room;
+ return want < (uintptr_t) g->len ? (uintptr_t) g->len : want; }
+
 static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
@@ -1556,6 +1562,10 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   // the slack must clear the nursery seeded at nw >> 1 below, or please's promotion test
   // latches the first collection to a major over the whole image
   g->major_len = nw + (nw >> 1) + (1u << 19);
+  // under a budget the pool keeps to its share beside the nursery seeded below, the image at least
+  if (g->budget) {
+   uintptr_t sh = (g->budget - img_seed(g, nw)) / 2, lo = nw + 2 * (uintptr_t) g->len + 64;
+   if (g->major_len > sh) g->major_len = sh > lo ? sh : lo; }
   if (!(g->major_base = alloc(NULL, g->major_len * sizeof(word)))) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
@@ -1607,7 +1617,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  g->major_live0 = nw;
  g->rem_n = 0, g->rem_miss = 0;           // it names ini's pool, freed above
  // seed the nursery from the live set, rather than ramping from the floor a collection at a time
- uintptr_t want = nw >> 1;
+ uintptr_t want = img_seed(g, nw);
  g->hp = g->end;                          // ini's young: garbage, every root came from the image
  if (want > (uintptr_t) g->len) { struct g *h = gen_grow(g, want); if (ok(h)) g = h; }
  return g;

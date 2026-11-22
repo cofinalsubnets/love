@@ -98,6 +98,9 @@
    _ (ok ? (close q) 0)
  (test ok r))
 
+; the gpio words answer () for a pin the board lacks: none on qemu, and 99 on any board
+(test (nil? (gpio_init 99)) (nil? (gpio_dir 99 1)) (nil? (gpio_put 99 1)) (nil? (gpio_get 99)))
+
 ; /dev/hci is a radio's hci: the end at once with none, and on the pi, before any command, nothing
 (: board (open "/proc/board" "r" @ q (port? q ? (slurp q @ s (close q, s))))
    q (open "/dev/hci" "r")
