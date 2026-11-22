@@ -1058,7 +1058,9 @@
      cl (catmap (i \ map (j \ hs ((x0 + i + 4096) * 8192 + z0 + j + 4096)) ^nz) ^nx)
      ([(b 'low) land-g x0 z0 nx nz] + rev (foldl (\ a l (#l + <a . a)) [0] cl) + cats cl + catmap (cats * L 'tris) ^#(L 'tris)))
    (body b) (b 'land @ () (catmap (q \ q 0 + [(q 1)]) (b 'planes)) (land-db b))
-   dbl (catmap (b \ body b @ q ([(kind b) #q] + b 'lo + b 'hi + q)) bs)
+   ; ..a thing made whole, as a cushion, buries nothing: its corners pressed into another are
+   ; lit as its face is
+   dbl (catmap (b \ body b @ q ([(kind b) #q] + b 'lo + b 'hi + q)) (filter (b \ !(peep b 'whole 0)) bs))
    DB (gem-tray [#dbl] (map (v \ 1.0 * v) dbl))
    ; ..cut finer where the sky's light changes only where a room stands up out of a land
    lnds (filter (b \ b 'land != ()) bs)
