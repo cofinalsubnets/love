@@ -11,8 +11,8 @@ the self-hosting double-bake fits comfortably.
 ## Build
 
 ```
-cd src/inle/teensy41 && make            # -> $R/out/teensy41/love.hex
-make flash                           # teensy_loader_cli --mcu=TEENSY41 -w -v ...
+cd src/inle/teensy41 && make            # -> $R/out/teensy41/love.bin, love.hex
+make flash                           # love src/tools/halfkay.l write out/teensy41/love.bin
 ```
 
 Compiled END TO END by **mooncc** (`love mooncc -t thumb2`, built by the

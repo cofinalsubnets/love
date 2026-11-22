@@ -1,46 +1,18 @@
 // rp2040 bare-metal arch backend, no pico SDK: vectors, crt0, clocks, UART0 console, the
 // timer and SIO GPIO, for a cortex-M0+ booting from flash XIP
 #include <stdint.h>
+#define CRT0_V6M
 #include "rp2040.h"
-
-// linker bounds (rp2040.lds)
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
-extern void *const vectors[];
+#include "../crt0.h"
 
 int main(void);
 
-// --- fault diagnostics ----------------------------------------------------
-// ARMv6-M has no CFSR/BFAR: halt and let SWD read the stacked frame
-void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
-
-// spins: wfe/wfi have no thumb1 row in holo yet
-static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
-
-// --- crt0 / reset ---------------------------------------------------------
-// boot2 has loaded SP from vectors[0]
+// boot2, or the rom's warm entry, has loaded sp from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(VTOR_ADDR) = (uint32_t) (uintptr_t) vectors;
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
+  crt0(1);
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
-
-// --- vector table (at 0x10000100, or sram's base in a ram image) ---------
-// system vectors only: no peripheral IRQ is enabled
-__attribute__((section(".vectors"), used))
-void *const vectors[] = {
-  (void *) __stack_top__,   // 0  initial SP
-  reset_handler,            // 1  reset
-  default_handler,          // 2  NMI
-  isr_hardfault,            // 3  HardFault
-  0, 0, 0, 0, 0, 0, 0,      // 4..10 reserved
-  default_handler,          // 11 SVCall
-  0, 0,                     // 12..13 reserved
-  default_handler,          // 14 PendSV
-  default_handler,          // 15 SysTick
-};
 
 // --- clocks: XOSC (12 MHz) + PLL_SYS -> 125 MHz clk_sys; clk_peri off XOSC --
 void clocks_init(void) {

@@ -98,6 +98,14 @@
    _ (ok ? (close q) 0)
  (test ok r))
 
+; /dev/hci is a radio's hci: the end at once with none, and on the pi, before any command, nothing
+(: board (open "/proc/board" "r" @ q (port? q ? (slurp q @ s (close q, s))))
+   q (open "/dev/hci" "r")
+   ok (port? q)
+   r (ok && (#board = 0 ? (see q = -1) (cue? q = 0)))
+   _ (ok ? (close q) 0)
+ (test ok r))
+
 ; symlinks: k_walk follows one at every component, so a directory can be a link. /bin, /sbin
 ; and /usr/sbin all name /usr/bin
 (: (rd p) (open p "r" @ q (port? q ? (slurp q @ s (close q, s))))
