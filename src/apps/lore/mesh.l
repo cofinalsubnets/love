@@ -314,8 +314,9 @@
                       (0.5 * t * (t * (4.0 - 3.0 * t) + 1.0)) (0.5 * t * t * (t - 1.0))]
               (bic a b) (: x (cr a) y (cr b) (map (k \ x (k % 4) * y (k // 4)) ^16))
               nr (4 * c) R (iota nr) sd (R // c) t (R % c / (1.0 * c))
-              fa (pin ((sd = 0) * t + (sd = 1) + (sd = 2) * (1.0 - t)) nr 0.5)
-              fb (pin ((sd = 1) * t + (sd = 2) + (sd = 3) * (1.0 - t)) nr 0.5)
+              mid (gem-tray [1] [0.5])
+              fa (abut [((sd = 0) * t + (sd = 1) + (sd = 2) * (1.0 - t)) mid])
+              fb (abut [((sd = 1) * t + (sd = 2) + (sd = 3) * (1.0 - t)) mid])
               g [N (dir N) [(q 0) (q 1) (q (m + 1)) (q m)] (wts ua ub)
                  (lace [at (at + 1) (at + S + 1) zk at (at + S + 1) (at + S) zk])
                  (wts fa fb) [sd R ((R + 1) % nr) ((R % c = 0) * sd * c + (R % c > 0) * nr) ((R % c = 0) * ((sd + 1) * c % nr) + (R % c > 0) * nr)]
