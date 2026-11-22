@@ -3071,12 +3071,14 @@
        ; register: paravirt's `call *%[op]` must stay the six-byte `ff 15` the kernel patches. a
        ; segment's operand keeps the register: holo lays no %gs: store at a rip address
        (riptext e) (? (neutral? || gtgt g != 'x64 || 0 <= findsub tmpl "s:") () (asmk g env ['addr e] @ v (string? v ? v ())))
+       ; i386: a value wider than a register under a letter set that allows memory sits there
+       (wmem k c e) (? (k = 'pick && ia32? g && (elem 109 (map c ^#c) || elem 103 (map c ^#c)) && 4 < asmw g env e) 'mem k)
        (oconv l acc)
         (!(two? l) ? (rev acc)
            (: c <<l n #c
               h (0 < n ? (c 0) 0)
               c2 (1 < n && c 1 = 38 ? (snip c 2 n) (snip c 1 n))    ; "=&r": the early clobber is the picking rule already
-              k (h @ (61 || 43) (asmc g c2) 'bad)
+              k (h @ (61 || 43) (wmem (asmc g c2) c2 <><l) 'bad)
               fc (c2 @ ("@cc" + (f && 0 < #f)) (peep asmflags f ()) ())
               gv (<><l @ ('var nm) (two? (peep (g 'gregs) nm ())) ())
               ; the stack-pointer register variable ("+r"(current_stack_pointer)) is sp as it stands:
@@ -3092,7 +3094,7 @@
                  (oconv >l ([(h @ 43 'x 'o) (pinof (apw k <><l) <><l) <><l (asmw g env <><l)] . acc)))))
        (iconv l acc)
         (!(two? l) ? (rev acc)
-           (: k (asmc g <<l) e <><l
+           (: e <><l k (wmem (asmc g <<l) <<l e)
               v (elem k '(imm either) ? (asmk g env e) 'no)
               (k @ 'bad (asmno g "an asm input constrained \"\(<<l)\"")
                    'imm (v != 'no ? (iconv >l (['m v 0 0] . acc)) (asmno g "an asm immediate input that is not a constant"))
