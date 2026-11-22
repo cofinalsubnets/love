@@ -4,6 +4,7 @@
 (borrow '(view world posix window lore))
 
 (: _ (setenv "HORN" "none")
+   _ (setenv "LOVE_NEST" (cwd 0 + "/out/.lorewin-nest-" + show (getpid 0)))   ; no nest: no scene kept
    ; events by frame: k held 0-2, p at 3-4, q at 6; or ? down 1-3
    script {0 [['down 37]] 3 [['up 37] ['down 25]] 4 [['up 25]] 6 [['down 16]]}
    ; ..k held, repeating at frames 1 and 2

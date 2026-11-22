@@ -153,7 +153,7 @@ static struct g *ini_0(struct g*g, uintptr_t len0) {
  if (g->rem) memset(g->rem + LvRemCap, 0xff, LvRemIx * sizeof(uint16_t));
  g->major_base = g->rem ? alloc(NULL, g->major_len * sizeof(word)) : NULL;
  if (!g->major_base) { if (g->rem) alloc(g->rem, 0); return encode(g, status_scare); }
- g->major_hp = g->major_base, g->budget = love_budget;
+ g->major_hp = g->major_base, g->budget = love_budget_boot;
  g->minor0 = love_minor0, g->major0 = love_major0, g->ratio = gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = wait_in;
  // the kind sentinels and drives a native reaches through g: a blob holds no binary address
@@ -276,6 +276,8 @@ int love_once(void) {
  once_give(&once_lock);
  return ok; }
 
+// a new core's budget: a seat that knows its ram says so before it wakes or bakes
+uintptr_t love_budget_boot = love_budget;
 struct g *ini(void) {
  if (!love_once()) return encode(NULL, status_scare);
  uintptr_t const len0 = love_minor0;

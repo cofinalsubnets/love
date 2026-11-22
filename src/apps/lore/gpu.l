@@ -204,10 +204,11 @@
  (sky! s sk) (? !(two? sk) () (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
  (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
- ; ..the textures, laid again only when one of them is not the one laid
+ ; ..the textures, each laid again only when it is not the one laid
  (texs! s texs) (? (alike (s 'texs) texs) ()
-   (: (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
-      r (filter string? (map lay ^#texs)) (? (two? r) <r (pin s 'texs texs, ()))))
+   (: o (s 'texs) all (!(two? o) || #o != #texs)
+      (lay i) (: t (texs i) l (tray? t ? t (t 0)) (gpu-tex (s 'g) i (shape l 1) (shape l 0) t))
+      r (filter string? (map lay (filter (i \ all || !(o i == texs i)) ^#texs))) (? (two? r) <r (pin s 'texs texs, ()))))
  (alike a b) (a == b || two? a && two? b && #a = #b && all (i \ a i == b i) ^#a)
  (gpu-facets s w h B mat vs ts texs ol ks sk c)
   (: o (tray? ol ? ol (two? ol ? (ol 0) ())) st (tray? ol ? 8 11) sv (ol 1) sd (ol 2)
@@ -226,8 +227,8 @@
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
                  y (string? u ? u (sky! s sk) @ () (glow! s o) r r)
                  ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
-                 ; or one that says its spots
-                 kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) ? 512 0)
+                 ; or one that says its spots; but every 'read'th, which a feed in view reads back
+                 rd (peep s 'read 0) kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) && !(0 < rd && s 'fr % rd = 0) ? 512 0)
                  e (string? y ? y (gpu-send (s 'g) w h mat (map (b \ b 0) bs) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0) + kp)]))
                  p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
                  (? (string? e) (pin s 'g (), ())

@@ -2,6 +2,8 @@
 ; pty is 0x0 and a parent's settty races its first read. no bare ESC: ESC then a key is alt.
 ; tether is not in love0, so no corpus. run: cat test/00-init.l test/host/00-host.l test/host/tty.l | out/love
 (borrow 'quay)
+; a nest that is not there, so no scene is kept in the user's, here or in a child
+(setenv "LOVE_NEST" (cwd 0 + "/out/.tty-nest-" + show (getpid 0)))
 (: reaped {}
    deadline 20000
    (waitfor pid) (gather pid @ s

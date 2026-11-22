@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-cells view-pen view-band
-         view-rescale view-scaled view-gauge view-gauged view-loading view-spin view-tick view-corner? view-tap)
+         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow 'window)                        ; a level in a window of its own, its keys held
@@ -366,17 +366,29 @@
  ;     paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
  ;     as big as it is by then, and answers [y0 y1] the rows to show, or () for the box's;
  ;     the paper may not hold what the screen does, a window's frames being sent whole.
- ;     else box is in cells and it answers what to say to the terminal ---
+ ;     else box is in cells and it answers what to say to the terminal. under view-busy the
+ ;     tick only notes where the making is, and the busy loop draws ---
  view-load-wait 150 view-load-every 40
- (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0}
-   (\ what part (: now (clock 0)
+ (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0 'busy 0}
+   (paint what part) (: now (clock 0)
      (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
         (: b (tablet? win && atom? box ? (window-sized win @ s [0 0 (s 0) (s 1)]) box)
            s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != at 'box) 'what what 'part part})
            (pins at 'n (at 'n + 1) 'last now 'box b,
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
-            ()))))))
+            ()))))
+   (\ what part (what @
+     'busy (pin at 'busy part, ())
+     'spin (paint (at 'what) (at 'part))
+     _ (pins at 'what what 'part part, at 'busy ? () (paint what part)))))
+ ; ..(view-busy tk f) answers (f ()), made on a task of its own while this one draws tk's
+ ; screen every view-load-every ms, whether the making ticks or not; a scare in the making
+ ; scares here. tk () just makes it. a long call into C still holds both till it is back
+ (view-busy tk f) (tk @ () (f ())
+   _ (: w (twirl (_ \ trap (_ \ [1 (f ())]) () (a \ b \ [0 a b])) 0)
+        (go _) (landed? w ? 0 (tk 'spin (), rest view-load-every, go ()))
+        (tk 'busy 1, go (), tk 'busy 0, catch w @ r (<r = 1 ? (r 1) (scare (r 1) (r 2))))))
  ; ..a tick for win, or the terminal where it is (), its whole screen the box
  (view-tick win draw) (view-loading win (tablet? win ? ()
                          (tty 1 @ ws [0 0 (two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])) draw)

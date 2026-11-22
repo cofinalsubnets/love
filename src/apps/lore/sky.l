@@ -4,7 +4,8 @@
 ; lays a pixel each.
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
 ; weather (sky-weather cover): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
-; 'smog 0 (default) to 1, the sky and its light browned toward orange; 'twinkle the air's
+; 'smog 0 (default) to 1, the sky and its light browned toward orange; 'dye [r g b] the sky's
+; own blue, dark and clouds turned to that colour, as bright, the smog on it thinning overhead; 'twinkle the air's
 ; stir under the stars, 1 earth's (default), 0 none, more a shimmering night. a light with
 ; 'turn, the eye's axes in the world's, has the sky's clouds fixed in the world, far
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
@@ -145,9 +146,13 @@
  ; ..and what it lights: a times the sky's ambient and b times the sun's colour
  (sky-irr lt a b) (c+ (c* a (lt 'amb)) (c* b (lt 'sunc)))
  ; ..smog, wx 'smog 0 to 1 of the way, browns what is seen and what it lights toward orange
- (smoggy wx c) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
+ (smoggy wx c) (smog-by wx c 1.0)
+ ; ..f of it, a share or a tray of them
+ (smog-by wx c f) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
    t (cmix [1.35 0.52 0.16] [2.0 1.0 0.24] (sat (1.6 * l)))
-   (k @ 0.0 c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] k)))
+   (k @ 0.0 c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] (k * f))))
+ ; ..a colour turned to the dye's, as bright
+ (dyed wx c) (peep wx 'dye () @ () c d (: l ((c 0 + c 1 + c 2) / 3.0) n ((d 0 + d 1 + d 2) / 3.0) [(l * d 0 / n) (l * d 1 / n) (l * d 2 / n)]))
  (sky-light s wx sim) (sky-lit s wx sim (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim)))
  ; ..its cloud over the sun given, csun 0 to 1
  (sky-lit s wx sim csun) (: sy (s 1)
@@ -192,7 +197,7 @@
    dusk (c* (lt 'tw * (1.0 - 0.5 * lt 'day)) (c+ (c* (warm * warm * warm) [0.9 0.38 0.16]) [0.22 0.12 0.28]))
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
-   sky0 (c+ (c+ (cmix (R 'dark) (R 'blue) (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
+   sky0 (c+ (c+ (cmix (dyed wx (R 'dark)) (dyed wx (R 'blue)) (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
    ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
    cl0 (haze-k (sat (0.5 + (th - edge wx sim) / sqrt (0.0016 + 2.0 * sq (R 'sd)))) (R 'hk) wx sim)
    cl (clouded wx cl0)                          ; overcast: no sky through it
@@ -207,7 +212,8 @@
               (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
                   (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
-   (smoggy wx (cmix sky0 cloudc cl)))
+   ; ..under a dye the clouds that colour too, and the smog a band low down, the dye's sky over it
+   (smog-by wx (cmix sky0 (dyed wx cloudc) cl) (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))))
  ; a colour said as 0xrrggbb
  (rgb x) [((x // 65536) / 255.0) ((x // 256 % 256) / 255.0) ((x % 256) / 255.0)]
  ; the sky's colour down the rays dx dy dz (trays) from the eye at ex ez, under the light
