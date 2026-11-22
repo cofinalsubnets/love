@@ -9,7 +9,7 @@ extern uint32_t __data_start__[], __data_end__[], __data_load__[];
 extern uint32_t __bss_start__[], __bss_end__[];
 extern void *const vectors[];
 
-void te_main(void);   // the face: main.c the board shell, kern.c the kernel, psram-test.c
+void te_main(void);   // kern.c's kernel, or psram-test.c's probe
 
 // the stacked frame from mkboot.l's isr_hardfault (r0), kept where an SWD debugger finds it
 volatile struct fault {
@@ -65,7 +65,7 @@ static void caches_init(void) {
 // from mkboot.l's cstartup, the stack laid
 void cmain(void) {
   // the LED before anything that can hang: a cold boot dying in clock bring-up still shows it
-  gpio_init(LED_BIT); gpio_set_dir(LED_BIT, 1); gpio_put(LED_BIT, 1);
+  gpio_init(LED_PIN); gpio_set_dir(LED_PIN, 1); gpio_put(LED_PIN, 1);
   // FPU on (CP10/CP11) before any float code
   REG(SCB_CPACR) |= (0xFu << 20);
   // MON_EN: a bkpt with no debugger vectors to the fault reporter rather than a mute lockup
@@ -187,16 +187,94 @@ int uart_getc(void) {
 // the board clock in ms, for the drivers; a love face answers love_clock from it
 uintptr_t te_ms(void) { return REG(GPT1_CNT) / 1000u; }
 
-// rp2040.c's gpio_* contract; pin is a GPIO2 bit, only the LED's pad muxed. TODO: the full pin map
+// the board's pins 0..54, PJRC's numbering: each a GPIO1..4 bank, its bit and its pad's mux
+// offset, as core_pins.h's teensy 4.1 map spells them on the fast banks 6..9 that mirror
+// these. 0 a pin the console (0, 1), the microSD (42..47) or the PSRAM (48..54) holds
+#define PIN(bank, bit, pad) ((pad) << 16 | (bank) << 8 | (bit))
+static uint32_t const pins[55] = {
+  0,                         //  0 AD_B0_03, held
+  0,                         //  1 AD_B0_02, held
+  PIN(4,  4, 0x024u),     //  2 EMC_04
+  PIN(4,  5, 0x028u),     //  3 EMC_05
+  PIN(4,  6, 0x02Cu),     //  4 EMC_06
+  PIN(4,  8, 0x034u),     //  5 EMC_08
+  PIN(2, 10, 0x164u),     //  6 B0_10
+  PIN(2, 17, 0x180u),     //  7 B1_01
+  PIN(2, 16, 0x17Cu),     //  8 B1_00
+  PIN(2, 11, 0x168u),     //  9 B0_11
+  PIN(2,  0, 0x13Cu),     // 10 B0_00
+  PIN(2,  2, 0x144u),     // 11 B0_02
+  PIN(2,  1, 0x140u),     // 12 B0_01
+  PIN(2,  3, 0x148u),     // 13 B0_03
+  PIN(1, 18, 0x104u),     // 14 AD_B1_02
+  PIN(1, 19, 0x108u),     // 15 AD_B1_03
+  PIN(1, 23, 0x118u),     // 16 AD_B1_07
+  PIN(1, 22, 0x114u),     // 17 AD_B1_06
+  PIN(1, 17, 0x100u),     // 18 AD_B1_01
+  PIN(1, 16, 0x0FCu),     // 19 AD_B1_00
+  PIN(1, 26, 0x124u),     // 20 AD_B1_10
+  PIN(1, 27, 0x128u),     // 21 AD_B1_11
+  PIN(1, 24, 0x11Cu),     // 22 AD_B1_08
+  PIN(1, 25, 0x120u),     // 23 AD_B1_09
+  PIN(1, 12, 0x0ECu),     // 24 AD_B0_12
+  PIN(1, 13, 0x0F0u),     // 25 AD_B0_13
+  PIN(1, 30, 0x134u),     // 26 AD_B1_14
+  PIN(1, 31, 0x138u),     // 27 AD_B1_15
+  PIN(3, 18, 0x094u),     // 28 EMC_32
+  PIN(4, 31, 0x090u),     // 29 EMC_31
+  PIN(3, 23, 0x0A8u),     // 30 EMC_37
+  PIN(3, 22, 0x0A4u),     // 31 EMC_36
+  PIN(2, 12, 0x16Cu),     // 32 B0_12
+  PIN(4,  7, 0x030u),     // 33 EMC_07
+  PIN(2, 29, 0x1B0u),     // 34 B1_13
+  PIN(2, 28, 0x1ACu),     // 35 B1_12
+  PIN(2, 18, 0x184u),     // 36 B1_02
+  PIN(2, 19, 0x188u),     // 37 B1_03
+  PIN(1, 28, 0x12Cu),     // 38 AD_B1_12
+  PIN(1, 29, 0x130u),     // 39 AD_B1_13
+  PIN(1, 20, 0x10Cu),     // 40 AD_B1_04
+  PIN(1, 21, 0x110u),     // 41 AD_B1_05
+  0,                         // 42 SD_B0_03, held
+  0,                         // 43 SD_B0_02, held
+  0,                         // 44 SD_B0_01, held
+  0,                         // 45 SD_B0_00, held
+  0,                         // 46 SD_B0_05, held
+  0,                         // 47 SD_B0_04, held
+  0,                         // 48 EMC_24, held
+  0,                         // 49 EMC_27, held
+  0,                         // 50 EMC_28, held
+  0,                         // 51 EMC_22, held
+  0,                         // 52 EMC_26, held
+  0,                         // 53 EMC_25, held
+  0,                         // 54 EMC_29, held
+};
+static uint32_t pin_row(unsigned pin) { return pin < 55 ? pins[pin] : 0; }
+static uint32_t pin_bank(uint32_t r) { return GPIO1_BASE + 0x4000u * ((r >> 8 & 7u) - 1u); }
+
+int gpio_ok(unsigned pin) { return pin_row(pin) != 0; }
+
+// the bank's clock on, the pad to GPIO (ALT5, SION so the PSR reads an output back), an
+// input until set_dir
 void gpio_init(unsigned pin) {
-  if (pin == LED_BIT) REG(IOMUXC_SW_MUX_GPIO_B0_03) = MUX_ALT(5);
-  REG(GPIO2_GDIR) &= ~(1u << pin); }            // input until set_dir
+  uint32_t r = pin_row(pin);
+  if (!r) return;
+  static uint32_t const gate[4][2] = { { CCM_CCGR1, 3u << 26 }, { CCM_CCGR0, 3u << 30 },
+                                       { CCM_CCGR2, 3u << 26 }, { CCM_CCGR3, 3u << 12 } };
+  uint32_t const *g = gate[(r >> 8 & 7u) - 1u];
+  REG(g[0]) |= g[1];
+  REG(IOMUXC_BASE + (r >> 16)) = MUX_ALT(5) | 0x10u;
+  REG(pin_bank(r) + 0x04u) &= ~(1u << (r & 31u)); }
 
 void gpio_set_dir(unsigned pin, int out) {
-  if (out) REG(GPIO2_GDIR) |= (1u << pin);
-  else     REG(GPIO2_GDIR) &= ~(1u << pin); }
+  uint32_t r = pin_row(pin);
+  if (!r) return;
+  if (out) REG(pin_bank(r) + 0x04u) |= 1u << (r & 31u);
+  else     REG(pin_bank(r) + 0x04u) &= ~(1u << (r & 31u)); }
 
 void gpio_put(unsigned pin, int hi) {
-  REG(hi ? GPIO2_DR_SET : GPIO2_DR_CLEAR) = 1u << pin; }
+  uint32_t r = pin_row(pin);
+  if (r) REG(pin_bank(r) + (hi ? 0x84u : 0x88u)) = 1u << (r & 31u); }
 
-int gpio_get(unsigned pin) { return (REG(GPIO2_PSR) >> pin) & 1u; }
+int gpio_get(unsigned pin) {
+  uint32_t r = pin_row(pin);
+  return r ? (int) (REG(pin_bank(r) + 0x08u) >> (r & 31u) & 1u) : 0; }

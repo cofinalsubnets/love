@@ -11,7 +11,8 @@
 ; mkir is a thunk because the IR carries live (aslr) addresses. the fit is a batch: `nif`
 ; mmaps a page-rounded arena per call.
 ; a native cell reverts to its twin across a bake, so a woken image is slow until forge-fit runs.
-; it needs the glaze module, not the hook: LOVE_NO_GLAZE=1 clears the hook, keeps the module.
+; it needs the glaze module, not the hook: on a woken image LOVE_NO_GLAZE=1 clears the hook and
+; keeps the module; an unbaked boot under it loads no glaze, and forge stands down.
 ; the bar for a new kernel is a run-time constant or a twin of interpreted love, not mere heat.
 (:
    ; --- the ABI kit -------------------------------------------------------------------

@@ -291,9 +291,10 @@ static struct g *env_budget(struct g *g) {
     if (pg > 0 && sz > 0) g->budget = (uintptr_t) pg * (uintptr_t) sz / 2 / sizeof(word); }
   return g; }
 
-// LOVE_NO_GLAZE: a pure-interpreter session, never the artifact
+// LOVE_NO_GLAZE: a pure-interpreter session, never the artifact. an egg boot under it never
+// loads the glaze, so this finds no module there and what it bakes carries no native
 #ifdef LvGlazed
-static char const glaze_off[] = "(: ev (cite 'glaze 'base-ev) natjit ())";
+static char const glaze_off[] = "((cite 'glaze) ? (ev '(: ev (cite 'glaze 'base-ev) natjit ())) 0)";
 #else
 static char const glaze_off[] = "";
 #endif
@@ -483,10 +484,15 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, post and the arch's holo
-  g = cats_glaze(g);                                     // a no-op on an unglazed arch
+  // LOVE_NO_GLAZE: an egg that never loads the glaze, as an unglazed arch's, for an image a
+  // core that cannot enter the natives will wake (a cortex-m has no a32 state for the arm stub)
+  char const *ng = getenv("LOVE_NO_GLAZE");
+  if (!(ng && *ng)) {
+   g = cats_glaze(g);                                    // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = shelve(g);                                    // glaze.l's own borrow of holo
+   g = shelve(g);                                   // glaze.l's own borrow of holo
 #endif
+  }
   g = evals_(g, "(latemop ())");                    // the egg's mop
 
   g = evals_(g,
