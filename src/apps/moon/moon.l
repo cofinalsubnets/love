@@ -605,10 +605,99 @@
        (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
        (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
+   ; -- -S: the object -c lays, said as GNU assembly. a section's bytes are .byte rows, a symbol a
+   ; label with its .globl, .type and .size, a relocation a .reloc at its place (one on a
+   ; section through the label at its head); an inline asm
+   ; blob that bears no fix is the text it was written in. it assembles to the object again --
+   (obj-asm s tx)
+    (: w (s 4 = 2)                                   ; elf64
+       mach (rle16 s 18)
+       at (mach = 40 ? "%" "@")
+       shoff (w ? (rle64 s 40) (rle32 s 32))
+       shes (rle16 s (w ? 58 46)) shn (rle16 s (w ? 60 48)) shx (rle16 s (w ? 62 50))
+       ; a section: name type flags offset size link info align entsize
+       (sh k) (shoff + k * shes @ b
+                (w ? [(rle32 s b) (rle32 s (b + 4)) (rle64 s (b + 8)) (rle64 s (b + 24)) (rle64 s (b + 32))
+                      (rle32 s (b + 40)) (rle32 s (b + 44)) (rle64 s (b + 48)) (rle64 s (b + 56))]
+                     [(rle32 s b) (rle32 s (b + 4)) (rle32 s (b + 8)) (rle32 s (b + 16)) (rle32 s (b + 20))
+                      (rle32 s (b + 24)) (rle32 s (b + 28)) (rle32 s (b + 32)) (rle32 s (b + 36))]))
+       secs (map sh ^shn)
+       (cstr o) (: (e i) (s i = 0 ? i (e (i + 1))) (snip s o (e o)))
+       (sname h) (cstr ((secs shx) 3 + h 0))
+       symh (filter (h \ h 1 = 2) secs @ l (two? l ? <l ()))
+       strh (two? symh ? (secs (symh 5)) ())
+       sz (w ? 24 16)
+       ; a symbol: name info section value size
+       (sym k) (symh 3 + k * sz @ b
+                 (w ? [(cstr (strh 3 + rle32 s b)) (s (b + 4)) (rle16 s (b + 6)) (rle64 s (b + 8)) (rle64 s (b + 16))]
+                      [(cstr (strh 3 + rle32 s b)) (s (b + 12)) (rle16 s (b + 14)) (rle32 s (b + 4)) (rle32 s (b + 8))]))
+       syms (two? symh ? (map sym ^(symh 4 // sz)) ())
+       (symnm k) (syms k @ y (((y 1) & 15) = 3 ? ".Lsec\(y 2)" (y 0)))
+       (s64 v) (9223372036854775807 < v ? (v - 18446744073709551616) v)
+       (s32 v) (2147483647 < v ? (v - 4294967296) v)
+       ; a section's relocations: offset type symbol addend, the addend () where the field holds it
+       (rels i)
+        (catmap (h \ (? ((h 1 = 4 || h 1 = 9) && h 6 = i)
+                       (: rela (h 1 = 4) es (w ? (rela ? 24 16) (rela ? 12 8))
+                          (map (k \ h 3 + k * es @ b
+                                 (w ? (rle64 s (b + 8) @ inf [(rle64 s b) (inf & 4294967295) (symnm (inf >> 32)) (rela ? (s64 (rle64 s (b + 16))) ())])
+                                      (rle32 s (b + 4) @ inf [(rle32 s b) (inf & 255) (symnm (inf >> 8)) (rela ? (s32 (rle32 s (b + 8))) ())])))
+                               ^(h 4 // es)))
+                       ()))
+                secs)
+       (rname t) (peep (peep gf-relnames mach {}) t () @ n (string? n ? n (show t)))
+       (rline r) ("\t.reloc ., " + rname (r 1) + ", " + r 2
+                  + (r 3 @ a (? !(charm? a) "" (a = 0) "" (0 < a) ("+" + show a) (show a))) + "\n")
+       (sline y) (: n (y 0) b ((y 1) >> 4) t ((y 1) & 15)
+                    ((? (b = 1) "\t.globl \(n)\n" (b = 2) "\t.weak \(n)\n" "")
+                     + (? (t = 2) "\t.type \(n),\(at)function\n" (t = 1) "\t.type \(n),\(at)object\n" "")
+                     + (0 < y 4 ? "\t.size \(n),\(show (y 4))\n" "")
+                     + n + ":\n"))
+       (rows bs) (atom? bs ? "" ("\t.byte " + join "," (map show (take 16 bs)) + "\n" + rows (drop 16 bs)))
+       (log2 n) (n <= 1 ? 0 (1 + log2 (n >> 1)))
+       ; the blobs that may stand as text, by their first byte
+       blobs (foldl (t \ p \ (p 0 @ bs (all (x \ charm? x || string? x) bs ?
+                                       (elf-flat bs @ z (0 < #z ? (pin t (z 0) ([z (p 1)] . peep t (z 0) ())) t)) t)))
+                    {} tx)
+       (sect i)
+        (: h (secs i) nm (sname h) base (h 3) n (h 4) bits (h 1 != 8)
+           f (h 2)
+           (fb m c) (0 < (f & m) ? c "")
+           fl (fb 2 "a" + fb 1 "w" + fb 4 "x" + fb 16 "M" + fb 32 "S" + fb 1024 "T")
+           ty (h 1 @ 1 "progbits" 8 "nobits" 7 "note" 14 "init_array" 15 "fini_array" t (show t))
+           labs (foldl (t \ y \ (y 2 = i && ((y 1) & 15) != 3 && 0 < #(y 0) ? (pin t (y 3) (y . peep t (y 3) ())) t)) {} syms)
+           rs (foldl (t \ r \ pin t (r 0) r) {} (rels i))
+           (ev? o) (two? (peep labs o ()) || two? (peep rs o ()))
+           (nextev o) (? (n <= o) n (ev? o) o (nextev (o + 1)))
+           (clear? a b) (a = b ? 1 (ev? a ? 0 (clear? (a + 1) b)))
+           ; the longest blob standing at o, no symbol or relocation inside it
+           (blob o) (bits && o < n ? (filter (p \ o + #(p 0) <= n && snip s (base + o) (base + o + #(p 0)) = p 0
+                                                 && !(two? (peep rs o ())) && clear? (o + 1) (o + #(p 0)))
+                                            (peep blobs (s (base + o)) ()) @ l (two? l ? (foldl (a \ p \ (#(a 0) < #(p 0) ? p a)) <l >l) ()))
+                                     ())
+           (flush run) (? (two? run) (rows (rev run)) "")
+           (go o run acc)
+            (: here (map sline (rev (peep labs o ()))) rl (peep rs o () @ r (two? r ? [(rline r)] ()))
+               pre (two? here || two? rl ? (rev (here + rl) + [(flush run)] + acc) acc)
+               run1 (two? here || two? rl ? () run)
+               (? (n <= o) (rev ([(flush run1)] + pre))
+                  !bits (nextev (o + 1) @ e (go e () (["\t.zero \(show (e - o))\n"] + pre)))
+                  (blob o @ p (two? p ? (go (o + #(p 0)) () ([(p 1 + "\n") (flush run1)] + pre))
+                                         (go (o + 1) (s (base + o) . run1) pre)))))
+           ("\t.section \(nm),\"\(fl)\",\(at)\(ty)" + (0 < (f & 16) ? ",\(show (h 8))" "") + "\n"
+            + "\t.p2align \(show (log2 (h 7)))\n.Lsec\(i):\n" + join "" (go 0 () ())))
+       keep (filter (i \ (secs i) 1 @ t (!(elem t [0 2 3 4 9 17]) && sname (secs i) != ".shstrtab")) ^shn)
+       ; a weak name defined nowhere here is still weak
+       weak (catmap (y \ y 2 = 0 && ((y 1) >> 4) = 2 ? ["\t.weak \(y 0)\n"] ()) syms)
+       (join "" (weak + map sect keep)))
    (cc-obj src dst (t @ {'tgt tgt}))
-    (pin cppdeps 'l (),
+    (pin cppdeps 'l (), pin asmtx 'on (t 'S), pin asmtx 'l (),
      cc-objbytes src t @ b
-       (tgt != 'wasm ? (write-bytes dst b)
+       (? (t 'S && tgt != 'wasm) (open dst "w" @ q
+                                   (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
+                                    say q (obj-asm (elf-flat b) (rev (asmtx 'l))),
+                                    close q))
+          (tgt != 'wasm) (write-bytes dst b)
         (open dst "w" @ q
            (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
             say q b,
@@ -1313,6 +1402,7 @@
            "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
            "-fno-tree-vectorize" "-fno-unroll-loops" "-fno-reorder-blocks" "-fno-gcse"
            "-fno-var-tracking" "-fno-var-tracking-assignments" "-fcolor-diagnostics"
+           "-fverbose-asm" "-fno-verbose-asm"                    ; -S's comments, of which it lays none
            "-fno-color-diagnostics" "-fno-caret-diagnostics" "-fno-diagnostics-show-caret")
    (fok? a) (elem a fsound || elem a fhint || starts? a "-fstrict-flex-arrays=" ||
              starts? a "-falign-loops" || starts? a "-falign-jumps" || starts? a "-falign-labels" ||
@@ -1350,6 +1440,8 @@
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws))))
           ("-c" . r) (flags r (pin t 'c 1))
+          ; -S: -c's object, said as assembly
+          ("-S" . r) (flags r (pin (pin t 'c 1) 'S 1))
           ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
           ; -g form rides through tol?
           ("-g0" . r) (flags r (pin t 'dbg ()))
@@ -1644,7 +1736,9 @@
                              ; stdin has no name to derive an .o from
                              (<l = "-") (udie 2 "cc: a source on stdin needs -o")
                              !(dotsrc? <l) (udie 2 "cc: not a .c or .s input: \(<l)")
-                             (cc-obj <l (obase <l) f, go >l))
+                             ; -S lays x.s, and never over its own source
+                             (f 'S && !(ends? <l ".c")) (udie 2 "cc: -S of \(<l) needs -o")
+                             (cc-obj <l (obase <l @ b (f 'S ? "\(snip b 0 (#b - 1))s" b)) f, go >l))
                    (go ins))
                 (cc-link ins "a.out" f, 0)))))
 

@@ -2865,18 +2865,29 @@
    (asmfsafe txt fs)
     (any (w \ 0 <= findsub txt w) asmsp ? fs (map (f \ (two? f && <f = 'raw ? (f + ['fsafe]) f)) fs))
    (rawclean fs) (map (f \ (two? f && <f = 'raw && 2 < #f ? [<f <>f] f)) fs)
+   ; -S's side table: each blob laid while 'on, with the text it was written in. only a text of
+   ; data directives is kept, whose bytes any assembler lays alike; an instruction's stay bytes
+   asmtx {}
+   (asmdirs? s) ((: n #s
+                    (at i) (? (n <= i) 1 (elem (s i) [32 9 10]) (at (i + 1)) (s i = 46) (eol i) 0)
+                    (eol i) (? (n <= i) 1 (s i = 59) 0 (s i = 10) (at i) (eol (i + 1)))
+                    (at 0)))
+   (asmkeep bs txt) (peep asmtx 'on 0 && asmdirs? txt ? (pin asmtx 'l ([bs txt] . peep asmtx 'l ()), bs) bs)
    (asmbody g tgt neutral? txt)
     ; one blob resolves its labels inside it; an absolute label (pushl's) wants the link, so a
     ; template carrying one takes the runs path, its labels the function's own
     (neutral? || gas-plain? tgt txt && !(any (f \ two? f && <f = 'pushl) (gas-text tgt txt)) ?
-       [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmho tgt prog (cg-refs prog {})))]]
+       [['raw (: prog (neutral? ? (asm-text txt) (gas-text tgt txt))                 (asmkeep (asmho tgt prog (cg-refs prog {})) txt))]]
        (: pf "\(nlab g "\(g 'fn).asm")."
           r (gas-top-in tgt txt "" [1 6] pf (peep (g 'sects) (g 'fn) ".text"))
           _ (two? (r 4) ? (scare 'gas-alias <>(<(r 4))))      ; a template's alias has no C name to land on
           home (foldl (a \ x \ <x = "" ? (x 3) a) () <r)
           ; the prefix rides along: what dead code removes of the home, the record follows out
           (pin g 'fasecs ([(filter (x \ <x != "") <r) (r 1) (r 2) pf (r 3)] . g 'fasecs),
-           asmruns tgt home)))
+           ; a template that is one run and no more stands as its text under -S
+           (: rs (asmruns tgt home)
+              _ (two? rs && atom? >rs && two? <rs && <(<rs) = 'raw ? (asmkeep ((<rs) 1) txt) 0)
+              rs))))
    ; the canary sits at fp-16, under the frame link (fnreset keeps the cell): set from the guard
    ; at entry, compared on every way out. one blob each, every register it borrows put back
    (sspblob g k)
@@ -3134,7 +3145,8 @@
                                                ; x64's %a of an address constant is rip-relative, as gcc spells it, but under a
                                                ; segment, which holo lays only absolute; %P and %c stay absolute
                                                (md = 97 && tgt = 'x64 && !(cint? v) && findsub tmpl "s:" < 0) "\(v)(%rip)"
-                                               (gas-imm tgt v md)))
+                                               ; an immediate is spelled signed, as gcc and clang lay it
+                                               (gas-imm tgt (cint? v && 9223372036854775807 < v ? (v - 18446744073709551616) v) md)))
                          (mtext a9) (md \ (? md 'bad neutral? "\(peep asmnames a9 "r?"), 0" (gas-mem tgt a9)))
                          (ltext l9) (md \ (md = 108 ? (show l9) 'bad))
                          ; a v register: plain is v, s h d b q its scalar views; x64's is xmm, x too

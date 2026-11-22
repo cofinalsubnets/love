@@ -1031,6 +1031,68 @@ moonrun -fno-strict-aliasing -fno-common -fno-pie -fno-asynchronous-unwind-table
   -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a flag taken as it stands was refused"
 echo "mooncc: -f[un]signed-char held to gcc, the -f flags that change the object do, the rest refuse by name"
 
+# -S: the object -c lays, said as assembly. assembled again, by holo and by gas where there is
+# one, it is -c's object: every section's bytes, the relocations, the symbols
+dssig() { # an object's sections, relocations and symbols as text; an assembler's own marks left out
+  readelf -SW "$1" | sed -n 's/^ *\[ *[0-9]*\] \(\.[^ ]* *\(PROGBITS\|NOBITS\|NOTE\|INIT_ARRAY\|FINI_ARRAY\) \)/\1/p' |
+    awk '$1 != ".note.gnu.property" && $5 !~ /^0+$/ { print "sec", $1, $2, $5, (NF == 10 ? $7 : "-"), $NF }' | sort > "$1.sec"
+  cat "$1.sec"
+  while read -r _ s _; do readelf -x "$s" "$1" 2> /dev/null | grep '^  0x'; done < "$1.sec"
+  readelf -rW "$1" | awk '/^Relocation section/ { sec = $3 } /^[0-9a-f]+ +[0-9a-f]+ +R_/ { print "rel", sec, $1, $3, $5, $6, $7 }' | sort > "$1.rel"
+  cat "$1.rel"
+  # a mapping symbol is gas's own; an undefined name no relocation asks for, or one the object
+  # also defines (an asm label's second entry), has no line to come from
+  readelf -sW "$1" | awk 'FNR == NR { used[$5] = 1; next }
+    FNR > 3 && $8 != "" && $8 !~ /^[$][dx]/ && $4 != "SECTION" && $4 != "FILE" {
+      if ($7 == "UND") und[$8] = $4 " " $5; else { def[$8] = 1; print "sym", $8, $4, $5, $3, "DEF" } }
+    END { for (n in und) if (used[n] && !def[n]) print "sym", n, und[n], 0, "UND" }' "$1.rel" - | sort
+}
+dsrt() { # dsrt TGT GAS FILE..
+  dt=$1; dg=$2; shift 2
+  for f; do
+    b="$ho/.ds.$(basename "$f" .c)"
+    moonrun -t "$dt" -c -o "$b.o" "$f" > /dev/null 2>&1 || continue
+    moonrun -t "$dt" -S -o "$b.s" "$f" > /dev/null 2>&1 || fail "mooncc -t $dt -S $f"
+    dssig "$b.o" > "$b.want"
+    case $f in
+      */138-ucn.c) ;;      # holo's gas front reads no utf-8 name in an expression
+      *) moonrun -t "$dt" -c -o "$b.h.o" "$b.s" > /dev/null 2>&1 || fail "holo does not read mooncc -t $dt -S $f"
+         dssig "$b.h.o" | cmp -s - "$b.want" || fail "mooncc -t $dt -S $f, assembled by holo, is not -c's object";;
+    esac
+    if [ -n "$dg" ]; then
+      "$dg" -o "$b.g.o" "$b.s" 2> /dev/null || fail "gas does not read mooncc -t $dt -S $f"
+      dssig "$b.g.o" | cmp -s - "$b.want" || fail "mooncc -t $dt -S $f, assembled by gas, is not -c's object"
+    fi
+    rm -f "$b".*
+  done
+}
+# kbuild's offsets: a template of data directives stands as its text, which sed reads; one that
+# names a symbol, or holds an instruction, stays bytes under its relocation
+cat > "$ho/.dso.c" <<'DSEOF'
+struct t { long a, b; char c[40]; long d; };
+extern int ext(void); int g = 7; static int s;
+#define DEFINE(sym, val) asm volatile("\n.ascii \"->" #sym " %0 " #val "\"" : : "i" (val))
+int main(void) {
+  DEFINE(NR_THINGS, 24);
+  DEFINE(T_D, __builtin_offsetof(struct t, d));
+  DEFINE(T_MASK, ~(sizeof(struct t) - 1));
+  asm volatile(".quad ext");
+  asm volatile("nop");
+  return ext() + g + s;
+}
+DSEOF
+for dt in x64 a64; do
+  moonrun -t $dt -S -o "$ho/.dso.s" "$ho/.dso.c" || fail "mooncc -t $dt -S"
+  [ "$(grep -c '^\.ascii "->' "$ho/.dso.s")" = 3 ] && grep -q '^\.ascii "->T_D [$]*56 ' "$ho/.dso.s" ||
+    fail "-t $dt -S: an offsets template is not its text"
+  grep -q '^\.ascii "->T_MASK [$]*-64 ' "$ho/.dso.s" || fail "-t $dt -S: an immediate past 2^63 is not spelled signed"
+  grep -q 'nop\|\.quad' "$ho/.dso.s" && fail "-t $dt -S: a template that is not all data, or names a symbol, stood as text"
+done
+(cd "$ho" && moonrun -S .dso.c && [ -s .dso.s ]) || fail "-S with no -o did not lay FILE.s"
+dsrt x64 "$(command -v as)" "$ho/.dso.c" test/cc/*.c
+dsrt a64 "$(command -v aarch64-linux-gnu-as)" "$ho/.dso.c" test/cc/*.c
+echo "mooncc: -S assembles to -c's object by holo and by gas, an offsets template its text"
+
 # -ftrivial-auto-var-init=zero: every automatic without an initializer reads zero, over a dirty stack
 cat > "$ho/.avz.c" <<'EOF'
 struct s { int a[3]; char c; long l; };

@@ -36,7 +36,7 @@
    ; the target as mooncc's -t, a line naming none being a64
    arch (? (atom? tgt) "a64" (<tgt = "--target=aarch64-linux-gnu") "a64" (<tgt = "--target=x86_64-linux-gnu") "x64"
               (<tgt = "--target=arm-linux-gnueabi") "arm" ())
-   (moon? _) (elem "-c" av && two? srcs && string? tg && string? arch)
+   (moon? _) ((elem "-c" av || elem "-S" av) && two? srcs && string? tg && string? arch)
    ; mooncc names no compiler family, and the kernel refuses one it does not know: it is lent the
    ; clang's the .config was made for ($HEARTS_CLANG_VERSION, hk-cc's; else the pinned 22.1.8). it
    ; predefines true, false and bool, which linux/stddef.h declares; it has __int128 but not clang's
@@ -54,7 +54,7 @@
    (spell ws a)
     (? (atom? ws) (rev a)
        (: x <ws  r >ws
-          (? (x = "-c" || drop? x || x = <srcs) (spell r a)
+          (? (x = "-c" || x = "-S" || drop? x || x = <srcs) (spell r a)
              (x = "-o") (spell >r a)
              (x = "-isystem" && two? r) (spell >r (<r . "-I" . a))
              (elem x ["-I" "-D" "-U" "-include"] && two? r) (spell >r (<r . x . a))
@@ -96,7 +96,7 @@
              (clang 1 ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r "")))))
       !(moon? 0) (clang (lays? 0) (why 0))
       (: sp (abs <srcs)
-         r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch "-c"]
+         r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch (elem "-S" av ? "-S" "-c")]
                   + ident + spell av () + ["-o" tg sp]))
          (? (two? r && <r = 0) (quit 0)
             (clang 1 (? (two? r && <r = 124) "timeout 900s"
