@@ -249,6 +249,7 @@
  song-chunk (song-rate // 30)
  song-gain 5200.0
  song-mixall (cite 'dsp 'mixall)
+ song-loop (cite 'dsp 'tones-loop)
  phrase [-5.5 -3.5 -12.5]
  phrase-gap 1.2                         ; seconds from one note of it to the next
  phrase-ring 3.0                        ; ..and how long a note takes to die away
@@ -275,14 +276,15 @@
                         'trem drone-swell-db 'trate drone-swell})
                     v (ops-voice (map op drone-notes) 0 1099511627776 1.0 1.0 song-rate)
                     (lp ix) (ix % (drone-loop * song-rate))
-                    [(v 0) (ix \ v 1 (lp ix)) (drone-gain * 0.5) (drone-gain * 0.5) (ix \ v 4 (lp ix))])
+                    [(v 0) (ix \ v 1 (lp ix)) (drone-gain * 0.5) (drone-gain * 0.5) (ix \ v 4 (lp ix))
+                     (song-loop && v 5 && song-loop (v 5) (drone-loop * song-rate))])
  (apartment-song-new h st) {'h h 'fpos 0 'vs [[0 (drone-voice ())]] 'sb {st}
                             'next (phrase-first * song-rate) 'struck 0}
  (strike! s at v) (pin s 'vs (s 'vs + [[at (mkvoice at v song-rate)]]))
  ; a note and its echoes: one voice heard again from what it laid, where mixall sums; else
  ; each echo a voice of its own
  (note! s at v) (: vo (song-mixall && mkvoice at v song-rate)
-                   (? (#vo = 5) (pin s 'vs (s 'vs + [[at (echoed vo (map (e \ [(int (<e * song-rate)) (e 1)]) phrase-echoes))]]))
+                   (? (#vo = 6) (pin s 'vs (s 'vs + [[at (echoed vo (map (e \ [(int (<e * song-rate)) (e 1)]) phrase-echoes))]]))
                       (strike! s at v,
                        each phrase-echoes (e \ strike! s (at + int (<e * song-rate)) (pin (pins {} 's (v 's) 'note (v 'note) 'legato (v 'legato)) 'gain (v 'gain * e 1))))))
  (phrase! s) (: sb (s 'sb) base (s 'fpos)

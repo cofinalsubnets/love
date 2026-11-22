@@ -3,12 +3,8 @@
 // are mkboot.l's
 #include <stdint.h>
 #include "nucleo446.h"
+#include "../crt0.h"
 #include "../../../src/inle/bput.h"
-
-// nucleo446.lds's bounds and mkboot.l's vector table
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[];
-extern void *const vectors[];
 
 int main(void);
 
@@ -33,9 +29,7 @@ void cmain(void) {
   REG(SCB_CPACR) |= (0xFu << 20);
   arm_dsb_isb();
   // .data and .bss before clocks, so no read of a global races the copy
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
-  REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
+  crt0(8);
   clocks_init();
   serial_init();
   main();

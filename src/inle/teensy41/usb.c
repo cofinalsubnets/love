@@ -172,6 +172,7 @@ static void usb_stray(void) {
   if (n < 160) REG(0xE000E180u + 4u * (n / 32)) = 1u << (n % 32); }
 
 #define SCB_DCCIMVAC 0xE000EF70u
+#define SCB_DCCMVAC 0xE000EF68u
 #define MPU_CTRL 0xE000ED94u
 #define MPU_RBAR 0xE000ED9Cu
 #define MPU_RASR 0xE000EDA0u
@@ -225,6 +226,9 @@ void usb_init(void) {
   for (uint32_t i = 0; i < 16; i++) REG(vt + 4 * i) = (uint32_t) (uintptr_t) vectors[i];
   for (uint32_t i = 16; i < 176; i++) REG(vt + 4 * i) = (uint32_t) (uintptr_t) usb_stray;
   REG(vt + 4 * (16 + irq_usb1)) = (uint32_t) (uintptr_t) usb_isr;
+  // the table's lines out of the cache to the ram, where an exception finds its vector
+  arm_dsb();
+  for (uint32_t i = 0; i < 4u * 176; i += 32) REG(SCB_DCCMVAC) = (uint32_t) (vt + i);
   arm_dsb();
   REG(SCB_VTOR) = (uint32_t) vt;
   arm_dsb_isb();

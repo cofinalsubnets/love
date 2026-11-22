@@ -38,7 +38,9 @@ CCACHE ?= $(shell command -v ccache 2>/dev/null)
 # read off __love_osv is that a board has no OS to have a word about. it also keeps the
 # ALSA and OSS lanes out of the compile, which want open/ioctl/getenv and would be a
 # link error here rather than a device this seat could ever reach.
-mc_flags = -t thumb2sp -D tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D data_section=0 -D love_horn_seat=1 -D inf_heap=1 \
+# love_horn_rate: the rate the song plays at, horn-rate's answer: a quarter of the SDK's 44.1k,
+# which pdglue.c lays four times
+mc_flags = -t thumb2sp -D tco=1 -D __STDC_HOSTED__=0 -D TARGET_PLAYDATE=1 -D TARGET_EXTENSION=1 -D data_section=0 -D love_horn_seat=1 -D love_horn_rate=11025 -D inf_heap=1 \
   -Isrc/love/user/playdate -Iout/playdate -I. -Isrc/love -Iout/lib -Isrc/love/quay -Isrc/apps/moon/include -I$(pd_sdk)/C_API
 # our own link. -Ttext 0 is where link_map.ld puts .text, which is the only thing
 # that script says about placement; --emit-relocs keeps the R_ARM_ABS32 sites so
@@ -68,9 +70,10 @@ pd_local_c = $(wildcard *.c)
 # heap, so the doors src/love/fd.c carries on a hosted love have nobody here to answer them.
 # src/love/horn.c where the boards take src/love/nohorn.c: this device has a speaker, so it answers
 # love_horn_writen for real -- see love_horn_seat in the flags below, and k_horn_* in main.c.
-# the stones add the rasterizer, the lamps and the pool they run on, and the song's tones and
-# packer, after horn.c, as src/inle/mps2's baker links them
-pd_shared_c = $(love_c) $(f_c) $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/pool.c $(S)/love/audio/tones.c $(S)/love/audio/tonerun.c $(S)/love/mem.c
+# the song's tones go before horn.c, as the core's own (port.mk's love_m) do in src/inle/mps2's
+# baker, then the stones' rasterizer, lamps and the pool they run on, and the packer: the nif
+# rows must lie in the baker's order, or the image's fingerprint refuses it and the egg bakes here
+pd_shared_c = $(love_c) $(f_c) $(S)/love/audio/tones.c $(S)/love/audio/tonerun.c $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/pool.c $(S)/love/mem.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (src/inle/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
@@ -177,7 +180,7 @@ $(o)/pdex-alt.elf: $(pd_o) | $(m)
 $(o)/pdex.so: $(pd_src) $(game_h)
 	@echo CC	$@
 	@mkdir -p $(o)
-	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dtco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dlove_horn_seat=1 \
+	@$(CCACHE) gcc -g -O1 -shared -fPIC -Dtco=0 -DTARGET_SIMULATOR=1 -DTARGET_EXTENSION=1 -Dlove_horn_seat=1 -Dlove_horn_rate=11025 \
 	  -I. -I$(o) -I$(hd) -I$(R) -I$(S)/love -I$(R)/out/lib -I$(S)/love/quay -I$(pd_sdk)/C_API \
 	  -o $@ $(pd_src) -lm
 

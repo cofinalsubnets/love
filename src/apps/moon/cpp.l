@@ -564,8 +564,9 @@
                    (go >l d))
        (go buf 0))
    (cppgo toks macs cond buf out incf)
-    (atom? toks ? (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
-                        (rev (tokflush buf macs out)))
+    (atom? toks ? (? (peep macs 'feed ()) ['feed cond buf out]      ; a block's end: cppfeed's
+                     (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
+                     (rev (tokflush buf macs out)))
        (: ls (linesplit toks) rest <>ls
           ; a directive's comments go with it
           line (<ls @ l (? (atom? l || !(any cmt? l)) l (nocmt l @ k (two? k && pv? <k "#" ? k l))))
@@ -685,8 +686,10 @@
                             sv (lndel macs)
                             _ (pin macs 'lndelta 0)
                             _ (pin macs "#open:\(ipath)" [1])
+                            fd (peep macs 'feed ())                   ; a header ends as a whole TU does
+                            _ (pin macs 'feed ())
                             raw (cppgo itoks macs () () () chf)       ; recurse with fresh cond; shares macs
-                            (pin macs "#open:\(ipath)" (), pin macs 'lndelta sv,
+                            (pin macs 'feed fd, pin macs "#open:\(ipath)" (), pin macs 'lndelta sv,
                             ; a nested failure propagates up wearing its file; never answer (),
                             ; which reads as an empty include
                              gripe? raw ? (gripein raw name)
@@ -776,15 +779,41 @@
                 pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - 1.0 / 4503599627370496.0) * 1023 2.0) 0)]],
                ; bool/true/false are the driver's (moon.l cc-defs)
                 t))
-   (cpp toks incf fname) (cpp-fin toks incf fname bare)   ; -> (1 out) | a gripe (test with okv?, never two?)
-   (cppasm toks incf fname) (cpp-fin toks incf fname (t \ t))
-   (cpp-fin toks incf fname fin)
+   ; an assembly source fed in blocks, each cut at a line end: one macro table and one
+   ; conditional stack across them. a feed answers (1 toks), finished, up to its last line
+   ; mark; the line after it is held for the next, so no string run or spacing straddles a
+   ; cut. a run that ends in an open macro call, or on a name that may open one, is held too
+   (cppopen fname) {'macs (pin (cppmacs fname) 'feed 1) 'cond () 'buf () 'tail ()}
+   (cppfeed st toks incf)
+    (: macs (st 'macs)
+       r (cppgo toks macs (st 'cond) (st 'buf) () incf)
+       (r @ ('feed cond buf out)
+          (: held (callopen? buf macs || two? buf && macat? <buf macs && fnish? (mdef macs (macnm <buf)) macs 8)
+             (pin st 'cond cond, pin st 'buf (held ? buf ()),
+              cppcut st (held ? out (tokflush buf macs out))))
+          r))
+   ; out is reversed: from its last line mark on is the tail
+   (cppcut st out)
+    (: (go l tl) (? (atom? l) ()
+                    (pv? <l "\n") [>l (<l . tl)]
+                    (go >l (<l . tl)))
+       (go out () @ c
+          (atom? c ? (pin st 'tail (st 'tail + rev out), [1 ()])     ; no line starts here
+             (: ts (st 'tail + rev <c)
+                (pin st 'tail <>c, cppdone st ts)))))
+   ; the tokens are spelled and dropped, so the sharing table goes with each block
+   (cppdone st ts) (pin spanacc 'l (), pin (st 'macs) 'itab (), [1 (strcat-pass ts 0 () (t \ t))])
+   (cppclose st)
+    (: cond (st 'cond) macs (st 'macs)
+       (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
+          (cppdone st (st 'tail + rev (tokflush (st 'buf) macs ())))))
+   (cpp toks incf fname)                                  ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (cppmacs fname)
        r (cppgo toks macs () () () incf)
        ; the spans ride the head as one 'fspans token, so cpp keeps its (1 out) channel
        (gripe? r ? r
           (: _ (pin spanacc 'l ())
-             out (strcat-pass r 0 () (t \ itok macs (fin t)))
+             out (strcat-pass r 0 () (t \ itok macs (bare t)))
              [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)])))       ; an empty list is a valid empty TU
 
    ; -E: the TU as text in gcc -E's shape: tokens by line, a `# N "file"` marker where the file
