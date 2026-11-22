@@ -11,6 +11,7 @@ set -u
 ho=$1
 name=test_dwarf
 dd=`command -v llvm-dwarfdump 2>/dev/null || true`
+oc=`command -v llvm-objcopy 2>/dev/null || true`
 gdb=`command -v gdb 2>/dev/null || true`
 [ -n "$dd" ] || [ -n "$gdb" ] || gate_skip "$name: no llvm-dwarfdump or gdb, skipped"
 
@@ -67,6 +68,30 @@ if [ -n "$dd" ]; then
   holes=`expr $nf - $ne`
 fi
 
+# -g leaves the code alone: love's own C on x64, with and without -g, the same .text. the files
+# named still differ, the marks reaching the allocator; one that stops differing leaves the list
+same="arr cb ev io lamp love lr macho mem num poly posix raster snap swatch tablet thrun vfs"
+cd0() { "$ho/love" mooncc -t x64 -os linux $2 -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$1" -o "$3" \
+          && "$oc" -O binary --only-section=.text "$3" "$3.text"; }
+mkdir -p "$d/g"; n=0; nsame=-
+[ -n "$oc" ] && for f in src/love/*.c; do
+  b=`basename $f .c`
+  ( cd0 $f "" "$d/g/$b.o" && cd0 $f -g "$d/g/$b.g.o" || echo "$b: mooncc" > "$d/g/$b.bad" ) &
+  n=`expr $n + 1`; [ `expr $n % 8` = 0 ] && wait
+done
+wait
+[ -n "$oc" ] && for f in src/love/*.c; do
+  b=`basename $f .c`
+  [ -f "$d/g/$b.bad" ] && { echo "FAIL $name: mooncc $f"; exit 1; }
+  k=0; for x in $same; do [ $x = $b ] && k=1; done
+  if cmp -s "$d/g/$b.o.text" "$d/g/$b.g.o.text"; then
+    [ $k = 1 ] && { echo "FAIL $name: $b.c's code no longer moves under -g: take it off the list"; exit 1; }
+  else
+    [ $k = 0 ] && { echo "FAIL $name: -g changes $b.c's code"; exit 1; }
+  fi
+done
+[ -n "$oc" ] && nsame=`echo $same | wc -w` || gate_partly "$name: no llvm-objcopy, -g's code check skipped"
+
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
 mc -t x64 -os linux -c "$d/t.c" -o "$d/t0.o"
@@ -86,4 +111,4 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds; a64 raster.c: $holes function(s) without an fde"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds; a64 raster.c: $holes function(s) without an fde; -g moves the code of $nsame of love's C files"
