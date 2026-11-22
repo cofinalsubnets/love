@@ -13,9 +13,12 @@ static love_inline struct mem *after(struct mem *r) {
 
 static love_inline void *ff_body(struct mem *m) { return &m->next; }
 
-// this big or more comes off the top of the highest fit, less off the bottom of the lowest:
-// small long-lived blocks pile up low, the high end stays whole for the heap's pools
+// this big or more comes off the highest fit, less off the bottom of the lowest: small
+// long-lived blocks pile up low, the high end stays whole for the heap's pools. a big block
+// takes the end of its run away from the last big one: a pool copied into a new block and
+// freed then joins the run between them, and the free words stay one run
 #define ff_big ((uintptr_t) (4u << 20) / sizeof(uintptr_t))
+static uintptr_t ff_last;
 
 // the header of an n-word body aligned to a in t, 0 if none fits; a gap below is a block, never one word
 static love_inline uintptr_t ff_fit(struct mem *t, uintptr_t n, uintptr_t a, bool top) {
@@ -53,7 +56,11 @@ static love_inline void *ff_alloc_aligned(struct mem **fl, uintptr_t n, uintptr_
   for (struct mem **q = fl; *q; q = &(*q)->next) {
     uintptr_t x = ff_fit(*q, n, a, top);
     if (x) { b = q, h = x; if (!top) break; } }
-  return b ? ff_carve(b, h, n) : NULL; }
+  if (!b) return NULL;
+  if (top) {
+    uintptr_t x = ff_last > h ? ff_fit(*b, n, a, false) : 0;
+    ff_last = h = x ? x : h; }
+  return ff_carve(b, h, n); }
 
 static love_inline void *ff_alloc(struct mem **fl, uintptr_t n) {
   return ff_alloc_aligned(fl, n, sizeof(uintptr_t)); }

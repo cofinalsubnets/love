@@ -2,8 +2,9 @@
 // after every step: the free blocks and the allocated ones tile it exactly (so no word is
 // lost to padding or held twice), the list runs in address order with no two blocks
 // touching, every body sits on its alignment, an allocated block holds its body and at most
-// one word more, small requests come off the bottom and big ones off the top, and freeing
-// everything leaves the pool one block again. seeded, so a red names a step that repeats.
+// one word more, small requests come off the bottom and big ones off the top, a pool copied
+// to a new block and freed leaves the free words one run, and freeing everything leaves the
+// pool one block again. seeded, so a red names a step that repeats.
 #include "ffalloc.h"
 
 #include <stdio.h>
@@ -68,6 +69,19 @@ int main(void) {
   if (b) lv[nl++] = (struct live) { b, ff_big, sizeof(uintptr_t) };
   if (pg) lv[nl++] = (struct live) { pg, 1024, 4096 };
   if ((why = check(fl, base, lv, nl, sp))) printf("FAIL test_ffalloc: the shapes: %s\n", why), fails++;
+
+  // a major collection's shape, four times: a new pool beside the old, the old freed. the
+  // free words are one run after each
+  if (s && b && pg && !fails) {
+    ff_free(&fl, s), ff_free(&fl, pg), nl = 1, lv[0] = (struct live) { b, ff_big, sizeof(uintptr_t) };
+    for (int i = 0; i < 4 && !fails; i++) {
+      uintptr_t n = ff_big + 1000 * (uintptr_t) i, *t = ff_alloc(&fl, n);
+      if (!t) { printf("FAIL test_ffalloc: major %d: no block\n", i), fails++; break; }
+      ff_free(&fl, lv[0].p), lv[0] = (struct live) { t, n, sizeof(uintptr_t) };
+      uintptr_t all = 0, big = 0;
+      for (struct mem *m = fl; m; m = m->next) all += m->len, big = m->len > big ? m->len : big;
+      if (big != all) printf("FAIL test_ffalloc: major %d: %lu words free, the largest run %lu\n", i, (unsigned long) all, (unsigned long) big), fails++;
+      if ((why = check(fl, base, lv, nl, sp))) printf("FAIL test_ffalloc: major %d: %s\n", i, why), fails++; } }
 
   // churn: allocations of every size and alignment, frees in any order
   uint64_t seed = 0x9e3779b97f4a7c15ull;
