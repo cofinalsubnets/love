@@ -119,12 +119,13 @@
    (tt 0 >= tt 1 ? [s] (filter two? [(tt 0 > 0.001 ? [a (at (tt 0)) (s 2)] ()) (tt 1 < 0.999 ? [(at (tt 1)) b (s 2)] ())])))
  ; ..a run of pieces end to end as one tube: a ring at each joint, its radius between the
  ; pieces', turned on from the last ring so it never twists, the texture laid on along the
- ; run; its ends run on a little past a ring at each, narrowing, so it sinks into what it
- ; grows from and closes; its faces' middles at the radius
+ ; run; its ends run on a little past a ring at each, narrowing to a point, so it sinks into
+ ; what it grows from and is closed seen from anywhere; its faces' middles at the radius
  (sweep run tex ts) (: k #run r0 (run 0 2) rl (run (k - 1) 2) n (r0 > 0.1 ? 12 (r0 > 0.03 ? 8 (r0 > 0.012 ? 4 3)))
    d0 (unit (c- (run 0 1) (run 0 0))) dl (unit (c- (run (k - 1) 1) (run (k - 1) 0)))
-   ps ([(c- (run 0 0) (c* (0.8 * r0) d0)) (run 0 0)] + map (i \ run i 1) ^k + [(c+ (run (k - 1) 1) (c* (0.8 * rl) dl))])
-   rs ([(0.6 * r0) r0] + map (i \ 0.5 * (run i 2 + run (i + 1) 2)) ^(k - 1) + [rl (0.3 * rl)])
+   ps ([(c- (run 0 0) (c* (1.0 * r0) d0)) (c- (run 0 0) (c* (0.8 * r0) d0)) (run 0 0)] + map (i \ run i 1) ^k
+       + [(c+ (run (k - 1) 1) (c* (0.8 * rl) dl)) (c+ (run (k - 1) 1) (c* (0.9 * rl) dl))])
+   rs ([0.0 (0.6 * r0) r0] + map (i \ 0.5 * (run i 2 + run (i + 1) 2)) ^(k - 1) + [rl (0.3 * rl) 0.0])
    m #ps
    ; ..where each ring faces: along the run there, the way to the next joint from the last
    (way i) (unit (c- (ps (min (m - 1) (i + 1))) (ps (max 0 (i - 1)))))
