@@ -60,8 +60,10 @@
 ; the house far west and its yard, the floors' top, and how far a point is from them in plan
 (: sx0 -132.2 sx1 -104.0 sz0 14.0 sz1 30.0 hy 0.06)
 (: (off-site x z) (: a (max 0.0 (max (sx0 - x) (x - sx1))) b (max 0.0 (max (sz0 - z) (z - sz1))) (sqrt (2 a + 2 b))))
-; ..and the land sunk well under their floors inside, below the shadow's slots
-(: (sink x z) (0.5 * ease (min (min (x - sx0) (sx1 - x)) (min (z - sz0) (sz1 - z))) 1.0 3.0))
+; ..and the land sunk well under the yard's floor and the house's, below the shadow's slots,
+; and not at all past their walls
+(: (sink x z) (: (in a0 a1 b0 b1) (min (min (x - a0) (a1 - x)) (min (z - b0) (b1 - z)))
+   (0.5 * ease (max (in sx0 -116.2 sz0 sz1) (in -116.2 sx1 16.0 28.0)) 1.0 3.0)))
 
 ; the dunes: two long swells crossing and a short one on them, none near the river, on the
 ; island or under the cube

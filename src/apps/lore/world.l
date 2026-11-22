@@ -1138,17 +1138,51 @@
    ; ..a land's sheet only where it is still the ground: none where a later air brush has
    ; carved it open, asked only of the triangles inside one's box
    cv (filter (b \ b 'air = 1 && !(peep b 'sheer 0) && b 'land = ()) bs) ck (map (b \ [(b 'lo) (b 'hi)]) cv)
-   (ground-cut m d) (? (!(peep d 'land 0) || atom? cv) m
+   ; ..and cut at the feet of the upright solids standing in it, and again foot-w out from
+   ; them, so the light falls off from a wall the same way all along it
+   sv (filter (b \ b 'air = 0 && b 'land = () && all (pl \ abs (pl 0 1) < 1e-9 || abs (pl 0 1) > 1.0 - 1e-9) (b 'planes)) bs)
+   sk (map (b \ [(b 'lo) (b 'hi)]) sv) foot-w 0.4
+   (foot-cut m) (? (atom? sv) m
+     (: vs (m 0) ts (m 1) n #ts
+        (co k j) (gem-tray [n] (map (t \ 1.0 * vs (t j) k) ts))
+        mn (map (k \ min (co k 0) (min (co k 1) (co k 2))) ^3) mx (map (k \ max (co k 0) (max (co k 1) (co k 2))) ^3)
+        hit (foldl (\ h j (: lo (sk j 0) hi (sk j 1)
+                             I (iota ((mx 0 > lo 0 - foot-w) * (mn 0 < hi 0 + foot-w) * (mx 2 > lo 2 - foot-w) * (mn 2 < hi 2 + foot-w)
+                                      * (mx 1 + 0.05 > lo 1) * (mn 1 < hi 1)))
+                             (foldl (\ h i (pin h i (j . peep h i ()))) h (map I ^#I))))
+                   {} ^#sv)
+        (mix a b t) (map (k \ a k + t * (b k - a k)) ^#a)
+        (sd pl o v) (pl 0 0 * v 0 + pl 0 1 * v 1 + pl 0 2 * v 2 - pl 1 - o)
+        ; ..a polygon parted by a plane o past pl: [in out]
+        (split pl o P) (: k #P
+          (edge a2 i) (: a (P i) b (P ((i + 1) % k)) sa (sd pl o a) sb (sd pl o b)
+            ins (sa <= 0.0 ? (a . a2 0) (a2 0)) outs (sa >= 0.0 ? (a . a2 1) (a2 1))
+            ((sa < 0.0 && sb > 0.0) || (sa > 0.0 && sb < 0.0) ? (: x (mix a b (sa / (sa - sb))) [(x . ins) (x . outs)]) [ins outs]))
+          r (foldl edge [() ()] ^k)
+          [(rev (r 0)) (rev (r 1))])
+        ; ..parted by a solid's sides o out: [the pieces outside, the piece within]
+        (cut-by b o P) (foldl (\ a pl (: rem (a 1) (#rem < 3 ? a (: q (split pl o rem) [(#(q 1) >= 3 ? (q 1 . a 0) (a 0)) (q 0)]))))
+                              [() P] (filter (pl \ abs (pl 0 1) < 1e-9) (b 'planes)))
+        ; ..a piece [poly under] by a solid: its band and what is under it
+        (pieces b pc) (: r1 (cut-by b foot-w (pc 0)) o1 (map (p \ [p (pc 1)]) (r1 0))
+          (#(r1 1) < 3 ? o1 (: r2 (cut-by b 0.0 (r1 1)) (o1 + map (p \ [p (pc 1)]) (r2 0) + (#(r2 1) >= 3 ? [[(r2 1) 1]] ())))))
+        ks (sort (keys hit))
+        res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (sv j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
+                            (map (pc \ [(pc 0) (t 3)]) pcs)))
+                    ks)
+        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] res)
+        (mesh (vs + catmap (q \ q 0) res) (map ts (filter (i \ peep hit i () = ()) ^n) + tr 1))))
+   (ground-cut m0 d) (: m (peep d 'land 0 ? (foot-cut m0) m0) (? (!(peep d 'land 0) || atom? cv) m
      (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
         (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
         X (mid 0) Y (mid 1 - 0.05) Z (mid 2)
         I (iota (foldl (\ a b (a + (b 'lo 0 < X) * (X < b 'hi 0) * (b 'lo 1 < Y) * (Y < b 'hi 1) * (b 'lo 2 < Z) * (Z < b 'hi 2))) (X * 0) cv > 0))
         gone (foldl (\ t j (: i (I j) (brush-medium bs [(X i) (Y i) (Z i)] @ 1 (pin t i 1) t))) {} ^#I)
-        (mesh (m 0) (map ts (filter (i \ peep gone i 0 = 0) ^n)))))
+        (mesh (m 0) (map ts (filter (i \ peep gone i 0 = 0) ^n))))))
    (made k f) (: ky (idof [k ti]) [(kept ['mesh ky] f) ky])
    more (map (i \ (: m (made ['poster (vals (ps i)) i (shape (ptex i 0))] (_ \ pm i)) (on (m 0) (m 1)))) ^#ps
          + map (d \ (: _ (tick 'decals ()) m (made ['decal (vals d)] (_ \ decal-mesh d tt)) (on (m 0) (m 1)))) ds
-         + map (d \ (: m (made ['drape (vals d) (peep d 'land 0 ? ck ())] (_ \ ground-cut (drape-mesh d tt) d)) (on (m 0) (m 1)))) dps
+         + map (d \ (: m (made ['drape (vals d) (peep d 'land 0 ? [ck sk] ())] (_ \ ground-cut (drape-mesh d tt) d)) (on (m 0) (m 1)))) dps
          + map (s \ (: m (made ['bar (vals s)] (_ \ strip-bar s)) (on (m 0) (m 1)))) (filter (s \ peep s 'unlit 0) (lv 'strips))
          + map (s \ (: m (made ['frame (vals s)] (_ \ troffer-frame s)) (on (m 0) (m 1)))) (filter (s \ peep s 'troffer 0) (lv 'strips))
          + map (o \ (: m (made ['tree (map o (sort (filter (k \ k != 'grown) (keys o))))] (_ \ (: i (tix tt (o 'tex)) (mesh-move (tree-mesh o i (tt i 3 / tt i 1)) (o 'at) 0.0)))) (on (m 0) (m 1)))) (lv 'trees))
@@ -2558,7 +2592,8 @@
                        [101])
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
-                               ld (_ \ view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin))
+                               ; ..the reading's tick going on for the first making, so its screen runs on
+                               ld (_ \ peep o 'tk () @ () (view-loading win (tablet? win ? () [0 0 w (h // 2)]) (peep o 'loading view-spin)) t (pin o 'tk (), t))
                                nm (o 'entry) came (peep o 'came 0)
                                st (pins (state-at w h lv (dir-of p) ld nm) 'cut (came ? () (lv 'shots)) 'puff (came || !(lv 'winded) ? 0.0 1.0) 'deep (o 'md = 'window || view-deep? ()) 'kitty (mesh-mode (o 'md))
                                         'win (o 'win) 'path p 'scale (peep o 'scale 2) 'sway (peep o 'sway 0))
@@ -2584,7 +2619,7 @@
                        (o2 \ world-tick o2 p @ lv (string? lv ? (pin bad 'why lv) (world-go o2 lv)))
                        (_ \ (say out mesh-gone, flush out)))
    (bad 'why ? (say err ("world: " + p + ": " + bad 'why + "\n"), flush err, 1) r))
- (world-tick o p) (view-tick (o 'win) (peep o 'loading view-spin) @ tk (view-busy tk (_ \ world-loading p tk)))
+ (world-tick o p) (view-tick (o 'win) (peep o 'loading view-spin) @ tk (pin o 'tk tk, view-busy tk (_ \ world-loading p tk)))
  ; ..and on to the level a walk left for, in the same window, as long as there is one
  (world-go o lv) (: st (world-walk o lv) g (st 'goto)
    (? (atom? g) st
