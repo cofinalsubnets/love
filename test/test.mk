@@ -615,12 +615,13 @@ test_virt test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke: test_%: ho
 test_playdate: host
 	@$(gsh) test/gate/playdate.sh "$(MAKE)" $m
 # test_teensy41 -- the inle kernel: kmain over the board's drivers and the arm love's objects (-t arm,
-# thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified
+# thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified;
+# beside it the flash's loader and the same kernel linked for the psram, each layout verified
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
 	@if ! command -v qemu-arm >/dev/null 2>&1; then \
 	   sh test/gate/skip.sh gate-skip "test_teensy41: no qemu-arm to bake the kernel's image, skipped"; exit $$?; fi; \
-	  $(MAKE) -C src/inle/teensy41 kernel || { echo "FAIL teensy41 kernel build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C src/inle/teensy41 kernel loader ram || { echo "FAIL teensy41 kernel build (the boot-image verifies are inside)"; exit 1; }; \
 	  echo "test_teensy41: the inle kernel (all-mooncc thumb-2), its image baked under qemu-arm, OUR linker -- nothing foreign"
 # test_nucleo446 -- mooncc, nlink.l, ocopy.l; arm-none-eabi-gcc only for its libgcc.a
 test_nucleo446: host
