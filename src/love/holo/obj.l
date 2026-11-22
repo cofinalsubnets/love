@@ -969,6 +969,7 @@
         (catall (map (\ [off k lbl aux pv]
            (: sl (o-has? mset lbl && rel-c k aux != 0 ? [(peep locidx lbl 0) 0] (secsym lbl)) si <sl sa <>sl
               (k @
+                 ['elf n] (erela off si n (sa + aux))                     ; a relocation by number, as `.reloc` gives it
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (erela off si rabs (sa + aux))
                  'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 r-32) (sa + aux))

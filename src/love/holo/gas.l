@@ -1801,6 +1801,18 @@
        (? (sg ? ((r = 0 && (b & 64) = 0) || (r = -1 && (b & 64) != 0)) (r = 0)) [b]
           ((b | 128) . gf-leb r sg)))
    ; a word's bytes, or its fixup: rel32 is S + aux - P - 4 wherever it resolves, so `- .` rides aux + 4
+   ; an elf relocation's name by machine and number, for `.reloc` and for a printed object
+   gf-relnames {62 {1 "R_X86_64_64" 2 "R_X86_64_PC32" 4 "R_X86_64_PLT32" 9 "R_X86_64_GOTPCREL" 10 "R_X86_64_32"
+              11 "R_X86_64_32S" 12 "R_X86_64_16" 14 "R_X86_64_8" 24 "R_X86_64_PC64" 41 "R_X86_64_GOTPCRELX"
+              42 "R_X86_64_REX_GOTPCRELX"}
+          183 {257 "R_AARCH64_ABS64" 258 "R_AARCH64_ABS32" 260 "R_AARCH64_PREL64" 261 "R_AARCH64_PREL32"
+               273 "R_AARCH64_LD_PREL_LO19" 274 "R_AARCH64_ADR_PREL_LO21" 275 "R_AARCH64_ADR_PREL_PG_HI21"
+               277 "R_AARCH64_ADD_ABS_LO12_NC" 278 "R_AARCH64_LDST8_ABS_LO12_NC" 279 "R_AARCH64_TSTBR14"
+               280 "R_AARCH64_CONDBR19" 282 "R_AARCH64_JUMP26" 283 "R_AARCH64_CALL26"
+               284 "R_AARCH64_LDST16_ABS_LO12_NC" 285 "R_AARCH64_LDST32_ABS_LO12_NC"
+               286 "R_AARCH64_LDST64_ABS_LO12_NC" 299 "R_AARCH64_LDST128_ABS_LO12_NC"
+               311 "R_AARCH64_ADR_GOT_PAGE" 312 "R_AARCH64_LD64_GOT_LO12_NC"}}
+   (gf-relnum nm) (catmap (m \ gf-relnames m @ t (filter (k \ t k = nm) (keys t))) (keys gf-relnames) @ l (two? l ? <l ()))
    (gf-word tgt w e rl)
     (: v (gf-val e rl) pc <v s <>v k <>>v
        (? !(string? s) (gf-le k w)
@@ -2250,6 +2262,11 @@
                          0 xs))
               (mn = ".octa") (raw (catmap gf-octa xs))
               (mn = ".ascii") (raw (catall (gf-strs rest)))
+              ; `.reloc ., TYPE, sym+k`: that relocation on the bytes that follow, which hold their own field
+              (mn = ".reloc" && two? >>xs && xa-trim <xs = ".")
+               (: n (gf-relnum (xa-trim <>xs)) v (gf-val (xs 2) rl)
+                  (charm? n && string? <>v ? (raw [['fix 0 ['elf n] (name <>v) <>>v]])
+                     (scare 'gas-directive ".reloc")))
               (elem mn '(".asciz" ".string")) (raw (catmap (b \ b + [0]) (gf-strs rest)))
               (elem mn '(".zero" ".skip" ".space"))
                (: f (two? >xs ? (num <>xs) 0) ts (gtoks <xs)
