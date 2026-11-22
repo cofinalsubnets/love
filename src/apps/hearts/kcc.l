@@ -91,7 +91,7 @@
       (probe && string? arch && (elem "-c" av || elem "-S" av || elem "-E" av)) (probed 0)
       probe (quit 1)                                  ; a link asked of the compiler: kcc links nothing
       (cpp? 0)
-       (: r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch] + av))
+       (: r (hark (["sh" "-c" "\"$@\" 2>&1" "kcc" love "timeout" "900" love "mooncc" "-t" arch] + filter (a \ !(drop? a)) av))
           (? (two? r && <r = 0) (quit 0)
              (clang 1 ("-E rc " + show (two? r ? <r -1) + " " + first (two? r ? >r "")))))
       !(moon? 0) (clang (lays? 0) (why 0))

@@ -882,6 +882,10 @@ a+ +b + + + + x->y a-- -1 1.e+5 0x1p-3 L"wide" 'c'
 f(a,b) [i] {x;} a/ /b a/ *b
 EOF
 moonrun -E "$ho/.esp.c" | grep -v '^#' | grep -v '^$' | cmp -s - "$ho/.esp.want" || fail "-E spaced tokens gcc keeps joined"
+# a pp-number runs through its dots, and a comment a directive drops is one space (a linker script's)
+printf '#define TP *(a)/* c */\t\\\n }\nLINUX_2.6.39 { TP\nb = 1..2; c = 1.5.2.x; d = 2.6 .39;\n' > "$ho/.ppn.S"
+printf 'LINUX_2.6.39 { *(a) }\nb = 1..2; c = 1.5.2.x; d = 2.6 .39;\n' > "$ho/.ppn.want"
+moonrun -E -P -C "$ho/.ppn.S" | grep -v '^$' | cmp -s - "$ho/.ppn.want" || fail "-E split a pp-number at a dot, or lost a dropped comment's space"
 mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
 printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
