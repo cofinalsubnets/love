@@ -76,9 +76,9 @@
 ; the light: a failing strip mostly on; the door's lamps red while shut, green once open
 (: st (at 80 48) f (world-pens st) sc (st 'sc)
    up (world-pens (pins (at 80 48) 'ph 1.2 'pz 5.0))
-   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0) ^600)
+   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0 {}) ^600)
    bad (map (k \ k 2) ks)
-   open (world-ks sc 0.0 [1.0] 0.0)
+   open (world-ks sc 0.0 [1.0] 0.0 {})
    east (world-pens (pins (at 80 48) 'th (pi / 2.0) 'pz 7.0 'px -0.6))
    (pink? c) ((c >> 16 & 255) > (c >> 8 & 255) + 40 && (c & 255) > (c >> 8 & 255))
    n #(sc 'lights)

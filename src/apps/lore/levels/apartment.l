@@ -5,7 +5,7 @@
 ; the station
 (borrow 'scenery)
 
-; the textures: what is there, sand and the bed's mud, cracked as it dried
+; the textures: what is there, sand, and mud for the yard's banked sides
 (: sand (feel 'sand (texture 64 64 3
          '((fill (rgb 0.8 0.68 0.48)) (noise 1 0.07) (fbm 16 4 0.12) (stain 16 3 0.42 0.35 (shade 0.9))
            (stain 8 3 0.38 0.35 (mix (rgb 0.88 0.78 0.6) 0.6)) (relief 1.5 2 0.08)))))
@@ -35,10 +35,15 @@
 (: boards (feel 'wood (texture 64 64 1.2 '((fill (rgb 0.5 0.34 0.2)) (noise 1 12 0.1) (fbm 16 3 0.1) (stripes 8 1 0 (shade 0.6))))))
 (: rug (feel 'soft (texture 32 32 0.8 '((fill (rgb 0.55 0.2 0.18)) (checker 8 8 (shade 0.85)) (noise 1 0.05) (fbm 8 3 0.08)))))
 (: cloth (feel 'soft (texture 32 32 0.5 '((fill (rgb 0.35 0.42 0.5)) (noise 1 0.08) (fbm 8 3 0.06)))))
-(: walnut (material 'wood 6 {'colour (rgb 0.26 0.15 0.09) 'grain 0.25}))
+(: walnut (material 'wood 6 {'colour (rgb 0.3 0.16 0.08) 'grain 0.05 'knots 0.0 'rings 9 'warp 1.5}))
 (: lacquer (feel 'wood (texture 16 16 0.5 '((fill (grey 0.07)) (noise 2 0.06) (rows 0 1 (grey 0.12))))))
 (: oak (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.45 0.3 0.18)) (noise 1 10 0.1) (fbm 16 3 0.08)))))
 (: clear (texture 64 64 2 '((fill (rgb 0.82 0.88 0.88)) (fbm 32 3 0.05))))
+; ..the tv's: the yard's picture, seen through a glass with nothing on it; dark grey static
+; till the first frame
+(: clean [(texture 192 112 7 '((fill hole)))])
+(: static (texture 192 112 7 '((fill (rgb 0.16 0.18 0.2)) (noise 1 0.3))))
+
 ; ..and the paintings, each thrown anew every game from the templates
 (: wide-art (texture 96 64 1.0 '((art any 1))))
 (: tall-art (texture 64 96 1.0 '((art any 2))))
@@ -98,6 +103,8 @@
 (: shore-y (river-y - lift))
 (: (bed-y w) (w > 0.0 ? (shore-y * (1.0 - ease w 0.0 bank-w)) (shore-y - (bed-d + shore-y) * ease (0.0 - w) 0.0 1.0)))
 (: (ground x z) (: d (z - meander x) (bed-y (off-shore x z) + dune x z * ease (abs d - sep x) 4.5 14.0 * flat x z - sink x z)))
+; ..the sand a shade darker over the bed, easing back to the plain's across its banks
+(: (shaded rs) (map (map (p \ p + [(1.0 - 0.25 * (1.0 - ease (off-shore (p 0) (p 2)) -0.5 (bank-w + 1.0)))])) rs))
 (: (rows-by xs fs dy) (map (f \ map (x \ (: z (meander x + f x) [x (ground x z + dy) z])) xs) fs))
 (: (rows-on xs ts dy) (rows-by xs (flats ts) dy))
 (: (far-at o x) (o + sep x * (1.0 - ease o 8.0 40.0)))
@@ -162,6 +169,8 @@
     (furnish 'rug [-112.8 hy 25.1] 0 {'w 4.4 'd 4.6 'skin {'soft rug}})
     (furnish 'sideboard [-115.76 hy 25.3] 270 {'skin {'body oak 'top oak 'frame oak}})
     (furnish 'tv [-115.7 (hy + 0.8) 25.3] 270 {})
+    ; ..its screen, a tap turning it on: the yard seen from high in its far corner, on the tree
+    (switched (camera [-130.6 3.6 27.6] 144 -17 (feed clean (ad [-115.663 (hy + 1.21) 25.3] [1 0 0] [0 1 0] 1.05 0.61 static))))
     (furnish 'sofa [-111.6 hy 25.3] 270 {'w 2.6 'skin {'soft cloth}})
     (furnish 'table [-113.2 hy 25.3] 90 {'w 1.6 'd 0.8 'h 0.42 'apron 0.05 'skin {'top oak 'frame oak}})
     (plush [-113.2 0.42 25.3] 0 'mouse)
@@ -181,10 +190,9 @@
   (sky 15.5 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.32 0.32 0.3))
   ; the plain, open to the sky, walled by nothing to see; the land on it, dunes and the river's
-  ; dry bed in its two channels about the island, its mud cracked
+  ; dry bed in its two channels about the island, a shade darker
   (void [-146 -2 -60] [60 40 60])
-  (land sand (rows-by xs lts 0.0))
-  (map (fs \ drape mud (rows-by xs fs 0.02)) [lo-bed hi-bed])
+  (land sand (shaded (rows-by xs lts 0.0)))
   ; ..heard out on it, the wind and now and then a bell; in the burnt tree's yard, a throb
   (hum 'wind [-146 -2 -60] [60 40 60]) (hum 'bells [-146 -2 -60] [60 40 60])
   (hum 'throb [yx0 -1 yz0] [yx1 yh yz1])
@@ -192,8 +200,7 @@
   (beyond (drape grass (rows-by xs lts lift)))
   (beyond (flow [0.7 0] (drape water (level-on xs [-1.0 -0.5 0.0 0.5 1.0] river-y))))
   ; the land going on past the walls, its river and what the glass shows of them
-  (map (drape sand) (around (\ xs fs (rows-by xs fs 0.0))))
-  (map (q \ drape mud (rows-by q (lo-bed + hi-bed) 0.02)) sides)
+  (map (drape sand) (around (\ xs fs (shaded (rows-by xs fs 0.0)))))
   (map (beyond * drape grass) (around (\ xs fs (rows-by xs fs lift))))
   (map (q \ beyond (flow [0.7 0] (drape water (level-on q [-1.0 -0.5 0.0 0.5 1.0] river-y)))) sides)
   ; the cube woken in

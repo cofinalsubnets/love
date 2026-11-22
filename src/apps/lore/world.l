@@ -539,8 +539,9 @@
            {'at [[x (hi 1 + 2.9) z]] 'n [0.0 -1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}] () () ()))
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
  ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a beacon, every one in time; a door's
- ; lamp by its door; one the loop lights, on while mu is. sd keeps two failing lights out of step
- (bright how mt sd ds mu) ((two? how ? <how 'steady) @
+ ; lamp by its door; one the loop lights, on while mu is; a screen's, on while sw says. sd keeps
+ ; two failing lights out of step
+ (bright how mt sd ds mu sw) ((two? how ? <how 'steady) @
   'stammer (flicker-stammer mt sd)
   'buzz (flicker-buzz mt)
   'breathe (flicker-pulse mt 0.7 0.3 1.7 sd)
@@ -548,9 +549,10 @@
   'beacon (flicker-blink (mt - (#how > 3 ? (how 3) 0.0)) (how 1) (how 2) 0.06)
   'dim (how 1)
   'music mu
+  'switch (1.0 * peep sw (how 1) 0)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
- (world-ks sc mt ds mu) (map (i \ bright (sc 'lights i 'how) mt i ds mu) ^#(sc 'lights))
+ (world-ks sc mt ds mu sw) (map (i \ bright (sc 'lights i 'how) mt i ds mu sw) ^#(sc 'lights))
  amb [0.025 0.025 0.03]
  ; the sky's day, an equinox, and its latitude; asked every sky-k of kitty's pixels
  sky-day 20716.0
@@ -707,7 +709,9 @@
    (round kk) [(1.0 * t 1 * (kk % C) / (C - 1)) (1.0 * t 2 * ((kk // C) % (wr + 1)) / (wr - 1))]
    (laid kk ax p) (? (wr > 0) (round kk) (al = ()) (uv ax p) [(k * us (kk // C)) (k * peep vs kk 0.0)])
    (id q j) (peep (ix 0) (3 * (q 0 j) + q 1) 0)
-   (mesh (map (v \ (: e (pn (v 0)) (e 0 + laid (v 0) (v 1) (e 0) + e 1 + hue))) (rev (ix 2)))
+   ; ..its colour, the sheet's shade there where it has one
+   sd (peep d 'shade ()) (tint kk) (sd = () ? hue (c* (sd (kk // C) (kk % C)) hue))
+   (mesh (map (v \ (: e (pn (v 0)) (e 0 + laid (v 0) (v 1) (e 0) + e 1 + tint (v 0)))) (rev (ix 2)))
          (catmap (q \ [[(id q 0) (id q 1) (id q 2) i] [(id q 0) (id q 2) (id q 3) i]]) qs)))
  (file-of dir p) (p 'file @ () () f (f 0 @ 47 f (dir + f)))
  ; --- the advertisements: each its own light, bright, and a lamp before it in the colour
@@ -718,7 +722,10 @@
  (ad-light lv txs tt d) (: a (d 'at) n (unit (c+ (d 'np) (c* -1.0 a))) p (c+ a (c* 0.8 n))
    (light [{'at [p] 'n n 'c (c* 2.2 (avg-col txs (d 'tex))) 'r (0.9 * max (d 'w) (d 'h) + 6.0) 'soft 1.5 'wrap 0.3
             'keep (inside (room-at lv (p 0) (p 2)))}]
-          (peep d 'music 0 @ 1 ['music] ()) [[(mesh-pack (decal-mesh d tt)) ad-shine]] ()))
+          (peep d 'music 0 = 1 ? ['music] (screen-of d)) [[(mesh-pack (decal-mesh d tt)) ad-shine]] ()))
+ ; ..a switched screen's key among the screens on, its place; else ()
+ (screen-of d) (peep d 'switch 0 = 1 ? ['switch (show (d 'at))] ())
+ (screen-on? st q) (q 'sw = () || peep (peep st 'screens {}) (q 'sw) 0 = 1)
  ; ..a feed: the eye's frame before laid on its ad's texture, cropped to the ad's shape,
  ; its gain set as a camera's own is to bring its mean up to a mid grey, up to eight times,
  ; scanned and vignetted, under its overlays a second each; every tray made once, and the
@@ -726,6 +733,7 @@
  ; its frames on a window reads each one back while a feed is in view
  (feeds-of lv tt) (map (d \ (: i (tix tt (d 'tex)) {'i i 'w (tt i 1) 'h (tt i 2) 'a (d 'w / d 'h) 'over (map (nm \ tix tt nm) (d 'feed))
                                                      'stamp (d 'stamp) 'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'memo {}
+                                                     'sw (screen-of d @ () () k (k 1))
                                                      'cards (peep d 'cards () @ () () c [(map (nm \ tix tt nm) (c 0)) (c 1) (c 2)])
                                                      'mid (d 'at) 'rad (0.5 * sqrt (sq (d 'w) + sq (d 'h)))}))
                        (filter (d \ two? (peep d 'feed ())) (lv 'ads)))
@@ -763,7 +771,7 @@
       (#ix = 0 ? f (pin f ix ((b 0 << 16) | (b 1 << 8) | b 2)))))
  ; ..the textures with each feed's laid on its own: the eye's frame before, or its camera's
  ; last, while there is one
- (fed st tx) (: fs (st 'sc 'feeds) e0 (peep st 'framed ())
+ (fed st tx) (: fs (filter (screen-on? st) (st 'sc 'feeds)) e0 (peep st 'framed ())
    (? (atom? fs) tx
       (: (src q) (q 'cam = () ? [e0 (mesh-dims st)] [(peep q 'framed ()) (peep q 'fdim ())])
          ps (foldl (\ t q (: s (src q) ph (feed-phase st q) (tray? (s 0) || ph != 'cam ? (pin t (q 'i) (feed-pic st q tx s ph)) t))) {} fs)
@@ -1474,7 +1482,7 @@
  ; ..or a camera's, sh with its frame's 'w and 'h: drawn on its own, and kept by the camera
  (level-pens st sh) (: cam? (tablet? sh && peep sh 'w 0 > 0) k (cam? ? 1 (peep st 'kp 1)) dm (cam? ? [(sh 'w) (sh 'h)] (mesh-dims st))
    w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
-   ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0))
+   ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0) (peep st 'screens {}))
    hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
    e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
    th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph + hb 2))
@@ -1514,7 +1522,7 @@
    ; ..a feed's ball laid where the scene is
    (fseen? q) (seen? (tablet? sf ? {'mid (sf 'at (q 'mid 0) (q 'mid 1) (q 'mid 2)) 'rad (q 'rad)} q))
    _ (tablet? (peep v 'gpu ()) ? (pin (v 'gpu) 'read (any (q \ q 'cam = () && fseen? q) (sc 'feeds) ? 1 0)))
-   _ (cam? ? 0 (each (filter (q \ (q 'cam != () || q 'watch != ()) && fseen? q) (sc 'feeds)) (q \ cam-shot! st q)))
+   _ (cam? ? 0 (each (filter (q \ (q 'cam != () || q 'watch != ()) && screen-on? st q && fseen? q) (sc 'feeds)) (q \ cam-shot! st q)))
    (far c) (net (map (k \ sq (c 'mid k - v 'e k)) ^3))
    cks (sc 'chunks) hid ((tablet? sf && e 1 < peep sf 'cut -1e9) || deep-hid? sc (cam? ? e [(st 'px) (st 'py) (st 'pz)]))
    cs (cells-seen sc v e) (cut? i) (tablet? cs && peep cs i 0 = 0)
@@ -1957,7 +1965,7 @@
    (filter hit ^#ds @ () () l <l))
  ; ..what a tap does: a door opened by hand swung the other way; () where it meets none
  (touch st) (? (charm? (st 'dlg)) (pick! st (st 'dlg)) (peep st 'eye 'walk != 'walk) st (touch-at st))
- (touch-at st) (door-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () (sleep-at st @ () () i (sleep! st i)) i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st))
+ (touch-at st) (door-at st @ () (deck-at st @ () (switch-at st @ () (gate-at st @ () (grave-at st @ () (sleep-at st @ () (screen-at st @ () () k (screen! st k)) i (sleep! st i)) i (kneel! st i)) i (swing! st i)) i (send! st i)) _ (play! st))
    i (: o (peep st 'opened {}) q (st 'lvl 'doors i) m (0.5 * (q 'a + q 'b)) p (P (q 'ax) (q 'c) 0.0 m)
         (copy t) (foldl (\ u k (pin u k (t k))) {} (keys t)) opening (peep o i 0 = 0)
         ; ..opened its way out, or with none away from the eye, the way it swung kept as it shuts
@@ -2024,6 +2032,13 @@
     'th (t + pi) 'top (a 1 + mattress-h)})
  ; ..a bed to sleep in the eye's line meets within reach, its number; tapped, the eye lies
  ; down on it from the side it stands, then goes on where the bed leads
+ ; ..a switched screen the eye's line meets within reach, its key; tapped, turned on or off
+ (screen-at st) (: e (eye-at st) d (look-way st) ss (filter (a \ peep a 'switch 0 = 1) (st 'lvl 'ads))
+   (in? a p) (: n (unit (c- (a 'np) (a 'at))) u (unit (c- (a 'up) (a 'at))) r (cross n u) q (c- p (a 'at))
+     (abs (dot q n) <= 0.1 && abs (dot q u) <= 0.5 * a 'h + 0.05 && abs (dot q r) <= 0.5 * a 'w + 0.05))
+   (filter (a \ any (j \ in? a (c+ e (c* (0.05 * j) d))) ^(int (reach / 0.05))) ss @ () () l (show (<l 'at))))
+ (screen! st k) (: o (peep st 'screens {}) (copy t) (foldl (\ u j (pin u j (t j))) {} (keys t))
+   (mix-cry (pin st 'screens (pin (copy o) k (1 - peep o k 0))) "click" ()))
  (sleep-at st) (: e (eye-at st) d (look-way st) qs (st 'lvl 'sleeps)
    (on? q p) (: a (q 'at) t (q 'deg * pi / 180.0) dx (p 0 - a 0) dz (p 2 - a 2) u (dx * cos t - dz * sin t) v (dx * sin t + dz * cos t)
      (abs u <= 0.5 * mattress-w && 0.0 <= v && v <= mattress-l && a 1 <= p 1 && p 1 <= a 1 + mattress-h + 0.05))

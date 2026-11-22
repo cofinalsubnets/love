@@ -232,6 +232,8 @@
 ;                                      decal is, bright as its own light and lighting what
 ;                                      is before it in its colours
 ;   (playing AD)                       an advertisement lit only while the level's loop plays
+;   (switched AD)                      ..or a screen lit only while it is on, a tap turning it
+;                                      on or off; off, its feed shot no more
 ;   (feed [TEXTURE ..] AD)             an advertisement showing what the eye saw the frame
 ;                                      before, as a security camera's monitor: its gain its
 ;                                      own, scanned, framed by the textures a second each in turn,
@@ -342,7 +344,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog dye twinkle ad feed camera watch cards stamp spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog dye twinkle ad feed camera watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -461,12 +463,15 @@
  (decal at n up w h t) (: u "(decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)" a (P at u) nn (P n u) uu (P up u)
    (texture? t ? (part 'decal [['at a] ['np (map (k \ a k + nn k) ^3)] ['up (map (k \ a k + uu k) ^3)] ['w (N w u)] ['h (N h u)] ['tex t]])
       (no u t)))
- (drape t rs) (: u "(drape TEXTURE [[[x y z] ..] ..])" (pg q) (q @ () () (P q u))
+ ; ..a point of a sheet [x y z], or [x y z s] its texture's colour s times over there
+ (shaded? q) (two? q && #q = 4 && num? (q 3) && pt? (take 3 q))
+ (shade-of rs) (any (r \ any shaded? r) rs ? [['shade (map (map (q \ shaded? q ? 1.0 * q 3 1.0)) rs)]] ())
+ (drape t rs) (: u "(drape TEXTURE [[[x y z] ..] ..])" (pg q) (q @ () () (P (shaded? q ? (take 3 q) q) u))
    (? (!(texture? t)) (no u t) (!(two? rs && all two? rs && all (r \ #r = #<rs) rs)) (no u rs)
-      (part 'drape [['tex t] ['rows (map (map pg) rs)]])))
+      (part 'drape ([['tex t] ['rows (map (map pg) rs)]] + shade-of rs))))
  (land t rs) (: u "(land TEXTURE [[[x y z] ..] ..])"
-   (? (!(texture? t)) (no u t) (!(two? rs && #rs > 1 && all two? rs && all (r \ #r = #<rs && all pt? r) rs && #<rs > 1)) (no u rs)
-      (part 'land [['air 0] ['tex t] ['skin {'floor t}] ['rows (map (map (map f)) rs)]])))
+   (? (!(texture? t)) (no u t) (!(two? rs && #rs > 1 && all two? rs && all (r \ #r = #<rs && all (q \ pt? q || shaded? q) r) rs && #<rs > 1)) (no u rs)
+      (part 'land ([['air 0] ['tex t] ['skin {'floor t}] ['rows (map (map (q \ map f (take 3 q))) rs)]] + shade-of rs))))
  (beyond d) (kind? d ['drape] ? (with d 'seen 1) (no "(beyond DRAPE)" d))
  (hither d) (kind? d ['drape] ? (with d 'seen 2) (no "(hither DRAPE)" d))
  (clear d) (kind? d ['drape] ? (with d 'clear 1) (no "(clear DRAPE)" d))
@@ -709,6 +714,7 @@
       (part 'orb [['at (P at u)] ['r (N r u)] ['tex t] ['turns (N turns u)]])))
  (tether h l) (? (!(num? h) || h <= 0) (no "(tether h LIFT)" h) (kind? l ['lift]) (with l 'tether (1.0 * h)) (no "(tether h LIFT)" l))
  (playing d) (kind? d ['ad] ? (with d 'music 1) (no "(playing AD)" d))
+ (switched d) (kind? d ['ad] ? (with d 'switch 1) (no "(switched AD)" d))
  (feed ts d) (: u "(feed [TEXTURE ..] AD)"
    (? (!(two? ts) || !(all texture? ts)) (no u ts) (kind? d ['ad]) (with d 'feed ts) (no u d)))
  (camera at deg pitch d) (: u "(camera [x y z] bearing pitch FEED)"
@@ -1383,8 +1389,8 @@
        'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'dye (of 'dye @ () () m (<m 'c)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
-       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'clear (peep d 'clear 0) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
-       'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0) 'feed (map tname (peep d 'feed ())) 'stamp (peep d 'stamp ())
+       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'clear (peep d 'clear 0) 'land (d 'kind @ 'land 1 0) 'shade (peep d 'shade ())}) (of 'drape + of 'land))
+       'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0) 'switch (peep d 'switch 0) 'feed (map tname (peep d 'feed ())) 'stamp (peep d 'stamp ())
                        'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'cards (peep d 'cards () @ () () c [(map tname (c 0)) (c 1) (c 2)])}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'in (peep o 'in 0) 'src (o 'src) 'xf (peep o 'xf xf-id)}) (of 'orb))
