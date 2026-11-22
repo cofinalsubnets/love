@@ -1531,7 +1531,11 @@
    gk (!cam? && tablet? (st 'gpu)) (named pk b x) (gk ? [(b 0) (b 1) [(gpu-name st pk) x]] b)
    ; ..and one relit, by the ks of the lamps that reach it: a far lamp's breath sends it not
    (lit-named pk b) (named pk b (mesh-lit-ks pk dk))
-   hall (map (q \ (: c (cks (q 1)) (lit-named (c 'pk) (relit (c 'pk) (c 'lit)))))
+   ; ..on the gpu, one its lamps reach laid once with them out and their light by them, which
+   ; the gpu adds as strong as they are, once relit so it knows them
+   (hall-of c) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
+     (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1)]] (lit-named pk (relit pk (c 'lit)))))
+   hall (map (q \ hall-of (cks (q 1)))
              (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
    ; ..each door slid open along its wall into the wall's thickness, or one opened by hand
    ; swung on its hinge away from who opened it
@@ -1600,7 +1604,7 @@
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
    all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)) + bd (strings-at st))
-   _ (gk ? (pin v 'keys (map (b \ b 2) all)) 0)
+   _ (gk ? (pins v 'keys (map (b \ b 2) all) 'lamps (map (b \ #b > 3 ? (b 3) ()) all) 'dks dk) 0)
    ; ..the frame kept for a feed's next
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] tx fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare
     @ f (tray? f && !cam? ? (pin st 'framed f, f) f)))

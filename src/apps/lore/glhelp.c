@@ -21,9 +21,10 @@
 //   sun SW SH OFF BIAS L0 .. L15
 //                     the sun's view, kept: its depths, SW x SH floats from OFF rows top first,
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
-//   sky ID TONE       the next frame's sky: buf ID drawn last, only where the frame is bare,
+//   sky ID TONE [EX EY EZ]
+//                     the next frame's sky: buf ID drawn last, only where the frame is bare,
 //                     exposed by TONE, onto a glow kept there or through a glass's tint; its
-//                     u an edge, as facets's flag 256 takes it
+//                     u an edge, as facets's flag 256 takes it; its places from the eye at E
 //   spots W H NS OFF  the next frame's spots, W by H, as show takes them: NS pixels' indices
 //                     then their words, floats at OFF, laid in its sky in the sky's stead
 //   glow RX RY RZ UX UY UZ ZN ZF LEAD SOFT
@@ -118,6 +119,7 @@ enum {
  X(void, glTexParameteri, (GLenum, GLenum, GLint)) \
  X(GLint, glGetUniformLocation, (GLuint, const GLchar *)) \
  X(void, glUniform1f, (GLint, GLfloat)) X(void, glUniform1i, (GLint, GLint)) \
+ X(void, glUniform1fv, (GLint, GLsizei, const GLfloat *)) X(void, glUniform1iv, (GLint, GLsizei, const GLint *)) \
  X(void, glUniform2f, (GLint, GLfloat, GLfloat)) X(void, glUniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
  X(void, glUniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) X(void, glScissor, (GLint, GLint, GLsizei, GLsizei)) \
  X(void, glUniformMatrix4fv, (GLint, GLsizei, unsigned char, const GLfloat *)) \
@@ -149,18 +151,18 @@ static void *(*map64) (void *, size_t, int, int, int, long long);
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
-struct buf { int id, nv, S, glow; GLuint vao, vb, ib; int nrun; struct run *runs; };   // glow: its runs all glow
+struct buf { int id, nv, S, glow; GLuint vao, vb, ib, lb; int nrun; struct run *runs; int li[8]; };   // glow: its runs all glow; lb its lamps'
 struct helper {
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
  struct buf *bufs; int nbuf, cbuf;
  GLuint prog, fb, rb, db, gb, gr; int fw, fh, dual, fglass;   // gb gr: glass's on what is bare, in floats where they blend
  unsigned char *gx;   // ..read back; rb and gr textures, which the sky asks
- GLuint mk; int sky, spend; float stone; GLint u_fg;   // the sky drawn under the bare, over a copy of the frame's marks
+ GLuint mk; int sky, spend; float stone, soff[3]; GLint u_fg;   // the sky drawn under the bare, over a copy of the frame's marks
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
  GLuint zf, zt; GLint u_bb, u_br, u_bu, u_gz; float eye[10]; int epend;   // the glows' eye, and the depths they fade by
  GLuint sm; GLint u_lm, u_sun, u_bias, u_ss; float lm[16], bias; int sw, sh;   // the sun's view
- GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp;
+ GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp, u_off, u_li, u_ks;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
  EGLDisplay d; EGLConfig cf; EGLContext c; EGLSurface ws; void *xd;   // ws: the window shown on, by xd's display
@@ -201,10 +203,15 @@ static GLuint shader(int o, GLenum k, const char *src) {
 static char const vsrc[] =
  "#version 300 es\n"
  "layout(location=0) in vec3 p; layout(location=1) in vec2 t; layout(location=2) in vec3 c; layout(location=3) in vec3 sc;\n"
- "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; uniform int bb; uniform vec3 br; uniform vec3 bu;\n"
+ "layout(location=4) in vec3 l0; layout(location=5) in vec3 l1; layout(location=6) in vec3 l2; layout(location=7) in vec3 l3;\n"
+ "layout(location=8) in vec3 l4; layout(location=9) in vec3 l5; layout(location=10) in vec3 l6; layout(location=11) in vec3 l7;\n"
+ "uniform int li[8]; uniform float ks[128];\n"
+ "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; uniform int bb; uniform vec3 br; uniform vec3 bu; uniform vec3 off;\n"
  "out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
- "void main(){ vec3 P = bb != 0 ? p + t.x * br + t.y * bu : p;\n"
- " vec4 q = m * vec4(P, 1.0); uv = t; col = c; scol = sc; lp = (lm * vec4(P, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
+ "void main(){ vec3 P = (bb != 0 ? p + t.x * br + t.y * bu : p) + off;\n"
+ " vec4 q = m * vec4(P, 1.0); uv = t; scol = sc;\n"
+ " col = c + ks[li[0]] * l0 + ks[li[1]] * l1 + ks[li[2]] * l2 + ks[li[3]] * l3 + ks[li[4]] * l4 + ks[li[5]] * l5 + ks[li[6]] * l6 + ks[li[7]] * l7;\n"
+ " lp = (lm * vec4(P, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
  " if (q.w > 0.0) { vec2 s = floor((q.xy / q.w * 0.5 + 0.5) * vp * 16.0 + 0.5) / 16.0; q.xy = (s / vp * 2.0 - 1.0) * q.w; }\n"
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
@@ -366,6 +373,8 @@ static int setup(struct helper *H, int x) {
  H->u_ts = glGetUniformLocation(H->prog, "ts"); H->u_has = glGetUniformLocation(H->prog, "has");
  H->u_fog = glGetUniformLocation(H->prog, "fog"); H->u_fz = glGetUniformLocation(H->prog, "fz");
  H->u_tone = glGetUniformLocation(H->prog, "tone"); H->u_mode = glGetUniformLocation(H->prog, "mode"); H->u_vp = glGetUniformLocation(H->prog, "vp");
+ H->u_off = glGetUniformLocation(H->prog, "off");
+ H->u_li = glGetUniformLocation(H->prog, "li"); H->u_ks = glGetUniformLocation(H->prog, "ks");
  char const *ex = (char const *) glGetString(0x1F03);   // GL_EXTENSIONS
  H->dual = ex && strstr(ex, "GL_EXT_blend_func_extended") != NULL;
  H->fglass = ex && strstr(ex, "GL_EXT_color_buffer_float") && strstr(ex, "GL_EXT_float_blend");
@@ -436,6 +445,8 @@ static void cmd_tex(struct helper *H, int id, int w, int h, int L, size_t off) {
 
 static void buf_free(struct buf *b) {
  glDeleteVertexArrays(1, &b->vao); glDeleteBuffers(1, &b->vb); glDeleteBuffers(1, &b->ib);
+ if (b->lb) glDeleteBuffers(1, &b->lb);
+ b->lb = 0; memset(b->li, 0, sizeof b->li);
  free(b->runs); b->runs = NULL; b->nrun = 0; }
 
 static int bytex(void const *a, void const *b) {
@@ -466,7 +477,7 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S)
   ix[3*i] = (uint32_t) t[0], ix[3*i+1] = (uint32_t) t[1], ix[3*i+2] = (uint32_t) t[2]; }
  struct buf *b = buf_of(H, id);
  if (b) buf_free(b);
- else { H->bufs = grow(H->bufs, &H->cbuf, H->nbuf, sizeof *H->bufs); b = H->bufs + H->nbuf++; b->id = id; }
+ else { H->bufs = grow(H->bufs, &H->cbuf, H->nbuf, sizeof *H->bufs); b = H->bufs + H->nbuf++; b->id = id; b->lb = 0; memset(b->li, 0, sizeof b->li); }
  glGenVertexArrays(1, &b->vao); glBindVertexArray(b->vao);
  glGenBuffers(1, &b->vb); glBindBuffer(GL_ARRAY_BUFFER, b->vb);
  glBufferData(GL_ARRAY_BUFFER, (intptr_t) vb, p, GL_STATIC_DRAW);
@@ -492,6 +503,30 @@ static void cmd_verts(struct helper *H, int id, int nv, size_t off, int S) {
  glBindBuffer(GL_ARRAY_BUFFER, b->vb);
  glBufferSubData(GL_ARRAY_BUFFER, 0, 4 * (intptr_t) S * nv, p);
  glBindBuffer(GL_ARRAY_BUFFER, 0);
+ dprintf(H->out, "ok\n"); }
+
+// a buf's lamps: for each vertex 8 slots of light, slot k the colour lamp LK gives it at full
+// strength; ks's strengths times them added to its colour as it is drawn. none past those
+static void cmd_lamps(struct helper *H, int id, int nv, size_t off, int const *li) {
+ struct buf *b = buf_of(H, id);
+ if (!b || b->nv != nv) { dprintf(H->out, "err lamps not that buf\n"); return; }
+ unsigned char const *p = bytes(H, off, 4 * 24 * (size_t) nv);
+ if (!p) { dprintf(H->out, "err lamps bytes\n"); return; }
+ for (int k = 0; k < 8; k++) if (li[k] < 0 || li[k] >= 128) { dprintf(H->out, "err lamps index\n"); return; }
+ glBindVertexArray(b->vao);
+ if (!b->lb) glGenBuffers(1, &b->lb);
+ glBindBuffer(GL_ARRAY_BUFFER, b->lb);
+ glBufferData(GL_ARRAY_BUFFER, 4 * 24 * (intptr_t) nv, p, GL_STATIC_DRAW);
+ for (int k = 0; k < 8; k++) glVertexAttribPointer(4 + k, 3, GL_FLOAT, 0, 4 * 24, (void*) (uintptr_t) (12 * k)), glEnableVertexAttribArray(4 + k);
+ glBindVertexArray(0); glBindBuffer(GL_ARRAY_BUFFER, 0);
+ memcpy(b->li, li, sizeof b->li);
+ dprintf(H->out, "ok\n"); }
+
+// the lamps' strengths, n of them, kept until the next
+static void cmd_ks(struct helper *H, char const *l) {
+ float k[128] = {0}; int n = 0; char *e;
+ for (double x = strtod(l, &e); e != l && n < 128; l = e, x = strtod(l, &e)) k[n++] = (float) x;
+ glUseProgram(H->prog); glUniform1fv(H->u_ks, 128, k);
  dprintf(H->out, "ok\n"); }
 
 static GLuint plain(GLenum f, GLenum ty, int w, int h) {
@@ -665,8 +700,9 @@ static void cmd_sun(struct helper *H, char *args) {
  for (int i = 0; i < 16; i++) H->lm[i] = (float) v[4 + i];
  dprintf(H->out, "ok\n"); }
 
-static void cmd_sky(struct helper *H, int id, double tone) {
+static void cmd_sky(struct helper *H, int id, double tone, double const *e) {
  H->sky = id, H->stone = (float) tone, H->spend = 1;
+ for (int k = 0; k < 3; k++) H->soff[k] = (float) e[k];
  dprintf(H->out, "ok\n"); }
 // ..ns spots at off for the next frame w by h, laid in its sky as it is drawn
 static void cmd_spots(struct helper *H, int w, int h, int ns, size_t off) {
@@ -842,7 +878,7 @@ static void cmd_frame(struct helper *H, char *args) {
    struct buf *b = buf_of(H, (int) v[k]);
    if (!b) continue;
    glBindVertexArray(b->vao);
-   glUniform1i(H->u_bb, ey && b->glow);
+   glUniform1i(H->u_bb, ey && b->glow); glUniform1iv(H->u_li, 8, b->li);
    for (int r = 0; r < b->nrun; r++) {
     int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
     if ((m != 0) != pass) continue;
@@ -865,7 +901,7 @@ static void cmd_frame(struct helper *H, char *args) {
  for (int k = lead; glassy && k < n; k++) {
   struct buf *b = buf_of(H, (int) v[k]);
   if (!b) continue;
-  glBindVertexArray(b->vao);
+  glBindVertexArray(b->vao); glUniform1iv(H->u_li, 8, b->li);
   for (int r = 0; r < b->nrun; r++) {
    int const tx = code(b->runs[r].tex);
    if (tx > -3) continue;
@@ -882,14 +918,14 @@ static void cmd_frame(struct helper *H, char *args) {
   glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, H->mk); glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
   glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); mode(H, 5);
   glUniform1i(H->u_has, 0); glUniform1i(H->u_cls, 0); glUniform1i(H->u_sun, 0); glUniform1i(H->u_fg, H->fglass);
-  glUniform2f(H->u_fz, 0, 0); glUniform1f(H->u_tone, H->stone);
+  glUniform2f(H->u_fz, 0, 0); glUniform1f(H->u_tone, H->stone); glUniform3f(H->u_off, H->soff[0], H->soff[1], H->soff[2]);
   glActiveTexture(GL_TEXTURE5); glBindTexture(GL_TEXTURE_2D, H->gr);
   int const sp = H->opend && H->ow == w && H->oh == h;
   if (sp) glActiveTexture(GL_TEXTURE7), glBindTexture(GL_TEXTURE_2D, H->ot);
   glActiveTexture(GL_TEXTURE0); glUniform1i(H->u_sp, sp);
   glBindVertexArray(sb->vao);
   for (int r = 0; r < sb->nrun; r++) glDrawElements(GL_TRIANGLES, sb->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) sb->runs[r].at));
-  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); }
+  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); }
  H->opend = 0;
  // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
  if ((int) v[10] & 512) {
@@ -958,9 +994,16 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
   else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
   else if (!strncmp(l, "sun ", 4)) cmd_sun(H, l + 4);
+  else if (!strncmp(l, "lamps ", 6)) {
+   int li[8]; if (sscanf(l + 6, "%d %d %ld %d %d %d %d %d %d %d %d", &id, &a, &off, li, li + 1, li + 2, li + 3, li + 4, li + 5, li + 6, li + 7) == 11) cmd_lamps(H, id, a, (size_t) off, li);
+   else dprintf(H->out, "err what: %s\n", l); }
+  else if (!strncmp(l, "ks", 2) && (l[2] == ' ' || !l[2])) cmd_ks(H, l + 2);
   else if (!strncmp(l, "win ", 4)) cmd_win(H, strtoul(l + 4, NULL, 10));
   else if (!strncmp(l, "show ", 5)) cmd_show(H, l + 5);
-  else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) cmd_sky(H, id, tone);
+  else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) {
+   double e[3] = {0, 0, 0};
+   sscanf(l + 4, "%*d %*lf %lf %lf %lf", &e[0], &e[1], &e[2]);
+   cmd_sky(H, id, tone, e); }
   else if (!strncmp(l, "spots ", 6) && sscanf(l + 6, "%d %d %d %ld", &a, &b, &c, &off) == 4) cmd_spots(H, a, b, c, (size_t) off);
   else if (!strncmp(l, "glow ", 5)) cmd_glow(H, l + 5);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
