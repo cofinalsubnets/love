@@ -102,6 +102,15 @@
            ex [0.3 -0.2 0.1] skr (skv - foldl (\ a q (pin a (q 0) (q 1))) (skv * 0.0) (catmap (v \ map (k \ [(11 * v + k) (ex k)]) ^3) ^4))
            se (apart (gpu-facets s W H -1 mat [verts gv] [ta tg] X (o 64) () [skv skt 1.5] ())
                      (gpu-facets s W H -1 mat [verts gv] [ta tg] X (o 64) () [skr skt 1.5 () ex] ()))
+           ; ..a batch lit by its lamps' slots, lamp 2 as strong as ks says, as the cpu draws its
+           ; colours lit so, unfogged; then at another strength, the slots laid once
+           lc (iota 168 % 24 @ m ((m = 0) * 0.3 + (m = 1) * 0.2 + (m = 2) * 0.1))
+           vh (foldl (\ a j (: ix (iota 7 * 8 + 5 + j) (pin a ix (0.5 * verts ix)))) verts ^3)
+           (lk k) (vh + foldl (\ a j (pin a (iota 7 * 8 + 5 + j) (k * [0.3 0.2 0.1] j))) (verts * 0.0) ^3)
+           nf (gem-tray [8] [40.0 60.0 80.0 0.0 0.0 64.0 1.5 0.0])
+           (lamped k) (apart (facets W H -1 mat [(lk k)] [tris] X nf)
+                             (gpu-facets s W H -1 mat [vh] [tris] X nf () () [{'lamps [[lc [2 0 0 0 0 0 0 0]]] 'dks [0.0 0.0 k]}]))
+           la [(lamped 0.7) (lamped 0.2)]
            ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
            (rl x V) (apart (facets W H -1 mat [V gv] [tc tl] X (o 64)) (gpu-facets s W H -1 mat [V gv] [tc tl] X (o 64) [['sq x] ['ln 0]] () ()))
            rv (: a (rl 1 verts) n (s 'n) b (rl 2 (verts * 0.5)) c (rl 2 (verts * 0.5)) [a b c (s 'n - n)])
@@ -110,7 +119,7 @@
            un (: cs ((iota 80 >= 60) * 65281 - 1) ds (gem-tray [1 80] (map (x \ x >= 60 ? 0.0 2.0) ^80))
                  u (gpu-under g cs ds) f (gpu-frame g 640 8 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 0])
                  (u = () && tray? f ? [(net (f < 0)) (net ((f >= 0) * ((f & 16777215) = 65280)))] f))
-           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se]))))
+           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
@@ -119,7 +128,7 @@
                  && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6) && all (f \ f <= 4) (r 7)
                  && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)
                  && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0
-                 && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4))
+                 && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13)))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

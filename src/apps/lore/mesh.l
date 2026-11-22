@@ -3,7 +3,7 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-halo mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-lamp-slots mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-paint mesh-gone
          mesh-glb mesh-glb-of)
@@ -159,6 +159,18 @@
                           (pk 'tris)])))
  ; ..the ks of the lamps that reach a mesh mesh-lamps! keeps, all of them before it has
  (mesh-lit-ks pk ks) (pk 'live @ () ks lv (map ks (lv 'r)))
+ ; ..a mesh mesh-lamps! keeps, for a gpu to light: [verts li cols], its verts lit with the lamps
+ ; that reach it out, li those lamps, 8 at most, and cols 24 numbers a vertex, slot k lamp li
+ ; k's light there at full strength; () where none or more than 8 reach it. made once, kept
+ (mesh-lamp-slots pk) (: lv (peep pk 'live ()) r (tablet? lv ? (lv 'r) ())
+   (? (!(two? r) || #r > 8) ()
+      (pk 'slots @ ()
+         (: ix (lv 'ix) on (ix // 8) n (pk 'n) c8 (lv 'c8)
+            v (foldl (\ v j (pin v (ix + 5 + j) (c8 j * lv 'base j))) (pk 'buf) ^3)
+            cs (foldl (\ a k (foldl (\ a j (pin a (on * 24 + 3 * k + j) (c8 j * lv 'chs (r k) j))) a ^3)) (iota (24 * n) * 0.0) ^#r)
+            q [v (r + map (_ \ 0) ^(8 - #r)) cs]
+            (pin pk 'slots q, q))
+         q q)))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
