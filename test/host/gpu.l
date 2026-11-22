@@ -134,6 +134,14 @@
                            c (sky-tone lt (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim))
                            [(net (gf >> 32 != 1)) (off (gf & 16777215) ((q8 (c 0) << 16) | (q8 (c 1) << 8) | q8 (c 2)) @ f [(amax f) (net (f > 0))])])
            ps [(px (sky-weather 1) 2.0 0.3) (px (pins (sky-weather 3) 'smog 0.6) 0.0 0.05) (px (pins (sky-weather 2) 'dye [0.9 0.3 0.6]) 1.0 0.4)]
+           ; ..and kept, unread, under it, where every bare pixel is the sky's, mesh-frame's c with
+           ; its spots; with no sky, read
+           kx (: sim (1.0 * 1790812800 + 12.0 * 3600.0) wx (sky-weather 1) lt (sky-light (sky-sun sim 0.0 0.65) wx sim)
+                 e [0.0 0.0 0.0] v (mesh-view W H e 2.0 0.3 1.4 0.1 100.0)
+                 m (mesh-sky (sky-stars sim 0.0 0.65) lt wx e sim 0.0 4 {} 2 0 v) _ (pin s 'keep 1)
+                 c [{} -1 [0 0 [0 0 0]] 1] (sh sk) (gpu-facets s W H -1 mat [verts] [ta] [] nf () sk c)
+                 a (sh [() () (m 2) () e (m 5)]) b (sh ()) _ (pin s 'keep 0)
+                 [a (tray? b)])
            ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
            (rl x V) (apart (facets W H -1 mat [V gv] [tc tl] X (o 64)) (gpu-facets s W H -1 mat [V gv] [tc tl] X (o 64) [['sq x] ['ln 0]] () ()))
            rv (: a (rl 1 verts) n (s 'n) b (rl 2 (verts * 0.5)) c (rl 2 (verts * 0.5)) [a b c (s 'n - n)])
@@ -142,9 +150,10 @@
            un (: cs ((iota 80 >= 60) * 65281 - 1) ds (gem-tray [1 80] (map (x \ x >= 60 ? 0.0 2.0) ^80))
                  u (gpu-under g cs ds) f (gpu-frame g 640 8 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 0])
                  (u = () && tray? f ? [(net (f < 0)) (net ((f >= 0) * ((f & 16777215) = 65280)))] f))
-           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps]))))
+           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
-   ; few pixels on an edge apart at most; the sky a pixel at a time all bare, a step off at most
+   ; few pixels on an edge apart at most; the sky a pixel at a time all bare, a step off at most,
+   ; and kept under it
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
                  && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
@@ -152,7 +161,7 @@
                  && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)
                  && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0
                  && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13) && all (f \ f <= 4) (r 14) && all (f \ f <= 4) (r 15)
-                 && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16)))
+                 && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16) && r 17 = ['kept 1]))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

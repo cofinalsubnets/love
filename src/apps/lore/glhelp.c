@@ -1080,14 +1080,17 @@ static void cmd_frame(struct helper *H, char *args) {
    glUniform1i(H->u_skm, 0); glUniformMatrix4fv(H->u_m, 1, 1, m); }
   glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); }
  H->opend = 0;
- // ..with keep, left unread where no pixel is the cpu's to finish: one asked of the gpu
+ // ..with keep, left unread where no pixel is the cpu's to finish: none where the sky was
+ // asked a pixel at a time, which finishes every bare one, else one asked of the gpu
  if ((int) v[10] & 512) {
-  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDepthMask(0);
-  glUseProgram(H->kprog); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->rb);
-  GLuint any = 1;
-  glBeginQuery(GL_ANY_SAMPLES_PASSED, H->kq); glDrawArrays(GL_TRIANGLES, 0, 3); glEndQuery(GL_ANY_SAMPLES_PASSED);
-  glGetQueryObjectuiv(H->kq, GL_QUERY_RESULT, &any);
-  glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glDepthMask(1); glUseProgram(H->prog);
+  GLuint any = 0;
+  if (!ps) {
+   glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDepthMask(0);
+   glUseProgram(H->kprog); glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, H->rb);
+   any = 1;
+   glBeginQuery(GL_ANY_SAMPLES_PASSED, H->kq); glDrawArrays(GL_TRIANGLES, 0, 3); glEndQuery(GL_ANY_SAMPLES_PASSED);
+   glGetQueryObjectuiv(H->kq, GL_QUERY_RESULT, &any);
+   glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glEnable(GL_DEPTH_TEST); glDepthMask(1); glUseProgram(H->prog); }
   if (!any) {
    int const k = H->ks;
    glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, H->kt[k]); glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
