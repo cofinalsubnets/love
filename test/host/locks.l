@@ -43,6 +43,12 @@
 (test (: a (locks-acquire lk-root "big" 'heavy lk-me "x" 1000000 2)
          (&& (0 = peep a "granted" 1) (1 = peep a "position" 0)))
       (1 = locks-release lk-root "big" 'heavy lk-me))
+; a load ceiling of 0 holds the first ticket back where the load reads, one far above lets it by
+(test (: a (locks-acquire lk-root "busy" 'heavy lk-me "x" [() 0] 2)
+         (? (() = peep a "load" ()) 1 (&& (0 = peep a "granted" 1) (1 = peep a "position" 0))))
+      (1 = locks-release lk-root "busy" 'heavy lk-me)
+      (peep (locks-acquire lk-root "calm" 'heavy lk-me "x" [() 1000000] 2) "granted" 0)
+      (1 = locks-release lk-root "calm" 'heavy lk-me))
 ; a dead ticket is swept, not waited behind
 (test (: _ (locks-acquire lk-root "d" 'heavy lk-dead "gone" () 1)
          (peep (locks-acquire lk-root "e" 'heavy lk-me "gate" () 1) "granted" 0))

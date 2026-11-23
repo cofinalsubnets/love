@@ -1178,7 +1178,9 @@
      (lk nm) (cite 'locks nm)
      (locks? _) (lit? (lk 'locks-acquire))
      bee-locks {}                                          ; name -> [kind note], still queued
-     bee-floor (: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+     ; the heavy pool's gate: the memory floor, and a ceiling on the one-minute load, the processors unless set
+     bee-floor [(: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+                (: v (peep bee-salt 'heavy-load ()) (? (two? v && numeric? <v) <v (sysconf () @ (_ . c . _) (charm? c && 0 < c ? c ()) ())))]
      bee-hmax (: v (peep bee-salt 'heavy-max ()) (? (two? v && charm? <v) <v 2))
      ; the holder's pid: this bee's own, read off its card when a child speaks as it
      (lock-pid _) (: c (card-of (me 0)) p (tablet? c ? (card-pid c) 0) (? (alive? p) p (getpid 0)))
@@ -1192,6 +1194,7 @@
                 "?")
           ("queued for \(nm): position " + show (peep r "position" "?") + ", held by \(by)"
            + (r "mem_gb" @ () "" g (", \(g) GB available"))
+           + (r "load" @ () "" l (", load \(l)"))
            + "; a message from lock-\(nm) comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]

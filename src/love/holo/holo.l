@@ -297,7 +297,8 @@
          (<items @ x
             (fix? x ?
                (labels (fix-l x) @ tgt
-                  (? (imm? tgt)
+                  (? (two? (fix-k x)) (x . resolve-open >items labels be addr open)   ; a relocation by number stays one
+                     (imm? tgt)
                       (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x)
                        + resolve-open >items labels be (addr + fix-w x) open)
                      (peep open (fix-l x) 0) (x . resolve-open >items labels be (addr + fix-w x) open)
