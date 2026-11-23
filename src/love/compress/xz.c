@@ -72,9 +72,18 @@ struct lz_out { uint8_t *b; uintptr_t n, cap, base; int pause; };
 LZ_AT(isrep, 192); LZ_AT(isg0, 204); LZ_AT(isg1, 216); LZ_AT(isg2, 228); LZ_AT(isrep0l, 240);
 LZ_AT(slot, 432); LZ_AT(spec, 688); LZ_AT(align, 802); LZ_AT(len, 818); LZ_AT(rep, 1332); LZ_AT(lc, 1846);
 
+// the casks' states: an LZMA2 stream's, and a .lzma body's with the input a symbol might still want
+struct l2_st { uint64_t magic, n, base, cap, dict; uint32_t needdict, needprops;
+               struct lz_model m; lzp lit[0x300 << 4]; };
+#define LM_ROOM ((uintptr_t) 1 << 20)
+struct lm_st { uint64_t magic, n, cap, dict, tot, want, litn; uint32_t range, code, pend, started, done;
+               uint8_t pin[LZ_REQ + 4]; struct lz_model m; };
+_Static_assert(sizeof(((struct lm_st*) 0)->pin) == 24, "lz.l lays pin by 24");
+
 // laid and proved by lz.l: lz_reset, lz_props, rd_init, rd_norm; lz_run, which decodes to lim bytes
 // or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for input, 0 corrupt; and LZMA2's
-// l2_walk, a stream's bytes or -1, and l2_dec, 0 or -1
+// l2_walk, a stream's bytes or -1, l2_dec, 0 or -1, and l2_step, one chunk into a cask's window; and
+// lm_step, a .lzma body's feed: 0 corrupt, 1 paused for room, 2 done, 3 the rest kept in pin
 #include "lz_gen.h"
 
 // --- the range coder ------------------------------------------------------------------------
@@ -531,43 +540,6 @@ static uint64_t xz_crc64(const uint8_t *p, uintptr_t n) { return xz_crc64_on(0, 
 #define L2_CHUNK ((uintptr_t) 1 << 21)
 #define L2_ROOM(d) (((d) < L2_CHUNK ? L2_CHUNK : (d) < ((uintptr_t) 1 << 23) ? (d) : (uintptr_t) 1 << 23) + 16)
 #define L2_MAGIC 0x6c7a6d6132u
-struct l2_st { uint64_t magic, n, base, cap, dict; uint32_t needdict, needprops;
-               struct lz_model m; lzp lit[0x300 << 4]; };
-static void l2_slide(struct l2_st *S, uint8_t *win, uintptr_t need) {
- if (S->n + need <= S->cap) return;
- uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15, keep = S->n - shift;
- memmove(win, win + shift, keep);
- S->n = keep, S->base = S->base > shift ? S->base - shift : 0; }
-// one chunk -> how many bytes it put out, from *o0 in the window; -1 malformed
-static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr_t n, uintptr_t *o0) {
- if (!n || !s[0]) return -1;                    // the end byte is the caller's
- unsigned c = s[0];
- if (c >= 0xe0 || c == 1) S->needprops = 1, S->needdict = 0, S->base = S->n;
- else if (S->needdict) return -1;
- if (c < 0x80) {
-  if (c > 2 || n < 3) return -1;
-  uintptr_t k = ((uintptr_t) s[1] << 8 | s[2]) + 1;
-  if (n != 3 + k) return -1;
-  l2_slide(S, win, k);
-  *o0 = S->n, memcpy(win + S->n, s + 3, k), S->n += k;
-  return (intptr_t) k; }
- if (n < 5) return -1;
- uintptr_t u = ((uintptr_t) (c & 31) << 16 | (uintptr_t) s[1] << 8 | s[2]) + 1,
-           k = ((uintptr_t) s[3] << 8 | s[4]) + 1, h = 5;
- if (c >= 0xc0) {
-  if (n < 6 || !lz_props(&S->m, s[5], 4)) return -1;
-  S->needprops = 0, h = 6; }
- else if (S->needprops) return -1;
- if (n != h + k) return -1;
- if (c >= 0xa0) lz_reset(&S->m);
- l2_slide(S, win, u);
- struct lz_out o = { win, S->n, S->cap, S->base, 0 };
- struct lz_rd r;
- if (!rd_init(&r, s + h, k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
- rd_norm(&r);
- if (r.bad || r.i != r.n || r.code) return -1;
- *o0 = S->n, S->n = o.n;
- return (intptr_t) u; }
 
 // the lzma model with room for lc + lp up to lim, from alloc -> or NULL
 static struct lz_model *lz_new(unsigned lclp) {
@@ -674,12 +646,9 @@ love_noinline static struct g *host_lzma2d_by(struct g *g) {
 
 // a .lzma body as it comes, in a cask: the model, the coder between feeds, the input a symbol
 // might still want, and a window of the last dict bytes with LM_ROOM past them, slid down by
-// a multiple of 16 as l2_slide does. a feed answers what its input decoded, LM_ROOM at most:
+// a multiple of 16 as lz_slide does. a feed answers what its input decoded, LM_ROOM at most:
 // past that it pauses and hands back the input it did not reach
-#define LM_ROOM ((uintptr_t) 1 << 20)
 #define LM_MAGIC 0x6c7a6d6131u
-struct lm_st { uint64_t magic, n, cap, dict, tot, want, litn; uint32_t range, code, pend, started, done;
-               uint8_t pin[LZ_REQ + 4]; struct lz_model m; };
 #define LM_HEAD ((sizeof(struct lm_st) + 7) & ~(uintptr_t) 7)
 static struct str *lm_cask(word x) {
  struct str *s = state_str(x);
@@ -710,36 +679,16 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
  if (!cs || !strp(g->sp[1])) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  struct lm_st *S = (struct lm_st*) cs->bytes;
  uintptr_t sn = len(g->sp[1]), in = S->pend + sn, o0 = S->n, used = 0;
- int last = !sn, rc = S->done ? 2 : 1;
+ int rc = 2;
  uint8_t *buf = alloc(NULL, in + 1);
  if (!buf) return g->sp[1] = ZeroPoint, g->sp += 1, g;
  memcpy(buf, S->pin, S->pend), memcpy(buf + S->pend, txt(g->sp[1]), sn);
+ S->pend = 0;
  if (!S->done) {
-  uint8_t *win = (uint8_t*) cs->bytes + LM_HEAD + S->litn * sizeof(lzp);
   S->m.lit = (lzp*) (cs->bytes + LM_HEAD);          // the cask moves: the pointer is laid again
-  if (S->cap - S->n <= LZ_MAXLEN) {
-   uintptr_t shift = (S->n - (S->n < S->dict ? S->n : S->dict)) & ~(uintptr_t) 15;
-   memmove(win, win + shift, S->n - shift), S->n -= shift, o0 = S->n; }
-  struct lz_rd r = { buf, 0, in, S->range, S->code, 0 };
-  if (!S->started) {
-   if (in < 5 && !last) rc = 3;
-   else if (!rd_init(&r, buf, in)) rc = 0;
-   else S->started = 1; }
-  if (S->started && rc == 1) {
-   int known = S->want != (uint64_t) -1;
-   struct lz_out o = { win, S->n, S->cap - S->n < LM_ROOM ? S->cap : S->n + LM_ROOM, 0, last ? 2 : 1 };
-   rc = known && S->tot == S->want ? 1 : lz_run(&S->m, &r, &o, known ? S->n + (S->want - S->tot) : 0, !known);
-   if (r.bad && rc) rc = 0;
-   S->tot += o.n - S->n, S->n = o.n, S->range = r.range, S->code = r.code;
-   if (rc == 1 && known && S->tot == S->want) rc = 2;
-   else if (rc == 1 && last && o.n < o.cap - LZ_MAXLEN) rc = 0;   // the input over, the stream not
-   used = r.i; }
-  if (rc == 2) S->done = 1; }
+  rc = lm_step(S, (uint8_t*) cs->bytes + LM_HEAD + S->litn * sizeof(lzp), buf, in, !sn, &o0, &used); }
  if (!rc) return S->magic = 0, alloc(buf, 0), g->sp[1] = ZeroPoint, g->sp += 1, g;
- uintptr_t on = S->n - o0, rest = in - used;
- if (rc == 3) {                                       // the rest kept for the next feed
-  memcpy(S->pin, buf + used, rest), S->pend = (uint32_t) rest, rest = 0; }
- else S->pend = 0;
+ uintptr_t on = S->n - o0, rest = in - used;           // 3: the rest is in pin
  uintptr_t need = str_width(on) + (rc == 3 ? 0 : str_width(rest) + Width(struct chain));
  if (!ok(g = have(g, need))) return alloc(buf, 0), g;
  cs = lm_cask(g->sp[0]), S = (struct lm_st*) cs->bytes;       // have may move it

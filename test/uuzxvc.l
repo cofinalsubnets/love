@@ -1,11 +1,11 @@
 ; test/uuzxvc.l -- laid by src/love/compress/lz.l, `make mx`. edit that file.
 ; the ledger: what the theorems leave open, each with who answers for it
-; pointers: lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p, l2_walk's and l2_dec's n at s -- xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window
+; pointers: lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p, l2_walk's, l2_dec's, l2_step's and lm_step's n at s, the casks' windows of cap -- xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window
 ; model: the probabilities are struct lz_model's first 1846 words, lit 0x300 << (lc + lp) more, a count that fits -- xz.c's static asserts; lz_new and the casks size lit
 ; props: m's lc, lp and pb are what lz_props proved lc <= 8, lp <= 4, pb <= 4 of -- its raw stores, and no other write: the coder's own are the encoder's, lc 4
-; coder: rd_norm's i <= n -- l2_dec's guard; for the rest, lz_run's epilogue, the least of the two
-; window: on <= cap, base <= on, cap + 8 and nin + 1 fit -- l2_dec holds them, cap + 8 from its caller; l2_step and lzma_feed lay o and r so
-; chunk: rd_init answers 1 with r.i 5 and r.n n; l2_dec's bad, code and props fields are read raw -- its raw stores; a wrong one is a wrong answer, not a read outside
+; coder: rd_norm's i <= n -- the guards of l2_dec and l2_step
+; window: on <= cap, base <= on, cap + 8 and nin + 1 fit -- held by l2_dec, l2_step and lm_step, n + 1 and cap + 8 from their callers, whose sizes XZ_MAX and a string's bound
+; chunk: rd_init answers 1 with r.i 5 and r.n n; the bad, code, want, tot and props fields are read raw -- its raw stores; a wrong one is a wrong answer, not a read outside
 ; raw: a raw statement writes only r, m and o's fields, read again by no term -- lz.l's epilogue and rep moves
 ; word: a word read back fits -- the C type; `havw` states it
 (test
@@ -1886,5 +1886,261 @@
   (inf-le onh10 cap) g23
   (inf-le basej0 onh10) g24
   (inf-lt (natminus n (add si (add hj1 kh6))) (natminus n si)) (inf-subby si n (add hj1 kh6) g1 (bz-pos (add hj1 kh6) (inf-letrans 1 hj1 (add hj1 kh6) (inf-letrans 1 5 hj1 (idpath false) a1) (inf-leaddr hj1 kh6))))
+ )
+ (defcx inf-zxslide (Ob (pi x nat nat)) (w nat) (cap nat) (on nat) (dict nat) (gw (inf-le 32 w)) (gc (inf-lt (add cap 8) (inf-pow w))) (go (inf-le on cap)) )
+ (defvcs inf-vc-zxslide-r1 1 inf-zxslide (g1 (inf-le on dict))
+  (inf-le 0 on) (idpath false)
+ )
+ (defvcs inf-vc-zxslide-h1 1 inf-zxslide (g1 (inf-lt dict on))
+  (inf-le dict on) (inf-letrans dict on on (inf-ltle dict on g1) (inf-refl on))
+ )
+ (defvcs inf-vc-zxslide-r2 1 inf-zxslide (g1 (inf-lt dict on) xh1 nat g2 (inf-lt on xh1))
+  (inf-le 0 on) (idpath false)
+ )
+ (defvcs inf-vc-zxslide-m1 1 inf-zxslide (g1 (inf-lt dict on) xh1 nat g2 (inf-le xh1 on))
+  (inf-le xh1 on) g2
+  (inf-le (add 0 (natminus on xh1)) cap) (inf-letrans (add 0 (natminus on xh1)) (natminus on xh1) cap (inf-refl (natminus on xh1)) (inf-letrans (natminus on xh1) on cap (inf-suble on xh1) go))
+  (inf-le (add xh1 (natminus on xh1)) cap) (inf-letrans (add xh1 (natminus on xh1)) on cap (bz-nbr xh1 (natminus on xh1) on (inf-refl (natminus on xh1)) g2) go)
+ )
+ (defvcs inf-vc-zxslide-r3 1 inf-zxslide (g1 (inf-lt dict on) xh1 nat g2 (inf-le xh1 on))
+  (inf-le xh1 on) g2
+ )
+ (defcx inf-zxstep (In (pi x nat nat)) (Ob (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat)) (w nat) (n nat) (cap nat) (dict nat) (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))) (gc (inf-lt (add cap 8) (inf-pow w))) )
+ (defvcs inf-vc-zxstep-h1 1 inf-zxstep (g0 (inf-lt 0 n))
+  (inf-lt 0 n) g0
+ )
+ (defvcs inf-vc-zxstep-s0 1 inf-zxstep (g0 (inf-lt 0 n) ch1 nat g1 (inf-lt 0 ch1) onh2 nat baseh3 nat ndh4 nat nph5 nat g2 (inf-le onh2 cap) g3 (inf-le baseh3 onh2) xh6 nat g4 (inf-lt 0 xh6))
+  (inf-lt 1 (inf-pow w)) (inf-wlit 1 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-s1 1 inf-zxstep (g0 (inf-lt 0 n) ch1 nat g1 (inf-lt 0 ch1) onh2 nat baseh3 nat ndh4 nat nph5 nat g2 (inf-le onh2 cap) g3 (inf-le baseh3 onh2) xh6 nat g4 (inf-lt 0 xh6))
+  (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-s2 1 inf-zxstep (g0 (inf-lt 0 n) ch1 nat g1 (inf-lt 0 ch1) onh2 nat baseh3 nat ndh4 nat nph5 nat g2 (inf-le onh2 cap) g3 (inf-le baseh3 onh2) xh6 nat g4 (inf-lt 0 xh6))
+  (inf-lt onh2 (inf-pow w)) (inf-lelt onh2 (add cap 8) (inf-pow w) (inf-letrans onh2 cap (add cap 8) g2 (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxstep-j0j 1 inf-zxstep (g0 (inf-lt 0 n) ch1 nat g1 (inf-lt 0 ch1) onh2 nat baseh3 nat ndh4 nat nph5 nat g2 (inf-le onh2 cap) g3 (inf-le baseh3 onh2) xh6 nat g4 (inf-lt 0 xh6))
+  (inf-le onh2 onh2) (inf-refl onh2)
+ )
+ (defvcs inf-vc-zxstep-j0j 2 inf-zxstep (g0 (inf-lt 0 n) ch1 nat g1 (inf-lt 0 ch1) onh2 nat baseh3 nat ndh4 nat nph5 nat g2 (inf-le onh2 cap) g3 (inf-le baseh3 onh2) xh6 nat g4 (paths nat xh6 0) g5 (paths nat ndh4 0))
+  (inf-le baseh3 onh2) g3
+ )
+ (defcx inf-zxstep-c1 inf-zxstep (g0 (inf-lt 0 n)) (ch1 nat) (g1 (inf-lt 0 ch1)) (onh2 nat) (baseh3 nat) (ndh4 nat) (nph5 nat) (g2 (inf-le onh2 cap)) (g3 (inf-le baseh3 onh2)) (xh6 nat) (npj0 nat) (ndj0 nat) (basej0 nat) (a0 (inf-le basej0 onh2)) )
+ (defvcs inf-vc-zxstep-h7 1 inf-zxstep-c1 (g6 (inf-lt ch1 128) g7 (inf-le ch1 2) g8 (inf-le 3 n))
+  (inf-lt 1 n) (inf-lttrans 1 3 n (idpath true) g8)
+  (inf-lt 2 n) (inf-lttrans 2 3 n (idpath true) g8)
+ )
+ (defvcs inf-vc-zxstep-i8 1 inf-zxstep-c1 (g6 (inf-lt ch1 128) g7 (inf-le ch1 2) g8 (inf-le 3 n) kh7 nat)
+  (inf-le 3 n) g8
+ )
+ (defvcs inf-vc-zxstep-j3 1 inf-zxstep-c1 (g6 (inf-lt ch1 128) g7 (inf-le ch1 2) g8 (inf-le 3 n) kh7 nat g9 (paths nat (natminus n 3) kh7))
+  (inf-le onh2 cap) g2
+ )
+ (defvcs inf-vc-zxstep-c1 1 inf-zxstep-c1 (g6 (inf-lt ch1 128) g7 (inf-le ch1 2) g8 (inf-le 3 n) kh7 nat g9 (paths nat (natminus n 3) kh7) g10 (inf-lt (natminus cap onh2) kh7))
+  (inf-le 32 w) gw
+  (inf-lt (add cap 8) (inf-pow w)) gc
+  (inf-le onh2 cap) g2
+ )
+ (defcx inf-zxstep-c13 inf-zxstep-c1 (g6 (inf-lt ch1 128)) (g7 (inf-le ch1 2)) (g8 (inf-le 3 n)) (kh7 nat) (g9 (paths nat (natminus n 3) kh7)) (g10 (inf-lt (natminus cap onh2) kh7)) (sxc1 nat) (c1e1 (inf-le sxc1 onh2)) )
+ (defvcs inf-vc-zxstep-c1s 1 inf-zxstep-c13 ()
+  (inf-le sxc1 onh2) c1e1
+  (inf-lt (natminus onh2 sxc1) (inf-pow w)) (inf-lelt (natminus onh2 sxc1) (add cap 8) (inf-pow w) (inf-letrans (natminus onh2 sxc1) cap (add cap 8) (inf-letrans (natminus onh2 sxc1) onh2 cap (inf-suble onh2 sxc1) g2) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxstep-c1t 1 inf-zxstep-c13 (c1g (inf-lt basej0 sxc1))
+  (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-c1jj 1 inf-zxstep-c13 (c1g (inf-lt basej0 sxc1))
+  (inf-le 0 (natminus onh2 sxc1)) (idpath false)
+ )
+ (defvcs inf-vc-zxstep-c1u 1 inf-zxstep-c13 (c1g (inf-le sxc1 basej0))
+  (inf-le sxc1 basej0) c1g
+  (inf-lt (natminus basej0 sxc1) (inf-pow w)) (inf-lelt (natminus basej0 sxc1) (add cap 8) (inf-pow w) (inf-letrans (natminus basej0 sxc1) cap (add cap 8) (inf-letrans (natminus basej0 sxc1) basej0 cap (inf-suble basej0 sxc1) (inf-letrans basej0 onh2 cap a0 g2)) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxstep-c1jj 2 inf-zxstep-c13 (c1g (inf-le sxc1 basej0))
+  (inf-le (natminus basej0 sxc1) (natminus onh2 sxc1)) (inf-submono basej0 onh2 sxc1 a0)
+ )
+ (defcx inf-zxstep-c14 inf-zxstep-c13 (basec1j nat) (c1v (inf-le basec1j (natminus onh2 sxc1))) )
+ (defvcs inf-vc-zxstep-j3j 1 inf-zxstep-c14 ()
+  (inf-le (natminus onh2 sxc1) cap) (inf-letrans (natminus onh2 sxc1) onh2 cap (inf-suble onh2 sxc1) g2)
+  (inf-le basec1j (natminus onh2 sxc1)) c1v
+ )
+ (defvcs inf-vc-zxstep-j3j 3 inf-zxstep-c1 (g6 (inf-lt ch1 128) g7 (inf-le ch1 2) g8 (inf-le 3 n) kh7 nat g9 (paths nat (natminus n 3) kh7) g10 (inf-le kh7 (natminus cap onh2)))
+  (inf-le onh2 cap) g2
+  (inf-le basej0 onh2) a0
+ )
+ (defcx inf-zxstep-c12 inf-zxstep-c1 (g6 (inf-lt ch1 128)) (g7 (inf-le ch1 2)) (g8 (inf-le 3 n)) (kh7 nat) (g9 (paths nat (natminus n 3) kh7)) (onj3 nat) (basej3 nat) (j3a (inf-le onj3 cap)) (j3b (inf-le basej3 onj3)) )
+ (defvcs inf-vc-zxstep-j3i 1 inf-zxstep-c12 ()
+  (inf-le onj3 cap) j3a
+ )
+ (defvcs inf-vc-zxstep-m1 1 inf-zxstep-c12 (j3h (inf-le kh7 (natminus cap onj3)))
+  (inf-le (add onj3 kh7) cap) (bz-nbr onj3 kh7 cap j3h j3a)
+  (inf-le (add 3 kh7) n) (bz-nbr 3 kh7 n (inf-letr (natminus n 3) kh7 (natminus n 3) g9 (inf-refl (natminus n 3))) g8)
+ )
+ (defvcs inf-vc-zxstep-s5 1 inf-zxstep-c1 (g6 (inf-le 128 ch1) g11 (inf-lt ch1 192) g12 (paths nat npj0 0) g13 (inf-le 5 n))
+  (inf-lt 5 (inf-pow w)) (inf-wlit 5 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-j1j 1 inf-zxstep-c1 (g6 (inf-le 128 ch1) g11 (inf-lt ch1 192) g12 (paths nat npj0 0) g13 (inf-le 5 n))
+  (inf-le 5 5) (idpath false)
+  (inf-le 5 n) g13
+ )
+ (defvcs inf-vc-zxstep-h8 1 inf-zxstep-c1 (g6 (inf-le 128 ch1) g11 (inf-le 192 ch1) g14 (inf-le 6 n))
+  (inf-lt 5 n) (inf-lttrans 5 6 n (idpath true) g14)
+ )
+ (defvcs inf-vc-zxstep-c2 1 inf-zxstep-c1 (g6 (inf-le 128 ch1) g11 (inf-le 192 ch1) g14 (inf-le 6 n) bh8 nat)
+  (inf-le 32 w) gw
+ )
+ (defcx inf-zxstep-c11 inf-zxstep-c1 (g6 (inf-le 128 ch1)) (g11 (inf-le 192 ch1)) (g14 (inf-le 6 n)) (bh8 nat) (lcc2 nat) (lpc2 nat) (pbc2 nat) (xc2 nat) (c2e1 (inf-le lcc2 8)) (c2e2 (inf-le lpc2 4)) (c2e3 (inf-le pbc2 4)) )
+ (defvcs inf-vc-zxstep-s6 1 inf-zxstep-c11 (g15 (inf-lt 0 xc2))
+  (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-s7 1 inf-zxstep-c11 (g15 (inf-lt 0 xc2))
+  (inf-lt 6 (inf-pow w)) (inf-wlit 6 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-j1j 3 inf-zxstep-c11 (g15 (inf-lt 0 xc2))
+  (inf-le 5 6) (idpath false)
+  (inf-le 6 n) g14
+ )
+ (defcx inf-zxstep-c2 inf-zxstep-c1 (g6 (inf-le 128 ch1)) (hj1 nat) (xj1 nat) (npj1 nat) (a1 (inf-le 5 hj1)) (a2 (inf-le hj1 n)) )
+ (defvcs inf-vc-zxstep-h9 1 inf-zxstep-c2 ()
+  (inf-lt 1 n) (inf-lttrans 1 5 n (idpath true) (inf-letrans 5 hj1 n a1 a2))
+  (inf-lt 2 n) (inf-lttrans 2 5 n (idpath true) (inf-letrans 5 hj1 n a1 a2))
+ )
+ (defvcs inf-vc-zxstep-h10 1 inf-zxstep-c2 (uh9 nat)
+  (inf-lt 3 n) (inf-lttrans 3 5 n (idpath true) (inf-letrans 5 hj1 n a1 a2))
+  (inf-lt 4 n) (inf-lttrans 4 5 n (idpath true) (inf-letrans 5 hj1 n a1 a2))
+ )
+ (defvcs inf-vc-zxstep-i13 1 inf-zxstep-c2 (uh9 nat kh10 nat)
+  (inf-le hj1 n) a2
+ )
+ (defvcs inf-vc-zxstep-c3 1 inf-zxstep-c2 (uh9 nat kh10 nat g16 (paths nat (natminus n hj1) kh10) litnh11 nat g17 (inf-lt litnh11 (inf-pow w)) g18 (inf-le 768 litnh11) g19 (inf-lt 159 ch1))
+  (inf-le 32 w) gw
+  (inf-lt litnh11 (inf-pow w)) g17
+ )
+ (defcx inf-zxstep-c10 inf-zxstep-c2 (uh9 nat) (kh10 nat) (g16 (paths nat (natminus n hj1) kh10)) (litnh11 nat) (g17 (inf-lt litnh11 (inf-pow w))) (g18 (inf-le 768 litnh11)) (g19 (inf-lt 159 ch1)) )
+ (defcx inf-zxstep-c3 inf-zxstep-c2 (uh9 nat) (kh10 nat) (g16 (paths nat (natminus n hj1) kh10)) (litnh11 nat) (g17 (inf-lt litnh11 (inf-pow w))) (g18 (inf-le 768 litnh11)) )
+ (defvcs inf-vc-zxstep-j4 1 inf-zxstep-c3 ()
+  (inf-le onh2 cap) g2
+ )
+ (defvcs inf-vc-zxstep-c4 1 inf-zxstep-c3 (g20 (inf-lt (natminus cap onh2) uh9))
+  (inf-le 32 w) gw
+  (inf-lt (add cap 8) (inf-pow w)) gc
+  (inf-le onh2 cap) g2
+ )
+ (defcx inf-zxstep-c8 inf-zxstep-c3 (g20 (inf-lt (natminus cap onh2) uh9)) (sxc4 nat) (c4e1 (inf-le sxc4 onh2)) )
+ (defvcs inf-vc-zxstep-c4s 1 inf-zxstep-c8 ()
+  (inf-le sxc4 onh2) c4e1
+  (inf-lt (natminus onh2 sxc4) (inf-pow w)) (inf-lelt (natminus onh2 sxc4) (add cap 8) (inf-pow w) (inf-letrans (natminus onh2 sxc4) cap (add cap 8) (inf-letrans (natminus onh2 sxc4) onh2 cap (inf-suble onh2 sxc4) g2) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxstep-c4t 1 inf-zxstep-c8 (c4g (inf-lt basej0 sxc4))
+  (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
+ )
+ (defvcs inf-vc-zxstep-c4jj 1 inf-zxstep-c8 (c4g (inf-lt basej0 sxc4))
+  (inf-le 0 (natminus onh2 sxc4)) (idpath false)
+ )
+ (defvcs inf-vc-zxstep-c4u 1 inf-zxstep-c8 (c4g (inf-le sxc4 basej0))
+  (inf-le sxc4 basej0) c4g
+  (inf-lt (natminus basej0 sxc4) (inf-pow w)) (inf-lelt (natminus basej0 sxc4) (add cap 8) (inf-pow w) (inf-letrans (natminus basej0 sxc4) cap (add cap 8) (inf-letrans (natminus basej0 sxc4) basej0 cap (inf-suble basej0 sxc4) (inf-letrans basej0 onh2 cap a0 g2)) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxstep-c4jj 2 inf-zxstep-c8 (c4g (inf-le sxc4 basej0))
+  (inf-le (natminus basej0 sxc4) (natminus onh2 sxc4)) (inf-submono basej0 onh2 sxc4 a0)
+ )
+ (defcx inf-zxstep-c9 inf-zxstep-c8 (basec4j nat) (c4v (inf-le basec4j (natminus onh2 sxc4))) )
+ (defvcs inf-vc-zxstep-j4j 1 inf-zxstep-c9 ()
+  (inf-le (natminus onh2 sxc4) cap) (inf-letrans (natminus onh2 sxc4) onh2 cap (inf-suble onh2 sxc4) g2)
+  (inf-le basec4j (natminus onh2 sxc4)) c4v
+ )
+ (defvcs inf-vc-zxstep-j4j 3 inf-zxstep-c3 (g20 (inf-le uh9 (natminus cap onh2)))
+  (inf-le onh2 cap) g2
+  (inf-le basej0 onh2) a0
+ )
+ (defcx inf-zxstep-c4 inf-zxstep-c3 (onj4 nat) (basej4 nat) (j4a (inf-le onj4 cap)) (j4b (inf-le basej4 onj4)) )
+ (defvcs inf-vc-zxstep-j4i 1 inf-zxstep-c4 ()
+  (inf-le onj4 cap) j4a
+ )
+ (defcx inf-zxstep-c5 inf-zxstep-c4 (j4h (inf-le uh9 (natminus cap onj4))) (xc5 nat) (c5e1 (pi e (inf-lt 0 xc5) (inf-le 5 kh10))) )
+ (defvcs inf-vc-zxstep-c6 1 inf-zxstep-c5 (g21 (inf-lt 0 xc5) sth12 nat g22 (inf-le sth12 11))
+  (inf-le 32 w) gw
+  (inf-lt (add kh10 1) (inf-pow w)) (inf-lelt (add kh10 1) n (inf-pow w) (inf-lt1 kh10 n (inf-lttrans kh10 (add hj1 kh10) n (inf-lttrans kh10 (add 1 kh10) (add hj1 kh10) (inf-lelts kh10 kh10 (inf-refl kh10)) (inf-addr 1 hj1 kh10 (inf-letrans 1 5 hj1 (idpath false) a1))) (bz-nbr hj1 kh10 n (inf-letr (natminus n hj1) kh10 (natminus n hj1) g16 (inf-refl (natminus n hj1))) a2))) gn)
+  (inf-le 5 (add kh10 1)) (inf-letrans 5 kh10 (add kh10 1) (c5e1 g21) (inf-leaddr kh10 1))
+  (inf-lt (add cap 8) (inf-pow w)) gc
+  (inf-le onj4 cap) j4a
+  (inf-le basej4 onj4) j4b
+  (inf-le sth12 11) g22
+  (inf-le 768 litnh11) g18
+  (inf-lt litnh11 (inf-pow w)) g17
+  (inf-lt (add onj4 uh9) (inf-pow w)) (inf-lelt (add onj4 uh9) cap (inf-pow w) (bz-nbr onj4 uh9 cap j4h j4a) (lz-cw w cap gc))
+ )
+ (defcx inf-zxstep-c6 inf-zxstep-c5 (g21 (inf-lt 0 xc5)) (sth12 nat) (g22 (inf-le sth12 11)) (xc6 nat) )
+ (defvcs inf-vc-zxstep-c7 1 inf-zxstep-c6 (g23 unit ih13 nat g24 (inf-le ih13 kh10))
+  (inf-le 32 w) gw
+  (inf-lt kh10 (inf-pow w)) (inf-lttrans kh10 n (inf-pow w) (inf-lttrans kh10 (add hj1 kh10) n (inf-lttrans kh10 (add 1 kh10) (add hj1 kh10) (inf-lelts kh10 kh10 (inf-refl kh10)) (inf-addr 1 hj1 kh10 (inf-letrans 1 5 hj1 (idpath false) a1))) (bz-nbr hj1 kh10 n (inf-letr (natminus n hj1) kh10 (natminus n hj1) g16 (inf-refl (natminus n hj1))) a2)) (inf-ltle n (inf-pow w) gn))
+  (inf-le ih13 kh10) g24
+ )
+ (defcx inf-zxstep-c7 inf-zxstep-c6 (g23 unit) (ih13 nat) (g24 (inf-le ih13 kh10)) (ic7 nat) (c7e1 (inf-le ic7 kh10)) )
+ (defcx inf-zxlm (In (pi x nat nat)) (Ob (pi x nat nat)) (Pin (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat)) (w nat) (n nat) (cap nat) (dict nat) (last nat) (rm nat) (gw (inf-le 32 w)) (gn (inf-lt (add n 1) (inf-pow w))) (gc (inf-lt (add cap 8) (inf-pow w))) )
+ (defvcs inf-vc-zxlm-j1 1 inf-zxlm (onh1 nat g1 (inf-le onh1 cap))
+  (inf-le onh1 cap) g1
+ )
+ (defvcs inf-vc-zxlm-c1 1 inf-zxlm (onh1 nat g1 (inf-le onh1 cap) g2 (inf-le (natminus cap onh1) 273))
+  (inf-le 32 w) gw
+  (inf-lt (add cap 8) (inf-pow w)) gc
+  (inf-le onh1 cap) g1
+ )
+ (defcx inf-zxlm-c7 inf-zxlm (onh1 nat) (g1 (inf-le onh1 cap)) (g2 (inf-le (natminus cap onh1) 273)) (sxc1 nat) (c1e1 (inf-le sxc1 onh1)) )
+ (defvcs inf-vc-zxlm-s1 1 inf-zxlm-c7 ()
+  (inf-le sxc1 onh1) c1e1
+  (inf-lt (natminus onh1 sxc1) (inf-pow w)) (inf-lelt (natminus onh1 sxc1) (add cap 8) (inf-pow w) (inf-letrans (natminus onh1 sxc1) cap (add cap 8) (inf-letrans (natminus onh1 sxc1) onh1 cap (inf-suble onh1 sxc1) g1) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxlm-j1j 1 inf-zxlm-c7 ()
+  (inf-le (natminus onh1 sxc1) cap) (inf-letrans (natminus onh1 sxc1) onh1 cap (inf-suble onh1 sxc1) g1)
+ )
+ (defvcs inf-vc-zxlm-j1j 2 inf-zxlm (onh1 nat g1 (inf-le onh1 cap) g2 (inf-lt 273 (natminus cap onh1)))
+  (inf-le onh1 cap) g1
+ )
+ (defcx inf-zxlm-c1 inf-zxlm (onh1 nat) (g1 (inf-le onh1 cap)) (onj1 nat) (a1 (inf-le onj1 cap)) )
+ (defvcs inf-vc-zxlm-m1 1 inf-zxlm-c1 (yh2 nat g3 (paths nat yh2 0) g4 (inf-lt n 5) g5 (paths nat last 0))
+  (inf-le (add 0 n) 24) (inf-letrans (add 0 n) n 24 (inf-refl n) (inf-letrans n 5 24 (inf-ltle n 5 g4) (idpath false)))
+  (inf-le (add 0 n) n) (inf-letrans (add 0 n) n n (inf-refl n) (inf-refl n))
+ )
+ (defcx inf-zxlm-c6 inf-zxlm-c1 (yh2 nat) (g3 (paths nat yh2 0)) (g4 (inf-le 5 n)) (xc2 nat) (c2e1 (pi e (inf-lt 0 xc2) (inf-le 5 n))) )
+ (defcx inf-zxlm-c2 inf-zxlm-c1 (yh2 nat) )
+ (defvcs inf-vc-zxlm-j3 1 inf-zxlm-c2 (ih3 nat g7 (inf-le ih3 n) yh4 nat g8 (paths nat yh4 0))
+  (inf-le onj1 cap) a1
+ )
+ (defvcs inf-vc-zxlm-s2 1 inf-zxlm-c2 (ih3 nat g7 (inf-le ih3 n) yh4 nat g8 (paths nat yh4 0) g9 (inf-lt (natminus cap onj1) rm))
+  (inf-lt cap (inf-pow w)) (inf-lelt cap (add cap 8) (inf-pow w) (inf-letrans cap cap (add cap 8) (inf-refl cap) (inf-leaddr cap 8)) gc)
+ )
+ (defvcs inf-vc-zxlm-j3j 1 inf-zxlm-c2 (ih3 nat g7 (inf-le ih3 n) yh4 nat g8 (paths nat yh4 0) g9 (inf-lt (natminus cap onj1) rm))
+  (inf-le cap cap) (inf-refl cap)
+  (inf-le onj1 cap) a1
+ )
+ (defvcs inf-vc-zxlm-s3 1 inf-zxlm-c2 (ih3 nat g7 (inf-le ih3 n) yh4 nat g8 (paths nat yh4 0) g9 (inf-le rm (natminus cap onj1)))
+  (inf-lt (add onj1 rm) (inf-pow w)) (inf-lelt (add onj1 rm) cap (inf-pow w) (bz-nbr onj1 rm cap g9 a1) (lz-cw w cap gc))
+ )
+ (defvcs inf-vc-zxlm-j3j 3 inf-zxlm-c2 (ih3 nat g7 (inf-le ih3 n) yh4 nat g8 (paths nat yh4 0) g9 (inf-le rm (natminus cap onj1)))
+  (inf-le (add onj1 rm) cap) (bz-nbr onj1 rm cap g9 a1)
+  (inf-le onj1 (add onj1 rm)) (inf-letrans onj1 onj1 (add onj1 rm) (inf-refl onj1) (inf-leaddr onj1 rm))
+ )
+ (defcx inf-zxlm-c3 inf-zxlm-c2 (ih3 nat) (g7 (inf-le ih3 n)) (yh4 nat) (g8 (paths nat yh4 0)) (ocj3 nat) (a2 (inf-le ocj3 cap)) (a3 (inf-le onj1 ocj3)) )
+ (defvcs inf-vc-zxlm-c3 1 inf-zxlm-c3 (limh5 nat g10 (inf-lt limh5 (inf-pow w)) litnh6 nat g11 (inf-lt litnh6 (inf-pow w)) g12 (inf-le 768 litnh6) sth7 nat g13 (inf-le sth7 11))
+  (inf-le 32 w) gw
+  (inf-lt (add n 1) (inf-pow w)) gn
+  (inf-le ih3 (add n 1)) (inf-letrans ih3 n (add n 1) g7 (inf-leaddr n 1))
+  (inf-lt (add ocj3 8) (inf-pow w)) (inf-lelt (add ocj3 8) (add cap 8) (inf-pow w) (inf-addr ocj3 cap 8 a2) gc)
+  (inf-le onj1 ocj3) a3
+  (inf-le 0 onj1) (idpath false)
+  (inf-le sth7 11) g13
+  (inf-le 768 litnh6) g12
+  (inf-lt litnh6 (inf-pow w)) g11
+  (inf-lt limh5 (inf-pow w)) g10
+ )
+ (defcx inf-zxlm-c4 inf-zxlm-c3 (limh5 nat) (g10 (inf-lt limh5 (inf-pow w))) (litnh6 nat) (g11 (inf-lt litnh6 (inf-pow w))) (g12 (inf-le 768 litnh6)) (sth7 nat) (g13 (inf-le sth7 11)) (xc3 nat) )
+ (defcx inf-zxlm-c5 inf-zxlm-c4 (g14 (inf-lt 0 xc3)) (yh8 nat) (g15 (paths nat yh8 0)) (ih9 nat) (g16 (inf-le ih9 n)) (oeh13 nat) (g22 (inf-le oeh13 ocj3)) (g23 (inf-le onj1 oeh13)) (yh10 nat) (yj4 nat) )
+ (defvcs inf-vc-zxlm-i15 1 inf-zxlm-c5 (g18 (paths nat yj4 0) yh12 nat g19 (paths nat yh12 0) g20 unit)
+  (inf-le ih9 n) g16
+ )
+ (defvcs inf-vc-zxlm-m2 1 inf-zxlm-c5 (g18 (paths nat yj4 0) yh12 nat g19 (paths nat yh12 0) g20 unit g21 (inf-le (natminus n ih9) 24))
+  (inf-le ih9 n) g16
+  (inf-le (add 0 (natminus n ih9)) 24) (inf-letrans (add 0 (natminus n ih9)) (natminus n ih9) 24 (inf-refl (natminus n ih9)) g21)
+  (inf-le (add ih9 (natminus n ih9)) n) (bz-nbr ih9 (natminus n ih9) n (inf-refl (natminus n ih9)) g16)
  )
  )
