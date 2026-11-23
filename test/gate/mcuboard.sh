@@ -6,7 +6,10 @@
 # which it prints only when every check passed. a teensy41-usb host instead holds a teensy 4.1 on usb:
 # the running image reboots to its loader at 134 baud, src/tools/halfkay.l writes the .bin, and green is
 # lush answering on the usb console the host's tty fact names, a pin read back high
-# and low through the gpio words. an rp2350-uf2 host holds a pico 2
+# and low through the gpio words. a teensy41-loader host holds the same board with
+# src/inle/teensy41/loader.c in its flash, its usb fact the port's by-path name: the loader takes
+# the kernel's .pkt into the psram, a kernel left running going back to it through HalfKay's
+# start, and green is the flash leg's and an answer after a major. no flash write. an rp2350-uf2 host holds a pico 2
 # on usb, its usb fact the port's by-path name: 134 baud on the port's serial device reboots a running
 # image into the rom, the uf2 goes raw onto the port's drive (the rom takes blocks at any sector; the
 # drive's model is checked first), and the battery reports to whoever opens the console. a
@@ -38,6 +41,7 @@ case $cap in
   rp2350-uf2) model=RP2350 ;;
   trinkey-samba) ;;
   nrf52840-loader) ;;
+  teensy41-loader) ;;
   *) echo "FAIL $t: no board known for $cap" >&2; exit 1 ;;
 esac
 "$ho/love" bee --on "$cap" --probe >/dev/null 2>&1 || gate_skip "$t: skipped (no host with $cap answers)"
@@ -132,6 +136,49 @@ sleep 0.5
 cat stage2.pkt >&3
 wait
 exec 3>&-
+tr -d '\r' < got.1
+EOF
+elif [ "$cap" = teensy41-loader ]; then
+  cp "${img%.bin}.pkt" "$sd/firm.pkt"
+  cp "$ho/love" src/tools/halfkay.l "$sd/"
+  green='*40002*50001*60000*70003*'
+  cat > "$sd/run.sh" <<'EOF'
+usb=${BEE_USB:-}
+[ -n "$usb" ] || { echo "the host gives no usb fact"; exit 1; }
+tty=/dev/serial/by-path/$usb:1.0
+# the port's product: "love loader" the flash's, "inle teensy41" a kernel
+prod() { q=$(readlink -f "$tty" 2>/dev/null) && [ -e "$q" ] && cat "$(readlink -f "/sys/class/tty/${q##*/}/device/..")/product"; }
+upto() { n=0; until [ "$(prod)" = "$2" ]; do n=$((n + 1)); [ $n -gt $(($1 * 4)) ] && return 1; sleep 0.25; done; }
+# a kernel left running: 134 baud is HalfKay, whose start runs what the flash holds. no write
+if [ "$(prod)" = "inle teensy41" ]; then
+  stty -F "$tty" 134 2>/dev/null
+  sleep 2
+  timeout 30 ./love halfkay.l start > start.log 2>&1 || { tail -3 start.log; echo "halfkay would not start the flash's image"; exit 1; }
+  upto 15 "love loader"
+fi
+p=$(prod); [ "$p" = "love loader" ] || { echo "no loader on $usb (${p:-no device}): the flash wants make flashloader, a write gwen says go to"; exit 1; }
+sleep 0.5
+stty -F "$tty" raw -echo clocal || exit 1
+exec 3<>"$tty"
+cat firm.pkt >&3
+upto 20 "inle teensy41"; r=$?
+exec 3>&-
+[ $r -eq 0 ] || { echo "the kernel's console never came up on $usb ($(prod))"; exit 1; }
+exec 3<>"$tty"
+stty 115200 cs8 -cstopb -parenb raw -echo -crtscts clocal <&3 || exit 1
+timeout 90 cat <&3 > got.1 &
+c=$!
+n=0
+until grep -q '[$] ' got.1 2>/dev/null; do n=$((n + 1)); [ $n -gt 40 ] && break; sleep 1; done
+sleep 2
+say() { printf '%s\r' "$1" >&3; sleep "$2"; }
+say 'love -e "(+ 40000 2)"' 2
+say 'love -e "(+ 50000 (gpio_init 13, gpio_dir 13 1, gpio_put 13 1, gpio_get 13))"' 2
+say 'love -e "(* 2 (+ 30000 (gpio_put 13 0, gpio_get 13)))"' 2
+# a major, which the one-liners never reach, and an answer after it
+say 'love -e "(please 1, + 70000 3)"' 6
+kill $c 2>/dev/null
+wait
 tr -d '\r' < got.1
 EOF
 elif [ "$cap" = nrf52840-loader ]; then
@@ -238,6 +285,8 @@ case $img in
 esac
 if [ "$cap" = teensy41-usb ]; then
   echo "$t: the .bin written by halfkay.l, lush on the usb console answered love -e \"(+ 40000 2)\", pin 13 read back high then low"
+elif [ "$cap" = teensy41-loader ]; then
+  echo "$t: the kernel into the psram by the flash's loader over usb, the flash untouched, lush answered, pin 13 read back high then low, an answer after a major"
 elif [ "$cap" = trinkey-samba ]; then
   echo "$out" | while read -r l; do case "$l" in "; mooncc"*|"; core"*|"; from"*|"; all"*) echo "$l" ;; esac; done
   echo "$t: the image into sram by the bootloader's sam-ba, the flash untouched, the battery green on its usb console"
