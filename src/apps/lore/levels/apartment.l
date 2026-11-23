@@ -47,9 +47,9 @@
 (: clean [(texture 192 112 7 '((fill hole)))])
 (: static (texture 192 112 7 '((fill (rgb 0.16 0.18 0.2)) (noise 1 0.3))))
 
-; ..and the paintings, each thrown anew every game from the templates
+; ..and the paintings, each thrown anew every game from the templates, the tall one's bands of colour
 (: wide-art (texture 96 64 1.0 '((art any 1))))
-(: tall-art (texture 64 96 1.0 '((art any 2))))
+(: tall-art (texture 64 96 1.0 '((art fields 2))))
 
 ; the river: wandering across the plain along x, more the further from the cube. by the cube
 ; it parts in two channels sep x either side of its line, the island between
@@ -195,11 +195,12 @@
     (furnish 'rug [-112.8 hy 25.1] 0 {'w 4.4 'd 4.6 'skin {'soft rug}})
     (furnish 'sideboard [-115.76 hy 25.3] 270 {'skin {'body oak 'top oak 'frame oak}})
     (furnish 'tv [-115.7 (hy + 0.8) 25.3] 270 {})
-    ; ..its screen, a tap turning it on: the yard seen from high in its far corner, on the tree
-    (switched (camera [-130.6 3.6 27.6] 144 -17 (feed clean (ad [-115.663 (hy + 1.21) 25.3] [1 0 0] [0 1 0] 1.05 0.61 static))))
+    ; ..its screen, a tap turning it on: the yard seen from high in its far corner, on the tree;
+    ; once the mouse is down the tree's shadow, the table it lay on
+    (switched (missing [-114.7 1.5 25.3] 90 -36 (camera [-130.6 3.6 27.6] 144 -17 (feed clean (ad [-115.663 (hy + 1.21) 25.3] [1 0 0] [0 1 0] 1.05 0.61 static)))))
     (furnish 'sofa [-111.6 hy 25.3] 270 {'w 2.6 'skin {'soft cloth}})
     (furnish 'table [-113.2 hy 25.3] 90 {'w 1.6 'd 0.8 'h 0.42 'apron 0.05 'skin {'top oak 'frame oak}})
-    (plush [-113.2 0.42 25.3] 0 'mouse)
+    (plush [-113.2 0.42 25.3] 270 'mouse)
     (furnish 'painting [-111.2 hy 27.78] 0 {'w 1.8 'h 1.2 'low 1.0 'skin {'picture wide-art 'frame (material 'wood 2 {'colour (rgb 0.12 0.1 0.09)})}})
     (furnish 'armchair [-113.2 hy 27.0] 236 {'skin {'soft (material 'cloth 3 {'colour (rgb 0.45 0.32 0.2)})}})
     (map (q \ furnish 'shelf [(q 0) hy 27.64] 0 {'h 2.0 'shelves 5 'fill 'books 'seed (q 1) 'skin {'frame oak}}) [[-108.0 17] [-107.05 18]])

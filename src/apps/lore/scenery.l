@@ -249,6 +249,8 @@
 ;   (camera [x y z] bearing pitch FEED)  the feed seen from x y z, not by the eye: a camera
 ;                                      standing there, its picture shot a few times a second
 ;                                      while the feed is in view
+;   (missing [x y z] bearing pitch FEED)  a camera's feed, seen from there instead while a
+;                                      plush lies down a tree's shadow's hole
 ;   (watch [x y z] radius [near far] cone FEED)  ..or from somewhere near to far from x y
 ;                                      z, within cone degrees of straight up or down through
 ;                                      it, looking at it, a ball of radius there a sixth to a
@@ -294,6 +296,10 @@
 ;                                      standing for theirs
 ;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT) (blink LIGHT)  a light failing, buzzing,
 ;                                      breathing, or flashing as a mast's beacon does
+;   (given WHEN change LIGHT)          the light as change makes it while WHEN holds, else as
+;                                      it is: (given 'loop-gone (dim 0) l). WHEN is 'loop,
+;                                      the loop playing, or 'loop-gone, it playing on all
+;                                      worn away; change sets how the light behaves
 ;   (beacon period on LIGHT)           a light flashing on for on seconds of every period
 ;   (dim k LIGHT)                      a light burning steady at k of its strength
 ;   (ripple period on delay LIGHT)     a beacon flashing delay seconds into its period, so a
@@ -350,8 +356,8 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera missing watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
@@ -729,6 +735,8 @@
    (? (!(two? ts) || !(all texture? ts)) (no u ts) (kind? d ['ad]) (with d 'feed ts) (no u d)))
  (camera at deg pitch d) (: u "(camera [x y z] bearing pitch FEED)"
    (? (kind? d ['ad] && two? (peep d 'feed ())) (with d 'cam [(P at u) (N deg u) (N pitch u)]) (no u d)))
+ (missing at deg pitch d) (: u "(missing [x y z] bearing pitch FEED)"
+   (? (kind? d ['ad] && two? (peep d 'cam ())) (with d 'missing [(P at u) (N deg u) (N pitch u)]) (no u d)))
  (watch at r nf cone d) (: u "(watch [x y z] radius [near far] cone FEED)"
    (? (!(num? r) || r <= 0) (no u r) (!(two? nf) || #nf != 2 || !(all num? nf) || nf 0 <= r || nf 1 < nf 0) (no u nf)
       (!(num? cone) || cone <= 0 || cone > 90) (no u cone)
@@ -776,6 +784,10 @@
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
  (blink l) (how 'blink l)
+ (how-of l) (: p (lit? l ? l <(filter lit? l)) (p 'how))
+ (given c g l) (: u "(given WHEN change LIGHT)"
+   (? (!(elem c ['loop 'loop-gone])) (no u c) (!(lit? l) && (tablet? l || atom? l || !(any lit? l))) (no u l)
+      (how-is ['given c (how-of (g l)) (how-of l)] l)))
  (dim k l) (: u "(dim k LIGHT)" (? (!(num? k) || k < 0) (no u k) (how-is ['dim (f k)] l)))
  (ripple per on d l) (: u "(ripple period seconds-on delay LIGHT)"
    (? (!(num? per) || per <= 0) (no u per) (!(num? on) || on <= 0 || per <= on) (no u on) (!(num? d)) (no u d)
@@ -1401,7 +1413,7 @@
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'clear (peep d 'clear 0) 'land (d 'kind @ 'land 1 0) 'shade (peep d 'shade ())}) (of 'drape + of 'land))
        'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0) 'switch (peep d 'switch 0) 'feed (map tname (peep d 'feed ())) 'stamp (peep d 'stamp ())
-                       'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'cards (peep d 'cards () @ () () c [(map tname (c 0)) (c 1) (c 2)])}) (of 'ad))
+                       'cam (peep d 'cam ()) 'missing (peep d 'missing ()) 'watch (peep d 'watch ()) 'cards (peep d 'cards () @ () () c [(map tname (c 0)) (c 1) (c 2)])}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'in (peep o 'in 0) 'src (o 'src) 'xf (peep o 'xf xf-id)}) (of 'orb))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (s 'n) 'text (s 'text) 'c (s 'c) 'how (s 'how) 'unlit (peep s 'unlit 0)})) (of 'sign))

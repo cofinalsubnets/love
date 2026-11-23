@@ -10,7 +10,7 @@
 (module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
-         world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
+         world-watch world-free? world-ks world-loop world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
@@ -547,7 +547,8 @@
            {'at [[x (hi 1 + 2.9) z]] 'n [0.0 -1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}] () () ()))
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
  ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a beacon, every one in time; a door's
- ; lamp by its door; one the loop lights, on while mu is; a screen's, on while sw says. sd keeps
+ ; lamp by its door; one the loop lights, on while mu is 1 or 2; one given a thing, as it is
+ ; then or else; a screen's, on while sw says. sd keeps
  ; two failing lights out of step
  (bright how mt sd ds mu sw) ((two? how ? <how 'steady) @
   'stammer (flicker-stammer mt sd)
@@ -556,7 +557,8 @@
   'blink (flicker-blink mt 1.5 0.5 0.06)
   'beacon (flicker-blink (mt - (#how > 3 ? (how 3) 0.0)) (how 1) (how 2) 0.06)
   'dim (how 1)
-  'music mu
+  'music (min 1.0 mu)
+  'given (bright (how (mu > (how 1 = 'loop ? 0.0 1.0) ? 2 3)) mt sd ds mu sw)
   'switch (1.0 * peep sw (how 1) 0)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
@@ -740,7 +742,7 @@
  ; frame's gather once for each size of frame; a stamp's dots each second. a gpu that keeps
  ; its frames on a window reads each one back while a feed is in view
  (feeds-of lv tt) (map (d \ (: i (tix tt (d 'tex)) {'i i 'w (tt i 1) 'h (tt i 2) 'a (d 'w / d 'h) 'over (map (nm \ tix tt nm) (d 'feed))
-                                                     'stamp (d 'stamp) 'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'memo {}
+                                                     'stamp (d 'stamp) 'cam (peep d 'cam ()) 'home (peep d 'cam ()) 'missing (peep d 'missing ()) 'watch (peep d 'watch ()) 'memo {}
                                                      'sw (screen-of d @ () () k (k 1))
                                                      'cards (peep d 'cards () @ () () c [(map (nm \ tix tt nm) (c 0)) (c 1) (c 2)])
                                                      'mid (d 'at) 'rad (0.5 * sqrt (sq (d 'w) + sq (d 'h)))}))
@@ -788,11 +790,15 @@
  ; ..a camera's feed shot again from where it stands at half its texture's size, cam-dt
  ; seconds apart and only while it shows the camera or is about to
  cam-dt 0.25
- (cam-shot! st q) (: _ (q 'cam = () ? (watch-pick! st q) 0) c (q 'cam) w (q 'w // 2) h (q 'h // 2)
+ (cam-shot! st q) (: _ (q 'cam = () ? (watch-pick! st q) 0) _ (q 'missing = () ? 0 (pin q 'cam (q (dropped? st ? 'missing 'home)))) c (q 'cam) w (q 'w // 2) h (q 'h // 2)
    (? (st 'mt - peep q 'shot-t -1e9 < cam-dt || !(elem (peep q 'ph 'cam) ['cam 'out])) 0
       (: f (level-pens st {'at [(c 0 0) (c 0 1 - eye-h) (c 0 2)] 'deg (c 1) 'pitch (c 2) 'fov (peep c 3 fov) 'ro (peep c 4 0.0) 'w w 'h h 'memo (q 'memo)
                            'out (q 'watch != () ? 1 0)})
          (pins q 'framed f 'fdim [w h] 'shot-t (st 'mt)))))
+ ; ..whether a plush is down a shadow's hole, out of the hands
+ (dropped? st) (: ds (peep (st 'lvl) 'pits ())
+   (in? p d) (d 0 0 <= p 0 && p 0 <= d 1 0 && d 0 2 <= p 2 && p 2 <= d 1 2 && p 1 < d 1 1 - 1.0)
+   (any (b \ b 'kind = 'plush && peep b 'held 0 = 0 && any (in? (b 'p)) ds) (st 'balls)))
  ; ..a watching camera's place: near to far from its mark, within the cone about the world's
  ; up through it, even over its area, looking at it, turned any way about that; its eye as
  ; wide as puts the ball round the mark a sixth to a half of the picture high
@@ -1509,7 +1515,7 @@
  ; ..or a camera's, sh with its frame's 'w and 'h: drawn on its own, and kept by the camera
  (level-pens st sh) (: cam? (tablet? sh && peep sh 'w 0 > 0) k (cam? ? 1 (peep st 'kp 1)) dm (cam? ? [(sh 'w) (sh 'h)] (mesh-dims st))
    w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
-   ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0) (peep st 'screens {}))
+   ds (st 'doors) ks (world-ks sc (st 'mt) ds (world-loop st) (peep st 'screens {}))
    hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
    e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
    th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph + hb 2))
@@ -2044,6 +2050,8 @@
    (mix-cry (? (tablet? m) (pin st 'music ())
                (: d (st 'loop @ () (: d (loop-new ()) (pin st 'loop d, d)) d d) (pin st 'music {'d d 'n 0 'g 0.0})))
             "click" ()))
+ ; ..the loop: 0 not playing, 1 playing, 2 playing on with all of it worn away
+ (world-loop st) (: m (st 'music) (? (!(tablet? m)) 0.0 (m 'n < song-rate * m 'd 'gone) 1.0 2.0))
  (loop-new _) (decay-new (clock 0 % 1000003 * 0.00731 + 0.5))
  ; ..an iron gate's leaf the eye's line meets within reach, or passes just over, its number;
  ; tapped, it swings the other way
