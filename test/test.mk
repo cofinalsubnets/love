@@ -184,6 +184,7 @@ hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzi
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
 hostnif_tests += test/host/greet.l   # love greet headless: its keys, its box, laid over a saver
+hostnif_tests += test/host/sky.l    # lore's sky: the air's tables, the clouds and the light off them
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight

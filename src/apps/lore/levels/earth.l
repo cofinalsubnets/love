@@ -805,6 +805,8 @@
   (sky 18.35 'mostly)
   (smog 0.9)
   (dye (rgb 0.5 0.22 0.72))
+  ; ..pink where it breaks
+  (gradient [(rgb 0.88 0.4 0.24) (rgb 0.75 0.34 0.38) (rgb 0.61 0.3 0.4)])
   ; ..and all through it far traffic, and a music box now and then
   (hum 'traffic [-1000 -1000 -1000] [1000 1000 1000])
   (hum 'musicbox [-1000 -1000 -1000] [1000 1000 1000])

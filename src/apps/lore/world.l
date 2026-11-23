@@ -857,7 +857,7 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (lv 'sky @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'dye (peep s 'dye ()) 'twinkle (peep s 'twinkle 1.0))
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under
@@ -1420,7 +1420,7 @@
       c (1.0 / (1.0 + eye-h * max 0.0 k)) dip (atan2 (sqrt (1.0 - 2 c)) c) a (atan2 (s 1) h + dip)
       up (h < 1e-6 ? s [(cos a * s 0 / h) (sin a) (cos a * s 2 / h)])
       ; ..its clouds fixed in the world as the sun and stars are, the eye's axes their turn
-      cs (up 1 <= 0.0 ? 0.0 (sky-orb-cloud (sk 'wx) (sk 'sw) (sk 'sim)))
+      cs (sky-orb-cloud (sk 'wx) (sk 'sw) (sk 'sim))
       lt (pins (sky-lit up (sk 'wx) (sk 'sim) cs) 'sun s 'turn (sf 'axes x y z))
       {'lt lt 'wx (sk 'wx) 'sim (sk 'sim) 'k (0.75 * lt 'expo)
        'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0))}))

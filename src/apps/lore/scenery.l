@@ -50,8 +50,14 @@
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
+;   (smog-hue (rgb r g b))             the smog's colour, as bright: none, a brown to an orange
 ;   (dye (rgb r g b))                  the sky's own blue, its dark at night and its clouds
 ;                                      that colour, as bright; under smog the smog a band low down
+;   (atmosphere [N ..])                the sky's air, its 14 numbers as src/love/air.c says them;
+;                                      none, the earth's
+;   (gradient [(rgb r g b) ..])        the sky painted, two colours or more evenly up from the
+;                                      horizon to overhead, as bright as the day and on
+;                                      into the dusk; a dye leaves it
 ;   (twinkle k)                        the air's stir under the stars: 1 earth's (none said),
 ;                                      0 an airless sky's still stars, more a shimmering night
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
@@ -344,7 +350,7 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog dye twinkle ad feed camera watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
          across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
@@ -403,7 +409,11 @@
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
+ (smog-hue c) (: u "(smog-hue (rgb r g b))" (colour? c && any (x \ x > 0.0) c ? (part 'smog-hue [['c c]]) (no u c)))
  (dye c) (: u "(dye (rgb r g b))" (colour? c && any (x \ x > 0.0) c ? (part 'dye [['c c]]) (no u c)))
+ (atmosphere a) (: u "(atmosphere [14 numbers])"
+   (two? a && #a = 14 && all (x \ (charm? x || gem? x) && 0 <= x) a && all (k \ 0 < a k) [0 1 2 3 5 6 11] && a 12 < 1 ? (part 'atmosphere [['a (map (x \ 1.0 * x) a)]]) (no u a)))
+ (gradient cs) (: u "(gradient [(rgb r g b) (rgb r g b) ..])" (two? cs && 1 < #cs && all colour? cs ? (part 'gradient [['cs cs]]) (no u cs)))
  (twinkle k) (: u "(twinkle k)" ((charm? k || gem? k) && 0 <= k ? (part 'twinkle [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
  (skylight c) (: u "(skylight (rgb r g b))" (colour? c ? (part 'skylight [['c c]]) (no u c)))
@@ -1322,7 +1332,7 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'wisp 'brazier 'resonance 'plush 'tree 'sky 'smog 'dye 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'winded 'sleep 'fall 'herald])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'wisp 'brazier 'resonance 'plush 'tree 'sky 'smog 'smog-hue 'dye 'atmosphere 'gradient 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'winded 'sleep 'fall 'herald])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
@@ -1386,7 +1396,7 @@
        'speakers (map (q \ {'at (q 'at) 'lo (q 'lo) 'hi (q 'hi) 'far (peep q 'far ())}) (of 'speaker))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
-       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'dye (of 'dye @ () () m (<m 'c)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
+       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'smog-hue (of 'smog-hue @ () () m (<m 'c)) 'dye (of 'dye @ () () m (<m 'c)) 'air (of 'atmosphere @ () () m (<m 'a)) 'sky (of 'gradient @ () () m (<m 'cs)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
        'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'clear (peep d 'clear 0) 'land (d 'kind @ 'land 1 0) 'shade (peep d 'shade ())}) (of 'drape + of 'land))

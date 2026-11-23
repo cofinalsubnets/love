@@ -235,7 +235,7 @@
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
  ; the grid's mesh and the spots it lays, [verts tris tone [S C] e] or (), what lays the disc or
  ; the stars after, and their spots for a frame the gpu kept, [S C] or (). a sky with no 'turn
- ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map]]: sky-gpu's, then the
+ ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map air]]: sky-gpu's, then the
  ; view's right, up, ahead, focal length, step, width and height; LORE_SKY_PX 0 keeps the grid
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
@@ -253,11 +253,13 @@
                    I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
                    (#I = 0 ? () [(S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ())]))))))
      sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
-     ; ..the disc by day, the stars by night, on the pixels ok holds of: [S C] their indices,
+     ; ..the disc while it is up, the stars by night, on the pixels ok holds of: [S C] their indices,
      ; -1 for none, and their colours, or ()
      (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
                      (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
-                        [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]))
+                        st [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]
+                        (lt 'hi < (two? (lt 'turn) ? -0.4 -0.06) ? st (disc v ok @ () st d (map (k \ glued (st k) (d k)) ^2)))))
+     (glued a b) (: n #a i (iota (n + #b)) (over (peep b (i - n) 0) (i < n) (peep a i 0)))
      ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
      (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1
@@ -267,7 +269,7 @@
          (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
          [(v \ (: q (getenv "LORE_SKY_PX" != "0" ? (sky-gpu lt wx (e 0) (e 2) sim) ())
                   (? (two? q) [() () (1.5 * lt 'expo) (spots v (S \ S >= 0)) e
-                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h)])) (q 1)]]
+                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h)])) (q 1) (q 2)]]
                      (sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e])))))
           (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked

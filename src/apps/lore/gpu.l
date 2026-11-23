@@ -53,7 +53,7 @@
 ;                                of its own. sk [verts tris tone] a sky drawn under what is bare
 ;                                as facets draws it with flags 352, 11 a vertex, its pixels bare
 ;                                alone 2^32 more, or (); [.. spots e] its places from the eye at e;
-;                                [() () tone spots e [nums map]] asked a pixel at a time, mesh-sky's.
+;                                [() () tone spots e [nums map air]] asked a pixel at a time, mesh-sky's.
 ;                                c [v ..] with v 'lamps each batch's [cols li] or () and v 'dks
 ;                                the lamps' strengths, as gpu-lamps takes them; and v 'scene
 ;                                {'key 'make 'at 'vis 'kb}: (make ()) its bufs, each [verts tris
@@ -234,15 +234,16 @@
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
  ; ..the sky, laid again only as its mesh is new, drawn from the eye each frame, and the spots
  ; in it a frame w by h asks
- ; ..or, sk 5 [nums map], asked a pixel at a time: the map sent as it is new, the numbers each frame
+ ; ..or, sk 5 [nums map air], asked a pixel at a time: the map and the air's table sent as they are new, the numbers each frame
  (sky! s sk w h) (? !(two? sk) ()
    (: _ (#sk > 3 && two? (sk 3) ? (gpu-spots (s 'g) w h (sk 3)) ())
       e (#sk > 4 ? (sk 4) [0.0 0.0 0.0])
       q (? (#sk > 5 && two? (sk 5))
-           (: P (sk 5) m (P 1) n (int (sqrt #m))
-              r (? (peep s 'cmap () == m) ()
-                   (: c (cask (4 * #m)) _ ((cite 'guts 'pinf) c 0 4 m)
-                      ((put! (s 'g) c, ask (s 'g) "cloud \(show n) 0") @ () (pin s 'cmap m, ()) r r)))
+           (: P (sk 5) m (P 1) A (P 2)
+              (lay k t say) (? (peep s k () == t) ()
+                   (: c (cask (4 * #t)) _ ((cite 'guts 'pinf) c 0 4 t)
+                      ((put! (s 'g) c, ask (s 'g) say) @ () (pin s k t, ()) r r)))
+              r (lay 'cmap m "cloud \(show (int (sqrt #m))) 0" @ () (lay 'amap A "air 128 \(show (#A // 384)) 0") q q)
               (string? r ? r (ask (s 'g) ("skyp " + unwords (map num (P 0))) @ () [-1] r r)))
            (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
            (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
