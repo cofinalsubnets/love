@@ -10,7 +10,7 @@
 (module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
-         world-watch world-free? world-ks world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
+         world-watch world-free? world-ks world-loop world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
@@ -547,7 +547,8 @@
            {'at [[x (hi 1 + 2.9) z]] 'n [0.0 -1.0 0.0] 'c c 'r 5.0 'soft 0.4 'keep k}] () () ()))
  ; ..how bright a light is at mt seconds, the doors open by ds: steady; a strip failing,
  ; mostly on and now and then stammering off; a tube's buzz; a bulb breathing; a beacon, every one in time; a door's
- ; lamp by its door; one the loop lights, on while mu is; a screen's, on while sw says. sd keeps
+ ; lamp by its door; one the loop lights, on while mu is 1 or 2; one given a thing, as it is
+ ; then or else; a screen's, on while sw says. sd keeps
  ; two failing lights out of step
  (bright how mt sd ds mu sw) ((two? how ? <how 'steady) @
   'stammer (flicker-stammer mt sd)
@@ -556,7 +557,8 @@
   'blink (flicker-blink mt 1.5 0.5 0.06)
   'beacon (flicker-blink (mt - (#how > 3 ? (how 3) 0.0)) (how 1) (how 2) 0.06)
   'dim (how 1)
-  'music mu
+  'music (min 1.0 mu)
+  'given (bright (how (mu > (how 1 = 'loop ? 0.0 1.0) ? 2 3)) mt sd ds mu sw)
   'switch (1.0 * peep sw (how 1) 0)
   (a . u) (peep ds <u 0.0 @ d (a @ 'shut (d < 0.02 ? 1.0 0.0) (d < 0.02 ? 0.0 1.0)))
   1.0)
@@ -1513,7 +1515,7 @@
  ; ..or a camera's, sh with its frame's 'w and 'h: drawn on its own, and kept by the camera
  (level-pens st sh) (: cam? (tablet? sh && peep sh 'w 0 > 0) k (cam? ? 1 (peep st 'kp 1)) dm (cam? ? [(sh 'w) (sh 'h)] (mesh-dims st))
    w <dm h (dm 1) sc (st 'sc) lv (st 'lvl)
-   ds (st 'doors) ks (world-ks sc (st 'mt) ds (tablet? (st 'music) ? 1.0 0.0) (peep st 'screens {}))
+   ds (st 'doors) ks (world-ks sc (st 'mt) ds (world-loop st) (peep st 'screens {}))
    hb (tablet? sh ? [0.0 0.0 0.0 0.0] (mesh-sway st (gesture-body st) fov w))
    e (tablet? sh ? [(sh 'at 0) (sh 'at 1 + eye-h) (sh 'at 2)] [(st 'px + hb 1 * cos (st 'th)) (st 'py + dip st + hb 0) (st 'pz - hb 1 * sin (st 'th))])
    th (tablet? sh ? (sh 'deg * pi / 180.0) (st 'th)) ph (tablet? sh ? (sh 'pitch * pi / 180.0) (st 'ph + hb 2))
@@ -2048,6 +2050,8 @@
    (mix-cry (? (tablet? m) (pin st 'music ())
                (: d (st 'loop @ () (: d (loop-new ()) (pin st 'loop d, d)) d d) (pin st 'music {'d d 'n 0 'g 0.0})))
             "click" ()))
+ ; ..the loop: 0 not playing, 1 playing, 2 playing on with all of it worn away
+ (world-loop st) (: m (st 'music) (? (!(tablet? m)) 0.0 (m 'n < song-rate * m 'd 'gone) 1.0 2.0))
  (loop-new _) (decay-new (clock 0 % 1000003 * 0.00731 + 0.5))
  ; ..an iron gate's leaf the eye's line meets within reach, or passes just over, its number;
  ; tapped, it swings the other way

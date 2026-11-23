@@ -103,6 +103,7 @@
 ; between them for walls. a passage dug from its first room to every other, through a
 ; doorway, seldom the whole wall; then more, so it loops, and most dead ends opened on past
 (: m0 40 mn 18)
+(: maze-seed 0 (roll a b) (h01 a (b + 977 * maze-seed)))   ; another seed, another maze
 (: (in? i) ((i - m0 + nx) % nx < mn))
 (: mcols (map (k \ (m0 + k) % nx) ^mn) mcells (catmap (i \ map (j \ i * nz + j) ^nz) mcols))
 (: (cid i j) ((i + nx) % nx * nz + (j + nz) % nz))
@@ -122,7 +123,7 @@
 (: gw (catmap (i \ map (cid i) gjs) gis))
 (: dug (: seen {} open {}
    (go c) (: _ (pin seen c 1)
-             (each (map (q \ q 1) (sort (map (d \ [(h01 c d) d]) ^4)))
+             (each (map (q \ q 1) (sort (map (d \ [(roll c d) d]) ^4)))
                    (d \ (: n (nb c d) e (edge c d) (peep seen n 0 = 0 && !(elem e shut) ? (: _ (pin open e 1) (go n)) 0)))))
    _ (each (filter (c \ !(in? (c // nz))) ^(nx * nz)) (c \ pin seen c 1))
    _ (each gw (c \ pin seen c 1))
@@ -140,35 +141,69 @@
 (: (walls-of c) (: i (c // nz) j (c % nz) [(cid i j) (cid (i - 1) j) (100000 + cid i j) (100000 + cid i (j - 1))]))
 ; ..the loops: a fifth of the walls left opened; then a dead end, but some, opened through
 ; one more of its walls
-(: braided (: o (foldl (\ t e (h01 e 3 < 0.2 ? (pin t e 1) t)) (foldl (\ t e (pin t e 1)) {} (keys dug))
+(: braided (: o (foldl (\ t e (roll e 3 < 0.2 ? (pin t e 1) t)) (foldl (\ t e (pin t e 1)) {} (keys dug))
                        (filter inner? (catmap (c \ [c (100000 + c)]) mcells)))
    (way? e) (peep o e 0 = 1 || elem e hall-doors)
    (dead? c) (#(filter way? (walls-of c)) = 1)
-   (more c) (: es (filter (e \ inner? e && !(way? e)) (walls-of c)) (two? es ? <(map (q \ q 1) (sort (map (e \ [(h01 e 5) e]) es))) ()))
-   (foldl (\ o c (? (!(hall? (c // nz) (c % nz)) && dead? c && h01 c 5 < 0.75 && more c != ()) (pin o (more c) 1) o)) o mcells)))
+   (more c) (: es (filter (e \ inner? e && !(way? e)) (walls-of c)) (two? es ? <(map (q \ q 1) (sort (map (e \ [(roll e 5) e]) es))) ()))
+   (foldl (\ o c (? (!(hall? (c // nz) (c % nz)) && dead? c && roll c 5 < 0.75 && more c != ()) (pin o (more c) 1) o)) o mcells)))
 ; ..and a few of its rooms four to a hall, the walls between them gone
 (: wides [[43 2] [48 7] [2 11] [5 3]])
 (: wide-es (catmap (q \ (: i (q 0) j (q 1) [(cid i j) (cid i (j + 1)) (100000 + cid i j) (100000 + cid (i + 1) j)])) wides))
 (: (through e) (? (elem e hall-doors) 'door (round-hall e) 'none
                   (elem e shut) 'none
                   (elem e wide-es) 'open
-                  (: w (? (peep braided e 0 = 1) (h01 e 7 <= 0.15 ? 'open 'door) 'none)
+                  (: w (? (peep braided e 0 = 1) (roll e 7 <= 0.36 ? 'open 'door) 'none)
                      (elem e sides && w = 'open ? 'door w))))
+; ..a room with nothing of its own in it; a doorway between two such as wide as it falls and
+; where, every other one in the middle: [its middle off the wall's, its half width]
+(: (plain? c) (: q [(c // nz) (c % nz)] (in? (q 0) && !(hall? (q 0) (q 1)) && !(elem q ([office store waiting bedroom flooded files] + closets)))))
+(: (plain-e? e) (: c (e % 100000) (plain? c && plain? (nb c (e < 100000 ? 0 2)))))
+; ..half a wall's thickness: wt by a room with something in it, else the first of thicks whose
+; share the die is under; pr where the wall is gone, so a corner left by three or four such
+; stands as a column
+(: pr 0.38 thicks [[0.5 wt] [0.75 0.22] [0.9 0.34] [1.0 0.5]])
+(: (half e) (? (!(plain-e? e)) wt (through e = 'open) pr (: h (roll e 41) (<(filter (q \ h < q 0) thicks) 1))))
+; ..and so where room c stops: [x0 x1 z0 z1]
+(: (faces c) (: i (c // nz) j (c % nz) (w d) (half (edge c d))
+   [(cx * i + w 1) (cx * (i + 1) - w 0) (cz * j + w 3) (cz * (j + 1) - w 2)]))
+(: (doorway e) (? (!(plain-e? e) || roll e 21 < 0.35) [0.0 0.7]
+      (: h (0.7 + 1.1 * roll e 22) [((2.4 - h) * (2.0 * roll e 23 - 1.0)) h])))
 (: white (texture 64 64 2 '((fill (grey 0.92)) (fbm 16 3 0.04))))
 (: checks (feel 'hard (texture 64 64 1.2 '((fill (grey 0.93)) (checker 32 32 (grey 0.08)) (fbm 16 3 0.05)))))
-(: (cell i j) (: wide (i < nx - 1 && through (cid i j) = 'open) z1 (cz * (j + 1) - wt) top-z (elem [i j] closets ? (z1 - 1.6) z1)
-   r (room [(cx * i + wt) 0 (cz * j + wt)] [(cx * (i + 1) + (wide ? (wt + 0.01) -wt)) mh top-z])
+; ..across a wall gone, what both its rooms are open to, along it; where they are the same
+; toward x the one room reaches over into the next
+(: (both e k) (: f (faces (e % 100000)) g (faces (nb (e % 100000) (e < 100000 ? 0 2))) [(max (f k) (g k)) (min (f (k + 1)) (g (k + 1)))]))
+(: (over? i j) (: e (cid i j) (i < nx - 1 && through e = 'open && half (edge e 2) = half (edge (nb e 0) 2) && half (edge e 3) = half (edge (nb e 0) 3))))
+(: (cell i j) (: wide (over? i j) f (faces (cid i j)) top-z (elem [i j] closets ? (f 3 - 1.6) (f 3))
+   r (room [(f 0) 0 (f 2)] [(wide ? (cx * (i + 1) + half (cid i j) + 0.01) (f 1)) mh top-z])
    (? (hall? i j) () ([i j] = bedroom) (dark r) r)))
 (: hall (dark (skin {'walls white 'floor checks 'ceiling white}
                     (room [(cx * <gis + wt) 0 (cz * <gjs + wt)] [(cx * (<gis + 3) - wt) gh (cz * (<gjs + 3) - wt)]))))
 (: (gap lo hi) (air (box lo hi)))
-(: (ways i j) (: x0 (cx * i + wt) x1 (cx * (i + 1) - wt) z0 (cz * j + wt) z1 (cz * (j + 1) - wt) xm (0.5 * (x0 + x1)) zm (0.5 * (z0 + z1))
-   (wx a b) (? (i < nx - 1) [(gap [(x1 - 0.01) 0 a] [(x1 + 2.0 * wt + 0.01) mh b])]
-               [(gap [(x1 - 0.01) 0 a] [lx mh b]) (gap [0 0 a] [(wt + 0.01) mh b])])
-   (wz a b) (? (j < nz - 1) [(gap [a 0 (z1 - 0.01)] [b mh (z1 + 2.0 * wt + 0.01)])]
-               [(gap [a 0 (z1 - 0.01)] [b mh lz]) (gap [a 0 0] [b mh (wt + 0.01)])])
-   ((through (cid i j) @ 'open (i < nx - 1 ? () (wx z0 z1)) 'door (wx (zm - 0.7) (zm + 0.7)) ())
-    + (through (100000 + cid i j) @ 'open (wz x0 x1) 'door (wz (xm - 0.7) (xm + 0.7)) ()))))
+(: (ways i j) (: c (cid i j) f (faces c) x1 (f 1) z1 (f 3) wa (half c) wb (half (100000 + c)) xm (cx * (i + 0.5)) zm (cz * (j + 0.5))
+   (wx a b) (? (i < nx - 1) [(gap [(x1 - 0.01) 0 a] [(x1 + 2.0 * wa + 0.01) mh b])]
+               [(gap [(x1 - 0.01) 0 a] [lx mh b]) (gap [0 0 a] [(wa + 0.01) mh b])])
+   (wz a b) (? (j < nz - 1) [(gap [a 0 (z1 - 0.01)] [b mh (z1 + 2.0 * wb + 0.01)])]
+               [(gap [a 0 (z1 - 0.01)] [b mh lz]) (gap [a 0 0] [b mh (wb + 0.01)])])
+   ((through (cid i j) @ 'open (over? i j ? () (both c 2 @ q (wx (q 0) (q 1)))) 'door (doorway (cid i j) @ [o h] (wx (zm + o - h) (zm + o + h))) ())
+    + (through (100000 + cid i j) @ 'open (both (100000 + c) 0 @ q (wz (q 0) (q 1))) 'door (doorway (100000 + cid i j) @ [o h] (wz (xm + o - h) (xm + o + h))) ()))))
+; ..what breaks the rooms up, thrown for each: pillars floor to ceiling on its quarters, clear
+; of its lights, and a stub of wall out from a whole one; the four rooms of a wide hall full of
+; pillars
+(: (pillar x z) (whole (skin {'all paper} (solid (box [(x - pr) 0 (z - pr)] [(x + pr) mh (z + pr)])))))
+(: wide-cs (catmap (q \ (: i (q 0) j (q 1) [(cid i j) (cid (i + 1) j) (cid i (j + 1)) (cid (i + 1) (j + 1))])) wides))
+(: (stub c) (: f (faces c) x0 (f 0) x1 (f 1) z0 (f 2) z1 (f 3)
+   ds (filter (d \ through (edge c d) = 'none) ^4) l (1.5 + 0.8 * roll c 34) o ((roll c 35 < 0.5 ? -1.0 1.0) * (1.25 + 0.4 * roll c 36)) zm (cz * (c % nz + 0.5))
+   xs (cx * (c // nz + 0.5) + o) zs (zm + o) t (0.12 + 0.18 * roll c 37)
+   (bar lo hi) [(whole (skin {'all paper} (solid (box lo hi))))]
+   (? (atom? ds) ()
+      (ds (int (roll c 33 * #ds)) @ 0 (bar [(x1 - l) 0 (zs - t)] [x1 mh (zs + t)]) 1 (bar [x0 0 (zs - t)] [(x0 + l) mh (zs + t)])
+                                   2 (bar [(xs - t) 0 (max (z1 - l) (zm + 0.95))] [(xs + t) mh z1]) (bar [(xs - t) 0 z0] [(xs + t) mh (min (z0 + l) (zm - 0.95))])))))
+(: (pillars c) (: xm (cx * (c // nz + 0.5)) zm (cz * (c % nz + 0.5)) k (int (4.0 * roll c 31))
+   qs [[-1.0 -1.0] [1.0 -1.0] [1.0 1.0] [-1.0 1.0]] (at n) (: q (qs ((k + n) % 4)) (pillar (xm + 1.55 * q 0) (zm + 1.7 * q 1))) t (roll c 32)
+   (? (!(plain? c)) () (elem c wide-cs) (map at ^4)
+      (t < 0.28) () (t < 0.5) [(at 0)] (t < 0.66) [(at 0) (at 2)] (t < 0.71) (map at ^4) (t < 0.8) [(at 0) (at 1)] (stub c))))
 ; ..the closet, a doorway wide and a stride and a half deep, and its door
 (: (closet i j) (: xm (cx * (i + 0.5)) z1 (cz * (j + 1) - wt)
    [(dark (room [(xm - 0.7) 0 (z1 - 1.4)] [(xm + 0.7) 2.4 z1]))
@@ -289,10 +324,10 @@
    (go fr) (? (atom? fr) hop (go (catmap (c \ catmap (reach c) (near c)) fr)))
    _ (each gw (c \ pin seen c 1))
    (go gw)))
-(: (exit-sign c d) (: i (c // nz) j (c % nz) x0 (cx * i + wt) x1 (cx * (i + 1) - wt) z0 (cz * j + wt) z1 (cz * (j + 1) - wt)
-   xm (0.5 * (x0 + x1)) zm (0.5 * (z0 + z1)) y (mh - 0.4) g (rgb 0.25 1.0 0.35)
-   (d @ 'xp (unlit (neon [(x1 - 0.03) y zm] [-1 0 0] 0.2 "exit" g)) 'xm (unlit (neon [(x0 + 0.03) y zm] [1 0 0] 0.2 "exit" g))
-        'zp (unlit (neon [xm y (z1 - 0.03)] [0 0 -1] 0.2 "exit" g)) (unlit (neon [xm y (z0 + 0.03)] [0 0 1] 0.2 "exit" g)))))
+(: (exit-sign c d) (: f (faces c) x0 (f 0) x1 (f 1) z0 (f 2) z1 (f 3) xm (cx * (c // nz + 0.5)) zm (cz * (c % nz + 0.5)) y (mh - 0.4) g (rgb 0.25 1.0 0.35)
+   o (: e (edge c (d @ 'xp 0 'xm 1 'zp 2 3)) (through e = 'door ? (doorway e 0) 0.0))
+   (d @ 'xp (unlit (neon [(x1 - 0.03) y (zm + o)] [-1 0 0] 0.2 "exit" g)) 'xm (unlit (neon [(x0 + 0.03) y (zm + o)] [1 0 0] 0.2 "exit" g))
+        'zp (unlit (neon [(xm + o) y (z1 - 0.03)] [0 0 -1] 0.2 "exit" g)) (unlit (neon [(xm + o) y (z0 + 0.03)] [0 0 1] 0.2 "exit" g)))))
 ; ..the rooms on the way from the closet's to the hall, in order
 (: way-out (: (go c out) (: d (hops c) i (c // nz) j (c % nz)
                            (? (elem c gw || d = ()) (rev out)
@@ -302,8 +337,8 @@
 ; ..and pa speakers in the maze, one in a room's corner every third room on the way out and
 ; here and there all round the ring, where both its walls stand
 (: (cornered? c) (: i (c // nz) j (c % nz) (in? i && !(hall? i j) && through (cid (i - 1) j) != 'open && through (100000 + cid i (j - 1)) != 'open)))
-(: pas (: on (map (k \ way-out (3 * k + 1)) ^((#way-out + 1) // 3)) round (filter (c \ h01 c 13 < 0.35 && !(elem c on)) mcells)
-   (map (c \ pa [(cx * (c // nz) + wt) mh (cz * (c % nz) + wt)] [1 1]) (filter cornered? (on + round)))))
+(: pas (: on (map (k \ way-out (3 * k + 1)) ^((#way-out + 1) // 3)) round (filter (c \ roll c 13 < 0.35 && !(elem c on)) mcells)
+   (map (c \ pa (faces c @ f [(f 0) mh (f 2)]) [1 1]) (filter cornered? (on + round)))))
 
 ; ..the ring's middle, flat in the world straight up off the tube's inside: the lift's
 ; platform climbing its tether from the grass up the axis of a pink orb turning there, in at
@@ -326,7 +361,7 @@
     (skin {'all steel} (solid (box [(sx - 3.03) (hub - 1.3) -1.22] [(sx + 3.03) (hub + 1.29) 1.22])))
     (dark (skin {'walls paint 'floor ply 'ceiling paint} (room [(sx - 2.95) cy -1.14] [(sx + 2.95) (hub + 1.21) 1.14])))
     (skin {'all paint} (air (box [(sx - 0.81) (hub - 1.31) -0.81] [(sx + 0.81) (cy + 0.01) 0.81])))   ; the hatch, a hair wider than the platform, so the floor never overlaps it
-    (map (x \ strip-light [(sx + x) (hub + 1.21) 0]) [-2.3 -1.25 1.25 2.3])
+    (map (x \ given 'loop-gone (dim 0) (strip-light [(sx + x) (hub + 1.21) 0])) [-2.3 -1.25 1.25 2.3])   ; out once the loop has worn away
     (block [(sx + 1.9) cy -1.13] [(sx + 2.94) (cy + 0.2) 0.9] wood)
     (sleep-bed [(sx + 2.42) (cy + 0.2) -1.1] 0 "earth.l" 'walk-in)   ; lain on, back to the station's walk-in
     (map (q \ pa [(sx + q 0 * 2.95) (hub + 1.21) (q 1 * 1.14)] [-(q 0) -(q 1)]) [[1 1] [1 -1] [-1 1] [-1 -1]])]))
@@ -428,11 +463,11 @@
     + [(furnish 'table [x 0 z] 180 {'w 0.7 'd 0.5 'h 0.55})
        (skin {'all casing} (solid (box [(x - 0.3) 0.55 (z - 0.22)] [(x + 0.3) 1.0 (z + 0.22)])))
        (ad [x 0.775 (z - 0.225)] [0 0 -1] [0 1 0] 0.48 0.33 bars)])))
-; ..the wisps: one at the bottom of the maze's pool, one in the far closet, one let fall
-; into brazier XXV, which a string will not ring whole, and one in the graveyard's empty plot
-(: wisps (: b (hearth-at [25 1]) xm (cx * (zi + 0.5)) z1 (cz * (zj + 1) - wt)
+; ..the wisps: one at the bottom of the maze's pool, one in the far closet, one on the
+; grass just downhill of brazier IV, as if set there and rolled off, and one in the graveyard's empty plot
+(: wisps (: b (hearth-at [4 0]) xm (cx * (zi + 0.5)) z1 (cz * (zj + 1) - wt)
    [(wisp [(spot-x flooded 3.1 0) -(pool-d) (spot-z flooded 0 4.0)]) (wisp [xm 0 (z1 - 0.7)])
-    (wisp [(b 0) (b 1 + 1.5) (b 2)]) (wisp (on-ground (yx + 2.2) (yz + 2.6)))]))
+    (wisp (on-ground (b 0 - 1.2) (b 2 + 0.7))) (wisp (on-ground (yx + 2.2) (yz + 2.6)))]))
 
 (level "the ring"
   (surface 'torus lx lz)
@@ -453,6 +488,7 @@
   (map (i \ map (cell i) ^nz) mcols)
   hall
   (map (i \ catmap (ways i) ^nz) mcols)
+  (catmap pillars mcells)
   (map (i \ map (panels i) ^nz) mcols)
   (closet ci cj)
   (closet zi zj)

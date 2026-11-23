@@ -296,6 +296,10 @@
 ;                                      standing for theirs
 ;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT) (blink LIGHT)  a light failing, buzzing,
 ;                                      breathing, or flashing as a mast's beacon does
+;   (given WHEN change LIGHT)          the light as change makes it while WHEN holds, else as
+;                                      it is: (given 'loop-gone (dim 0) l). WHEN is 'loop,
+;                                      the loop playing, or 'loop-gone, it playing on all
+;                                      worn away; change sets how the light behaves
 ;   (beacon period on LIGHT)           a light flashing on for on seconds of every period
 ;   (dim k LIGHT)                      a light burning steady at k of its strength
 ;   (ripple period on delay LIGHT)     a beacon flashing delay seconds into its period, so a
@@ -353,7 +357,7 @@
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera missing watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
@@ -780,6 +784,10 @@
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
  (blink l) (how 'blink l)
+ (how-of l) (: p (lit? l ? l <(filter lit? l)) (p 'how))
+ (given c g l) (: u "(given WHEN change LIGHT)"
+   (? (!(elem c ['loop 'loop-gone])) (no u c) (!(lit? l) && (tablet? l || atom? l || !(any lit? l))) (no u l)
+      (how-is ['given c (how-of (g l)) (how-of l)] l)))
  (dim k l) (: u "(dim k LIGHT)" (? (!(num? k) || k < 0) (no u k) (how-is ['dim (f k)] l)))
  (ripple per on d l) (: u "(ripple period seconds-on delay LIGHT)"
    (? (!(num? per) || per <= 0) (no u per) (!(num? on) || on <= 0 || per <= on) (no u on) (!(num? d)) (no u d)

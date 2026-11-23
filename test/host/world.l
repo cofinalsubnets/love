@@ -902,6 +902,12 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; a light given the loop gone: lit with the deck still and as the loop plays, out once it has
+; all worn away, lit again begun afresh; one given the loop playing is dimmed then
+(: owl (lv "(room [0 0 0] [10 4 10]) (given 'loop-gone (dim 0) (strip-light [5 4 5])) (given 'loop (dim 0.5) (bulb [2 2 2] (rgb 1 1 1))) (deck [4 0 6] [6 1 6.5]) (start [5 0 5.3] 0 -30)")
+   ows (world-new 8 8 owl "") (lit _) (world-ks (ows 'sc) 0.0 [] (world-loop ows) {}) go (_ \ world-step ows 'tap)
+   o0 (lit ()) _ (go ()) o1 (lit ()) m (ows 'music) _ (pin m 'n (int (1e6 * m 'd 'gone))) o2 (lit ()) _ (go ()) _ (go ()) o3 (lit ()))
+ (test ([o0 o1 o2 o3] = [[1.0 1.0] [1.0 0.5] [0.0 0.5] [1.0 0.5]]) (has? (lv "(given 'dusk (dim 0) (strip-light [5 4 5]))") "(given WHEN change LIGHT)"))
 ; a speaker's reach: the loop gone fifteen metres off a plain one, still heard there off one
 ; reaching twenty
 (: (rch sp x) (: l (lv ("(room [0 0 0] [40 4 4]) (deck [1 0 1] [2 1 2]) " + sp + " (start [1.5 0 2.5] 180 -30)"))
@@ -966,7 +972,8 @@
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
    (dce k) (: y (decay-at dc0 (dct + k * dcl)) (sqrt (net (y * y) / 4000.0))))
- (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0))
+ (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0)
+       (dce (int (dc0 'gone / dcl + 0.5) + 1) = 0.0) (0.0 < dce (int (dc0 'gone / dcl + 0.5) - 2)) (0.0 < dc0 'gone <= 902 * dcl))
 ; the way between levels: a herald within its reach makes for the eye and meeting it leaves
 ; for its file, by the level's own folder; a bed tapped is lain on, then left for its entry;
 ; and one come to by a bed's entry wakes on it and stands beside it, on its left
