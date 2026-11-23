@@ -83,7 +83,8 @@
              (atom? x && con-max < trap (_ \ #x) 0 (a \ b \ 0)) (: _ (put (show (peep x (iota (con-max // 8)) 0))) (pin n 'n (con-max + 1)))
              (put (show x)))
    _ (go x) s (slurp j) (full () ? (snip s 0 (min #s con-max) + " ..") s))
- (con-eval words st ln) (: ws ([["st" "the walk's state, a tablet" st]] + words st)
+ (con-eval words st ln) (: ws ([["st" "the walk's state, a tablet" st]
+   ["opens" "opens \"WORD ..\": what the phone's app opens from its next start on, \"\" its own" (t \ cite 'opens 'opens-word t)]] + words st)
    (? (ln = "help") (join "\n" (map (w \ pad (w 0) 10 " " + w 1) ws))
       (sound ("(" + foldl (\ a w (a + w 0 + " \\ ")) "" ws + ln + "\n)") @
         (d . _) (trap (_ \ (: r (foldl (\ f w (f (w 2))) (ev d) ws) (string? r && #r <= con-max ? r (con-show r)))) () (a \ b \ ";; " + show a + " " + show b))
