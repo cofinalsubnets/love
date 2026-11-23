@@ -143,6 +143,7 @@ typedef struct {
   deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
+  int resumed;                            /* ours in front: no dialog over us */
   int micp[2], mic, ask, earwait, micgen, micok;   /* the mic: pokes to the main thread; its grant; asked 1, our pause seen 2; the ears waiting, the answers, the last */
   void *main; long askt, mik[8];          /* the main thread's looper; when asked; the lock on earwait, micgen and micok */
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
@@ -1171,14 +1172,14 @@ static int micpoke(int fd, int ev, void *p) {
   while (read(fd, c, sizeof c) > 0) ;
   if (b->ask) { if (b->ask == 1 && now() - b->askt > 2) mican(b, b->a && !perms(b->a, 2)); return 1; }
   pthread_mutex_lock(b->mik); int w = b->earwait; pthread_mutex_unlock(b->mik);
-  if (!w) return 1;
+  if (!w || (b->a && __atomic_load_n(&b->up, 2) && !b->resumed)) return 1;   /* under another dialog: the next poke */
   int n = b->a && __atomic_load_n(&b->up, 2) ? perms(b->a, 1) : b->a ? perms(b->a, 2) : -1;
   if (n > 0 && __atomic_load_n(&b->up, 2)) b->ask = 1, b->askt = now(); else mican(b, !n);
   return 1;
 }
 /* the dialog covers us; we are back, or hidden under another app: answered */
-static void pause(void *a) { br *b = me(a); if (b->a == a && b->ask) b->ask = 2; }
-static void resume(void *a) { br *b = me(a); if (b->a == a && b->ask == 2) mican(b, !perms(a, 2)); }
+static void pause(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 0; if (b->ask) b->ask = 2; }
+static void resume(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 1; if (b->ask == 2) mican(b, !perms(a, 2)); }
 
 
 /* the whole screen: getWindow().getDecorView().setSystemUiVisibility(immersive sticky,
@@ -1232,7 +1233,7 @@ static void destroy(void *a) {
   br *b = me(a);
   if (b->stay) {                               /* the decks run on; an old activity's end, one taken over, is nothing */
     if (b->a == a) {
-      mican(b, 0);
+      b->resumed = 0; mican(b, 0);
       pthread_mutex_lock(b->act); b->a = 0; pthread_mutex_unlock(b->act);
       b->shown = 0; b->vh = 0; b->bare = 1;
     }
