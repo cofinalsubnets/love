@@ -126,6 +126,35 @@ for t in x64 a64 rv64; do
   fi
 done
 
+# a call spliced as statements is an inlined copy, one inside another too: its callee, its call's place, its names
+cat > "$d/i.c" <<'EOF'
+static long sum;
+__attribute__((noinline)) long opq(long v) {
+  sum += v;
+  return sum; }
+static inline __attribute__((always_inline)) void add(long v, int n) {
+  long t = v * n;
+  opq(t);
+  sum += t; }
+static inline __attribute__((always_inline)) void both(long q) {
+  long u = q + 1;
+  opq(u);
+  add(u, 2); }
+int main(int c, char **v) {
+  add(c + 4, c + 2);
+  both(c + 9);
+  opq(c);
+  return 0; }
+EOF
+for t in x64 a64 rv64; do
+  mc -t $t -os linux -g "$d/i.c" -o "$d/i.$t"
+  if [ -n "$dd" ]; then
+    "$dd" --verify "$d/i.$t" > "$d/vi.$t" 2>&1 || { cat "$d/vi.$t"; echo "FAIL $name: $t inlined --verify"; exit 1; }
+    n=`"$dd" --debug-info "$d/i.$t" | grep -c DW_TAG_inlined_subroutine`
+    [ "$n" = 3 ] || { echo "FAIL $name: $t has $n inlined copies, not 3"; exit 1; }
+  fi
+done
+
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
 mc -t x64 -os linux -c "$d/t.c" -o "$d/t0.o"
@@ -154,7 +183,12 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
       -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p' ./l.x64 ) > "$d/gdbl.out" 2>&1
   l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.out" | tr '\n' ' '`
   [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break opq' -ex run -ex bt -ex 'up' -ex 'print t' -ex continue -ex continue -ex bt -ex up -ex up -ex 'print u' \
+      -ex continue -ex bt ./i.x64 ) > "$d/gdbi.out" 2>&1
+  l=`sed -n 's/^#\([0-9]\)  *\(0x[0-9a-f]* in \)\{0,1\}\([a-z]*\) (.*i\.c:\([0-9]*\)$/\1\3:\4/p; s/^\$[0-9]* = //p' "$d/gdbi.out" | tr '\n' ' '`
+  [ "$l" = '0opq:3 1add:5 2main:14 1add:5 15 0opq:3 1add:5 2both:9 3main:15 1add:5 2both:9 <optimized out> 0opq:3 1main:16 ' ] \
+    || { cat "$d/gdbi.out"; echo "FAIL $name: gdb's inlined copies: $l"; exit 1; }
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals and locals; a64 raster.c: $holes function(s) without an fde"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; a64 raster.c: $holes function(s) without an fde"

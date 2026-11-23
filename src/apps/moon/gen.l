@@ -93,7 +93,7 @@
        (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
        (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
                      [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
-       (pin g 'dlv ([nm (map ([k par bs] \ [k par (map (b \ ((cite 'moon 'dlnm) <b . home b)) bs)]) (g 'dlsc))
+       (pin g 'dlv ([nm (map ([k par bs in] \ [k par (map (b \ (<b . home b)) bs) in]) (g 'dlsc))
                   (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
    ; the frame base's distance under the cfa, () where no cfa is described
    (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())
@@ -3493,8 +3493,20 @@
        ; if's test, 'expr a conditional or looped position: the body's one expression in place, nothing
        ; hoisted; ('exprh ws) the same where a non-trapping arg may hoist to a decl, not inside ws.
        ; always_inline whose returns do not fold away splices again on the jump lane
-       (site nm as d mode) (site1 nm as d mode () @ r
-                              (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
+       (site nm as d mode)
+        (: k (n9 'k) r (site1 nm as d mode ())
+           (? (two? r) (dlsite nm k mode r d)
+              !(peep (g 'alw) nm ()) r
+              (: k2 (n9 'k) (dlsite nm k2 mode (site1 nm as d mode 1) d))))
+       ; under -g a splice laid as statements has a mark at each end (lo.l dlopen), at the call's
+       ; place: st9's 'l, in a copy the copied body's `{`. a lone expression has no statement to mark, and a pushed-down test holds the caller's arms
+       (dlsite nm0 k mode r d)
+        (: nm <(split "`" nm0)
+           at (two? >d ? (peep (g 'dlfnl) <(split "`" <d) ()) (st9 'l))
+           (st? s) (<s != 'decl || any (p \ starts? <p "`r") <>s)
+           (at @ ([f l] && two? r && mode != 'expr && !(two? mode && elem <mode '(exprh push)) && any st? <r)
+             [([['loc f l 'in k nm]] + <r + [['loc f l 'out k nm]]) <>r]
+             _ r))
        (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced, or always_inline, splices at any depth
@@ -3846,7 +3858,13 @@
            (? (two? st) (<ha + <st)
               (two? fl) fl
               (hxb c d @ r (<r + [['if <>r (hb t d) (hb e d)]]))))
-       (hitems l d) (two? l ? (hs <l d + hitems >l d))
+       ; each item under the mark ahead of it, whichever operand runs first
+       (hitems l d) (: l0 (st9 'l) r (hit l d l0) (pin st9 'l l0, r))
+       (hit l d at)
+        (two? l ?
+           (: at2 (<l @ ('loc . f . n . _) [f n] _ at)
+              (here _) (pin st9 'l at2, hs <l d)
+              (here 0 + hit >l d at2)))
        [<rf <>rf <>>rf ['blk (hitems (dprune !(ilp32? g) ety <>(rf 3)) [<>rf])]])
    ; a test that folds (in C's types) prunes its dead arm before anything splices in: gcc's
    ; `__builtin_constant_p(n) ? f(n) : g(n)` never lays f's "i"(n). an arm a jump may reach (a label,
@@ -4927,7 +4945,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'dlfnl {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -4953,7 +4971,8 @@
        _ (pin g 'reach (cgreach <>ast (two? xtra ? <xtra {}) (g 'alias)))
        (recfns fs) (!(two? fs) ? 1
                       (dlsx <fs @ f
-                         (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
+                         (<fs @ ('fn . nm . _ . ('blk (('loc . fl . ln . _) . _)) . _) (pin (g 'dlfnl) nm [fl ln]) _ 0,
+                          elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
                           ; a body that does nothing: a call to it here is its arguments' effects alone
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           ; ..and one that is a single `return E`, for kcall to answer where E is one constant
