@@ -27,7 +27,7 @@
  reach 2.2                                ; how near the altar a kneel goes to it
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap the altar or the bottom to kneel  ·  a top corner leaves"
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap the altar or the bottom to kneel  ·  a top corner leaves, the top's middle the console"
  help-text "h/j/k/l move  ·  u/n look up/down  ·  space kneels  ·  ? keys"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
