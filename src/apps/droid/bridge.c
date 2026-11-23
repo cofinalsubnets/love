@@ -7,6 +7,7 @@
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, each pixel the whole number of the window's that fit
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
+                     'B' u8 on: Back is love's, from the bottom of a stack, where it else backs out
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
                      'D': the decks asked for, as 'D' records
@@ -128,7 +129,7 @@ enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOE
 /* a session: a love, the windows it started in a stack, a socket of its own so they land here */
 enum { NDECK = 8 };
 typedef struct {
-  int pid, lsock, csock, typing;
+  int pid, lsock, csock, typing, back;    /* back: its love keeps Back, which else backs out */
   int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
 } deck;
 
@@ -365,7 +366,7 @@ static void input(br *b) {
     int handled = 1;
     if (AInputEvent_getType(e) == 1) {
       int k = AKeyEvent_getKeyCode(e), down = AKeyEvent_getAction(e) == 0;
-      handled = k != 4 || b->d->nunder;   /* back backs out, or a window over a love takes it */
+      handled = k != 4 || b->d->nunder || b->d->back;   /* back backs out, or a window over a love takes it */
       if (handled) put(b, 'K', down, k, down ? typed(b, e) : 0);
     } else {
       int raw = AMotionEvent_getAction(e), ac = raw & 0xff, ix = raw >> 8 & 0xff, vh = vis(b);
@@ -976,6 +977,9 @@ static void *loop(void *p) {
         bad = readall(fd, &on, 1);
         if (!bad && fd == o->csock) { if (o == b->d && on != o->typing) keyboard(b, b->env, on); o->typing = on; }   /* up is a toggle */
         else if (!bad) o->utyping[covered(o, fd)] = on;
+      } else if (!bad && k == 'B') {
+        bad = readall(fd, &on, 1);
+        if (!bad && fd == (o->nunder ? o->under[0] : o->csock)) o->back = on;
       } else if (!bad && k == 'C') bad = copy(b, fd);
       else if (!bad && k == 'V') { if (fd == b->d->csock) paste(b); }
       else if (!bad && k == 'D') {
@@ -1072,6 +1076,7 @@ static void spawn(br *b, deck *d) {
       if (!*o) mine = 1; }
     if (!mine) ev[e++] = *v; }
   ev[e] = 0;
+  d->back = 0;
   d->pid = fork();
   if (!d->pid) { dup2(b->logw, 1); dup2(b->logw, 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
 }

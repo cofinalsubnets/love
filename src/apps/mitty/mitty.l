@@ -138,7 +138,7 @@
  (mw-args as) (? (two? as && <as = "-f") (two? >as ? >>as ()) as)
  ; --- the terminal: a program in a window, the shell when none; it ends with the program.
  ;     answers 0, or 1 and why it could not. a program asks a phone's keyboard away by ?7727,
- ;     and -k starts with it away ---
+ ;     and -k starts with it away, and Back nothing, until the program asks it ---
  (mitty-main as1)
   (: away (two? as1 && <as1 = "-k") as0 (away ? >as1 as1) font (mw-font as0) as (mw-args as0)
   (window-open 640 384 "mitty" @ win
@@ -150,7 +150,7 @@
          p (hopen (two? as ? as (string? me ? [me "lush"] ["sh"])) r c)
          (? (atom? p) (say err ("mitty: cannot start: " + show p + "\n"), flush err, window-close win, 1)
             (: gx (hbox p) m (hmas p) dirty {1} held {'typing (away ? 0 1)}
-               _ (away ? (scribe (peep gx () 0) "\e[?7727h") 0) _ (window-typing win (held 'typing))
+               _ (away ? (scribe (peep gx () 0) "\e[?7727h") 0) _ (window-typing win (held 'typing)) _ (away ? (window-back win 1) 0)
                (send s) (0 < #s ? (peer (peep gx () 0) 0, say m s, flush m) 0)
                ; shift with pgup and pgdn look back, half a screen at a time
                (key k) (: sc (peep gx () 0) n (gaze sc 1 // 2)
@@ -161,7 +161,7 @@
                ; the clipboard and the keyboard, as the program last said
                (turn _) (: sc (peep gx () 0) want (gaze sc 13 ? 0 1)
                            (clipped sc @ (pc + ";" + d) (d = "" || d = "?" ? 0 (window-own win 'clipboard (b64d d))) _ 0,
-                            want = held 'typing ? 0 (pin held 'typing want, window-typing win want)))
+                            want = held 'typing ? 0 (pin held 'typing want, window-typing win want, want && peep win 'back 0 ? (window-back win 0) 0)))
                look (mw-face win gx font held dirty
                      {'send send 'key key 'wants (r \ c \ b \ 1) 'size (r \ c \ settty m r c)
                       'paste (t \ 0 < #t ? (send (pasted (peep gx () 0) t)) 0)

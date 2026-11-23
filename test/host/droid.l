@@ -264,10 +264,20 @@
    _ (rest 50)
    ev0 (window-events dw-w)
    on (window-thumbs dw-w)
+   _ (dw-take 2)
    _ (say dc (dw-rec 84 0 10 20 + dw-rec 84 6 30 40 + dw-rec 84 5 30 41), flush dc)
    _ (rest 50)
    ev (window-events dw-w)
-   (test (ev0 = [['down 1]]) (on = 1) (ev = [['finger 0 0 10 20] ['finger 1 2 30 40] ['finger 1 1 30 41]])))
+   ; Back asked apart: its own key, a keyboard's esc still 1
+   bk (window-back dw-w 1)
+   dw-b1 (dw-take 2)
+   _ (say dc (dw-rec 75 1 4 0 + dw-rec 75 0 4 0 + dw-rec 75 1 111 0), flush dc)
+   _ (rest 50)
+   ev1 (window-events dw-w)
+   _ (window-back dw-w 0)
+   dw-b0 (dw-take 2)
+   (test (bk = 1) (dw-b1 = [66 1]) (dw-b0 = [66 0]) (ev1 = [['down 362] ['up 362] ['down 1]])
+         (ev0 = [['down 1]]) (on = 1) (ev = [['finger 0 0 10 20] ['finger 1 2 30 40] ['finger 1 1 30 41]])))
 (: _ (window-close dw-w) _ (close dc) _ (close dw-l) _ (unlink dw-path) 0)
 
 ; the framework's door: a fake bridge answers each op by its letter and keeps the records;
@@ -342,12 +352,13 @@
    (dm-up p) (: _ (unlink p) l (listen ['unix p])
       pid (spawn ["env" ("LOVE_FACE=" + p) ("HOME=" + dm-d) ("LOVE_NEST=" + dm-d) "HORN=none" "DISPLAY=" dm-love "src/apps/droid/lush.l"])
       [l pid])
-   ; a client: its first record, then 1 once it drew and 0 what it types, 'I's, read off between its frames
-   (dm-take l) (: c (accept l) _ (say c (dw-rec 83 0 320 240), flush c) [c {0 () 1 0}])
+   ; a client: its first record, then 1 once it drew 0 what it types, 2 whether Back is its, 'I's, read off between its frames
+   (dm-take l) (: c (accept l) _ (say c (dw-rec 83 0 320 240), flush c) [c {0 () 1 0 2 ()}])
    (dm-skip c n) (n < 1 ? 0 (see c, dm-skip c (n - 1)))
    (dm-u c) (: a (see c) b (see c) (a + 256 * b))
    (dm-read c t) (: k (see c)
       (? (k = 73) (: v (see c) (pin t 0 (v . t 0), dm-read c t))
+         (k = 66) (: v (see c) (pin t 2 (v . t 2), dm-read c t))
          (k = 70) (: w (dm-u c) _ (dm-u c) _ (dm-u c) n (dm-u c) (dm-skip c (4 * w * n), pin t 1 1, dm-read c t))
          0))
    (dm-wait f n) (? (f ()) 1 (n < 1) 0 (rest 50, dm-wait f (n - 1)))
@@ -365,7 +376,8 @@
    dm-pid (dm-kids (dm-a 1) @ (k . _) (dm-kids k @ (j . _) j 0) 0)
    _ (0 < dm-pid ? (still dm-pid 15) 0)
    dm-back (dm-wait (_ \ dm-1 1 0 = [1 0]) 100)
-   dm-t2 (dm-1 1 0)
+   _ (rest 100)
+   dm-t2 (dm-1 1 0) dm-bk (dm-1 1 2)
    _ (still (dm-a 1) 9) _ (wait (dm-a 1)) _ (close <dm-1) _ (close <dm-a) _ (unlink dm-path)
    ; a later deck
    dm-b (dm-up (dm-path + ".1"))
@@ -376,6 +388,6 @@
    _ (still (dm-b 1) 9) _ (wait (dm-b 1)) _ (close <dm-3) _ (close <dm-b) _ (unlink (dm-path + ".1")) _ (wait (spawn ["rm" "-r" dm-d])))
 (test
  (dm-second = 1) (dm-t1 = [0]) (dm-drew = 1) (0 < dm-pid)
- (dm-back = 1) (dm-t2 = [1 0])
+ (dm-back = 1) (dm-bk = [0 1]) (dm-t2 = [1 0])
  (dm-none = 0) (dm-t3 = [1]))
 (puts "droid: ok") (putc 10)

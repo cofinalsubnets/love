@@ -254,14 +254,14 @@
    ; the right half looking, and a touch that stays put a tap
    stick (lv 'stick) fg {}
    _ (stick && win ? (window-thumbs win) 0)
-   ; ..a phone's console: a tap at the top's middle opens it and puts it away, as esc does; the
+   ; ..a phone's console: a tap at the top's middle opens it and puts it away, as esc and Back do; the
    ; keyboard up and its touches the panes' while it is up, the gpu let go, which would hide it
    pc {'on 0}
    (phone-con _) (: on (con 'on) gp (st 'gpu) (? (!phone || on = pc 'on) ()
      (: _ (pin pc 'on on) _ (each (keys fg) (i \ pin fg i ())) _ (each (keys held) (c \ pin held c ()))
         (on ? (: _ (tablet? gp && tablet? (gp 'g) ? ((cite 'gpu 'gpu-close) (gp 'g), pin st 'gpu 'off, pin pc 'gpu 1) 0) (pin win 'thumbs 0, window-typing win 1))
               (: _ (peep pc 'gpu 0 ? (pins pc 'gpu 0, pin st 'gpu ()) 0) (window-thumbs win))))))
-   (phone-shut? e) (phone && con 'on && (<e = 'press ? (view-middle? st (e 2) (e 3)) (<e = 'down && e 1 = 1)))
+   (phone-shut? e) (phone && con 'on && (<e = 'press ? (view-middle? st (e 2) (e 3)) (<e = 'down && elem (e 1) [1 362])))
    (axis slot want) (: old (held slot @ h (h != () ? <h ()))
      (? (want = old) ()
         (want = ()) (pin held slot (), ())
@@ -382,7 +382,7 @@
      (side on) ((cite 'droid 'droid-side) on)
      (? (!asked && (o 'md != () || !(window-here? ()))) (tty ())
         (side 1, window-open 640 400 "lore" @ win
-           (? (tablet? win) (window-thumbs win,
+           (? (tablet? win) (window-thumbs win, window-back win 1,
                              mind (_ \ walk (pins o 'md 'window 'win win)) () (_ \ (window-close win, side 0)), 0)
               asked (side 0, say err ("lore: no window (" + show win + ")\n"), flush err, 1)
               (side 0, tty ())))))
