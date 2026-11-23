@@ -540,6 +540,34 @@
                     (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
+   ; -g's types for obj.l, the C left behind: (types vars sigs). types is a list each entry of
+   ; which names the others by index: (base name enc size) (ptr size j) (arr j n) (struct name size
+   ; members union?) (decl name) (fn j) (unspec name), j () for void; a member (name j off), a
+   ; bit-field's (name j off bitoff width). vars ((name j external?)..) the unit's globals, sigs a
+   ; function's (ret ((param j)..)) by name
+   (dwtys w stag ast svars sigs)
+    (: tb (pin {} 'n 0)
+       base {'char ["char" 6 1] 'schar ["signed char" 6 1] 'cchar ["char" 8 1] 'uchar ["unsigned char" 8 1]
+             'bool ["_Bool" 2 1] 'short ["short" 5 2] 'ushort ["unsigned short" 7 2] 'int ["int" 5 4]
+             'uint ["unsigned int" 7 4] 'long ["long" 5 w] 'ulong ["unsigned long" 7 w] 'llong ["long long" 5 8]
+             'ullong ["unsigned long long" 7 8] 'float ["float" 4 4] 'double ["double" 4 8]
+             'i128 ["__int128" 5 16] 'u128 ["unsigned __int128" 7 16]}
+       ; an entry's index is taken before its parts are, so a struct may point at itself
+       (ix ty) (? (ty = 'void) ()
+                  (show ty @ k (peep tb k -1 @ i (? (0 <= i) i
+                                                    (: j (tb 'n) _ (pins tb 'n (j + 1) k j) (pin tb j (ent ty), j))))))
+       (mem m) (@ m (nm . off . mt . _) (bitf? mt ? [nm (ix (mt 1)) off (mt 2) (mt 3)] [nm (ix mt) off]))
+       (ent ty)
+        (? (ptr? ty) ['ptr w (ix (ty 1))]
+           (arr? ty) ['arr (ix (ty 1)) (ty 2)]
+           (stru? ty) (peep stag (ty 1) () @ (fl . sz . _) ['struct (ty 1) sz (map mem fl) (1 < #fl && !(any (m \ m 1 != 0) fl))]
+                         _ ['decl (ty 1)])
+           (fn? ty) ['fn (two? >ty ? ix (ty 1) ())]
+           (peep base ty () @ () ['unspec (show ty)] b ('base . b)))
+       fs (ast 1)
+       vs (catmap (f \ f @ ('gdecl ds) (map (d \ [<d (ix (d 1)) !(peep svars <d 0)]) (filter (d \ !(fn? (d 1))) ds)) _ ()) fs)
+       sg (foldl (\ t f (f @ ('fn . nm . ps . _) (pin t nm [(ix <(peep sigs nm ['void])) (map (p \ [<p (ix (p 1))]) ps)]) _ t)) {} fs)
+       [(map tb ^(tb 'n)) vs sg])
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro hids]
@@ -566,7 +594,8 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
-                          (dbg ? [src (cwd 0) (ua || us)])]   ; -g: the unit, its dir, and whether .eh_frame serves its unwind
+                          ; -g: the unit, its dir, whether .eh_frame serves its unwind, and its types
+                          (dbg ? [src (cwd 0) (ua || us) (dwtys (elem tgt '(x64 a64 rv64) ? 8 4) stag ast svars sigs)])]
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")

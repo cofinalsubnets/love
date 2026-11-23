@@ -787,8 +787,8 @@
 
    ; -g's line tables, after the lay: each mark lo laid is a label .dl.K:LINE:FILE (.dlf.K: a
    ; body's `{`), each code lane with one a sequence, and a compile unit (name, dir, the lanes
-   ; as its ranges) over them, a subprogram for each function laid, at its body's `{`. dl:
-   ; (unit dir eh?), gfn the global functions
+   ; as its ranges) over them, a subprogram for each function laid, at its body's `{`, its
+   ; types and globals. dl: (unit dir eh? (types vars sigs)), moon's dwtys; gfn the global functions
    (o-dwarf lanes dl fnl gfn)
     (: (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(_):\(n):\(f)" [o 0 (read n) f] ())
                                 (starts? s ".dl.") (s @ ".dl.\(_):\(n):\(f)" [o 1 (read n) f] ())
@@ -835,10 +835,18 @@
                               [(bs + o-zeros 16) ([(#bs + 8) 'abs64 k (q 1 - a0) 0] . [#bs 'abs64 k (0 - a0) 0] . rels)])))
                  [() ()] sqs)
        rgl [".debug_ranges" 1 0 1 (<rg + o-zeros 16) (rev <>rg) {(name ".dbg.ranges") 0}]
-       ; 1 the unit, 2 a global function, 3 a static one: name, pc and length, the body's `{`
-       ; as its place, the cfa its frame base
-       sub (\ ex ([46 0 3 8 17 1 18 6 58 15 59 15] + (ex ? [63 25] ()) + [64 24 0 0]))
-       ab [".debug_abbrev" 1 0 1 ([1 17 1 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0 2] + sub 1 + [3] + sub () + [0])
+       ; the abbrevs, by code: 1 the unit; 2..5 a function, global or static, typed or void: name,
+       ; pc and length, its body's `{` as its place, the cfa its frame base, its params below it;
+       ; 6 a param; 7.. the types (ty), 17 18 a variable, global or static, at its address
+       (sub ex ty) ([46 1 3 8 17 1 18 6 58 15 59 15] + (ty ? [73 19] ()) + [39 25] + (ex ? [63 25] ()) + [64 24 0 0])
+       ab [".debug_abbrev" 1 0 1 ([1 17 1 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0]
+                                  + catall (o-mapi (\ i a ((i + 2) . a)) [(sub 1 1) (sub () 1) (sub 1 ()) (sub () ())
+                                       [5 0 3 8 73 19 0 0] [36 0 3 8 62 11 11 11 0 0] [15 0 11 11 73 19 0 0] [15 0 11 11 0 0]
+                                       [19 1 3 8 11 15 0 0] [23 1 3 8 11 15 0 0] [13 0 3 8 73 19 56 15 0 0]
+                                       [13 0 3 8 73 19 107 15 13 15 0 0] [1 1 73 19 0 0] [33 0 47 15 0 0] [33 0 0 0]
+                                       [52 0 3 8 73 19 63 25 2 24 0 0] [52 0 3 8 73 19 2 24 0 0] [19 0 3 8 60 25 0 0]
+                                       [59 0 3 8 0 0] [21 0 39 25 73 19 0 0] [21 0 39 25 0 0]])
+                                  + [0])
            () {(name ".dbg.abbrev") 0}]
        ; per code lane, its functions by pc: (lo label length name file line global?)
        (fns i l)
@@ -853,12 +861,41 @@
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
        pre (le16 4 + le32 0 + [8] + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
        cu0 (pre + le32 0 + le64 0 + le32 0)
+       dt (3 < #dl ? (dl 3) [() () {}])
+       ; a type's die, its refs by r: each is ref4, so its size never waits on where the rest go
+       (ty r e)
+        (e @ ('base nm en sz) ([7] + str nm + [en sz])
+             ('ptr sz j) (j = () ? [9 sz] ([8 sz] + r j))
+             ('arr j n) ([14] + r j + (charm? n && 0 < n ? (15 . uleb (n - 1)) [16]) + [0])
+             ('struct nm sz ms u) ([(u ? 11 10)] + str nm + uleb sz
+                                    + catmap (m \ (@ m [mn j off] ([12] + str mn + r j + uleb off)
+                                                       [mn j off bo bw] ([13] + str mn + r j + uleb (off * 8 + bo) + uleb bw)))
+                                             (filter (m \ m 1 != ()) ms) + [0])
+             ('decl nm) ([19] + str nm)
+             ('fn j) (j = () ? [22] ([21] + r j))
+             ('unspec nm) ([20] + str nm))
+       tys (dt 0)
+       tof (rev >(foldl (\ a e ((<a + #(ty (_ \ le32 0) e)) . a)) [(4 + #cu0)] tys))
+       (ref j) (le32 (tof j))
+       tyb (catmap (ty ref) tys)
+       ; a variable laid here, at its label
+       lbs (map (l \ l 6) lanes)
+       (laid? nm) (any (lb \ o-has? lb (name nm)) lbs)
+       (var acc v)
+        (@ acc [bs rels]
+           (@ v [nm j ex] (? (j = () || !(laid? nm)) acc
+                             (: b0 ([(ex ? 17 18)] + str nm + ref j + [9 3])
+                                [(bs + b0 + o-zeros 8) ([(4 + #bs + #b0) 'abs64 (name nm) 0 0] . rels)]))))
+       vs (foldl var [(cu0 + tyb) ()] (dt 1))
        (die acc f)
         (@ acc [bs rels]
            (@ f [_ k n nm fl ex]
-              [(bs + uleb (ex ? 2 3) + str nm + le64 0 + le32 n + uleb <fl + uleb (fl 1) + [1 156])
-               ([(4 + #bs + 1 + #(str nm)) 'abs64 k 0 0] . rels)]))
-       ds (foldl die [cu0 ()] fs)
+              (: sg (peep (dt 2) nm [() ()])
+                 [(bs + uleb (? (<sg = ()) (ex ? 4 5) (ex ? 2 3)) + str nm + le64 0 + le32 n + uleb <fl + uleb (fl 1)
+                      + (<sg = () ? () (ref <sg)) + [1 156]
+                      + catmap (p \ ([6] + str <p + ref (p 1))) (filter (p \ p 1 != ()) (sg 1)) + [0])
+                  ([(4 + #bs + 1 + #(str nm)) 'abs64 k 0 0] . rels)])))
+       ds (foldl die vs fs)
        cu (<ds + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)
               ([[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]

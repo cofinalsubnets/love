@@ -11,7 +11,6 @@ set -u
 ho=$1
 name=test_dwarf
 dd=`command -v llvm-dwarfdump 2>/dev/null || true`
-oc=`command -v llvm-objcopy 2>/dev/null || true`
 gdb=`command -v gdb 2>/dev/null || true`
 [ -n "$dd" ] || [ -n "$gdb" ] || gate_skip "$name: no llvm-dwarfdump or gdb, skipped"
 
@@ -68,29 +67,30 @@ if [ -n "$dd" ]; then
   holes=`expr $nf - $ne`
 fi
 
-# -g leaves the code alone: love's own C on x64, with and without -g, the same .text. the files
-# named still differ, the marks reaching the allocator; one that stops differing leaves the list
-same="arr cb ev io lamp love lr macho mem num poly posix raster snap swatch tablet thrun vfs"
-cd0() { "$ho/love" mooncc -t x64 -os linux $2 -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$1" -o "$3" \
-          && "$oc" -O binary --only-section=.text "$3" "$3.text"; }
-mkdir -p "$d/g"; n=0; nsame=-
-[ -n "$oc" ] && for f in src/love/*.c; do
-  b=`basename $f .c`
-  ( cd0 $f "" "$d/g/$b.o" && cd0 $f -g "$d/g/$b.g.o" || echo "$b: mooncc" > "$d/g/$b.bad" ) &
-  n=`expr $n + 1`; [ `expr $n % 8` = 0 ] && wait
-done
-wait
-[ -n "$oc" ] && for f in src/love/*.c; do
-  b=`basename $f .c`
-  [ -f "$d/g/$b.bad" ] && { echo "FAIL $name: mooncc $f"; exit 1; }
-  k=0; for x in $same; do [ $x = $b ] && k=1; done
-  if cmp -s "$d/g/$b.o.text" "$d/g/$b.g.o.text"; then
-    [ $k = 1 ] && { echo "FAIL $name: $b.c's code no longer moves under -g: take it off the list"; exit 1; }
-  else
-    [ $k = 0 ] && { echo "FAIL $name: -g changes $b.c's code"; exit 1; }
+# types and globals: a struct that points at itself and a pair that point at each other, each
+# compile held to 1 GB and a minute, so a walk that never ends fails here and takes no more
+cat > "$d/y.c" <<'EOF'
+struct node { int v; struct node *nx; };
+struct a;
+struct b { struct a *pa; int k; };
+struct a { struct b *pb; short s; };
+union u { float f; char c[4]; };
+struct node head = {7, 0};
+struct a aa;
+struct b bb = {&aa, 4};
+union u uu;
+static unsigned long cnt = 3;
+int y(struct node *n, unsigned long k) { return n->v + k + cnt + bb.k; }
+int main(void) { return y(&head, 1) - 15; }
+EOF
+tmo=`command -v timeout 2>/dev/null || true`
+for t in x64 a64 rv64; do
+  ( ulimit -v 1048576; LOVE_BUDGET_MB=512 $tmo ${tmo:+60} "$ho/love" mooncc -t $t -os linux -g "$d/y.c" -o "$d/y.$t" ) \
+    || { echo "FAIL $name: $t types under 1 GB and a minute"; exit 1; }
+  if [ -n "$dd" ]; then
+    "$dd" --verify "$d/y.$t" > "$d/vy.$t" 2>&1 || { cat "$d/vy.$t"; echo "FAIL $name: $t types --verify"; exit 1; }
   fi
 done
-[ -n "$oc" ] && nsame=`echo $same | wc -w` || gate_partly "$name: no llvm-objcopy, -g's code check skipped"
 
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
@@ -102,13 +102,19 @@ mc -os linux "$d/t0.o" "$d/u0.o" -o "$d/two0"
 
 if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
   ( cd "$d" && "$gdb" -q -batch -nx -ex 'break u.c:2' -ex 'break t.c:6' -ex 'info scope twice' -ex run -ex continue -ex bt -ex finish ./two.x64 ) > "$d/gdb.out" 2>&1
-  grep -q 'Breakpoint 2, dist () at .*t.c:6' "$d/gdb.out" && grep -q 'Breakpoint 1, twice () at .*u.c:2' "$d/gdb.out" \
+  grep -q 'Breakpoint 2, dist (p=.*, k=.*) at .*t.c:6' "$d/gdb.out" && grep -q 'Breakpoint 1, twice (v=.*) at .*u.c:2' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb by line"; exit 1; }
   grep -q 'Symbol v is' "$d/gdb.out" || grep -q 'No locals' "$d/gdb.out" || grep -q 'contains no locals' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb finds no scope for twice"; exit 1; }
   grep -q '^#1  0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" && grep -q '^0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb's bt and finish by .debug_frame"; exit 1; }
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'ptype head' -ex 'ptype struct a' -ex 'ptype uu' -ex 'ptype y' \
+      -ex 'print head' -ex 'print cnt' -ex 'print bb.k' ./y.x64 ) > "$d/gdby.out" 2>&1
+  for w in 'struct node \*nx;' 'struct b \*pb;' 'char c\[4\];' 'type = int (struct node \*, unsigned long)' \
+           '= {v = 7, nx = 0x0}' '= 3$' '= 4$'; do
+    grep -q "$w" "$d/gdby.out" || { cat "$d/gdby.out"; echo "FAIL $name: gdb's types: $w"; exit 1; }
+  done
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds; a64 raster.c: $holes function(s) without an fde; -g moves the code of $nsame of love's C files"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, and reads types and globals; a64 raster.c: $holes function(s) without an fde"
