@@ -196,11 +196,19 @@
  (brush-of r) (r 'land @
    () (: sh (r 'shape)
          b0 (sh 'box @ () (: p (sh 'prism) (brush-prism (r 'air) (p 0) (p 1) (p 2))) bx (brush-box (r 'air) (bx 0) (bx 1)))
-         (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0) 'sheer (peep r 'sheer 0)))
+         (pins (brush-cuts b0 (r 'cuts)) 'skin (r 'skin) 'whole (peep r 'whole 0) 'open (peep r 'open 0) 'sheer (peep r 'sheer 0)
+               'opening (peep r 'opening 0)))
    rs (pins (brush-land rs) 'skin (r 'skin) 'sig (foldl (\ a q (a + q 0 + 3.1 * q 1 + 7.3 * q 2)) 0.0 (cats rs))))
  (doorway d) (: ax (d 'ax) p (P ax (d 'c - 0.5 * d 'w) (d 'y) (d 'a - 0.02)) q (P ax (d 'c + 0.5 * d 'w) (d 'y + d 'h) (d 'b + 0.02))
    (brush-box 1 [(min (p 0) (q 0)) (d 'y) (min (p 2) (q 2))] [(max (p 0) (q 0)) (d 'y + d 'h) (max (p 2) (q 2))]))
- (brushes-of lv) (map brush-of (lv 'brushes) + map doorway (lv 'doors))
+ ; ..a window's opening or a doorway with no skin of its own takes the skin of what it cuts:
+ ; of the last brush before it its box overlaps more than a hair, a solid before an air
+ (brushes-of lv) (: (over a b) (all (k \ a 'lo k + 1e-4 < b 'hi k && b 'lo k + 1e-4 < a 'hi k) ^3)
+   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b
+                     (: os (filter (q \ two? (q 'skin) && q 'land = () && over q b) bs) s (filter (q \ q 'air = 0) os)
+                        (two? os ? (pins b 'skin (<(rev (two? s ? s os)) 'skin)) b)))
+   ws (rev (foldl (\ a b (skinned (rev a) b . a)) () (map brush-of (lv 'brushes))))
+   (ws + map (d \ skinned ws (pins (doorway d) 'opening 1)) (lv 'doors)))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
  ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
@@ -1180,8 +1188,27 @@
         res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (sv j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
                             (map (pc \ [(pc 0) (t 3)]) pcs)))
                     ks)
-        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] res)
-        (mesh (vs + catmap (q \ q 0) res) (map ts (filter (i \ peep hit i () = ()) ^n) + tr 1))))
+        ; ..and every edge, the pieces' and the whole triangles' beside them, taking the corners
+        ; the cuts laid on it, so none meets a corner mid-edge: bent round a surface, such an
+        ; edge's middle would stay a chord where the corner's goes out on the curve, the sky
+        ; showing between
+        (cell p) ((floor (p 0 / 2.0) + 4096) * 8192 + floor (p 2 / 2.0) + 4096)
+        ; ..one by a wrapping surface's seam laid on its far side too, where the same edge is
+        wr (tablet? sf ? [(sf 'lx) 0.0 (sf 'lz)] ())
+        (moved p k s) (map (j \ j = k ? (p j + s) (p j)) ^#p)
+        (twins p) (p . (atom? wr ? () (catmap (k \ (? (p k < 2.0) [(moved p k (wr k))] (wr k - 2.0 < p k) [(moved p k -(wr k))] ())) [0 2])))
+        cs (foldl (\ g p (: c (cell p) (pin g c (p . peep g c ())))) {} (catmap twins (catmap (q \ q 0) res)))
+        (near a b) (: lo (cell [(min (a 0) (b 0)) 0.0 (min (a 2) (b 2))]) hi (cell [(max (a 0) (b 0)) 0.0 (max (a 2) (b 2))])
+                      (catmap (i \ catmap (j \ peep cs (lo + i * 8192 + j) ()) ^(hi % 8192 - lo % 8192 + 1)) ^(hi // 8192 - lo // 8192 + 1)))
+        (on-edge a b) (: d (map (k \ b k - a k) ^3) L (dot d d)
+                        ps (catmap (p \ (: t (dot (map (k \ p k - a k) ^3) d / L) e (map (k \ a k + t * d k - p k) ^3)
+                                          (1e-6 < t && t < 1.0 - 1e-6 && dot e e < 1e-10 ? [[t p]] ()))) (near a b))
+                        (map (q \ q 1) (foldl (a \ q \ (two? a && q 0 - <a 0 < 1e-9 ? a (q . a))) () (sortby (x \ y \ x 0 <= y 0) ps) @ l (rev l))))
+        (whole P) (: k #P (catmap (i \ (P i . on-edge (P i) (P ((i + 1) % k)))) ^k))
+        un (map (i \ (: t (ts i) Q (whole [(vs (t 0)) (vs (t 1)) (vs (t 2))]) [i Q])) (filter (i \ peep hit i () = ()) ^n))
+        ps (map (q \ [(whole (q 0)) (q 1)]) res + map (u \ [(u 1) (ts (u 0) 3)]) (filter (u \ #(u 1) > 3) un))
+        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] ps)
+        (mesh (vs + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
    (ground-cut m0 d) (: m (peep d 'land 0 ? (foot-cut m0) m0) (? (!(peep d 'land 0) || atom? cv) m
      (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
         (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
@@ -1535,8 +1562,32 @@
    ; the gpu adds as strong as they are, once relit so it knows them
    (hall-of c) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
      (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1)]] (lit-named pk (relit pk (c 'lit)))))
+   ; ..and on a gpu that keeps a scene, each laid in it once the cells first let it be seen,
+   ; marked down while they do not; but one lit here frame by frame, which it sees and lays
+   ; with the rest; and with them each light's shines and glows at full strength, which it
+   ; takes as strong as the light
+   sg (gk && st 'gpu 'g != () && #dk <= 128 && #ks <= 1024)
+   mo (sg && !(tablet? sf))
+   (kept? c) (: pk (c 'pk) lv (peep pk 'live () @ () (: _ (relit pk (c 'lit)) (pk 'live)) l l)
+               (atom? (lv 'r) || two? (mesh-lamp-slots pk)))
+   can (filter (i \ !(hid && cks i 'deep) && !(cut? i)) ^#cks)
+   ht (sg ? (peep sc 'held () @ () (: t {} (pin sc 'held t, t)) t t) {})
+   _ (sg ? (each (filter (i \ !(peep ht i 0) && kept? (cks i)) can) (i \ pin ht i 1)) 0)
+   held (sg ? (sort (keys ht)) ())
+   vis (: z (iota #cks * 0.0) (atom? can ? z (pin z (int (gem-tray [#can] can)) 1.0)))
+   (scene _) (: (ball c) (: m (c 'mid) [(m 0) (m 1) (m 2) (c 'rad)])
+     (map (i \ (: b (hall-of (cks i)) [(b 0) (b 1) (b 2) (#b > 3 ? (b 3) ()) (ball (cks i)) -1 1.0 0 i])) held
+      + shone 'shine 0 + shone 'glow 1))
+   (shone key g) (catmap (i \ map (q \ (: b (named (q 0) (shine-at (q 0) 1.0 key) [key 1.0]) [(b 0) (b 1) (b 2) () (pk-ball (q 0)) i (q 1) g -1]))
+                                  (sc 'lights i key))
+                         ^#ks)
+   ; ..a packed mesh's ball, kept
+   (pk-ball pk) (pk 'ball @ () (: c (pk 'cols) lo (map (k \ amin (c k)) ^3) hi (map (k \ amax (c k)) ^3)
+                                  b (map (k \ 0.5 * (lo k + hi k)) ^3 + [(0.5 * sqrt (net (map (k \ sq (hi k - lo k)) ^3)))])
+                                (pin pk 'ball b, b))
+                 b b)
    hall (map (q \ hall-of (cks (q 1)))
-             (sort (map (i \ [(far (cks i)) i]) (filter (i \ seen? (cks i) && !(hid && cks i 'deep) && !(cut? i)) ^#cks))))
+             (sort (map (i \ [(far (cks i)) i]) (filter (i \ !(peep ht i 0) && seen? (cks i)) can))))
    ; ..each door slid open along its wall into the wall's thickness, or one opened by hand
    ; swung on its hinge away from who opened it
    sw (peep st 'swing {})
@@ -1545,25 +1596,28 @@
      c (iota (pk 'n) * 8 + 5)
      v (foldl (\ v k (pin v (c + k) ((1.0 - t) * b 0 (c + k) + t * ob 0 (c + k)))) (b 0) ^3)
      (swung [v (b 1)] pk d (w * t * swing-wide)))
-   (door i) (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i) A (d 'ax @ 'z 0 2) ix (iota (pk 'n) * 8)
-              (d 'hand @ 1 (hinged b pk d i) [(pin (b 0) (ix + A) (pk 'cols A + ds i * (d 'w - 0.05))) (b 1)]))
+   (door i) (: pk (sc 'doors i) b (relit pk (sc 'doors-lit i)) d (lv 'doors i) A (d 'ax @ 'z 0 2)
+              (d 'hand @ 1 (hinged b pk d i) (lit-shifted b pk A (ds i * (d 'w - 0.05)))))
    ; ..a glazed one with the glass, after what is seen through it
    (glazed? i) (lv 'doors i 'glass != ())
    doors (map door (filter (i \ !(glazed? i)) ^#(lv 'doors))) glazed (map door (filter glazed? ^#(lv 'doors)))
    ; ..each car where it has got to along its track, its door's leaves slid apart; none once gone
    (moved b pk k o) [(pin (b 0) (iota (pk 'n) * 8 + k) (pk 'cols k + o)) (b 1)]
+   ; ..or on a gpu, off a surface, laid once by its name x and moved there by the gpu
+   (shifted b pk k o x) (mo ? (named pk b x + [() (map (j \ j = k ? (1.0 * o) 0.0) ^3)]) (moved b pk k o))
+   (lit-shifted b pk k o) (shifted b pk k o (mesh-lit-ks pk dk))
    (leaf c s j) (s 'o + (2 * j - 1) * s 'door * (0.5 * c 'dw - 0.05))
    cars (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i) k (c 'ax @ 'z 0 2) o (s 'o)
                          (s 'ph = 'gone ? ()
-                            [(moved (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)]
-                            + map (j \ moved (relit (cs 'door j) (cs 'door-lit j)) (cs 'door j) k (leaf c s j)) ^2
-                            + [(moved (mesh-shine (cs 'bar) 3.0) (cs 'bar) k o)]
-                            + (tablet? (cs 'props) ? [(moved (relit (cs 'props 'pk) (cs 'props 'lit)) (cs 'props 'pk) k o)] ()))))
+                            [(lit-shifted (relit (cs 'body) (cs 'body-lit)) (cs 'body) k o)]
+                            + map (j \ lit-shifted (relit (cs 'door j) (cs 'door-lit j)) (cs 'door j) k (leaf c s j)) ^2
+                            + [(shifted (shine-at (cs 'bar) 3.0 'bar) (cs 'bar) k o 'bar)]
+                            + (tablet? (cs 'props) ? [(lit-shifted (relit (cs 'props 'pk) (cs 'props 'lit)) (cs 'props 'pk) k o)] ()))))
                ^#(lv 'cars))
    ; ..and its glass, drawn late
    cpanes (catmap (i \ (: c (lv 'cars i) s (st 'cars i) cs (sc 'cars i)
-                         (s 'ph = 'gone ? () ([(moved (relit (cs 'pane) (cs 'pane-lit)) (cs 'pane) (c 'ax @ 'z 0 2) (s 'o))]
-                                              + map (j \ moved (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
+                         (s 'ph = 'gone ? () ([(lit-shifted (relit (cs 'pane) (cs 'pane-lit)) (cs 'pane) (c 'ax @ 'z 0 2) (s 'o))]
+                                              + map (j \ lit-shifted (relit (cs 'dpane j) (cs 'dpane-lit j)) (cs 'dpane j) (c 'ax @ 'z 0 2) (leaf c s j)) ^2))))
                   ^#(lv 'cars))
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
@@ -1588,7 +1642,7 @@
    ; ..a lift's platform where it has got to, each leaf of its gates swung out as far as it
    ; is open, its pad and tether
    lifts (catmap (i \ (: q (sc 'lifts i) s (st 'lifts i) c (lv 'lifts i) f (q 'fix) u (1.0 - s 'g) w (2 u * (3.0 - 2.0 * u))
-                            ([(moved (relit (q 'pk) (q 'lit)) (q 'pk) 1 (s 'o)) (relit (f 'pk) (f 'lit))]
+                            ([(lit-shifted (relit (q 'pk) (q 'lit)) (q 'pk) 1 (s 'o)) (relit (f 'pk) (f 'lit))]
                              + map (k \ (: l (q 'leaves k) (leaf-swung (relit (l 'pk) (l 'lit)) (l 'pk) c (lift-leaves k) w (s 'o))))
                                    ^#lift-leaves)))
                     ^#(lv 'lifts))
@@ -1602,9 +1656,14 @@
    gates (map (i \ (: q (sc 'gates i) g (lv 'gates i) (gate-swung (relit (q 'pk) (q 'lit)) (q 'pk) g (gate-an g (st 'gates i))))) ^#(lv 'gates))
    ; ..what moves laid on a surface frame by frame, what stands laid with the scene
    (bd l) (tablet? sf ? (map (bent-tris sf) l) l)
-   all (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors + hall + sheets + by 'shine + bd spins + glass + bd glazed + bd cpanes + by 'glow
+   pre (bd orbs + bd hds + bd balls + bd cars + bd lifts + bd gates + bd tears + fences + vines + bd doors)
+   sp (bd spins) gz (bd glazed) cp (bd cpanes)
+   all (pre + hall + sheets + (sg ? () (by 'shine)) + sp + glass + gz + cp + (sg ? () (by 'glow))
         + bd (map (m \ motes-at m (st 'mt)) (sc 'motes)) + bd (strings-at st))
-   _ (gk ? (pins v 'keys (map (b \ b 2) all) 'lamps (map (b \ #b > 3 ? (b 3) ()) all) 'dks dk) 0)
+   _ (gk ? (pins v 'keys (map (b \ b 2) all) 'lamps (map (b \ #b > 3 ? (b 3) ()) all) 'dks dk 'offs (map (b \ #b > 4 ? (b 4) ()) all)
+                 'scene (sg ? {'key [#held (gpu-name st (cks 0 'pk))] 'make scene 'vis vis 'kb ks
+                               'at [(#pre + #hall) (#pre + #hall + #sheets + #sp + #glass + #gz + #cp)]}
+                             ())) 0)
    ; ..the frame kept for a feed's next
    (mesh-frame v [(map (b \ b 0) all) (map (b \ b 1) all)] tx fog (atom? sheets ? 8 136) (tablet? sf && out ? (gain * sk 'k) gain) bare
     @ f (tray? f && !cam? ? (pin st 'framed f, f) f)))
