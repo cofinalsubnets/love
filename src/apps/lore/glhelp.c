@@ -285,6 +285,7 @@ static char const fsrc[] =
  "  vec3 cd = dyed(body * ((0.95 - 0.35 * core - 0.2 * oc * core) * amb + li * clamp((s.y + 0.005) / 0.05, 0.0, 1.0) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * s.y) * sunc\n"
  "   + tw * (0.3 + 0.7 * li) * vec3(0.5, 0.22, 0.14) + 0.8 * (1.0 - day) * vec3(0.06, 0.05, 0.045)));\n"
  "  float sg = kp[26] > 0.5 ? clamp(1.0 - 1.6 * dy, 0.0, 1.0) : 1.0, hz = clamp(1.2 * kp[22], 0.0, 1.0);\n"
+ "  float x = max(0.0, th - ed); cd += kp[14] * (3.0 * disc * exp(-18.0 * x) + clamp((s.y + 0.005) / 0.05, 0.0, 1.0) * 0.6 * exp(-8.0 * x) * exp((mu - 1.0) * 120.0)) * sqrt(sunc);\n"
  "  float g = clamp(0.5 + (th - ed) / sqrt(0.0016 + 2.0 * sd * sd), 0.0, 1.0);\n"
  "  return smogby(mix(sky0, cd, clouded(g + 0.85 * hk * (hz - g))), sg); }\n"
  "float lit(int i, int j, float z) { return i < 0 || j < 0 || i >= ss.x || j >= ss.y || z <= texelFetch(sm, ivec2(i, j), 0).r ? 1.0 : 0.0; }\n"

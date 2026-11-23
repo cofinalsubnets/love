@@ -88,6 +88,12 @@
     (rise y hi t) (: l (low y hi t) (seen l y 0 - seen l (y + 0.08) 0)))
  (test (all (y \ 2.4 < rise y y ()) [0.5 0.1 0.03 0.01]) (: l (low -0.01 -0.01 ()) (near3 0.01 (seen l -0.01) (seen l -0.06))))
  (test (all (h \ 2.4 < rise -0.35 h ax) [0.1 0.02 -0.01]))
+ ; ..and through cloud: the thicker the less, and a full cover's thick clouds none, a thin one's some though it fills the ray
+ (: s [0.3 0.75 (sqrt 0.3475)] seen (wx \ sim \ (: lt (sky-light s wx sim) (c d) (map (q \ q 0) (sky-colour-at lt wx 0.0 (one (d 0)) (one (d 1)) (one (d 2)) 0.0 0.0 sim))
+      [(sky-cloud wx (s 0) (s 1) (s 2) 0.0 0.0 sim) (c s 1 - c [0.36 0.75 (sqrt 0.3079)] 1)]))
+    rows (c \ map (i \ seen (sky-weather c) (46800.0 + 700.0 * i)) ^200) full (filter (q \ 0.99 < q 0) (rows 2)) ds (sort (map (q \ q 1) full))
+    dim (sort (map (q \ q 1) (rows 3)))
+  (test (20 < #full) (0.5 < ds (#ds * 9 // 10)) (ds (#ds // 10) < 0.25) (dim 100 < 0.15)))
  (test (: d (seen (low -0.35 0.2 ax) 0.5) n (seen (low -0.35 -0.25 ax) 0.5) (near3 0.02 d (seen (low 0.2 0.2 ax) 0.775) && 8.0 * n 2 < d 2)))
  ; a level's forms: its sky's weather takes them, a wrong one stops the level
  (: (lv f) (world-read ("(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (start [0 0 0] 0 180) (room [-3 0 -3] [3 3 3]) (sky 12 'clear) " + f + ")")) (skl f) (lv f 'sky))

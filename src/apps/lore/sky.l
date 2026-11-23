@@ -214,14 +214,14 @@
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
-   disc ((1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f @ 0 1.0 0.3))
+   bare (f @ 0 1.0 0.3) disc ((1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * bare)
    sunk (sat ((sy + 0.005) / 0.05) * disc)
    sunc (air-sunc wx sy)
    night [0.05 0.055 0.075]
    amb0 (c+ (c* (1.0 - day) night) (c* (0.483 * day + 0.073 * tw * (1.0 - 0.5 * day)) (air-amb wx sy)))
    grey (cmix night [0.5 0.51 0.53] day)
    amb (c* (f @ 1 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
-   {'sun s 'hi sy 'day day 'tw tw 'sunk sunk 'disc disc 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
+   {'sun s 'hi sy 'day day 'tw tw 'sunk sunk 'disc disc 'bare bare 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the sky. far weighs what lies past the moon, the sun's own disc: 0 is the
  ; sky nearer than it, what a body in front of it shows ---
@@ -233,6 +233,8 @@
     'dark (c+ [0.012 0.016 0.04] (c* (0.06 * (1.0 - up)) [0.6 0.45 0.3]))
     'hk (sat (1.0 - dh / 0.06)) 'd (two? B ? () (deck-at dx dy dz ex ez 0.0))})
  (paint lt wx dx dy dz ex ez sim far a) (paint-by lt wx (rays-of (lt 'turn) dx dy dz ex ez a) sim far)
+ ; ..how fast a cloud's thickness hides the sun's disc, and the glow about it
+ thin 18.0 hazy 8.0
  (paint-by lt wx R sim far) (paint-with lt wx R sim far (thick-by lt wx R sim))
  ; ..[th od]: the cloud down the rays, and what of it lies on toward the sun, in steps
  marches [[0.012 0.6] [0.03 0.8] [0.06 1.0] [0.11 1.2]]
@@ -252,7 +254,7 @@
    ; whatever its height; the rays as high over the ground's edge as the sun is, less up high
    disc (sat ((mu - 0.9995) * 4000.0) * (t? ? 1.0 (sat (0.5 + 300.0 * dy))))
    ay (t? ? (dy + (hi - sy) * (1.0 - max dy -dy)) dy)
-   sky0 (c+ (c+ (c* (1.0 - lt 'day) (dyed wx (R 'dark))) (dusked wx lt (air-at wx hi sx sz t? dx ay dz))) (c* (3.0 * far * disc * lt 'disc) (map sqrt (lt 'sunc))))
+   sky0 (c+ (c+ (c* (1.0 - lt 'day) (dyed wx (R 'dark))) (dusked wx lt (air-at wx hi sx sz t? dx ay dz))) (c* (3.0 * far * disc * lt 'bare) (map sqrt (lt 'sunc))))
    ; ..the clouds: what of the sun gets through the cloud on toward it, their edges about it
    ; bright, the sky on the rest, darker the thicker
    ; ..and under smog the thick of them darker still and the thin lit through
@@ -267,7 +269,10 @@
                       (c* (lit * (sat ((hi + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * hi))) (lt 'sunc)))
                   (c+ (c* (lt 'tw * (0.3 + 0.7 * lit)) [0.5 0.22 0.14])
                       (c* (0.8 * (1.0 - lt 'day)) [0.06 0.05 0.045]))))
-   cd (dyed wx cloudc) sg (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))
+   ; ..and the sun itself through them, its disc by how thick they are and a glow about it wider
+   x (max 0.0 (th - edge wx sim)) up (sat ((hi + 0.005) / 0.05))
+   thru (c* (lt 'bare * (3.0 * far * disc * exp -(thin * x) + up * 0.6 * exp -(hazy * x) * exp ((mu - 1.0) * 120.0))) (map sqrt (lt 'sunc)))
+   cd (c+ (dyed wx cloudc) thru) sg (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))
    ; ..overcast no sky through it; under a dye the clouds that colour too, and the smog a band
    ; low down, the dye's sky over it
    (g \ smog-by wx (cmix sky0 cd (clouded wx (haze-k g (R 'hk) wx sim))) sg))
@@ -293,7 +298,7 @@
    (: n (1.0 * cloud-n) (dr r k o) (: x (sim * lap wx r k * k + o) (x - n * floor (x / n)))
       s (lt 'sun) d (peep wx 'dye ()) (f x) (1.0 * x)
       [(map f ([ex ez (edge wx sim) (dr 0.006 16.0 0.0) (dr 0.0025 16.0 0.0) (dr 0.011 37.0 11.3) (dr -0.004 37.0 -5.1)
-               (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'disc)]
+               (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'bare)]
               + lt 'sunc + [(lt 'cover)] + lt 'amb
               + [(sky-cover wx sim) (wx 'cover) (sky-fall wx) (peep wx 'smog 0.0) (two? d ? 1 0)]
               + (two? d ? d [1.0 1.0 1.0]) + smog-ends wx 0 + smog-ends wx 1 + [(peep wx 'sky () = () ? 0 1)])) (sky-maps () 'cloud) (air-of wx (s 1))]))
