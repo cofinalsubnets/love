@@ -137,7 +137,7 @@ case $tgt in
     GCC=clang
     exitonly=1
     mflags="-os none -Dmain=cc_main -c"
-    refuse="$int128s 364-w128float 297-frameaddr"
+    refuse="$int128s 364-w128float 297-frameaddr 395-asmwide"
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
     # no libc on the board, and no libgcc: what a link of either side cannot close
@@ -193,7 +193,7 @@ case $tgt in
     exitonly=1
     mflags="-os none -Dmain=cc_main -c"
     # no gas dialect: a target asm refuses
-    refuse="$int128s 364-w128float 297-frameaddr 327-bcp-splice 357-asmoutaddr"
+    refuse="$int128s 364-w128float 297-frameaddr 327-bcp-splice 357-asmoutaddr 395-asmwide"
     wide="68-static-assert 120-bfinit 161-enumwide"
     narrow="105-fneg 144-gnubuiltins 266-vaarg-struct"
     nolibc="callpark 100-complex 110-param5 114-rmwlv 115-rmwop 134-tentative 135-uac 146-declscope 147-enumscope
@@ -252,7 +252,7 @@ case $tgt in
     mflags="-os none -Dmain=cc_main -c"
     # no inline atomics yet (s32c1i): a __sync builtin refuses, as v6-M's; no gas dialect, so a
     # target asm refuses
-    refuse="$int128s 364-w128float 297-frameaddr 129-sync 327-bcp-splice 357-asmoutaddr"
+    refuse="$int128s 364-w128float 297-frameaddr 129-sync 327-bcp-splice 357-asmoutaddr 395-asmwide"
     wide="68-static-assert 120-bfinit 161-enumwide"
     # a 64-bit long assumed, past an ILP32 word: a shift by 63 and the like, no answer to hold;
     # 180 takes riscv's template on the reference and none here
