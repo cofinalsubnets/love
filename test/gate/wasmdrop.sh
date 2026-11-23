@@ -36,6 +36,8 @@ inmod "$w/a.wasm" unreached_fn && fail "a function nothing reaches was laid"
 has "$w/a.wasm" _start || fail "_start is not exported"
 has "$w/a.wasm" __love_start || fail "__love_start is not exported"
 has "$w/a.wasm" bycall && fail "a reached function is exported unasked"
+printf 'int wake(int a, int b) { return a + b; }\nint main(void) { return 0; }\n' > "$w/k.c"
+cc -o "$w/k.wasm" "$w/k.c" && has "$w/k.wasm" wake || fail "a wake the program defines is not kept for the loader"
 # a name the loader is asked for and the link did not keep is refused by name
 o=$("$node" test/holo/drop.mjs "$w/a.wasm" extra_fn)
 [ "$o" = "no export extra_fn" ] || fail "a ccall of a dropped function is not refused by name (got '$o')"

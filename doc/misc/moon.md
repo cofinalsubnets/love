@@ -193,6 +193,13 @@ Anything without `-c` is a **link**, through `src/love/holo/link.l`.
   That is what it is for: comparing one function's codegen against another cc's is impossible
   when a splice has rewritten it into its caller. Gated by `test_moon`, both halves — that it
   bites, and that the answer is unchanged;
+- the **wasm link lays what it can reach**: under `-t wasm` a program with a `main` keeps a
+  function only if a call, an address taken in code or a pointer in data reaches it from its
+  exports, and exports `_start`, `__love_start`, `malloc`, `free` and `wake` where it defines
+  them. `-Wl,--export=NAME` adds an export, which is a root, and fails the link by name when
+  nothing defines it; `-Wl,--export-all` lays and exports every function, as a module with no
+  `main` does by itself. A page that calls a function by name asks for it one of those ways.
+  Gated by `test_holowasm` (`test/gate/wasmdrop.sh`);
 - the **semantic** refusals stay loud (`-shared`, `-Wl,`'s payload, `-m..`) — an ignored one
   would be the silent-no-op trap in a cc suit. mooncc **refuses** a `-m` rather than ignoring
   it, but for two it lays, on a64 only (moon-c-gaps.md, linux on arm64):

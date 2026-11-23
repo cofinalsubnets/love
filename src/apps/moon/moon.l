@@ -1237,8 +1237,9 @@
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
    ; ledger alone: the link's live set is one copy of the program, not three
    ; what a program's module shows when nothing is asked: its entry both ways (the loader's
-   ; _start, a process's __love_start) and the heap door the loader marshals strings through
-   wasm-face '("_start" "__love_start" "malloc" "free")
+   ; _start, a process's __love_start), the heap door the loader marshals strings through, and
+   ; the wake it calls where a module has one
+   wasm-face '("_start" "__love_start" "malloc" "free" "wake")
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
@@ -1362,7 +1363,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
