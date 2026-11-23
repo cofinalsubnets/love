@@ -643,3 +643,95 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
  m->reps[0] = (uint32_t) r0;
  o->n = on;
  return rc; }
+static int64_t l2_walk(uint8_t const *s, uintptr_t n, uintptr_t *end) {
+ uintptr_t si = 0, k, h, u;
+ int64_t tot = 0;
+ unsigned int c;
+ while (1) {
+  if (n <= si) return -1;
+  c = s[si];
+  if (!c) {
+   *end = si + 1;
+   return tot; }
+  if (c < 128) {
+   if (2 < c) return -1;
+   if (n - si < 3) return -1;
+   k = ((uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   if (n - si - 3 < k) return -1;
+   tot = tot + k;
+   si += 3 + k; }
+  else {
+   if (c < 192) h = 5;
+   else h = 6;
+   if (n - si < h) return -1;
+   u = ((c & 31) << 16 | (uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   k = ((uint32_t) s[si + 3] << 8 | s[si + 4]) + 1;
+   if (n - si - h < k) return -1;
+   tot = tot + u;
+   si += h + k; } } }
+static int l2_dec(uint8_t const *s, uintptr_t n, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
+ struct lz_out o;
+ struct lz_rd r;
+ uintptr_t si = 0, on = pre, base = 0, k, h, u, i, st, litn;
+ unsigned int c, b, x, nd, np = 1;
+ o.b = out;
+ o.cap = cap;
+ o.pause = 0;
+ nd = !pre;
+ while (1) {
+  if (n <= si) return -1;
+  c = s[si];
+  if (!c) {
+   if (on == cap) return 0;
+   return -1; }
+  x = 224 <= c || c == 1;
+  if (x) {
+   np = 1;
+   nd = 0;
+   base = on; }
+  else if (nd) return -1;
+  if (c < 128) {
+   if (2 < c) return -1;
+   if (n - si < 3) return -1;
+   k = ((uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   if (n - si - 3 < k) return -1;
+   if (cap - on < k) return -1;
+   memcpy(out + on, s + (si + 3), k);
+   on += k;
+   si += 3 + k; }
+  else {
+   if (c < 192) {
+    if (np) return -1;
+    if (n - si < 5) return -1;
+    h = 5; }
+   else {
+    if (n - si < 6) return -1;
+    b = s[si + 5];
+    x = lz_props(m, b, 4);
+    if (!x) return -1;
+    np = 0;
+    h = 6; }
+   u = ((c & 31) << 16 | (uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   k = ((uint32_t) s[si + 3] << 8 | s[si + 4]) + 1;
+   if (n - si - h < k) return -1;
+   litn = (uintptr_t) 768 << (m->lc + m->lp);
+   if (litn < 768) return -1;
+   if (159 < c) lz_reset(m);
+   if (cap - on < u) return -1;
+   x = rd_init(&r, s + si + h, k);
+   if (!x) return -1;
+   st = m->state;
+   if (11 < st) return -1;
+   o.n = on;
+   o.base = base;
+   x = lz_run(m, &r, &o, on + u, 0);
+   if (x != 1) return -1;
+   on = o.n;
+   if (cap < on) return -1;
+   if (on < base) return -1;
+   i = r.i;
+   if (k < i) return -1;
+   rd_norm(&r);
+   x = r.bad || r.i != r.n || r.code;
+   if (x) return -1;
+   si += h + k; } } }

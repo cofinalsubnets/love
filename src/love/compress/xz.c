@@ -72,60 +72,10 @@ struct lz_out { uint8_t *b; uintptr_t n, cap, base; int pause; };
 LZ_AT(isrep, 192); LZ_AT(isg0, 204); LZ_AT(isg1, 216); LZ_AT(isg2, 228); LZ_AT(isrep0l, 240);
 LZ_AT(slot, 432); LZ_AT(spec, 688); LZ_AT(align, 802); LZ_AT(len, 818); LZ_AT(rep, 1332); LZ_AT(lc, 1846);
 
-// laid and proved by lz.l: lz_reset, lz_props, rd_init, rd_norm, and lz_run, which decodes to lim
-// bytes or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for input, 0 corrupt
+// laid and proved by lz.l: lz_reset, lz_props, rd_init, rd_norm; lz_run, which decodes to lim bytes
+// or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for input, 0 corrupt; and LZMA2's
+// l2_walk, a stream's bytes or -1, and l2_dec, 0 or -1
 #include "lz_gen.h"
-
-// --- LZMA2: the chunk walk ------------------------------------------------------------------
-// the header pass: total bytes, *end past the 0x00; -1 malformed
-static int64_t l2_walk(const uint8_t *s, uintptr_t n, uintptr_t *end) {
- uintptr_t i = 0;
- int64_t tot = 0;
- for (;;) {
-  if (i >= n) return -1;
-  unsigned c = s[i];
-  if (!c) { *end = i + 1; return tot; }
-  if (c == 1 || c == 2) {
-   if (n - i < 3) return -1;
-   uintptr_t k = ((uintptr_t) s[i + 1] << 8 | s[i + 2]) + 1;
-   if (n - i - 3 < k) return -1;
-   tot += k; i += 3 + k; continue; }
-  if (c < 0x80) return -1;
-  uintptr_t h = c >= 0xc0 ? 6 : 5;
-  if (n - i < h) return -1;
-  uintptr_t u = ((uintptr_t) (c & 31) << 16 | (uintptr_t) s[i + 1] << 8 | s[i + 2]) + 1,
-            k = ((uintptr_t) s[i + 3] << 8 | s[i + 4]) + 1;
-  if (n - i - h < k) return -1;
-  tot += u; i += h + k; } }
-
-// the chunks into out (cap exact): 0 ok, -1 corrupt. a dict reset first, props before the
-// first LZMA chunk and after a 0x01
-static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
- struct lz_out o = { out, pre, cap, 0, 0 };        // pre bytes of out said already: a preset base
- struct lz_rd r;
- uintptr_t i = 0;
- int needdict = !pre, needprops = 1;
- for (;;) {
-  unsigned c = s[i];
-  if (!c) return o.n == cap ? 0 : -1;
-  if (c >= 0xe0 || c == 1) { needprops = 1; needdict = 0; o.base = o.n; }
-  else if (needdict) return -1;
-  if (c < 0x80) {
-   uintptr_t k = ((uintptr_t) s[i + 1] << 8 | s[i + 2]) + 1;
-   if (cap - o.n < k) return -1;
-   memcpy(o.b + o.n, s + i + 3, k); o.n += k; i += 3 + k; continue; }
-  uintptr_t u = ((uintptr_t) (c & 31) << 16 | (uintptr_t) s[i + 1] << 8 | s[i + 2]) + 1,
-            k = ((uintptr_t) s[i + 3] << 8 | s[i + 4]) + 1, h = 5;
-  if (c >= 0xc0) {
-   if (!lz_props(m, s[i + 5], 4)) return -1;
-   needprops = 0; h = 6; }
-  else if (needprops) return -1;
-  if (c >= 0xa0) lz_reset(m);
-  if (cap - o.n < u || !rd_init(&r, s + i + h, k)) return -1;
-  if (lz_run(m, &r, &o, o.n + u, 0) != 1) return -1;
-  rd_norm(&r);                                   // the coder flushes a byte the last bit left
-  if (r.bad || r.i != r.n || r.code) return -1;
-  i += h + k; } }
 
 // --- the range coder ------------------------------------------------------------------------
 struct lz_rc { uint8_t *b; uintptr_t n, cap; uint64_t low; uint32_t range; uint8_t cache; uintptr_t csz; };
@@ -639,7 +589,7 @@ intptr_t lzma2_into(unsigned char const *s, uintptr_t n, unsigned char *out, uin
  uintptr_t end;
  if (l2_walk(s, n, &end) != (int64_t) cap) return -1;
  struct lz_model *m = lz_new(4);
- int ok = m && !l2_dec(s, out, cap, m, 0);
+ int ok = m && !l2_dec(s, n, out, cap, m, 0);
  if (m) alloc(m, 0);
  return ok ? (intptr_t) cap : -1; }
 
@@ -655,7 +605,7 @@ static lvm(lvm_lzma2d) {
   Have(w);
   o = word(ini_str(str(Hp), (uintptr_t) want)), Hp += w; }
  struct lz_model *m = lz_new(4);
- int const good = m && !l2_dec((const uint8_t*) txt(sw), (uint8_t*) txt(o), (uintptr_t) want, m, 0);
+ int const good = m && !l2_dec((const uint8_t*) txt(sw), len(sw), (uint8_t*) txt(o), (uintptr_t) want, m, 0);
  if (m) alloc(m, 0);
  love_musttail return Answer(good ? o : ZeroPoint); }
 
@@ -713,7 +663,7 @@ love_noinline static struct g *host_lzma2d_by(struct g *g) {
  uint8_t *buf = alloc(NULL, nb + (uintptr_t) want + 1);
  struct lz_model *m = lz_new(4);
  int good = buf && m;
- if (good) memcpy(buf, txt(bw), nb), good = !l2_dec((const uint8_t*) txt(zw), buf, nb + (uintptr_t) want, m, nb);
+ if (good) memcpy(buf, txt(bw), nb), good = !l2_dec((const uint8_t*) txt(zw), len(zw), buf, nb + (uintptr_t) want, m, nb);
  if (m) alloc(m, 0);
  if (good && ok(g = str0(g, (uintptr_t) want))) {
   memcpy(txt(g->sp[0]), buf + nb, (size_t) want);

@@ -444,15 +444,181 @@
      'macros '()
      'proofs {}}
 
-   lz-specs [reset props init rnorm run]
+   ; --- LZMA2's chunks --------------------------------------------------------------------------------
+   ; a refusal, and the header's lengths, each one under what it says
+   (no l g c) [l 'if g c [[(intern "\(l)r") 'retneg 1]]]
+   (be2 x d) ['wadd ['wor ['wshl ['u32 ['at 'In ['+ x d]]] 8] ['at 'In ['+ x (d + 1)]]] 1]
+   be3 '(wadd (wor (wor (wshl (and64 c 31) 16) (wshl (u32 (at In (+ si 1))) 8)) (at In (+ si 2))) 1)
+   ; under a header of h bytes (hp: 5 or 3 <= h) with room hm: a read at si + d, and k more after it (km)
+   sile '(inf-ltle si n g1)
+   (nfit x p) ['inf-lelt x 'n '(inf-pow w) p 'gn]
+   (hlt h hp d) (charm? h ? '(idpath true) ['inf-lttrans d 5 h '(idpath true) hp])
+   (hrd h hp hm d) ['bz-nbq 'si d h 'n (hlt h hp d) hm sile]
+   (hpr t L h hp hm ds)
+    (map (r \ r @ [j d] (: x ['add 'si d] p (hrd h hp hm d)
+      (pin t "\(L)-\(j)" ['inf-lttrans x 'n '(inf-pow w) p '(inf-ltle n (inf-pow w) gn)], pin t "\(L)-\(j + 1)" p))) ds)
+   (hk h hm k km) ['bz-nbr h k '(natminus n si) km hm]
+   (hkn h hm k km) ['bz-nbr 'si ['add h k] 'n (hk h hm k km) sile]
+   (hkp h hp k) (charm? h ? '(idpath true)
+                 ['bz-pos ['add h k] ['inf-letrans 1 h ['add h k] ['inf-letrans 1 5 h '(idpath false) hp] ['inf-leaddr h k]]])
+   (hin h hm k km) ['inf-letr ['add 'si ['add h k]] ['add ['add 'si h] k] 'n ['inf-addassoc 'si h k] (hkn h hm k km)]
+   ; si's step past it, at L, and the loop's fall, the back's j
+   (hstep t L j h hp hm k km)
+    (pin t "\(L)-1" (nfit ['add h k] ['inf-letrans ['add h k] '(natminus n si) 'n (hk h hm k km) '(inf-suble n si)]),
+     pin t "\(L)-2" (nfit ['add 'si ['add h k]] (hkn h hm k km)),
+     pin t "w0b-\(j)" ['inf-subby 'si 'n ['add h k] 'g1 (hkp h hp k)])
+   ; the header pass: the bytes it says, *end past the 0x00; -1 malformed
+   wpf {}
+   _ (hpr wpf "h2" 3 () 'g5 [[1 1] [3 2]])
+   _ (hstep wpf "s1" 1 3 () 'g5 'kh2 'g6)
+   _ (hpr wpf "h4" 'hj1 'a1 'g8 [[1 1] [3 2]])
+   _ (hpr wpf "h5" 'hj1 'a1 'g8 [[1 3] [3 4]])
+   _ (hstep wpf "s4" 2 'hj1 'a1 'g8 'kh5 'g9)
+   walk
+    {'name "l2_walk" 'short "zxwalk"
+     'attrs '("static")
+     'ret '(named "int64_t")
+     'params '(("s" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")) ("end" (ptr (named "uintptr_t"))))
+     'fields ()
+     'arrays '((In (v "s") n))
+     'requires '((In (pi x nat nat)) (w nat) (n nat) (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))))
+     'decls '(((named "uintptr_t") (si 0) (k) (h) (u)) ((named "int64_t") (tot 0)) (uint (c)))
+     'ensures ()
+     'body
+      [['w0 'while '(tru) '(natminus n si) ()
+        [(no 'i1 'g1 '(le n si))
+         '(h1 havoc c (at In si))
+         '(i2 if g2 (z c) ((o1 raw (expr (asn (deref (var "end")) (bin + (var "si") (num 1))))) (r2 ret tot)))
+         ['e1 'ife 'g3 '(lt c 128)
+          [(no 'i3 'g4 '(lt 2 c))
+           (no 'i4 'g5 '(lt (- n si) 3))
+           ['h2 'havoc 'k (be2 'si 1)]
+           (no 'i5 'g6 '(lt (- (- n si) 3) k))
+           '(h3 havoc tot (wadd tot k))
+           '(s1 set si (+ si (+ 3 k)))]
+          ['(j1 join g7 (lt c 192) ((s2 set h 5)) ((s3 set h 6)) ((a1 (inf-le 5 h))))
+           (no 'i6 'g8 '(lt (- n si) h))
+           ['h4 'havoc 'u be3]
+           ['h5 'havoc 'k (be2 'si 3)]
+           (no 'i7 'g9 '(lt (- (- n si) h) k))
+           '(h6 havoc tot (wadd tot u))
+           '(s4 set si (+ si (+ h k)))]]]]]
+     'macros '()
+     'proofs wpf}
+   ; the chunks into out, pre bytes of it said already: 0 and cap full, -1 corrupt. a dict reset first
+   ; unless pre, props before the first LZMA chunk and after a 0x01. each header is held to n, and what
+   ; lz_run left is read back guarded, so nothing here leans on l2_walk
+   (of f) ['dot ['var "o"] f]
+   (rf f) ['dot ['var "r"] f]
+   (oput l f e) [l 'raw ['expr ['asn (of f) e]]]
+   dpf {}
+   _ (hpr dpf "h3" 3 () 'g7 [[1 1] [3 2]])
+   _ (hstep dpf "s4" 3 3 () 'g7 'kh3 'g8)
+   _ (hpr dpf "h5" 'hj1 'a1 'a2 [[1 1] [3 2]])
+   _ (hpr dpf "h6" 'hj1 'a1 'a2 [[1 3] [3 4]])
+   _ (hstep dpf "s8" 6 'hj1 'a1 'a2 'kh6 'g15)
+   ; what fits under cap fits a word
+   (cfit x p) ['inf-lelt x 'cap '(inf-pow w) p '(lz-cw w cap gc)]
+   onk '(bz-nbr on kh3 cap g9 b1) onu '(bz-nbr on uh5 cap g19 b1)
+   kn ['inf-lttrans 'kh6 '(add hj1 kh6) 'n
+       '(inf-lttrans kh6 (add 1 kh6) (add hj1 kh6) (inf-lelts kh6 kh6 (inf-refl kh6)) (inf-addr 1 hj1 kh6 (inf-letrans 1 5 hj1 (idpath false) a1)))
+       ['inf-letrans '(add hj1 kh6) '(natminus n si) 'n (hk 'hj1 'a2 'kh6 'g15) '(inf-suble n si)]]
+   _ (map (r \ pin dpf (r 0) (r 1))
+      [["m1-1" (nfit '(add si 3) ['bz-nbr 'si 3 'n 'g7 sile])] ["m1-2" onk] ["m1-3" (hin 3 'g7 'kh3 'g8)]
+       ["s3-1" (cfit '(add on kh3) onk)] ["w0b-1" onk]
+       ["h4-1" ['inf-lttrans '(add si 5) 'n '(inf-pow w) ['bz-nbq 'si 5 6 'n '(idpath true) 'g13 sile] '(inf-ltle n (inf-pow w) gn)]]
+       ["h4-2" ['bz-nbq 'si 5 6 'n '(idpath true) 'g13 sile]]
+       ["h7-1" (hin 'hj1 'a2 'kh6 'g15)]
+       ["c4-2" (nfit '(add kh6 1) ['inf-lt1 'kh6 'n kn])]
+       ["c4-3" '(inf-letrans 5 kh6 (add kh6 1) (c3e1 g20) (inf-leaddr kh6 1))]
+       ["c4-10" (cfit '(add on uh5) onu)]])
+   dec
+    {'name "l2_dec" 'short "zxdec"
+     'attrs '("static")
+     'ret 'int
+     'params '(("s" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")) ("out" (ptr (named "uint8_t")))
+               ("cap" (named "uintptr_t")) ("m" (ptr (struct "lz_model"))) ("pre" (named "uintptr_t")))
+     'fields ()
+     'arrays '((In (v "s") n) (Ob (v "out") cap))
+     'requires
+      '((In (pi x nat nat)) (Ob (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat))
+        (w nat) (n nat) (cap nat) (pre nat)
+        (gw (inf-le 32 w))
+        (gn (inf-lt n (inf-pow w)))
+        (gc (inf-lt (add cap 8) (inf-pow w)))
+        (gp (inf-le pre cap)))
+     'decls
+      '(((struct "lz_out") (o)) ((struct "lz_rd") (r))
+        ((named "uintptr_t") (si 0) (on pre) (base 0) (k) (h) (u) (i) (st) (litn))
+        (uint (c) (b) (x) (nd) (np 1)))
+     'ensures ()
+     'calls [props reset init run rnorm]
+     'body
+      [(oput 'o1 "b" ['var "out"]) (oput 'o2 "cap" ['var "cap"]) (oput 'o3 "pause" ['num 0])
+       '(h0 havoc nd (raw (un not (var "pre"))))
+       ['w0 'while '(tru) '(natminus n si) '((b1 (inf-le on cap)) (b2 (inf-le base on)))
+        [(no 'i1 'g1 '(le n si))
+         '(h1 havoc c (at In si))
+         '(i2 if g2 (z c) ((i2a if g2a (eq on cap) ((r2 ret 0))) (r3 retneg 1)))
+         '(h2 havoc x (raw (lor (bin le (num 224) (var "c")) (bin eq (var "c") (num 1)))))
+         '(j0 join g3 (nz x) ((s0 set np 1) (s1 set nd 0) (s2 set base on))
+           ((i3 if g4 (nz nd) ((r4 retneg 1)))) ((a0 (inf-le base on))))
+         ['e1 'ife 'g5 '(lt c 128)
+          [(no 'i4 'g6 '(lt 2 c))
+           (no 'i5 'g7 '(lt (- n si) 3))
+           ['h3 'havoc 'k (be2 'si 1)]
+           (no 'i6 'g8 '(lt (- (- n si) 3) k))
+           (no 'i7 'g9 '(lt (- cap on) k))
+           '(m1 mcopy Ob on In (+ si 3) k)
+           '(s3 set on (+ on k))
+           '(s4 set si (+ si (+ 3 k)))]
+          [['j1 'join 'g10 '(lt c 192)
+            [(no 'i8 'g11 '(nz np)) (no 'i9 'g12 '(lt (- n si) 5)) '(s5 set h 5)]
+            [(no 'i10 'g13 '(lt (- n si) 6))
+             '(h4 havoc b (at In (+ si 5)))
+             '(c1 calx x "lz_props" ((raw (var "m")) b 4) (w b (maxlclp 4)) ((lc lc) (lp lp) (pb pb)))
+             (no 'i11 'g14 '(z x))
+             '(s6 set np 0) '(s7 set h 6)]
+            '((a1 (inf-le 5 h)) (a2 (inf-le h (natminus n si))))]
+           ['h5 'havoc 'u be3]
+           ['h6 'havoc 'k (be2 'si 3)]
+           (no 'i12 'g15 '(lt (- (- n si) h) k))
+           '(h7 have h7 (inf-le (add (add si h) k) n))
+           ['h8 'havw 'litn ['raw ['bin 'shl ['cast '(named "uintptr_t") ['num 768]] ['bin '+ (cf "m" "lc") (cf "m" "lp")]]] 'g16]
+           (no 'i13 'g17 '(lt litn 768))
+           '(j2 join g18 (lt 159 c) ((c2 call "lz_reset" ((raw (var "m"))) (w litn) ())) () ())
+           (no 'i14 'g19 '(lt (- cap on) u))
+           '(c3 calx x "rd_init" ((raw (addr (var "r"))) (raw (bin + (bin + (var "s") (var "si")) (var "h"))) k) (In (n k)) ())
+           (no 'i15 'g20 '(z x))
+           ['h9 'havoc 'st ['raw (cf "m" "state")]]
+           (no 'i16 'g21 '(lt 11 st))
+           (oput 'o4 "n" ['var "on"]) (oput 'o5 "base" ['var "base"])
+           ; what no law reads of lz_run's fields goes as 0
+           '(c4 calx x "lz_run" ((raw (var "m")) (raw (addr (var "r"))) (raw (addr (var "o"))) (+ on u) 0)
+             (In Ob Pr Lt w (nin k) (i 5) cap on base st (r0 0) litn (lim (add on u)) (rg 0) (cd 0) (pz 0) (bd 0) (em 0)) ())
+           (no 'i17 'g22 '(ne x 1))
+           ['h10 'havoc 'on ['raw (of "n")]]
+           (no 'i18 'g23 '(lt cap on))
+           (no 'i19 'g24 '(lt on base))
+           ['h11 'havoc 'i ['raw (rf "i")]]
+           (no 'i20 'g25 '(lt k i))
+           '(c5 call "rd_norm" ((raw (addr (var "r")))) (In w (n k)) ())
+           ['h12 'havoc 'x ['raw ['lor ['lor (rf "bad") ['bin 'ne (rf "i") (rf "n")]] (rf "code")]]]
+           (no 'i21 'g26 '(nz x))
+           '(s8 set si (+ si (+ h k)))]]]]]
+     'macros '()
+     'proofs dpf}
+
+   lz-specs [reset props init rnorm run walk dec]
    lz-h (cats ["// lz_gen.h -- laid by src/love/compress/lz.l, `make mx`. edit that file.\n"
                (cats (map (s \ clay-show (cl-fn s)) lz-specs))])
    lz-ledger
-    [["pointers" "lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
+    [["pointers" "lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p, l2_walk's and l2_dec's n at s" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
      ["model" "the probabilities are struct lz_model's first 1846 words, lit 0x300 << (lc + lp) more, a count that fits" "xz.c's static asserts; lz_new and the casks size lit"]
      ["props" "m's lc, lp and pb are what lz_props proved lc <= 8, lp <= 4, pb <= 4 of" "its raw stores, and no other write: the coder's own are the encoder's, lc 4"]
-     ["coder" "rd_norm's i <= n" "lz_run's epilogue, the least of the two"]
-     ["window" "on <= cap, base <= on, cap + 8 and nin + 1 fit" "l2_dec and lzma_feed lay o and r so"]
+     ["coder" "rd_norm's i <= n" "l2_dec's guard; for the rest, lz_run's epilogue, the least of the two"]
+     ["window" "on <= cap, base <= on, cap + 8 and nin + 1 fit" "l2_dec holds them, cap + 8 from its caller; l2_step and lzma_feed lay o and r so"]
+     ["chunk" "rd_init answers 1 with r.i 5 and r.n n; l2_dec's bad, code and props fields are read raw" "its raw stores; a wrong one is a wrong answer, not a read outside"]
      ["raw" "a raw statement writes only r, m and o's fields, read again by no term" "lz.l's epilogue and rep moves"]
      ["word" "a word read back fits" "the C type; `havw` states it"]]
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
