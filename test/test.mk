@@ -1,7 +1,7 @@
 # test/test.mk -- the test_* gates, included by ./Makefile; paths resolve from the root
 
 # every gate is phony: one missing here stops running once a file of its name appears
-.PHONY: \
+.PHONY: test_psnap \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
@@ -392,8 +392,22 @@ test_vi: host
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0) $(ho)/mooncc0.image
+test_moon: host $(love0) $(ho)/mooncc0.image test_psnap
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
+# the parser's prefix memo: its laws, then its oracle -- each runtime group of an isa compiled
+# with every unit parsed whole is the archive the build laid. psnap_isas="$(rt_isas)" runs them all
+psnap_isas ?= x64
+psnap_legs = $(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),psnap-$i-$g))
+define psnapleg
+.PHONY: psnap-$(1)-$(2)
+psnap-$(1)-$(2): out/rt/$(1)/$(2).a
+	@MOON_NOSNAP=1 $$(rtlove) src/tools/mkrt.l -m $$(ho)/.psnap-$(1)-$(2).a $(1) $$(patsubst %/mksys.l,$(if $(filter $(rt_nosys),$(1)),,mksys),$$(call rt_src,$(2))) && cmp $$(ho)/.psnap-$(1)-$(2).a $$< && rm -f $$(ho)/.psnap-$(1)-$(2).a || { echo "  psnap: FAIL -- $$< is not its whole parse"; exit 1; }
+endef
+$(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call psnapleg,$i,$g))))
+test_psnap: $(love0) $(ho)/mooncc0.image $(psnap_legs)
+	@echo 'TEST test/gate/psnap.sh (the prefix memo against the whole parse)'
+	@$(gsh) test/gate/psnap.sh $(love0) wake $(ho)/mooncc0.image
+	@echo '  psnap: ok -- $(words $(psnap_legs)) runtime groups ($(psnap_isas)) are their whole parse'
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
 mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:kinds-h:mx-ok src/love/nifs.h:src/love/nifs.l:nifs-h:nifs-ok \
