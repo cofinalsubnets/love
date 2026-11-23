@@ -381,7 +381,7 @@
     (skin {'all pooltile} (solid (box [x0 -(pool-d) (z0 + 0.5)] [x1 -0.6 (z0 + 1.0)])))
     (clear (flow [0.05 0.02] (drape water (map (b \ map (a \ [(x0 + (x1 - x0) * a / 5.0) pool-w (z0 + (z1 - z0) * b / 5.0)]) ^6) ^6))))]))
 ; ..a monitor filling a dead end's far wall, the orb on it as a camera somewhere out round
-; the whole ring sees it, a new place after each card, framed as a security camera's picture is, its labels and the hour stamped in a
+; the whole ring sees it, a new place after each card, framed as a security camera's picture is, the hour stamped in a
 ; pixel font three by five; now and then a burst of snow and a card, a solid colour and its
 ; text, the cards in turn. before the first picture, no signal
 (: dots {48 "111101101101111" 49 "010110010010111" 50 "111001111100111" 51 "111001111001111" 52 "101101111001001"
@@ -399,10 +399,9 @@
 (: camwhite '(grey 0.92))
 (: (corner x y dx dy) [['rect (min x (x + 18 * dx)) (min y (y + 2 * dy)) (max x (x + 18 * dx)) (max y (y + 2 * dy)) camwhite]
                        ['rect (min x (x + 2 * dx)) (min y (y + 12 * dy)) (max x (x + 2 * dx)) (max y (y + 12 * dy)) camwhite]])
-(: (camover rec) (texture 192 104 13
-                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1
-                   + (rec ? [['disc 17 17 4 '(rgb 0.95 0.1 0.08)]] ()) + type 25 12 2 "REC" camwhite)))
-(: camfeed [(camover 1) (camover 0)])
+(: camover (texture 192 104 13
+                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1)))
+(: camfeed [camover])
 (: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
 ; ..a card: its words in capitals, as many to a line as fit in n, each line in the middle
 (: (lines ws n) (foldl (\ a w (? (atom? a) [w] (#<a + 1 + #w <= n) (<a + " " + w . >a) (w . a))) () ws @ l (rev l)))

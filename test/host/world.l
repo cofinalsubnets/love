@@ -936,6 +936,13 @@
        (has? (lv "(camera [0 0 0] 0 0 (ball [0 0 0]))") "(camera [x y z] bearing pitch FEED)")
        (has? (lv "(cards [] 1 1 (ball [0 0 0]))") "(cards [TEXTURE ..] every hold FEED)")
        (has? (lv "(watch [0 0 0] 1 [3 2] 30 (ball [0 0 0]))") "(watch [x y z] radius [near far] cone FEED)")))
+; ..and one that moves while a plush lies down a hole, not held over it nor on the ground by it
+(: ml (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (plush [2 0 3] 90 'mouse) (missing [8 2 4] 90 -20 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   ms (world-new 32 20 ml "") mb (ms 'balls 0) mq (ms 'sc 'feeds 0) _ (pin (ms 'lvl) 'pits [[[1.0 -50.0 2.0] [3.0 0.0 4.0]]])
+   (seen p held) (pins mb 'p p 'held held, pin ms 'mt (ms 'mt + 1.0), world-pens ms, mq 'cam 0 0)
+ (test (seen [2.0 0.1 3.0] 0 = 5.0) (seen [2.0 -20.0 3.0] 0 = 8.0) (seen [2.0 -20.0 3.0] 1 = 5.0) (seen [6.0 -20.0 3.0] 0 = 5.0)
+       (has? (lv "(missing [0 0 0] 0 0 (ball [0 0 0]))") "(missing [x y z] bearing pitch FEED)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving

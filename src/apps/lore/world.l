@@ -740,7 +740,7 @@
  ; frame's gather once for each size of frame; a stamp's dots each second. a gpu that keeps
  ; its frames on a window reads each one back while a feed is in view
  (feeds-of lv tt) (map (d \ (: i (tix tt (d 'tex)) {'i i 'w (tt i 1) 'h (tt i 2) 'a (d 'w / d 'h) 'over (map (nm \ tix tt nm) (d 'feed))
-                                                     'stamp (d 'stamp) 'cam (peep d 'cam ()) 'watch (peep d 'watch ()) 'memo {}
+                                                     'stamp (d 'stamp) 'cam (peep d 'cam ()) 'home (peep d 'cam ()) 'missing (peep d 'missing ()) 'watch (peep d 'watch ()) 'memo {}
                                                      'sw (screen-of d @ () () k (k 1))
                                                      'cards (peep d 'cards () @ () () c [(map (nm \ tix tt nm) (c 0)) (c 1) (c 2)])
                                                      'mid (d 'at) 'rad (0.5 * sqrt (sq (d 'w) + sq (d 'h)))}))
@@ -788,11 +788,15 @@
  ; ..a camera's feed shot again from where it stands at half its texture's size, cam-dt
  ; seconds apart and only while it shows the camera or is about to
  cam-dt 0.25
- (cam-shot! st q) (: _ (q 'cam = () ? (watch-pick! st q) 0) c (q 'cam) w (q 'w // 2) h (q 'h // 2)
+ (cam-shot! st q) (: _ (q 'cam = () ? (watch-pick! st q) 0) _ (q 'missing = () ? 0 (pin q 'cam (q (dropped? st ? 'missing 'home)))) c (q 'cam) w (q 'w // 2) h (q 'h // 2)
    (? (st 'mt - peep q 'shot-t -1e9 < cam-dt || !(elem (peep q 'ph 'cam) ['cam 'out])) 0
       (: f (level-pens st {'at [(c 0 0) (c 0 1 - eye-h) (c 0 2)] 'deg (c 1) 'pitch (c 2) 'fov (peep c 3 fov) 'ro (peep c 4 0.0) 'w w 'h h 'memo (q 'memo)
                            'out (q 'watch != () ? 1 0)})
          (pins q 'framed f 'fdim [w h] 'shot-t (st 'mt)))))
+ ; ..whether a plush is down a shadow's hole, out of the hands
+ (dropped? st) (: ds (peep (st 'lvl) 'pits ())
+   (in? p d) (d 0 0 <= p 0 && p 0 <= d 1 0 && d 0 2 <= p 2 && p 2 <= d 1 2 && p 1 < d 1 1 - 1.0)
+   (any (b \ b 'kind = 'plush && peep b 'held 0 = 0 && any (in? (b 'p)) ds) (st 'balls)))
  ; ..a watching camera's place: near to far from its mark, within the cone about the world's
  ; up through it, even over its area, looking at it, turned any way about that; its eye as
  ; wide as puts the ball round the mark a sixth to a half of the picture high
