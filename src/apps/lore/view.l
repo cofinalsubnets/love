@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-pen view-band
-         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-tap)
+         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-middle? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow '(slip console))                ; the console's pane beside the scene's
@@ -217,6 +217,8 @@
    hs {'on 0 'p ()}
    ; ..the console, on any level; the level's 'words its own, beside st
    con (con-new ()) words (peep lv 'words (_ \ ())) at (c \ view-set1 c)
+   ; ..on a phone, the panes side by side
+   phone (win && win 'how = 'droid) _ (phone ? (pin con 'split ['beside 60 'scene 'con]) 0)
    (eval l) (con-task (_ \ con-eval words st l) (_ \ con-stop con win at))
    (con? k) (binds k = 'console)
    ; ..the keys held let go as the console takes them
@@ -252,6 +254,14 @@
    ; the right half looking, and a touch that stays put a tap
    stick (lv 'stick) fg {}
    _ (stick && win ? (window-thumbs win) 0)
+   ; ..a phone's console: a tap at the top's middle opens it and puts it away, as esc does; the
+   ; keyboard up and its touches the panes' while it is up, the gpu let go, which would hide it
+   pc {'on 0}
+   (phone-con _) (: on (con 'on) gp (st 'gpu) (? (!phone || on = pc 'on) ()
+     (: _ (pin pc 'on on) _ (each (keys fg) (i \ pin fg i ())) _ (each (keys held) (c \ pin held c ()))
+        (on ? (: _ (tablet? gp && tablet? (gp 'g) ? ((cite 'gpu 'gpu-close) (gp 'g), pin st 'gpu 'off, pin pc 'gpu 1) 0) (pin win 'thumbs 0, window-typing win 1))
+              (: _ (peep pc 'gpu 0 ? (pins pc 'gpu 0, pin st 'gpu ()) 0) (window-thumbs win))))))
+   (phone-shut? e) (phone && con 'on && (<e = 'press ? (view-middle? st (e 2) (e 3)) (<e = 'down && e 1 = 1)))
    (axis slot want) (: old (held slot @ h (h != () ? <h ()))
      (? (want = old) ()
         (want = ()) (pin held slot (), ())
@@ -264,7 +274,8 @@
                                     + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
                          (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
                    (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
-        (: ks (f 'far ? () (peep lv 'tap view-tap st x y))
+        (: mid (phone && !(f 'far) && view-middle? st x y) _ (mid ? (con-up con 1) 0)
+           ks (f 'far || mid ? () (peep lv 'tap view-tap st x y))
            ((f 'walk ? (pins held 'stick-x () 'stick-y ())),
             pin fg id (),
             ks))))
@@ -275,6 +286,7 @@
                  k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
                     (<e = 'finger) (finger e @ ks (ks + wgo >l))     ; in turn: a quick tap's up may ride with its down
+                    (phone-shut? e) (con-up con 0, wgo >l)
                     (!(ms 'on && elem <e ['press 'move 'release]) && con-event con eval e t at (<e = 'down && charm? k && con? k)) (let-go (), wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
@@ -330,6 +342,7 @@
              ks (win ? (wkeys ()) (tget ()))
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
              _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
+             _ (phone-con ())
              _ (resize ())
              _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
@@ -376,6 +389,8 @@
  ; ..whether pixel x y is a top corner of st's window, and the tap that leaves by one
  (view-corner? st x y) (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1)
                           (v < 0.15 && (u < 0.15 || 0.85 < u)))
+ ; ..the top's middle, a phone's console
+ (view-middle? st x y) (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1) (v < 0.15 && 0.4 < u && u < 0.6))
  (view-tap st x y) (view-corner? st x y ? [113] ())
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far

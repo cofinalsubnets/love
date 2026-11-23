@@ -80,6 +80,20 @@
                   'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held (_ \ 1) 'repeat [0 0]}))
  (test (rev (st 'log) = [[0 'forward] [1 'forward] [8 'where]]) (st 'said = [(0 ~ 9) (0 ~ 9)]) (rev (st 'helped) = [2 3 4 5])
        (rev (st 'sizes) = [[80 14] [80 25]]))
+; a phone's: a tap at the top's middle opens it, beside the scene, the keyboard up and the touches
+; the panes'; the same spot or esc puts it away, the thumbs back and the screen all the scene's
+(: tap (_ \ [['finger 1 0 320 10] ['finger 1 1 320 10]]) path ("/tmp/lorewin-face-" + show (getpid 0)) ls (listen ['unix path])
+   srv (twirl (_ \ (: _ (await ls) c (accept ls) (slurp c))) ()) line (connect ['unix path])
+   con {0 [['finger 1 0 100 200] ['finger 1 1 100 200]] 2 (tap 0) 4 [['press 1 320 10] ['release 1 320 10]] 6 (tap 0) 8 [['down 1] ['up 1]] 10 [['finger 1 0 10 10] ['finger 1 1 10 10]]}
+   win {'how 'droid 's line 'w 640 'h 400 'H 400 'row 0 'held () 'paper (cask (640 * 400 * 4)) 'said (con 0)}
+   st (view-walk {'new (w \ h \ {'w w 'h h 't 0 'win win 'sizes () 'typing () 'thumbs () 'gpu ()}) 'size (st \ w \ r \ pins st 'w w 'h (2 * r) 'sizes ([w r] . st 'sizes))
+                  'frame (_ \ "") 'key (st \ a \ st)
+                  'tick (st \ (pins st 'typing (peep win 'typing 0 . st 'typing) 'thumbs (peep win 'thumbs 0 . st 'thumbs), pin win 'said (peep con (st 't + 1) ())))
+                  'stick [119 115 97 100 87] 'binds view-binds 'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win})
+ z (close line, catch srv, close ls, unlink path)
+ (test (elem 1 (st 'typing)) (st 'typing 0 = 0) (st 'thumbs 0 = 1) (all (i \ st 'typing i = 1 - st 'thumbs i) ^#(st 'typing))
+       (rev (st 'typing) @ l (filter (i \ 0 < i && l i = 1 && l (i - 1) = 0) ^#l) = [2 6])
+       (0 < #(filter (q \ q 0 < 60) (st 'sizes))) (st 'sizes 0 = [80 25])))
 ; the panes: the scene over the console, a bar between, the screen all the scene's while it is
 ; away; ctrl-w m puts them side by side, x trades them, and the split is kept for the next time
 (: co (con-new ()) l0 (con-lay co 80 24) _ (con-up co 1) l1 (con-lay co 80 24)
