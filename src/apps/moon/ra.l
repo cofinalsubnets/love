@@ -118,7 +118,15 @@
 
    ; one round: ids, liveness, hulls, the scan -> [loc spills calls] | 'bad, calls: per call the
    ; spilled vregs it outlives
+   ; the line marks take no position; calls' positions come back counting them
    (raround g fs nosp)
+    (? !(any dlab? fs) (raround1 g fs nosp)
+       (raround1 g (filter (f \ !(dlab? f)) fs) nosp @
+          [loc sp cr] (: back {}
+                         _ (foldl ([i j] \ f \ (dlab? f ? [i (j + 1)] (cr i @ () 0 xs (pin back j xs), [(i + 1) (j + 1)]))) [0 0] fs)
+                         [loc sp back])
+          r r))
+   (raround1 g fs nosp)
     (: n #fs
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
        ids {} nms {}
@@ -379,7 +387,7 @@
              stubs {}
              (stub L) (stubs L @ () (nlab g ".lo" @ T (pin stubs L T, T)) T T)
              ; a fall into a call copies ahead of its argument setup, whose registers the copies may take
-             (setup? i) (ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd movss li la lea)) (!(lovr? d)) _ 0)
+             (setup? i) (dlab? (ft i) || ft i @ ('cuse . _) 1 ((op . d . _) && elem op '(mov movapd movss li la lea)) (!(lovr? d)) _ 0)
              (back i) (0 < i && in? (i - 1) && setup? (i - 1) ? (back (i - 1)) i)
              pre {}
              _ (map (i \ (in? i && i + 1 < n && !(in? (i + 1)) && setup? i ? (pin pre (back i) 1))) ^n)

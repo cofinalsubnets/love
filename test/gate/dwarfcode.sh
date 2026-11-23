@@ -1,7 +1,6 @@
 #!/bin/sh
 # test/gate/dwarfcode.sh -- -g leaves mooncc's code alone: love's own C on x64, compiled with and
-# without -g, the same .text. the files named still differ; one that stops differing fails until
-# it leaves the list. one compile at a time, each held to a budget.
+# without -g, the same .text. one compile at a time, each held to a budget.
 # usage: dwarfcode.sh OUTDIR
 . test/gate/skip.sh
 set -u
@@ -14,8 +13,6 @@ d=$ho/dwarfcode
 rm -rf "$d"; mkdir -p "$d"
 echo "DWARFCODE $d"
 export LOVE_BUDGET_MB=1024
-# the files named: the marks still reach the allocator
-same="arr cb ev io lamp love lr macho mem num poly posix raster snap swatch tablet thrun vfs"
 cd0() { "$ho/love" mooncc -t x64 -os linux $2 -D tco=1 -Iout -I. -Isrc/love -Isrc/inle -Iout/lib -c "$1" -o "$3" \
           && "$oc" -O binary --only-section=.text "$3" "$3.text"; }
 mkdir -p "$d/g"
@@ -26,11 +23,6 @@ done
 for f in src/love/*.c; do
   b=`basename $f .c`
   [ -f "$d/g/$b.bad" ] && { echo "FAIL $name: mooncc $f"; exit 1; }
-  k=0; for x in $same; do [ $x = $b ] && k=1; done
-  if cmp -s "$d/g/$b.o.text" "$d/g/$b.g.o.text"; then
-    [ $k = 1 ] && { echo "FAIL $name: $b.c's code no longer moves under -g: take it off the list"; exit 1; }
-  else
-    [ $k = 0 ] && { echo "FAIL $name: -g changes $b.c's code"; exit 1; }
-  fi
+  cmp -s "$d/g/$b.o.text" "$d/g/$b.g.o.text" || { echo "FAIL $name: -g changes $b.c's code"; exit 1; }
 done
-echo "dwarfcode: -g leaves the code of love's C alone but for `echo $same | wc -w` files named"
+echo "dwarfcode: -g leaves the code of love's C alone, `ls src/love/*.c | wc -l` files"
