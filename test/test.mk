@@ -808,8 +808,9 @@ test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
 	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
-	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
+	    src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
+	@cat test/00-init.l src/love/holo/reach.l test/law/reach.l | $(gsh) test/gate/run.sh reach "$m" "test/law/reach:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/machobind.sh "$m"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
@@ -1422,12 +1423,14 @@ test_nestwasm:
 # holo's wasm writer: three modules, wasm-opt if present, run by node, and the fuzz vs its model
 test_holowasm: host
 	@echo TEST test/holo/wasm.l
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
 	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
 	@$(NODE) test/holo/loader.mjs out/.holo3.wasm
+	@echo TEST test/gate/wasmdrop.sh "(the wasm link's drop)"
+	@$(gsh) test/gate/wasmdrop.sh $(ho) $m $(NODE)
 	@echo TEST test/holo/fuzz/wasm.l "(the wasm lane's second opinion: v8 against the model)"
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
 	@$(NODE) test/holo/fuzz/wasm.mjs out/.wasmfuzz.wasm out/.wasmfuzz.json
 endif
 
