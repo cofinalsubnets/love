@@ -544,8 +544,8 @@
    ; which names the others by index: (base name enc size) (ptr size j) (arr j n) (struct name size
    ; members union?) (decl name) (fn j) (unspec name), j () for void; a member (name j off), a
    ; bit-field's (name j off bitoff width). vars ((name j external?)..) the unit's globals, sigs a
-   ; function's (ret ((param j)..)) by name
-   (dwtys w stag ast svars sigs)
+   ; function's (ret ((param j)..)) by name, lv its scopes (gen's dlfin) by name, the types by index
+   (dwtys w stag ast svars sigs lv)
     (: tb (pin {} 'n 0)
        base {'char ["char" 6 1] 'schar ["signed char" 6 1] 'cchar ["char" 8 1] 'uchar ["unsigned char" 8 1]
              'bool ["_Bool" 2 1] 'short ["short" 5 2] 'ushort ["unsigned short" 7 2] 'int ["int" 5 4]
@@ -560,6 +560,7 @@
        (ent ty)
         (? (ptr? ty) ['ptr w (ix (ty 1))]
            (arr? ty) ['arr (ix (ty 1)) (ty 2)]
+           (two? ty && <ty = 'varr) ['arr (ix (ty 1)) ()]
            (stru? ty) (peep stag (ty 1) () @ (fl . sz . _) ['struct (ty 1) sz (map mem fl) (1 < #fl && !(any (m \ m 1 != 0) fl))]
                          _ ['decl (ty 1)])
            (fn? ty) ['fn (? (two? >ty) (ix (ty 1)))]
@@ -567,7 +568,8 @@
        fs (ast 1)
        vs (catmap (f \ f @ ('gdecl ds) (map (d \ [<d (ix (d 1)) !(peep svars <d 0)]) (filter (d \ !(fn? (d 1))) ds)) _ ()) fs)
        sg (foldl (\ t f (f @ ('fn . nm . ps . _) (pin t nm [(ix <(peep sigs nm ['void])) (map (p \ [<p (ix (p 1))]) ps)]) _ t)) {} fs)
-       [(map tb ^(tb 'n)) vs sg])
+       lt (foldl (\ t f (pin t <f (map ([k par bs] \ [k par (map ([n h ty] \ [n h (ix ty)]) bs)]) (f 1)))) {} lv)
+       [(map tb ^(tb 'n)) vs sg lt])
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
        [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro hids]
@@ -577,7 +579,7 @@
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
-           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
+           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs dlv]
               (: ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
@@ -595,7 +597,7 @@
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
                           ; -g: the unit, its dir, whether .eh_frame serves its unwind, and its types
-                          (dbg ? [src (cwd 0) (ua || us) (dwtys (elem tgt '(x64 a64 rv64) ? 8 4) stag ast svars sigs)])]
+                          (dbg ? [src (cwd 0) (ua || us) (dwtys (elem tgt '(x64 a64 rv64) ? 8 4) stag ast svars sigs dlv)])]
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")

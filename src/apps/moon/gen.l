@@ -86,6 +86,14 @@
              (go l) (l @ (f . u) (hit f + (f . go u)) _ ())
              _ (pins g 'dlp () 'dlo ())
              (go fs)))
+   ; a laid function's scopes with each name's home: ('f o) at cfa+o, ('d o) at the address there,
+   ; ('g label), () one in a register. csframe's shift is in, and the link sits 16 or 32 under the cfa
+   (dlfin g nm)
+    (: ln (g 'tgt @ 'x64 16 'a64 32 _ ()) sh (g 'dlfd)
+       (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
+       (home b) (b @ [_ 'm o ty] [(ln && ['f (at o)]) ty] [_ 'p o ty] [(ln && ['d (at o)]) ty]
+                     [_ 'g l ty] [['g l] ty] _ [() (last b)])
+       (pin g 'dlv ([nm (map ([k par bs] \ [k par (map (b \ ((cite 'moon 'dlnm) <b . home b)) bs)]) (g 'dlsc))] . g 'dlv)))
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -2121,6 +2129,7 @@
            hw (foldl (a \ s \ max a (0 - <s)) b0 (g 'slots))
            dk (aup (hw + d) 16 - aup hw 16)               ; what rides under the slots keeps its room
            offs (map (k \ 0 - (b0 + 8 * (k + 1))) ^n)
+           _ (pin g 'dlfd [b0 d])
            sv ((r3 ? [['st fb -8 'r3]]) + map (k \ [(elem (cs k) fcs ? 'stsd 'st) fb (offs k) (cs k)]) ^n)
            (rs S) (catmap (k \ ((cs k) @ r
                                  (? (elem r fcs) [['ldsd r fb (offs k)]]
@@ -4742,7 +4751,7 @@
        ; lo.l lays after this file: its names resolve at the call
        (mprof 'lo (_ \ (cite 'moon 'lofn) g f params sig) @
          'bad ((cite 'moon 'lorefuse) g)
-         fs (dlin g (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs)))))
+         fs (dlin g (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs)) @ r (g 'dlcur && dlfin g <>f, r))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -5172,7 +5181,7 @@
                   ['ldxb d b i s o] ['ldxbl d b i s o] ['ldxh d b i s o] ['ldxhl d b i s o] _ f)
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
    ; the static fns ride as lnames (local func symbols, so nm/gdb see real boundaries)
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs scopes) | ()
     (xnar tgt (cgen-core ast stbl sigs weaks xtra tgt) @ r
        (? (gripe? r) r                               ; a named cause rides out
           !(two? r) ()
@@ -5243,5 +5252,5 @@
                     (pfsec <>r + catmap (x \ pfsec (x 1)) xfns))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat (lnames + lvars + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
-                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
+                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)]) (<r 'dlv)]))))
 ) ; module 'moon

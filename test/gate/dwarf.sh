@@ -93,6 +93,35 @@ for t in x64 a64 rv64; do
   fi
 done
 
+# locals and params in memory, each block its own scope: a shadowed name, a static, a vla, a
+# struct by value, under callee-saved registers
+cat > "$d/l.c" <<'EOF'
+struct s { long a, b, c; };
+static long sum;
+static void use(void *p) { sum += *(char *)p; }
+static void (*volatile go)(void *) = use;
+long loc(int n, struct s by, long k) {
+  int x = n; go(&x);
+  { long x = k * 2; go(&x);
+    for (int i = 0; i < by.a; i++) { char z[4] = "abc"; go(z);
+      sum += n + k; } }
+  { short x = 9; static int cnt = 40; cnt++; go(&x);
+    sum += x + cnt; }
+  int v[n]; v[0] = 77; go(v);
+  sum += v[0];
+  return x + by.b + n + k;
+}
+int main(void) { struct s s = {1, 22, 3}; return loc(5, s, 100) - 132; }
+EOF
+for t in x64 a64 rv64; do
+  mc -t $t -os linux -g "$d/l.c" -o "$d/l.$t"
+  if [ -n "$dd" ]; then
+    "$dd" --verify "$d/l.$t" > "$d/vl.$t" 2>&1 || { cat "$d/vl.$t"; echo "FAIL $name: $t locals --verify"; exit 1; }
+    n=`"$dd" --debug-info "$d/l.$t" | grep -c DW_TAG_lexical_block`
+    [ "$n" = 4 ] || { echo "FAIL $name: $t has $n blocks, not 4"; exit 1; }
+  fi
+done
+
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
 mc -t x64 -os linux -c "$d/t.c" -o "$d/t0.o"
@@ -115,7 +144,12 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
            'type = long (\*)(' '= {v = 7, nx = 0x0}' '= 3$' '= 4$'; do
     grep -q "$w" "$d/gdby.out" || { cat "$d/gdby.out"; echo "FAIL $name: gdb's types: $w"; exit 1; }
   done
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'break l.c:9' -ex 'break l.c:11' -ex 'break l.c:14' -ex run \
+      -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' \
+      -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' ./l.x64 ) > "$d/gdbl.out" 2>&1
+  l=`sed -n 's/^\([ABC]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.out" | tr '\n' ' '`
+  [ "$l" = 'A 200 "abc" 22 B 9 41 C 5 77 22 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, and reads types and globals; a64 raster.c: $holes function(s) without an fde"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals and memory locals; a64 raster.c: $holes function(s) without an fde"

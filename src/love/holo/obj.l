@@ -837,7 +837,8 @@
        rgl [".debug_ranges" 1 0 1 (<rg + o-zeros 16) (rev <>rg) {(name ".dbg.ranges") 0}]
        ; the abbrevs, by code: 1 the unit; 2..5 a function, global or static, typed or void: name,
        ; pc and length, its body's `{` as its place, the cfa its frame base, its params below it;
-       ; 6 a param; 7.. the types (ty), 17 18 a variable, global or static, at its address
+       ; 6 a param; 7.. the types (ty), 17 18 a variable, global or static, at its address;
+       ; 23 a param at its home, 24 a variable with none, 25 a block
        (sub ex ty) ([46 1 3 8 17 1 18 6 58 15 59 15] + (ty ? [73 19] ()) + [39 25] + (ex ? [63 25] ()) + [64 24 0 0])
        ab [".debug_abbrev" 1 0 1 ([1 17 1 37 8 19 11 3 8 27 8 16 23 17 1 85 23 0 0]
                                   + catall (o-mapi (\ i a ((i + 2) . a)) [(sub 1 1) (sub () 1) (sub 1 ()) (sub () ())
@@ -845,10 +846,11 @@
                                        [19 1 3 8 11 15 0 0] [23 1 3 8 11 15 0 0] [13 0 3 8 73 19 56 15 0 0]
                                        [13 0 3 8 73 19 107 15 13 15 0 0] [1 1 73 19 0 0] [33 0 47 15 0 0] [33 0 0 0]
                                        [52 0 3 8 73 19 63 25 2 24 0 0] [52 0 3 8 73 19 2 24 0 0] [19 0 3 8 60 25 0 0]
-                                       [59 0 3 8 0 0] [21 0 39 25 73 19 0 0] [21 0 39 25 0 0]])
+                                       [59 0 3 8 0 0] [21 0 39 25 73 19 0 0] [21 0 39 25 0 0]
+                                       [5 0 3 8 73 19 2 24 0 0] [52 0 3 8 73 19 0 0] [11 1 17 1 18 6 0 0]])
                                   + [0])
            () {(name ".dbg.abbrev") 0}]
-       ; per code lane, its functions by pc: (lo label length name file line global?)
+       ; per code lane, its functions by pc: (lo label length name file line global? labels)
        (fns i l)
         (: lb (l 6)
            (one nm) (: k (name nm) e (fn-end nm)
@@ -856,12 +858,12 @@
                           (: lo (lb k) hi (lb e)
                              ds (sort (filter two? (map (x \ row x (lb x) @ r (two? r && lo <= <r && <r < hi ? r)) (keys lb))))
                              d (filter (r \ r 1 = 0) ds @ b (two? b ? <b (two? ds ? <ds ())))
-                             [[lo k (hi - lo) nm (two? d ? [(peep fix (d 3) 1) (d 2)] [1 0]) (elem nm gfn)]])))
+                             [[lo k (hi - lo) nm (two? d ? [(peep fix (d 3) 1) (d 2)] [1 0]) (elem nm gfn) lb]])))
            (sort (catmap one (uniq fnl))))
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
        pre (le16 4 + le32 0 + [8] + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
        cu0 (pre + le32 0 + le64 0 + le32 0)
-       dt (3 < #dl ? (dl 3) [() () {}])
+       dt (3 < #dl ? (dl 3) [() () {} {}])
        ; a type's die, its refs by r: each is ref4, so its size never waits on where the rest go
        (ty r e)
         (e @ ('base nm en sz) ([7] + str nm + [en sz])
@@ -887,14 +889,47 @@
                              (: b0 ([(ex ? 17 18)] + str nm + ref j + [9 3])
                                 [(bs + b0 + o-zeros 8) ([(4 + #bs + #b0) 'abs64 (name nm) 0 0] . rels)]))))
        vs (foldl var [(cu0 + tyb) ()] (dt 1))
+       ; a home's location: the cfa's offset, the address kept there, a label's
+       (homed h) (h @ ('f o) (: e ([145] + sleb o) (#e . e)) ('d o) (: e ([145] + sleb o + [6]) (#e . e)) ('g _) ([9 3] + o-zeros 8) _ ())
+       ; a local, its label's reloc where it is a static: () for a static not laid
+       (loc1 acc v)
+        (@ acc [bs rels]
+           (@ v [nm h j]
+              (? (j = () || (h @ ('g l) !(laid? l) _ ())) acc
+                 (: b0 ([(h = () ? 24 18)] + str nm + ref j)
+                    [(bs + b0 + homed h) (h @ ('g l) ([(#bs + #b0 + 2) 'abs64 (name l) 0 0] . rels) _ rels)]))))
+       ; a scope's names, then the blocks in it by address, each inside its parent and past its
+       ; elder; one whose mark is gone lays nothing. f: the function's start, its label, labels, scopes
+       (scope acc f k lo hi)
+        (@ f [f0 fk lb scs]
+           (: own (filter (s \ <s = k) scs)
+              a1 (foldl loc1 acc (catmap (s \ s 2) own))
+              (at p j d) (peep lb (name "\(p).\(j)") d)
+              kids (sort (catmap (s \ (at ".dlb" <s () @ b (charm? b ? [[b (at ".dle" <s hi) <s]] ()))) (filter (s \ 0 < <s && s 1 = k) scs)))
+              (kid st c)
+               (@ st [acc from]
+                  (: b (max from <c) e (min hi (c 1))
+                     (? (e <= b) st
+                        (@ acc [bs rels]
+                           (: a2 (scope [(bs + [25] + le64 0 + le32 (e - b)) ([(#bs + 1) 'abs64 fk (b - f0) 0] . rels)] f (c 2) b e)
+                              [[(<a2 + [0]) (a2 1)] e])))))
+              <(foldl kid [a1 lo] kids)))
        (die acc f)
         (@ acc [bs rels]
-           (@ f [_ k n nm fl ex]
+           (@ f [f0 k n nm fl ex lb]
               (: sg (peep (dt 2) nm [() ()])
-                 [(bs + uleb (? (<sg = ()) (ex ? 4 5) (ex ? 2 3)) + str nm + le64 0 + le32 n + uleb <fl + uleb (fl 1)
+                 scs (peep (dt 3) nm ())
+                 ph (catmap (s \ <s = -1 ? (s 2) ()) scs)
+                 (par p) (: h (filter (b \ <b = <p) ph @ (b . _) (b 1) ())
+                            ([(h = () ? 6 23)] + str <p + ref (p 1) + homed h))
+                 hd (uleb (? (<sg = ()) (ex ? 4 5) (ex ? 2 3)) + str nm)
+                 b0 (hd + le64 0 + le32 n + uleb <fl + uleb (fl 1)
                       + (<sg = () ? () (ref <sg)) + [1 156]
-                      + catmap (p \ ([6] + str <p + ref (p 1))) (filter (p \ p 1 != ()) (sg 1)) + [0])
-                  ([(4 + #bs + 1 + #(str nm)) 'abs64 k 0 0] . rels)])))
+                      + catmap par (filter (p \ p 1 != ()) (sg 1)))
+                 r (scope [b0 ()] [f0 k lb scs] 0 f0 (f0 + n))
+                 o (4 + #bs)
+                 [(bs + <r + [0])
+                  (map (r \ ((<r + o) . >r)) (r 1) + ([(o + #hd) 'abs64 k 0 0] . rels))])))
        ds (foldl die vs fs)
        cu (<ds + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)

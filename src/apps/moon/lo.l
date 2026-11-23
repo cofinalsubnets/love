@@ -1865,6 +1865,23 @@
           (at 8 @ [a f2] (lomkt g ty @ d [ty d (f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
    (lodl g pfx l f) (peep g 'dln 0 @ k (pin g 'dln (k + 1), name "\(pfx).\(k):\(l):\(f || "")"))
+   ; a local's C spelling, its respells and unrolled copies' (nm`2, nm`u1) cut; () for what no C names here
+   (dlnm nm)
+    (: ps (split "`" nm) (dig? s) (0 < #s && all digit? (map s ^#s))
+       (? (<ps != "" && all (s \ dig? s || starts? s "u" && dig? (snip s 1 #s)) >ps) <ps))
+   ; -g's blocks: one that binds a C name has marks at its ends and a record in 'dlsc: (k parent
+   ; bindings), k 0 the body's own and -1 the params, neither marked
+   (dlrec g k par e2 env)
+    (: (go e a) (e == env || atom? e ? a (go >e (string? <<e && dlnm <<e ? (<e . a) a)))
+       (pin g 'dlsc ([k par (go e2 ())] . g 'dlsc)))
+   (dlbinds? items) (any (s \ s @ (('decl || 'sdecl) ps) (any (p \ dlnm <p) ps) _ ()) items)
+   ; f lays a block's forms -> [forms env] | 'bad, under its marks where it asks them
+   (dlscope g env ask f)
+    (: par (g 'dlb) top (par = ())
+       (? (!top && !(ask && g 'dlcur)) (f 0)
+          (: k (? top 0 (peep g 'dlbn 1)) _ (top ? 0 (pin g 'dlbn (k + 1))) _ (pin g 'dlb k)
+             r (f 0) _ (pin g 'dlb par)
+             (r @ [fs e2] (dlrec g k par e2 env, (top ? r [([['label (name ".dlb.\(k)")]] + fs + [['label (name ".dle.\(k)")]]) e2])) _ r))))
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
     (: ; an arm that lays code and opens with no mark takes one of the statement around it, so code moved out of line keeps a row
@@ -1925,6 +1942,7 @@
                 (loseq [(lol [['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (lol [['label lc]]) (br c 1 lt) (lol [['label lb]])]))))
             ['for init c stp body]
              (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lq
+                (dlscope g env (dlbinds? [init]) (_ \
                 ((init @ () [() env]
                          ['decl ps] (lodecl g env ps)
                          [_ x] (lox g env x @ [_ _ fs] [fs env] 'bad)
@@ -1934,8 +1952,8 @@
                           (st body (['brk lb] . ['cont lc] . e1)) (lol [['label lc]])
                           (u \ (stp @ () () _ (lox g e1 stp @ [_ _ fs] fs 'bad)))
                           (u \ (c @ () [['jmp lt] ['label lb]]
-                                   _ (lobr g e1 c 1 lt @ 'bad 'bad fs ([['label lq]] + fs + [['label lb]]))))])
-                  'bad)))))
+                                   _ (lobr g e1 c 1 lt @ 'bad 'bad fs ([['label lq]] + fs + [['label lb]]))))] @ 'bad 'bad fs [fs e1])
+                  'bad)) @ [fs _] fs 'bad)))))
             ('brk . _) (assoc 'brk env @ [_ L] [['jmp L]] 'bad)
             ('cont . _) (assoc 'cont env @ [_ L] [['jmp L]] 'bad)
             ['goto nm] [['jmp (name "\(g 'fn).\(nm)")]]
@@ -2123,7 +2141,7 @@
              (['sdecl ps] . u) (go u (losdecl g env ps) acc)
              (it . u) (lost1 g env it @ 'bad 'bad fs (go u env (acc + fs)))
              [acc env])
-       (go items env ()))
+       (dlscope g env (dlbinds? items) (_ \ go items env ())))
    ; a VLA's block: the prior one this site laid given back (a loop runs the decl again), the bytes
    ; stashed, sp down by them rounded to 16, the block's address stashed. sp moves: no sibcall, no
    ; unframing
@@ -2218,7 +2236,7 @@
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
-          _ (pin g 'lon 0)
+          _ (pins g 'lon 0 'dlb () 'dlsc () 'dlfd [0 0])
           ; riscv's saves ride csframe here, so every exit restores at its marker
           _ (rvx? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
@@ -2287,7 +2305,7 @@
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
-                 body (lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
+                 body (dlrec g -1 () env (), lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
                            (g 'abad)], 'bad))
 
