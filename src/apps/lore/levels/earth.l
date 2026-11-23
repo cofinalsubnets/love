@@ -52,14 +52,14 @@
 (: binmetal (texture 32 64 0.6
              '((fill (rgb 0.62 0.67 0.74))
                (noise 12 0.5 0.07))))
-(: binsign (texture 64 64 0.3
+(: binsign (fine 4 (texture 64 64 0.3
             '((fill hole)
               (disc 32 32 30 (grey 0.92)) (disc 32 32 26 hole)
               (disc 25 17 4 (grey 0.92))
               (rect 21 22 29 39 (grey 0.92)) (rect 28 24 38 28 (grey 0.92))
               (rect 21 39 24 51 (grey 0.92)) (rect 26 39 29 51 (grey 0.92))
               (rect 36 37 46 39 (grey 0.92)) (rect 37 39 45 51 (grey 0.92))
-              (disc 39 32 2 (grey 0.92)))))
+              (disc 39 32 2 (grey 0.92))))))
 ; ..the street: paving slabs a metre square, worn, in pale joints
 (: paving (texture 64 64 2
            '((fill (rgb 0.29 0.29 0.3))
@@ -89,7 +89,7 @@
 (: courtred '(rgb 0.42 0.16 0.12))
 (: courtblue '(rgb 0.14 0.22 0.42))
 (: courtline '(grey 0.82))
-(: court (texture 220 320 11
+(: court (fine 4 (texture 220 320 11
           ['(fill hole) ['rect 0 0 220 280 courtred]
            ['disc 110 31.5 136 courtline] ['disc 110 31.5 135 courtred]
            ['disc 110 116 37 courtline] ['disc 110 116 36 courtred]
@@ -98,11 +98,11 @@
            ['disc 110 280 37 courtline] ['within 0 0 220 280 ['disc 110 280 36 courtred]] ['within 0 280 220 320 ['disc 110 280 36 'hole]]
            ['rect 0 0 220 1 courtline] ['rect 0 0 1 280 courtline] ['rect 219 0 220 280 courtline] ['rect 0 279 220 280 courtline]
            ['rect 61 0 62 116 courtline] ['rect 158 0 159 116 courtline] ['rect 61 115 159 116 courtline]
-           '(noise 6 0.15) '(patches 5 0.1 hole)]))
+           '(noise 6 0.15) '(patches 5 0.1 hole)])))
 ; ..its backboard: weathered white, a black edge and the box over the rim
-(: boardface (texture 72 42 1.8
+(: boardface (fine 4 (texture 72 42 1.8
               '((fill hole) (rect 0 0 72 2 (grey 0.08)) (rect 0 40 72 42 (grey 0.08)) (rect 0 0 2 42 (grey 0.08)) (rect 70 0 72 42 (grey 0.08))
-                (rect 24 18 48 20 (grey 0.08)) (rect 24 18 26 36 (grey 0.08)) (rect 46 18 48 36 (grey 0.08)) (rect 24 34 48 36 (grey 0.08)))))
+                (rect 24 18 48 20 (grey 0.08)) (rect 24 18 26 36 (grey 0.08)) (rect 46 18 48 36 (grey 0.08)) (rect 24 34 48 36 (grey 0.08))))))
 (: boardwhite (texture 16 16 1 '((fill (grey 0.86)) (noise 5 0.12) (patches 4 0.2 (shade 0.85)))))
 (: rimorange (texture 8 8 1 '((fill (rgb 0.85 0.32 0.06)) (noise 3 0.2))))
 (: netcord (texture 16 16 0.3 '((fill hole) (grid 8 8 1 (grey 0.9)))))
@@ -129,7 +129,7 @@
                (rows 0 1 (shade 0.88)) (rows 64 65 (shade 0.88)) (dots 42.667 16 0.8 (shade 0.6)))))
 ; ..its doors: two leaves of blued steel, each a raised plate with its corners cut, a dark
 ; seam between, blue lights in the frame, a hazard band at the foot
-(: unndoor (texture 64 56 3.4
+(: unndoor (fine 4 (texture 64 56 3.4
             '((fill (rgb 0.42 0.45 0.5)) (noise 20 0.6 0.06)
               (poly 7 6 25 6 29 10 29 44 25 48 7 48 3 44 3 10 (shade 1.18))
               (poly 39 6 57 6 61 10 61 44 57 48 39 48 35 44 35 10 (shade 1.18))
@@ -137,7 +137,7 @@
               (rows 0 2 0.12) (cols 0 2 0.12) (cols 62 64 0.12)
               (cols 31 33 0.06)
               (rect 0 18 2 36 (rgb 0.3 0.75 1)) (rect 62 18 64 36 (rgb 0.3 0.75 1))
-              (within 0 50 64 56 (fill 0.1) (stripes 8 4 -1 (rgb 0.85 0.65 0.1))))))
+              (within 0 50 64 56 (fill 0.1) (stripes 8 4 -1 (rgb 0.85 0.65 0.1)))))))
 ; ..and its banner: on black, two red hands raised side by side, palms facing, fingers up,
 ; and over them the three stars they have let go, a triangle pointing down; UNN across
 ; the wrists
@@ -157,13 +157,13 @@
 (: red '(rgb 0.78 0.07 0.05))
 (: pink '(rgb 0.95 0.45 0.4))
 (: white '(grey 0.95))
-(: unnbanner (texture 96 128 3.6
+(: unnbanner (fine 4 (texture 96 128 3.6
               (cats ['((fill (rgb 0.025 0.025 0.03)) (noise 30 0.1))
                      [(star 34 36 9 white) (star 62 36 9 white) (star 48 56 9 white)]
                      (hand 39 100 -1 red pink) (hand 57 100 1 red pink)
                      '((rect 23 100 27 114 (grey 0.95)) (rect 33 100 37 114 (grey 0.95)) (rect 23 110 37 114 (grey 0.95))
                        (rect 41 100 45 114 (grey 0.95)) (rect 51 100 55 114 (grey 0.95)) (poly 41 100 45 100 55 114 51 114 (grey 0.95))
-                       (rect 59 100 63 114 (grey 0.95)) (rect 69 100 73 114 (grey 0.95)) (poly 59 100 63 100 73 114 69 114 (grey 0.95)))])))
+                       (rect 59 100 63 114 (grey 0.95)) (rect 69 100 73 114 (grey 0.95)) (poly 59 100 63 100 73 114 69 114 (grey 0.95)))]))))
 
 ;; the corner shop and the advertisements
 ; ..the shop's grimed render, its sign's dark steel
@@ -199,15 +199,15 @@
 (: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
 ; ..a black board, a radio mast on it in neon green: two legs braced across and crossed, a
 ; mast and its tip
-(: admast (texture 128 128 9
+(: admast (fine 4 (texture 128 128 9
            '((fill (rgb 0.02 0.02 0.025))
              (poly 44 88 50 88 63 40 60 40 (rgb 0.35 1 0.35)) (poly 78 88 84 88 68 40 65 40 (rgb 0.35 1 0.35))
              (rect 52 76 76 79 (rgb 0.35 1 0.35)) (rect 56 64 72 67 (rgb 0.35 1 0.35)) (rect 59 52 69 55 (rgb 0.35 1 0.35))
              (poly 56 67 59 67 74 76 71 76 (rgb 0.35 1 0.35)) (poly 70 67 73 67 57 76 54 76 (rgb 0.35 1 0.35))
              (poly 60 55 62.4 55 70.4 64 68 64 (rgb 0.35 1 0.35)) (poly 67.6 55 70 55 60 64 57.6 64 (rgb 0.35 1 0.35))
-             (rect 62.6 24 65.4 40 (rgb 0.35 1 0.35)) (disc 64 24 3.2 (rgb 0.8 1 0.8)) (rect 36 88 92 91 (rgb 0.35 1 0.35)))))
-(: spin1 (texture 64 48 5 '((fill (rgb 0.95 0.08 0.6)) (disc 32 22 15 (rgb 0.2 0.9 1)) (disc 32 22 9 (rgb 0.95 0.08 0.6)) (rect 6 40 58 44 (grey 0.97)))))
-(: spin2 (texture 64 48 5 '((fill (rgb 1 0.85 0.08)) (rect 0 0 64 6 0.05) (rect 0 42 64 48 0.05) (poly 10 34 32 10 54 34 (rgb 0.9 0.08 0.08)))))
+             (rect 62.6 24 65.4 40 (rgb 0.35 1 0.35)) (disc 64 24 3.2 (rgb 0.8 1 0.8)) (rect 36 88 92 91 (rgb 0.35 1 0.35))))))
+(: spin1 (fine 4 (texture 64 48 5 '((fill (rgb 0.95 0.08 0.6)) (disc 32 22 15 (rgb 0.2 0.9 1)) (disc 32 22 9 (rgb 0.95 0.08 0.6)) (rect 6 40 58 44 (grey 0.97))))))
+(: spin2 (fine 4 (texture 64 48 5 '((fill (rgb 1 0.85 0.08)) (rect 0 0 64 6 0.05) (rect 0 42 64 48 0.05) (poly 10 34 32 10 54 34 (rgb 0.9 0.08 0.08))))))
 ; ..the street sweeper: yellow paint scuffed, a dark cab, the drums' worn
 ; steel, and caution bars; the garage it came out of, ribbed, a bar of the same at its top
 ; and its foot
@@ -215,12 +215,12 @@
 (: cabglass (texture 32 32 1 '((fill (rgb 0.04 0.07 0.1)) (noise 8 0.3) (rows 0 4 (rgb 0.36 0.37 0.39)))))
 (: drumsteel (texture 32 32 1 '((fill (rgb 0.22 0.22 0.23)) (noise 3 12 0.35) (cols 0 2 (shade 0.5)))))
 (: grille (texture 32 8 1 '((fill (grey 0.05)) (cols 0 2 (rgb 0.86 0.64 0.06)) (cols 30 32 (rgb 0.86 0.64 0.06)) (grid 3 0 1 (grey 0.2)))))
-(: hazard (texture 32 8 1 '((fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))))
-(: garage (texture 64 64 4.6
+(: hazard (fine 4 (texture 32 8 1 '((fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04))))))
+(: garage (fine 4 (texture 64 64 4.6
            '((fill (rgb 0.32 0.33 0.34)) (fbm 16 4 0.18) (bevel 64 5 1 (shade 1.18) (shade 0.5))
              (stain 16 3 0.3 0.3 (shade 0.8)) (relief 1.5 2 0.08)
              (within 0 0 64 6 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))
-             (within 0 58 64 64 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04))))))
+             (within 0 58 64 64 (fill (rgb 0.95 0.72 0.04)) (stripes 12 6 1 (grey 0.04)))))))
 ;; the memorial at the office's door
 ; ..wax, brown and the one purple, and a candle: its four sides and its top as pictures
 (: wax (texture 8 16 0.1 '((fill (rgb 0.36 0.21 0.11)) (noise 2 6 0.2) (rows 0 1 (rgb 0.5 0.32 0.17)))))

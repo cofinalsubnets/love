@@ -332,6 +332,8 @@
 ;                                      'seed, and 'skin of 'top 'frame 'body 'soft 'feet, a
 ;                                      tv's 'screen and a painting's 'picture, each a texture, a skin
 ;                                      or a kind; 'feet a star's casters, the frame's unless said
+;   (fine k TEXTURE)                   the texture in texels k times finer, 2 to 8, its
+;                                      layers as they read; for a pattern of hard edges
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
@@ -357,7 +359,7 @@
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera missing watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture fine feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
@@ -802,6 +804,10 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (fine k t) (: u "(fine k TEXTURE), k 2 to 8, to 2048 texels a side and no art in it"
+   (? (!(charm? k && 2 <= k <= 8)) (no u k) (!(texture? t)) (no u t)
+      (2048 < k * max (t 'w) (t 'h) || atom? (swatch-fine k (t 'layers))) (no u t)
+      (with (with (with t 'w (k * t 'w)) 'h (k * t 'h)) 'layers (swatch-fine k (t 'layers)))))
  ; --- materials: a texture from its kind and the parameters it changes, a number or [lo hi]
  ; thrown under the seed, or a colour; [w h metres layers feel] of the parameters, g ---
  (sh k) ['shade k]

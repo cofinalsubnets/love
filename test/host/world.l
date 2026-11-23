@@ -60,6 +60,12 @@
              "in a texture, (stripes 4 2 (grey 0.5)) -- it reads (stripes every w slant PAINT)")
        (has? (lv "(skin {'walls (texture 32 32 0 '((fill 1)))} (room [0 0 0] [2 2 2]))") "(texture width height metres LAYERS)")
        (has? (lv "(skin {'walls 3} (room [0 0 0] [2 2 2]))") "(skin {")
+       ; ..finer: as many metres, four times the texels
+       (: (tf w) (world-read (tx + "(level \"t\" (start [0 0 0] 0 180) (textures {'floor " + w + "}) (room [0 0 0] [2 2 2]))") 'textures 0)
+          a (tf "rust") b (tf "(fine 4 (feel 'metal rust))")
+          ((b 'w) = 128 && b 'h = 128 && b 'm = a 'm && b 'feel = 'metal && b 'layers 1 = '(noise 12 0.2)))
+       (has? (lv "(skin {'walls (fine 9 rust)} (room [0 0 0] [2 2 2]))") "(fine k TEXTURE)")
+       (has? (lv "(skin {'walls (fine 2 (texture 8 8 1 '((art drip 1))))} (room [0 0 0] [2 2 2]))") "no art in it")
        (lt "(skin {'floor (laid rust 90 [0 0.5])} (room [0 0 0] [2 2 2]))" 'brushes 0 'skin = [['floor 0 [90.0 [0.0 0.5]]]])
        (lt "(textures {'floor (laid rust 45 [1 0])}) (room [0 0 0] [2 2 2])" 'textures 0 'lay = [45.0 [1.0 0.0]])
        (has? (lv "(skin {'floor (laid rust 'x [0 0])} (room [0 0 0] [2 2 2]))") "(laid TEXTURE degrees [du dv])")
