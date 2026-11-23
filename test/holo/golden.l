@@ -1934,6 +1934,9 @@
    ;; the container: leb, names, a memory64 limit, a data segment's i64 offset
    _ (chk-eq "w.uleb" '(172 2) (uleb 300))
    _ (chk-eq "w.sleb" '(192 0) (sleb 64))
+   _ (chk-eq "w.sleb max" '(255 255 255 255 255 255 255 255 255 0) (sleb 9223372036854775807))
+   _ (chk-eq "w.sleb min" '(128 128 128 128 128 128 128 128 128 127) (sleb -9223372036854775808))
+   _ (chk-eq "w.uleb 2^64-1" '(255 255 255 255 255 255 255 255 255 1) (uleb 18446744073709551615))
    _ (chk-eq "w.name" "03616464" (hexs (wname "add")))
    _ (chk-eq "w.module.empty" "0061736d01000000" (wasm-hex {}))
    _ (chk-eq "w.module.mem64" "0061736d010000000504010501040b08010042080b026869"
