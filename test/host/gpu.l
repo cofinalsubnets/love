@@ -142,6 +142,18 @@
                  c [{} -1 [0 0 [0 0 0]] 1] (sh sk) (gpu-facets s W H -1 mat [verts] [ta] [] nf () sk c)
                  a (sh [() () (m 2) () e (m 5)]) b (sh ()) _ (pin s 'keep 0)
                  [a (tray? b)])
+           ; ..and the clouds' shade on a batch's sun: no cloud and the light it was made with over, none
+           ; taken but that light's own; a full one's shade, as the colours are with it taken; and where the
+           ; numbers say no shade, or a batch has no sun, none
+           sh (: vs (lk 0.35) sim (1.0 * 1790812800 + 12.0 * 3600.0) wx (sky-weather 1) lt (sky-light (sky-sun sim 0.0 0.65) wx sim)
+                 e [0.0 0.0 0.0] v (mesh-view W H e 2.0 0.3 1.4 0.1 100.0)
+                 m (mesh-sky (sky-stars sim 0.0 0.65) lt wx e sim 0.0 4 {} 2 0 v) q (m 5) sc (iota 21 % 3 @ j (0.1 * (j = 0) + 0.07 * (j = 1) + 0.05 * (j = 2)))
+                 (ask ed base) [() () (m 2) () e [(map (i \ i = 2 ? ed (i = 50 ? base (q 0 i))) ^51) (q 1) (q 2)]]
+                 (add k) (foldl (\ a j (: ix (iota 7 * 8 + 5 + j) (pin a ix (vs ix + k * [0.1 0.07 0.05] j)))) vs ^3)
+                 (fr V sun sk) (gpu-facets s W H -1 mat [V] [tris] X nf () sk [{'lamps [(sun ? [() () sc] ())]}])
+                 (dif x y) (: d ((x & 255) - (y & 255)) (max (amax d) -(amin d)))
+                 (t ed base k) (: sk (ask ed base) (dif (fr vs 1 sk) (fr (add k) 0 sk)))
+                 [(t 9.0 0.8 0.25) (t -9.0 0.8 -0.9375) (t 9.0 0.0 0.0) (t -9.0 0.8 0.0) (: sk (ask -9.0 0.8) (dif (fr vs 0 sk) (fr vs 0 sk)))])
            ; ..a batch moved every frame, a buf of its own each: those not drawn for a while dropped
            sw (: _ (each ^300 (i \ gpu-facets s W H -1 mat [(shove (0.001 * i) 0.0)] [tris] X nf () () ())) #(keys (s 'bufs)))
            ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
@@ -152,7 +164,7 @@
            un (: cs ((iota 80 >= 60) * 65281 - 1) ds (gem-tray [1 80] (map (x \ x >= 60 ? 0.0 2.0) ^80))
                  u (gpu-under g cs ds) f (gpu-frame g 640 8 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 0])
                  (u = () && tray? f ? [(net (f < 0)) (net ((f >= 0) * ((f & 16777215) = 65280)))] f))
-           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx sw]))))
+           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx sw sh]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most; the sky a pixel at a time all bare, a step off at most,
    ; and kept under it; a moving batch's old bufs dropped
@@ -163,7 +175,8 @@
                  && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)
                  && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0
                  && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13) && all (f \ f <= 4) (r 14) && all (f \ f <= 4) (r 15)
-                 && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16) && r 17 = ['kept 1] && r 18 < 200))
+                 && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16) && r 17 = ['kept 1] && r 18 < 200
+                 && r 19 0 <= 1 && r 19 1 <= 1 && r 19 2 <= 1 && 8 < r 19 3 && r 19 4 = 0))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

@@ -170,10 +170,9 @@
 (: grime (texture 32 32 2 '((fill (rgb 0.3 0.28 0.27)) (fbm 8 4 0.2) (stain 8 3 0.35 0.35 (shade 0.8)) (fbm 2 2 0.06) (relief 1.5 2 0.12)
                             (rows 0 1 0.12))))
 (: darkmetal (texture 16 16 1 '((fill (rgb 0.08 0.08 0.09)) (noise 4 0.3))))
-; ..its sign: the shop's name, its first and last two small across over and under the four
-; between, down the middle; both faces the same but that f takes its 天
-(: (shopsign x s f) [(neon [x 19.2 21.35] [s 0 0] 0.55 "戈文" (rgb 0.3 0.85 1))
-                   (f (neon [x 17.95 21.35] [s 0 0] 0.85 "天" (rgb 1 0.2 0.55)))
+; ..its sign: the shop's name, its last two small across under the four
+; before them, down the middle; both faces the same but that f takes its 天
+(: (shopsign x s f) [(f (neon [x 17.95 21.35] [s 0 0] 0.85 "天" (rgb 1 0.2 0.55)))
                    (neon [x 16.85 21.35] [s 0 0] 0.85 "然" (rgb 1 0.2 0.55))
                    (neon [x 15.75 21.35] [s 0 0] 0.85 "食" (rgb 1 0.2 0.55))
                    (neon [x 14.65 21.35] [s 0 0] 0.85 "品" (rgb 1 0.2 0.55))
