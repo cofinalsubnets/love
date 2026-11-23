@@ -823,7 +823,7 @@ gate_ho += test_elf32
 gate_ho += test_objcopy
 # test_dwarf -- mooncc -g through the link, by llvm-dwarfdump --verify and gdb; a leg skips without its oracle
 gate_ho += test_dwarf
-# test_dwarfcode -- -g leaves the code of love's C alone, but for the files dwarfcode.sh names
+# test_dwarfcode -- -g leaves the code of love's C alone
 gate_ho += test_dwarfcode
 # nc over real TCP on 127.0.0.1, both directions; `make nettest PORT=N`
 PORT ?= 7390
