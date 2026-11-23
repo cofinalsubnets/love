@@ -56,7 +56,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32_board test_esp32s3_board test_esp32c6_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
@@ -707,6 +707,7 @@ test_microbit_board: test_microbit
 	@echo TEST out/microbit/firm-ram.bin "(on silicon, from sram)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that kernel on a teensy 4.1, flashed over its usb on a host with teensy41-usb
+# ..by name, not in test_extra: it writes the flash, over the loader the psram lane wants
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.bin
