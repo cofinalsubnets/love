@@ -486,8 +486,10 @@
  ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
+ ; ..a window's share that is the picture's, where the console has the rest: 'pane its box in pixels
+ (mesh-pane st) (: wh (window-size (st 'win)) (peep st 'pane () @ () wh q [(max 1 (q 2)) (max 1 (q 3))]))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
+   wh (tablet? win ? (mesh-pane st) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
          'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
@@ -515,7 +517,16 @@
  ; when the gpu did; answers ""
  (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
    wh (window-size win) W <wh H (wh 1) P (window-paper win) gp (st 'gpu)
-   (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P)))
+   (? (two? (peep st 'pane ())) (mesh-split st f bands w h W H P)
+      (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P))))
+ ; ..beside the console the picture painted into its pane, the gpu keeping none of its frames
+ (mesh-split st f bands w h W H P) (: b (st 'pane) pw (b 2) ph (b 3) gp (st 'gpu) ov (peep st 'over {}) _ (tablet? gp ? (pin gp 'keep 0))
+   T (cask (4 * max 1 (pw * ph)))
+   _ (tray? f && #f = w * h && 0 < pw && 0 < ph ? (: _ (mesh-paint f w h T pw ph)
+                                    _ (each (sort (keys bands)) (r \ mesh-band st T pw ph r (bands r)))
+                                    (each ^(min ph (H - b 1)) (j \ pour P (4 * ((b 1 + j) * W + b 0)) T (4 * j * pw) (4 * min pw (W - b 0))))) 0)
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   (window-show (st 'win) 0 H, ""))
  ; ..its frames kept by the gpu from the next on
  (mesh-gpu-win st gp f w h W H P bands) (: ov (peep st 'over {})
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
