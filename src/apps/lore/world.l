@@ -1188,8 +1188,27 @@
         res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (sv j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
                             (map (pc \ [(pc 0) (t 3)]) pcs)))
                     ks)
-        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] res)
-        (mesh (vs + catmap (q \ q 0) res) (map ts (filter (i \ peep hit i () = ()) ^n) + tr 1))))
+        ; ..and every edge, the pieces' and the whole triangles' beside them, taking the corners
+        ; the cuts laid on it, so none meets a corner mid-edge: bent round a surface, such an
+        ; edge's middle would stay a chord where the corner's goes out on the curve, the sky
+        ; showing between
+        (cell p) ((floor (p 0 / 2.0) + 4096) * 8192 + floor (p 2 / 2.0) + 4096)
+        ; ..one by a wrapping surface's seam laid on its far side too, where the same edge is
+        wr (tablet? sf ? [(sf 'lx) 0.0 (sf 'lz)] ())
+        (moved p k s) (map (j \ j = k ? (p j + s) (p j)) ^#p)
+        (twins p) (p . (atom? wr ? () (catmap (k \ (? (p k < 2.0) [(moved p k (wr k))] (wr k - 2.0 < p k) [(moved p k -(wr k))] ())) [0 2])))
+        cs (foldl (\ g p (: c (cell p) (pin g c (p . peep g c ())))) {} (catmap twins (catmap (q \ q 0) res)))
+        (near a b) (: lo (cell [(min (a 0) (b 0)) 0.0 (min (a 2) (b 2))]) hi (cell [(max (a 0) (b 0)) 0.0 (max (a 2) (b 2))])
+                      (catmap (i \ catmap (j \ peep cs (lo + i * 8192 + j) ()) ^(hi % 8192 - lo % 8192 + 1)) ^(hi // 8192 - lo // 8192 + 1)))
+        (on-edge a b) (: d (map (k \ b k - a k) ^3) L (dot d d)
+                        ps (catmap (p \ (: t (dot (map (k \ p k - a k) ^3) d / L) e (map (k \ a k + t * d k - p k) ^3)
+                                          (1e-6 < t && t < 1.0 - 1e-6 && dot e e < 1e-10 ? [[t p]] ()))) (near a b))
+                        (map (q \ q 1) (foldl (a \ q \ (two? a && q 0 - <a 0 < 1e-9 ? a (q . a))) () (sortby (x \ y \ x 0 <= y 0) ps) @ l (rev l))))
+        (whole P) (: k #P (catmap (i \ (P i . on-edge (P i) (P ((i + 1) % k)))) ^k))
+        un (map (i \ (: t (ts i) Q (whole [(vs (t 0)) (vs (t 1)) (vs (t 2))]) [i Q])) (filter (i \ peep hit i () = ()) ^n))
+        ps (map (q \ [(whole (q 0)) (q 1)]) res + map (u \ [(u 1) (ts (u 0) 3)]) (filter (u \ #(u 1) > 3) un))
+        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] ps)
+        (mesh (vs + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
    (ground-cut m0 d) (: m (peep d 'land 0 ? (foot-cut m0) m0) (? (!(peep d 'land 0) || atom? cv) m
      (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
         (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
