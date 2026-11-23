@@ -338,7 +338,7 @@ fi
 for g in $groups; do
   gr= gs=0
   for l in $(cat "$d/$g.group"); do
-    if [ -f "$d/$l.rc" ]; then read -r r s < "$d/$l.rc"; else r=missing s=0; fi
+    if [ -f "$d/$l.rc" ]; then read -r r s w < "$d/$l.rc"; else r=missing s=0; fi
     [ "$r" = 0 ] || gr="$gr${gr:+,}$l"
     [ "$s" -gt "$gs" ] && gs=$s
   done

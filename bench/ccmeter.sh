@@ -18,13 +18,7 @@ command -v perf >/dev/null || { echo "ccmeter: perf not on PATH" >&2; exit 1; }
 [ $# -gt 0 ] || set -- raster zstd census
 cflags="-Iout -I. -Isrc/love -Isrc/inle -Iout/lib -D tco=1"
 
-# instructions in rz_* a frame: a 22-frame run less a 2-frame run, sampled every million
-rzf() { # binary script var -> M a frame
- for n in 2 22; do
-  env "$3=$n" LOVE_THREADS=1 perf record -q -e instructions:u -c 1000000 -o "$W/rz.data" "$1" "$2" > /dev/null 2>&1
-  perf report -i "$W/rz.data" --stdio --sort sym -q -n 2>/dev/null | awk '$NF ~ /^rz_/ {s += $2} END {print s + 0}' > "$W/rz-$n"
- done
- echo $(( ($(cat "$W/rz-22") - $(cat "$W/rz-2")) / 20 )); }
+rzf() { "$R/bench/rzf.sh" "$@"; }   # binary script var -> M a frame inside rz_*
 
 raster() {
  m=$(rzf out/love bench/raster.l RASTER_REPS); g=$(rzf out/love0 bench/raster.l RASTER_REPS)
@@ -42,10 +36,10 @@ int main(int argc, char **argv) {
  uintptr_t n = fread(s, 1, sizeof s, stdin), on;
  if (argv[1][0] == 'c') {
   uintptr_t cap = ze_cap(n); uint8_t *o = malloc(cap);
-  uintptr_t k = ze_frame(s, n, 19, o, cap);
+  uintptr_t k = ze_frame(s, n, 0, 19, o, cap, NULL);
   if (!k) return 2;
   fwrite(o, 1, k, stdout); return 0; }
- uint8_t *u = zs_whole(s, n, &on);
+ uint8_t *u = zs_whole(s, n, NULL, 0, NULL, &on);
  if (!u) return 3;
  fwrite(u, 1, on, stdout); return 0; }
 EOF
