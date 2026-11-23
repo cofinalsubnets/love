@@ -146,13 +146,18 @@
    ; ..a box holding all faces js of brush b
    (ubox b js) (: bxs (map (j \ box-of (b 'faces j)) js)
      {'lo (map (k \ foldl min 1e300 (map (x \ x 0 k) bxs)) ^3) 'hi (map (k \ foldl max -1e300 (map (x \ x 1 k) bxs)) ^3)})
+   ; ..each brush's planes for media, one across an axis [k sign d], one compare with side's answer
+   (ax q k) (all (j \ j = k || q j = 0) ^3 && mag (q k) = 1)
+   PD (tab (map (b \ map (pl \ (: q (pl 0) k (filter (ax q) ^3) (two? k ? [<k (q <k > 0 ? 1 -1) (pl 1)] pl))) (b 'planes)) bs))
    ; ..and the medium at points ps, a tray, of only those: a brush holding a place a hair off
-   ; the face is near it. the last brush holding a point says, each weighed over all at once
+   ; the face is near it. the last brush holding a point says, each weighed over all at once;
+   ; a land at the points hs instead, raised as high as a piece reaches to half a metre over
+   ; its middle, so a wall rising out of it stays whole
    (xyz ps) (map (k \ gem-tray [#ps] (map (p \ 1.0 * p k) ps)) ^3)
-   (media ks ps) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
+   (media ks ps hs) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
      (out pl) (pl @ [k 1 d] (V k <= d) [k -1 d] (V k >= 0.0 - d) [q d] (q 0 * X + q 1 * Y + q 2 * Z - d <= 0.0))
      (in i) (: b (bt i) (b 'land @ () (PD i @ () (X * 0.0 + 1.0) l (foldl (\ m pl (m * out pl)) (out <l) >l))
-                                   L (gem-tray [n] (map (p \ 1.0 * inside? b p) ps))))
+                                   L (gem-tray [n] (map (p \ 1.0 * inside? b p) hs))))
      (n = 0 ? () (foldl (\ m k (m + in k * (1.0 * bt k 'air - m))) (X * 0.0) ks)))
    ; ..and where a brush of ks has a face on points V facing n either way, a tray, as on-face?'s
    (sides V pl) (: q (pl 0) (q 0 * V 0 + q 1 * V 1 + q 2 * V 2 - pl 1))
@@ -161,9 +166,6 @@
                                       (: on (foldl (\ a p (: s (sides V p) (max a ((s < 1e-4) * (s > -1e-4))))) (V 0 * 0.0) par)
                                          (max m (foldl (\ a p (a * (sides V p <= 1e-4))) on pl))))))
                          (V 0 * 0.0) ks)
-   ; ..each brush's planes for media, one across an axis [k sign d], one compare with side's answer
-   (ax q k) (all (j \ j = k || q j = 0) ^3 && mag (q k) = 1)
-   PD (tab (map (b \ map (pl \ (: q (pl 0) k (filter (ax q) ^3) (two? k ? [<k (q <k > 0 ? 1 -1) (pl 1)] pl))) (b 'planes)) bs))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
    ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0)]) bs)) ())
    ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
@@ -179,7 +181,9 @@
                             pls (catmap (k \ meets (bt k) (b 'planes j)) others)
                             ps (poly-carve f pls)
                             pt (tab ps) cs (tab (map mid ps)) np #ps
-                            M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np))
+                            (top i e) (: c (c+ (cs i) (c* e n)) [(c 0) (min (cs i 1 + 0.5) (foldl max -1e300 (map (q \ q 1) (pt i))) + e * n 1) (c 2)])
+                            M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np)
+                                     (map (i \ top i 1e-3) ^np + map (i \ top i -1e-3) ^np))
                             F (np = 0 || atom? later ? () (flush later (xyz (map cs ^np)) n))
                             (catmap (i \ (: fr (M i) (fr = M (np + i) || (tray? F && F i > 0.5) ? () [[(pt i) (fr = 1 ? n (c* -1.0 n))]])))
                                     ^np))))

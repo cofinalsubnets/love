@@ -3,7 +3,7 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-halo mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-lamp-slots mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-paint mesh-gone
          mesh-glb mesh-glb-of)
@@ -159,6 +159,18 @@
                           (pk 'tris)])))
  ; ..the ks of the lamps that reach a mesh mesh-lamps! keeps, all of them before it has
  (mesh-lit-ks pk ks) (pk 'live @ () ks lv (map ks (lv 'r)))
+ ; ..a mesh mesh-lamps! keeps, for a gpu to light: [verts li cols], its verts lit with the lamps
+ ; that reach it out, li those lamps, 8 at most, and cols 24 numbers a vertex, slot k lamp li
+ ; k's light there at full strength; () where none or more than 8 reach it. made once, kept
+ (mesh-lamp-slots pk) (: lv (peep pk 'live ()) r (tablet? lv ? (lv 'r) ())
+   (? (!(two? r) || #r > 8) ()
+      (pk 'slots @ ()
+         (: ix (lv 'ix) on (ix // 8) n (pk 'n) c8 (lv 'c8)
+            v (foldl (\ v j (pin v (ix + 5 + j) (c8 j * lv 'base j))) (pk 'buf) ^3)
+            cs (foldl (\ a k (foldl (\ a j (pin a (on * 24 + 3 * k + j) (c8 j * lv 'chs (r k) j))) a ^3)) (iota (24 * n) * 0.0) ^#r)
+            q [v (r + map (_ \ 0) ^(8 - #r)) cs]
+            (pin pk 'slots q, q))
+         q q)))
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
@@ -221,8 +233,8 @@
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
- ; the grid's mesh, [verts tris tone] or (), what lays the disc or the stars after, and their
- ; spots for a frame the gpu kept, [S C] or ()
+ ; the grid's mesh and the spots it lays, [verts tris tone [S C]] or (), what lays the disc or
+ ; the stars after, and their spots for a frame the gpu kept, [S C] or ()
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -244,14 +256,15 @@
      (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
                      (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
                         [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]))
-     ; ..laid on g where f was bare, as b? tells
-     (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (q 1)))
+     ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
+     (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x = -1))))
-         [(v \ sky-mesh v lt wx e sim k sm) (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
+         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
+         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e]))
+          (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v
@@ -259,18 +272,22 @@
  ; the sky over f's bare pixels, about every k pixels, a flat tray: asked on a cube of
  ; directions n a face, fixed to the sky and drawn through the eye, so no turn or tilt moves
  ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn.
- ; with sm a tablet, each ask kept there and asked again a frame in sky-turn, or once
- ; sky-age of sim old; all of them again for a new grid, weather or light, or once the eye
- ; moves, so no two asks side by side are of different moments
- sky-turn 4 sky-age 1.0
- (sky-keep sm n mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
-   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && 2 ds < 3600.0)
+ ; with sm a tablet, each ask kept there: one never asked asked at once, and all in view
+ ; again together each sky-age of sim, so the mesh through them is made once in that; all of
+ ; them again once the eye has gone sky-move metres, the deck so far over it that less moves
+ ; nothing a pixel, and for a new grid, weather or light
+ sky-age 1.0 sky-cut 2 sky-move 4.0 sky-lead 0.25
+ (sky-keep sm n p mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
+   ok (peep sm 'n 0 = n && peep sm 'p 0.0 = p && peep sm 'wx () == wx && l 0 = lt 'sun && l 1 = lt 'expo && 2 ds < 3600.0)
    z (iota (6 * mm) * 0.0)
-   _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
-   (pins sm 'e e 'lt [(lt 'sun) (lt 'expo)] 'sim sim 'k (sm 'k + 1)))
+   _ (? !ok (pins sm 'n n 'p p 'wx wx 'cs (map (_ \ z) ^7) 'at (z - 1e9) 'all -1e9 'e e)
+        (2 (e 0 - q 0) + 2 (e 2 - q 2) > 2 sky-move) (pins sm 'all -1e9 'e e))
+   (pins sm 'lt [(lt 'sun) (lt 'expo)] 'sim sim))
  (sky-grid v lt wx e sim k f sm) (sky-mesh v lt wx e sim k sm @ () f m
-   (facets (v 'w) (v 'h) f (v 'cam) (m 0) (m 1) () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (m 2)])))
- ; ..its mesh, facets's verts and tris and the tone, or () where no block is in view
+   (: J (iota (#(m 0) // 11) * 11) at (foldl (\ a k (pin a (J + k) (e k))) (m 0 * 0.0) ^3)
+     (facets (v 'w) (v 'h) f (v 'cam) (m 0 + at) (m 1) () [(gem-tray [7] [0.0 0.0 0.0 0.0 0.0 352.0 (m 2)])])))
+ ; ..its mesh, facets's verts and tris and the tone, the places from the eye, or () where no
+ ; block is in view
  (sky-mesh v lt wx e sim k sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (2 m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
@@ -280,36 +297,102 @@
                      x (A0 * sg + (1 - A0) * s) y (A1 * sg + A0 * s + A2 * t) z (A2 * sg + (1 - A2) * t)
                      L (sqrt (2 x + 2 y + 2 z)) [(x / L) (y / L) (z / L)])
      (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
-     ; ..the corners in view, their directions and the triangles through them: kept in sm
-     ; until the view turns, the grid being the sky's and not the eye's
-     key [nb w h (v 'fov) (v 'f) (v 'r) (v 'u)]
+     ; ..a block in view: inside each side of the view but for half a block's diagonal, and
+     ; those kept sky-lead radians wider, while the view stays within them; the blocks' middles
+     ; kept for the grid
+     bm (? (tablet? sm && peep sm 'bk () = nb) (sm 'bm)
+           (: K (iota (6 * nb * nb)) m (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
+              (? (tablet? sm) (pins sm 'bk nb 'bm m) 0, m)))
+     tx (tan (v 'fov / 2.0)) ty (tx * h / w) fw (v 'f)
+     (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
+     sides [(side (v 'r) tx) (side (map (j \ 0.0 - v 'r j) ^3) tx) (side (v 'u) ty) (side (map (j \ 0.0 - v 'u j) ^3) ty)]
+     out (foldl (\ a p (max a (bm 0 * p 0 + bm 1 * p 1 + bm 2 * p 2))) (bm 0 * 0.0 - 1.0) sides)
+     ah (bm 0 * fw 0 + bm 1 * fw 1 + bm 2 * fw 2) need ((out < 1.15 * qa / nb) * (ah > 0.0)) vm (tablet? sm ? (peep sm 'vm ()) ())
+     vb (iota (? (two? vm && <vm = nb && net (need * (1 - vm 1)) = 0) (vm 1)
+                 (: m ((out < 1.15 * qa / nb + sky-lead) * (ah > 0.0 - sky-lead)) (? (tablet? sm) (pin sm 'vm [nb m]) 0, m))))
+     ; ..the corners of the blocks in view, their directions and the triangles through them:
+     ; kept in sm while the same blocks are in view, the grid being the sky's and not the eye's
+     key [nb w h (show vb)]
      gd (? (tablet? sm && peep sm 'gk () = key) (sm 'gd)
-           (: ; ..a block in view: inside each side of the view but for half a block's diagonal
-              tx (tan (v 'fov / 2.0)) ty (tx * h / w) r (v 'r) u (v 'u) fw (v 'f)
-              (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
-              sides [(side r tx) (side (map (j \ 0.0 - r j) ^3) tx) (side u ty) (side (map (j \ 0.0 - u j) ^3) ty)]
-              K (iota (6 * nb * nb)) bd (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
-              out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
-              vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
-              ; ..the blocks' corners, each asked once
+           (: ; ..the blocks' corners, each asked once, and a ring round each within its face
+              ; for the curves through them
+              (cl x) (max 0 (min n x))
               (corner E c) (: bk (vb (E // (2 c))) o (E % (2 c))
                              (bk // (2 nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
-              N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
+              (ring E) (: bk (vb (E // 49)) o (E % 49)
+                         (bk // (2 nb) * mm + cl (bk // nb % nb * 4 + o // 7 - 1) * m + cl (bk % nb * 4 + o % 7 - 1)))
+              N (iota (pin (iota (6 * mm) * 0) (ring (iota (#vb * 49))) 1 > 0))
               ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
-              (q j) (ix (qs + j)) zq (qs * 0 - 1)
-              g [N (dir N) (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])]
+              (q j) (ix (qs + j))
+              ; ..each quad's corners; one quad cut sky-cut by sky-cut, its points' weights on
+              ; the corners and its triangles; and one fanned from its middle to its sides'
+              ; points, the fan's triangles [middle a b] along each side cut and along it whole
+              c sky-cut S (c + 1) J (iota (S * S)) ua (J % S / (1.0 * c)) ub (J // S / (1.0 * c))
+              K (iota (2 c)) at (K // c * S + K % c) zk (K * 0 - 1)
+              (wts a b) [((1.0 - a) * (1.0 - b)) (a * (1.0 - b)) (a * b) ((1.0 - a) * b)]
+              ; ..and on the 4 by 4 corners about the quad, a catmull-rom curve each way, the
+              ; face's edge corners standing in past it
+              (cr t) [(0.5 * t * (t * (2.0 - t) - 1.0)) (0.5 * (t * t * (3.0 * t - 5.0) + 2.0))
+                      (0.5 * t * (t * (4.0 - 3.0 * t) + 1.0)) (0.5 * t * t * (t - 1.0))]
+              (bic a b) (: x (cr a) y (cr b) (map (k \ x (k % 4) * y (k // 4)) ^16))
+              nr (4 * c) R (iota nr) sd (R // c) t (R % c / (1.0 * c))
+              mid (gem-tray [1] [0.5])
+              fa (abut [((sd = 0) * t + (sd = 1) + (sd = 2) * (1.0 - t)) mid])
+              fb (abut [((sd = 1) * t + (sd = 2) + (sd = 3) * (1.0 - t)) mid])
+              g [N (dir N) [(q 0) (q 1) (q (m + 1)) (q m)] (wts ua ub)
+                 (lace [at (at + 1) (at + S + 1) zk at (at + S + 1) (at + S) zk])
+                 (wts fa fb) [sd R ((R + 1) % nr) ((R % c = 0) * sd * c + (R % c > 0) * nr) ((R % c = 0) * ((sd + 1) * c % nr) + (R % c > 0) * nr)]
+                 ; ..each quad's sides that lie on its face's edge
+                 (: x (qs % m) y (qs // m % m) [(y = 0) (x + 1 = n) (y + 1 = n) (x = 0)])
+                 (map (k \ ix (qs // mm * mm + cl (qs // m % m + k // 4 - 1) * m + cl (qs % m + k % 4 - 1))) ^16)
+                 (bic ua ub) (bic fa fb)]
               (? (tablet? sm) (pins sm 'gk key 'gd g) 0, g)))
      N (gd 0) d (gd 1)
-     ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
-     (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     ; ..each ask's clouds as fine as a grid half as coarse, their edges a pixel's: its two
+     ; colours and its edge, seven trays; kept ones as they were
+     p (mesh-step v 1)
+     (ask N d) (sky-ends lt wx (qa / n / 2.0) p (d 0) (d 1) (d 2) (e 0) (e 2) sim @ [c0 dc x] (c0 + dc + [x]))
      c (? (!(tablet? sm)) (ask N d)
-          (: _ (sky-keep sm n mm e lt wx sim)
-             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - sm 'at N > sky-age) > 0)) NA (N A)
+          (: _ (sky-keep sm n p mm e lt wx sim)
+             old (sim - sm 'all > sky-age) _ (old ? (pin sm 'all sim) 0)
+             A (old ? (iota #N) (iota (sm 'at N < -1e8))) NA (N A)
              cA (#A @ 0 () (ask NA (dir NA)))
-             _ (#A @ 0 () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
-             [(sm 'r N) (sm 'g N) (sm 'b N)]))
-     zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
-     (#N @ 0 () [(lace cols) (gd 2) (1.5 * lt 'expo)]))
+             _ (#A @ 0 () (pins sm 'cs (map (j \ pin (sm 'cs j) NA (cA j)) ^7) 'at (pin (sm 'at) NA (NA * 0.0 + sim)) 'ver (peep sm 'ver 0 + 1)))
+             (map (j \ sm 'cs j N) ^7)))
+     ; ..the mesh about the eye. a quad an edge crosses cut, clear at a corner and cloud at
+     ; another, its corners' asks eased between, so the edge bends within it, but on a face's
+     ; edge; one all soft eased whole; a side cut where both its corners are a cut quad's, so
+     ; no side is cut on one face of it and whole on the other, and none on a face's edge, whose
+     ; corners the next face numbers apart; a quad with a side cut fanned; the rest two triangles
+     (build _)
+      (: Q (gd 2) W (gd 3) T (gd 4) Wf (gd 5) Tf (gd 6) bd (gd 7) St (gd 8) (at k) (c 6 (Q k))
+        lo (min (min (at 0) (at 1)) (min (at 2) (at 3))) hi (max (max (at 0) (at 1)) (max (at 2) (at 3)))
+        ce ((lo < 0.5) * (hi > -0.5) * (hi - lo > 1.0))
+        cq (ce * (bd 0 + bd 1 + bd 2 + bd 3 = 0))
+        E (iota cq) hit (foldl (\ h k (pin h (Q k E) 1)) (N * 0) ^4) (hc k) (hit (Q k))
+        cs [(hc 0 * hc 1 * (1 - bd 0)) (hc 1 * hc 2 * (1 - bd 1)) (hc 2 * hc 3 * (1 - bd 2)) (hc 3 * hc 0 * (1 - bd 3))]
+        ns (cs 0 + cs 1 + cs 2 + cs 3) B (iota ((1 - cq) * (ns > 0))) F (iota ((1 - cq) * (ns = 0)))
+        nE (#E * #(W 0)) nf (#(Wf 0))
+        zf (F * 0 - 1) Jt (iota (#E * #T))
+        ; ..a fan's sides cut or whole, each of its triangles the one or the other
+        Jf (iota (#B * #(Tf 0))) qf (Jf // #(Tf 0)) lf (Jf % #(Tf 0))
+        sf (Tf 0 lf) bq (B qf) fc ((sf = 0) * cs 0 bq + (sf = 1) * cs 1 bq + (sf = 2) * cs 2 bq + (sf = 3) * cs 3 bq)
+        o (#N + nE + qf * nf) zb (Jf * 0 - 1)
+        fan (lace [(o + nf - 1) (o + Tf 3 lf + fc * (Tf 1 lf - Tf 3 lf)) (o + Tf 4 lf + fc * (Tf 2 lf - Tf 4 lf)) zb])
+        tris (abut [(lace [(Q 0 F) (Q 1 F) (Q 2 F) zf (Q 0 F) (Q 2 F) (Q 3 F) zf])
+                    (T (Jt % #T) + (Jt % 4 != 3) * (#N + Jt // #T * #(W 0))) fan])
+        ; ..each column the asks' own, then the cuts' and the fans' points: a place or a colour
+        ; eased straight from the corners, so a side's points lie on it and meet the next quad's,
+        ; and the edge along the curves through the 4 by 4 about them
+        (by x C V0 V1) (abut [x (mix-quads x C V0 E) (mix-quads x C V1 B)])
+        (lin x) (by x Q W Wf)
+        [(lace [(lin (d 0)) (lin (d 1)) (lin (d 2)) (by (c 6) St (gd 9) (gd 10)) 0.0
+                (lin (c 0)) (lin (c 1)) (lin (c 2)) (lin (c 3)) (lin (c 4)) (lin (c 5))]) tris])
+     ; ..kept while no ask is new and the view has not turned, its places from the eye, so a
+     ; gpu keeps it as the eye moves
+     mk [key (tablet? sm ? (peep sm 'ver 0) ())]
+     mv (? (tablet? sm && peep sm 'mk () = mk) (sm 'mv) (: m (build ()) (? (tablet? sm) (pins sm 'mk mk 'mv m) 0, m)))
+     (#N @ 0 () [(mv 0) (mv 1) (1.5 * lt 'expo)]))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
  ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly

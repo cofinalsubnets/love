@@ -10,7 +10,7 @@
 ; 'turn, the eye's axes in the world's, has the sky's clouds fixed in the world, far
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
 ; horizon too: sky-lit's csun then sky-orb-cloud's
-(module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
+(module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-ends sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
          sky-irr sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
 (borrow '(view vec starmap))
 (:
@@ -190,7 +190,9 @@
    [(th-of (R 'd) dx dy dz)
     (: n 0.025 X (dx + n * s 0) Y (dy + n * s 1) Z (dz + n * s 2) l (sqrt (2 X + 2 Y + 2 Z))
        (th-of () (X / l) (Y / l) (Z / l)))])
- (paint-with lt wx R sim far T) (: s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
+ (paint-with lt wx R sim far T) (paint-mix lt wx R sim far T (sat (0.5 + (T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq (R 'sd)))))
+ ; ..the colour as the share g of the sample past the edge, a number or a tray
+ (paint-mix lt wx R sim far T) (: s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
    dx (R 'dx) dy (R 'dy) dz (R 'dz) th (T 0) ts (T 1)
    mu (dx * sx + dy * sy + dz * sz)
    warm (sat ((mu + 0.3) / 1.3))
@@ -198,9 +200,6 @@
    disc (sat ((mu - 0.9995) * 4000.0))
    halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
    sky0 (c+ (c+ (cmix (dyed wx (R 'dark)) (dyed wx (R 'blue)) (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
-   ; ..the edge as wide as that spread: the share of the sample past it, not a fringe
-   cl0 (haze-k (sat (0.5 + (th - edge wx sim) / sqrt (0.0016 + 2.0 * sq (R 'sd)))) (R 'hk) wx sim)
-   cl (clouded wx cl0)                          ; overcast: no sky through it
    ; ..the clouds: lit on the side toward the sun, darker the thicker, greyer the more of them
    ; ..and under smog the thick of them darker still and the thin lit through
    sm (peep wx 'smog 0.0)
@@ -212,8 +211,10 @@
               (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
                       (c* (lt 'tw) [0.5 0.22 0.14]))
                   (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
-   ; ..under a dye the clouds that colour too, and the smog a band low down, the dye's sky over it
-   (smog-by wx (cmix sky0 (dyed wx cloudc) cl) (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))))
+   cd (dyed wx cloudc) sg (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))
+   ; ..overcast no sky through it; under a dye the clouds that colour too, and the smog a band
+   ; low down, the dye's sky over it
+   (g \ smog-by wx (cmix sky0 cd (clouded wx (haze-k g (R 'hk) wx sim))) sg))
  ; a colour said as 0xrrggbb
  (rgb x) [((x // 65536) / 255.0) ((x // 256 % 256) / 255.0) ((x % 256) / 255.0)]
  ; the sky's colour down the rays dx dy dz (trays) from the eye at ex ez, under the light
@@ -221,6 +222,13 @@
  (sky-colour-of lt wx dx dy dz ex ez sim) (sky-colour-at lt wx 0.0 dx dy dz ex ez sim)
  ; ..its rays a radians apart, the clouds no finer than they tell apart
  (sky-colour-at lt wx a dx dy dz ex ez sim) (paint lt wx dx dy dz ex ez sim 1.0 a)
+ ; ..its clouds as two colours and an edge, [clear cloud e]: the colour clear + (cloud - clear)
+ ; times 0.5 + e, 0 to 1, the edge as wide as the spread of rays p radians apart, so asks a
+ ; radians apart shade between them with each pixel's edge
+ (sky-ends lt wx a p dx dy dz ex ez sim) (: R (rays-of (lt 'turn) dx dy dz ex ez a) T (thick-by lt wx R sim)
+   f (paint-mix lt wx R sim 1.0 T) c0 (f 0.0)
+   sd (thick-sd (two? (lt 'turn) ? (p * orb-k) (deck-fp p dy)))
+   [c0 (c+ (f 1.0) (c* -1.0 c0)) ((T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq sd))])
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim) (paint lt wx dx dy dz ex ez sim 0.0 0.0)
  ; ..down rays a scene keeps, laid once by sky-rays, B its light's 'turn

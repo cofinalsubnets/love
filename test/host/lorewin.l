@@ -12,13 +12,15 @@
    asked {1 [['down 42] ['down 53] ['text "?"]] 3 [['up 53] ['up 42]] 5 [['down 16]]}
    ; ..+ finer, then - twice coarser: 2 to 1, 2 and 4
    scaled {1 [['down 13] ['text "+"]] 2 [['up 13] ['down 12] ['text "-"]] 3 [['up 12] ['down 12] ['text "-"]] 5 [['down 16]]}
+   ; ..w held 0-4, shift down from 2 to 4: the held w its capital while shift is
+   shifted {0 [['down 17] ['text "w"]] 2 [['down 42]] 4 [['up 42]] 5 [['up 17]] 7 [['down 16]]}
    (run sc held rep) (: win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (peep sc 0 ())}
                     lv {'new (w \ h \ {'w w 'h h 't 0 'log () 'helped ()})
                         'size (st \ w \ r \ pins st 'w w 'h (2 * r))
                         'frame (st \ ((0 < #(keys (peep st 'over {})) ? (pin st 'helped (st 't . st 'helped))), ""))
                         'key (st \ a \ pin st 'log ([(st 't) a] . st 'log))
                         'tick (st \ pin win 'evq (peep sc (st 't + 1) ()))
-                        'binds (view-bind view-binds {112 'where})
+                        'binds (view-bind view-binds {112 'where 119 'forward 87 'sprint}) 'walking (view-walking + ['sprint])
                         'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held held 'repeat rep}
                     st (view-walk lv)
                     [(rev (st 'log)) (st 'w) (st 'h) (rev (st 'helped)) (peep st 'scale ())])
@@ -29,12 +31,14 @@
    d (run scaled (_ \ 1) ev)
    e (run echoed (_ \ 1) none)
    f (run echoed (_ \ 1) ev)
+   g (run shifted (_ \ 1) ev)
  (test (a 0 = [[0 'forward] [1 'forward] [2 'forward] [3 'where]])   ; k each frame held, then p once
        (b 0 = [[0 'forward] [3 'where]])                              ; held, but the level says not now
        (e 0 = [[0 'forward] [3 'where]])                              ; the keyboard's repeat is no press
        (f 0 = a 0)                                                    ; nor a second one a frame
        (a 1 = 80) (a 2 = 50)                                          ; 640 by 400: 80 cells by 25 rows
-       (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())))                                     ; the help while ? is down, and no action
+       (c 3 = [1 2]) (c 0 = ()) (d 4 = 4) (d 0 = ()) (a 4 = ())
+       (g 0 = [[0 'forward] [1 'forward] [2 'sprint] [3 'sprint] [4 'forward]])))   ; shift turns a held w to a sprint and back                                     ; the help while ? is down, and no action
 
 ; a window's buttons go to the level's 'mouse, pressed and let go; where it looks by the
 ; mouse only once that is held, so the first click takes the mouse and goes no further
