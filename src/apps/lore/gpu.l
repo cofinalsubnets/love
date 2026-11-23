@@ -223,10 +223,12 @@
    (#t < 4 ? [-1] (gpu-buf (s 'g) id v t st @ () [id] r r)))
  ; ..the weights for n words, kept until the sweep
  (weights s n) (: t (s 'wt) (peep t n () @ () (: w (iota n % 997 + 1) (pin t n w, w)) w w))
- (sweep s) (: b (s 'bufs) u (s 'used) fr (s 'fr) (old? k) (u k < fr - 120 && !peep (s 'held) (b k 0) 0)
+ (sweep s) (: b (s 'bufs) u (s 'used) fr (s 'fr) (old? k) (u k < fr - 120 && !(peep (s 'held) (b k 0) 0))
    _ (each (filter old? (keys u)) (k \ gpu-drop (s 'g) (b k 0)))
-   ks (filter (k \ !(old? k)) (keys u))
-   (pins s 'bufs (foldl (\ t k (pin t k (b k))) {} ks) 'used (foldl (\ t k (pin t k (u k))) {} ks) 'wt {}))
+   ks (filter (k \ !(old? k)) (keys u)) ids (map (k \ b k 0) ks)
+   (kept t) (foldl (\ a id (peep t id () @ () a q (pin a id q))) {} ids)
+   (pins s 'bufs (foldl (\ t k (pin t k (b k))) {} ks) 'used (foldl (\ t k (pin t k (u k))) {} ks) 'wt {}
+         'lamped (kept (s 'lamped)) 'placed (kept (s 'placed))))
  ; ..the sun's view, laid again only when it moves
  (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
