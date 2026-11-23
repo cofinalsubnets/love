@@ -137,9 +137,10 @@
  (mw-font as) (? (two? as && <as = "-f" && two? >as) (uread <>as @ t (two? t ? (font-hex <>t))))
  (mw-args as) (? (two? as && <as = "-f") (two? >as ? >>as ()) as)
  ; --- the terminal: a program in a window, the shell when none; it ends with the program.
- ;     answers 0, or 1 and why it could not. a program asks a phone's keyboard away by ?7727 ---
- (mitty-main as0)
-  (: font (mw-font as0) as (mw-args as0)
+ ;     answers 0, or 1 and why it could not. a program asks a phone's keyboard away by ?7727,
+ ;     and -k starts with it away ---
+ (mitty-main as1)
+  (: away (two? as1 && <as1 = "-k") as0 (away ? >as1 as1) font (mw-font as0) as (mw-args as0)
   (window-open 640 384 "mitty" @ win
    (? !(tablet? win) (say err ("mitty: no window (" + show win + ")\n"), flush err, 1)
       (: wh (window-size win) r (max 2 ((wh 1) // 16)) c (max 20 (<wh // 8))
@@ -148,8 +149,8 @@
          _ (setenv "MITTY" "1")                       ; its pictures take
          p (hopen (two? as ? as (string? me ? [me "lush"] ["sh"])) r c)
          (? (atom? p) (say err ("mitty: cannot start: " + show p + "\n"), flush err, window-close win, 1)
-            (: gx (hbox p) m (hmas p) dirty {1} held {'typing 1}
-               _ (window-typing win 1)
+            (: gx (hbox p) m (hmas p) dirty {1} held {'typing (away ? 0 1)}
+               _ (away ? (scribe (peep gx () 0) "\e[?7727h") 0) _ (window-typing win (held 'typing))
                (send s) (0 < #s ? (peer (peep gx () 0) 0, say m s, flush m) 0)
                ; shift with pgup and pgdn look back, half a screen at a time
                (key k) (: sc (peep gx () 0) n (gaze sc 1 // 2)
@@ -174,7 +175,7 @@
                 window-close win,
                 0)))))))
 
- mitty-usage "usage: love mitty [-f FONT.hex] [COMMAND ..]   COMMAND, or the shell, in a window of its own;
+ mitty-usage "usage: love mitty [-k] [-f FONT.hex] [COMMAND ..]   COMMAND, or the shell, in a window of its own;
   shift+pgup and pgdn look back, ctrl+shift+C and V copy and paste, a drag selects. panes: love pier"
  _ (pins (cite 'verbs 'tab) 'mitty (udoor 'mitty mitty-main mitty-usage 1 1)))
 ) ; module mitty
