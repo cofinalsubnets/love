@@ -1881,21 +1881,28 @@
    ; at the call's line. 'dlis the open ones, 'dlik their splices
    (dlopen g env f l k nm)
     (: id (peep g 'dlbn 1) par (g 'dlb) at (peep (g 'dlfnl) nm [f l])
-       (pins g 'dlbn (id + 1) 'dlb id 'dlis ([k id par env] . g 'dlis) 'dlik ("\(k)" . g 'dlik) 'dlcur at,
+       (pins g 'dlbn (id + 1) 'dlb id 'dlis ([k id par env nm f l] . g 'dlis) 'dlik ("\(k)" . g 'dlik) 'dlcur at,
         [['label (name ".dlb.\(id)")] ['label (lodl g ".dl" (at 1) <at)]]))
-   (dlclose g env f l k nm)
-    (g 'dlis @ (([k2 id par e0] . u) && k2 = k)
-      (dlrec g id par env e0 [nm f l],
-       pins g 'dlb par 'dlis u 'dlik >(g 'dlik) 'dlcur [f l],
-       [['label (name ".dle.\(id)")] ['label (lodl g ".dl" l f)]])
-      _ ())
+   (dlclose g env f l k)
+    (any (e \ <e = k) (g 'dlis) ?
+       (<(g 'dlis) @ [k2 id par e0 nm cf cl]
+          (dlrec g id par env e0 [nm cf cl],
+           pins g 'dlb par 'dlis >(g 'dlis) 'dlik >(g 'dlik),
+           dlends id + (k2 = k ? (pin g 'dlcur [f l], [['label (lodl g ".dl" l f)]]) (dlclose g env f l k)))))
+   ; ..those a return's prune left open, at their block's end. is: the ones open ahead of it
+   (dlshut g env is)
+    (two? (g 'dlis) && g 'dlis != is ?
+       (<(g 'dlis) @ [k id par e0 nm f l]
+          (dlrec g id par env e0 [nm f l], pins g 'dlb par 'dlis >(g 'dlis) 'dlik >(g 'dlik), dlends id + dlshut g env is)))
+   ; a block's end, held by the form after it, and .dlz by the one ahead (dlout)
+   (dlends k) [['label (name ".dle.\(k)")] ['label (name ".dlz.\(k)")]]
    ; f lays a block's forms -> [forms env] | 'bad, under its marks where it asks them
    (dlscope g env ask f)
     (: par (g 'dlb) top (par = ())
        (? (!top && !(ask && g 'dlcur)) (f 0)
           (: k (? top 0 (peep g 'dlbn 1)) _ (top ? 0 (pin g 'dlbn (k + 1))) _ (pin g 'dlb k)
              r (f 0) _ (pin g 'dlb par)
-             (r @ [fs e2] (dlrec g k par e2 env (), (top ? r [([['label (name ".dlb.\(k)")]] + fs + [['label (name ".dle.\(k)")]]) e2])) _ r))))
+             (r @ [fs e2] (dlrec g k par e2 env (), (top ? r [([['label (name ".dlb.\(k)")]] + fs + dlends k) e2])) _ r))))
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
     (: ; an arm that lays code and opens with no mark takes one of the statement around it, so code moved out of line keeps a row
@@ -2155,9 +2162,9 @@
         (l @ (['decl ps] . u) (lodecl g env ps @ [fs e2] (go u e2 (acc + fs)) 'bad)
              (['sdecl ps] . u) (go u (losdecl g env ps) acc)
              (['loc f ln 'in k nm] . u) (go u env (acc + dlopen g env f ln k nm))
-             (['loc f ln 'out k nm] . u) (go u env (acc + dlclose g env f ln k nm))
+             (['loc f ln 'out k nm] . u) (go u env (acc + dlclose g env f ln k))
              (it . u) (lost1 g env it @ 'bad 'bad fs (go u env (acc + fs)))
-             [acc env])
+             (two? (g 'dlis) ? (: z (dlshut g env is) [(acc + z) env]) [acc env]))
        b (g 'dlb) is (g 'dlis) ik (g 'dlik)
        r (dlscope g env (dlbinds? g items) (_ \ go items env ()))
        (pins g 'dlb b 'dlis is 'dlik ik, r))

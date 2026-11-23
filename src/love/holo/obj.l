@@ -959,7 +959,7 @@
               ps (own @ ([_ _ _ (nm . _)] . _) (map cap ((peep (dt 2) nm [() ()]) 1)) _ ())
               a1 (foldl (loc1 f ps) acc (catmap (s \ s 2) own))
               (at p j d) (peep lb (name "\(p).\(j)") d)
-              kids (sort (catmap (s \ (at ".dlb" <s () @ b (charm? b ? [[b (at ".dle" <s hi) <s]] ()))) (filter (s \ 0 < <s) (peep (scs 1) k ()))))
+              kids (sort (catmap (s \ (at ".dlb" <s () @ b (charm? b ? (at ".dle" <s hi @ e [[b (e <= b ? (at ".dlz" <s e) e) <s]]) ()))) (filter (s \ 0 < <s) (peep (scs 1) k ()))))
               (kid st c)
                (@ st [acc from]
                   (: b (max from <c) e (min hi (c 1))

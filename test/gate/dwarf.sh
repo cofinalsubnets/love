@@ -126,7 +126,7 @@ for t in x64 a64 rv64; do
   fi
 done
 
-# a call spliced as statements is an inlined copy, one inside another too: its callee, its call's place, its names
+# a call spliced as statements is an inlined copy, one inside another too, one in an arm laid out of line: its callee, its call's place, its names
 cat > "$d/i.c" <<'EOF'
 static long sum;
 __attribute__((noinline)) long opq(long v) {
@@ -145,13 +145,19 @@ int main(int c, char **v) {
   both(c + 9);
   opq(c);
   return 0; }
+int sq(int x) {
+  int y = x * x;
+  return y + 1; }
+int q(int a) { if (a)
+    return sq(a);
+  return 7; }
 EOF
 for t in x64 a64 rv64; do
   mc -t $t -os linux -g "$d/i.c" -o "$d/i.$t"
   if [ -n "$dd" ]; then
     "$dd" --verify "$d/i.$t" > "$d/vi.$t" 2>&1 || { cat "$d/vi.$t"; echo "FAIL $name: $t inlined --verify"; exit 1; }
     n=`"$dd" --debug-info "$d/i.$t" | grep -c DW_TAG_inlined_subroutine`
-    [ "$n" = 3 ] || { echo "FAIL $name: $t has $n inlined copies, not 3"; exit 1; }
+    [ "$n" = 4 ] || { echo "FAIL $name: $t has $n inlined copies, not 4"; exit 1; }
   fi
 done
 
