@@ -833,11 +833,13 @@
        pr (foldl prog [() ()] sqs)
        body (le16 4 + le32 #hdr + hdr + <pr)
        ln [".debug_line" 1 0 1 (le32 #body + body) (map (r \ (@ r [o k l a p] [(o + 10 + #hdr) k l a p])) (rev <>pr)) {(name ".dbg.line") 0}]
+       ; a v5 list section's head: its length, version, address size
+       (o-v5 bs) (le32 (8 + #bs) + le16 5 + [8 0] + le32 0 + bs)
        rg (foldl (\ a q (@ a [bs rels]
                            (: k (q 2) a0 (peep ((lanes (q 0)) 6) k 0)
-                              [(bs + o-zeros 16) ([(#bs + 8) 'abs64 k (q 1 - a0) 0] . [#bs 'abs64 k (0 - a0) 0] . rels)])))
+                              [(bs + [7] + o-zeros 8 + uleb (q 1)) ([(13 + #bs) 'abs64 k (0 - a0) 0] . rels)])))
                  [() ()] sqs)
-       rgl [".debug_ranges" 1 0 1 (<rg + o-zeros 16) (rev <>rg) {(name ".dbg.ranges") 0}]
+       rgl [".debug_rnglists" 1 0 1 (o-v5 (<rg + [0])) (rev <>rg) {(name ".dbg.ranges") 12}]
        ; the abbrevs, by code: 1 the unit; 2..5 a function, global or static, typed or void: name,
        ; pc and length, its body's `{` as its place, the cfa its frame base, its params below it;
        ; 6 a param; 7.. the types (ty), 17 18 a variable, global or static, at its address;
@@ -866,7 +868,7 @@
                              [[lo k (hi - lo) nm (two? d ? [(peep fix (d 3) 1) (d 2)] [1 0]) (elem nm gfn) lb]])))
            (sort (catmap one (uniq fnl))))
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
-       pre (le16 4 + le32 0 + [8] + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
+       pre (le16 5 + [1 8] + le32 0 + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
        cu0 (pre + le32 0 + le64 0 + le32 0)
        dt (3 < #dl ? (dl 3) [() () {} {}])
        ; a type's die, its refs by r: each is ref4, so its size never waits on where the rest go
@@ -898,7 +900,7 @@
        ; a home's location: the cfa's offset, the address kept there, a label's
        (homed h) (h @ ('f o) (: e ([145] + sleb o) (#e . e)) ('d o) (: e ([145] + sleb o + [6]) (#e . e)) ('g _) ([9 3] + o-zeros 8) _ ())
        ; a vreg's lists by its states: ss, the function's (offset state) by address, hi its end; where
-       ; a state names no home for it there is none. .debug_loc grows in lc: (length bytes relocs), newest first
+       ; a state names no home for it there is none. .debug_loclists grows in lc: (length bytes relocs), newest first
        lc (pin {} 'n 0)
        (dwreg r) (show r @ s (: i (read (snip s 1 #s))
                                 (s 0 = 102 ? (i + (a64? ? 64 17)) a64? i ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))
@@ -911,14 +913,13 @@
                                          (acc @ ([a b h2] . t) (b = o && h2 = h ? ([a e h] . t) ([o e h] . acc)) _ [[o e h]]))))
                  _ (rev acc))
            (go ss ()))
-       ; -> the list's place in .debug_loc, () when v has no home
+       ; -> the list's place past .debug_loclists' head, () when v has no home
        (loclist v f)
         (@ f [f0 fk lb scs ss hi]
            (homes v ss hi @ () ()
-              hs (: b (o-ff8 + le64 0 + catmap ([a e h] \ (hexp h @ x (le64 (a - f0) + le64 (e - f0) + le16 #x + x))) hs + o-zeros 16)
+              hs (: b ([6] + le64 0 + catmap ([a e h] \ (hexp h @ x ([4] + uleb (a - f0) + uleb (e - f0) + uleb #x + x))) hs + [0])
                     n (lc 'n)
-                    (pins lc 'n (n + #b) 'b (b . lc 'b) 'r ([(n + 8) 'abs64 fk 0 0] . lc 'r), n))))
-       o-ff8 [255 255 255 255 255 255 255 255]
+                    (pins lc 'n (n + #b) 'b (b . lc 'b) 'r ([(n + 13) 'abs64 fk 0 0] . lc 'r), n))))
        ; a local, its label's reloc where it is a static: () for a static not laid
        ; with hd its name and type: its abbrev's code, a home's bytes and its reloc. codes: none, by
        ; expression, by list
@@ -973,9 +974,9 @@
        ds (foldl die [#(<vs) [<vs] <>vs] fs)
        cu (catall (rev (ds 1)) + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)
-              ([[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
+              ([[8 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
                 [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev (ds 2)) {}]
-       lcl [".debug_loc" 1 0 1 (catall (rev (lc 'b))) (rev (lc 'r)) {(name ".dbg.loc") 0}]
+       lcl [".debug_loclists" 1 0 1 (o-v5 (catall (rev (lc 'b)))) (rev (lc 'r)) {(name ".dbg.loc") 12}]
        (atom? sqs ? () ([ab inf ln rgl] + (lc 'n = 0 ? () [lcl]))))
 
    ; -- the general object: a list of sections, each (name type flags align forms), each one
