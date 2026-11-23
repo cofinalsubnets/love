@@ -93,7 +93,7 @@ for t in x64 a64 rv64; do
   fi
 done
 
-# locals and params in memory, each block its own scope: a shadowed name, a static, a vla, a
+# locals and params in memory and registers, each block its own scope: a shadowed name, a static, a vla, a
 # struct by value, under callee-saved registers
 cat > "$d/l.c" <<'EOF'
 struct s { long a, b, c; };
@@ -145,11 +145,11 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
     grep -q "$w" "$d/gdby.out" || { cat "$d/gdby.out"; echo "FAIL $name: gdb's types: $w"; exit 1; }
   done
   ( cd "$d" && "$gdb" -q -batch -nx -ex 'break l.c:9' -ex 'break l.c:11' -ex 'break l.c:14' -ex run \
-      -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' \
+      -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex 'print n' -ex 'print k' -ex 'print i' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' -ex 'print n' \
       -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' ./l.x64 ) > "$d/gdbl.out" 2>&1
   l=`sed -n 's/^\([ABC]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.out" | tr '\n' ' '`
-  [ "$l" = 'A 200 "abc" 22 B 9 41 C 5 77 22 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
+  [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals and memory locals; a64 raster.c: $holes function(s) without an fde"
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals and locals; a64 raster.c: $holes function(s) without an fde"

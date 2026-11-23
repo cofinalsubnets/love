@@ -87,13 +87,16 @@
              _ (pins g 'dlp () 'dlo ())
              (go fs)))
    ; a laid function's scopes with each name's home: ('f o) at cfa+o, ('d o) at the address there,
-   ; ('g label), () one in a register. csframe's shift is in, and the link sits 16 or 32 under the cfa
+   ; ('g label), ('v vreg) by the states, (k ((vreg home)..)) at the mark .dls.K. csframe's shift is in, and the link sits 16 or 32 under the cfa
    (dlfin g nm)
-    (: ln (g 'tgt @ 'x64 16 'a64 32 _ ()) sh (g 'dlfd)
+    (: ln (dlcfa g) sh (g 'dlfd)
        (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
-       (home b) (b @ [_ 'm o ty] [(ln && ['f (at o)]) ty] [_ 'p o ty] [(ln && ['d (at o)]) ty]
-                     [_ 'g l ty] [['g l] ty] _ [() (last b)])
-       (pin g 'dlv ([nm (map ([k par bs] \ [k par (map (b \ ((cite 'moon 'dlnm) <b . home b)) bs)]) (g 'dlsc))] . g 'dlv)))
+       (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
+                     [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
+       (pin g 'dlv ([nm (map ([k par bs] \ [k par (map (b \ ((cite 'moon 'dlnm) <b . home b)) bs)]) (g 'dlsc))
+                  (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
+   ; the frame base's distance under the cfa, () where no cfa is described
+   (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3

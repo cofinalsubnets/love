@@ -2236,7 +2236,7 @@
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
-          _ (pins g 'lon 0 'dlb () 'dlsc () 'dlfd [0 0])
+          _ (pins g 'lon 0 'dlb () 'dlsc () 'dltw () 'dlst () 'dlfd [0 0])
           ; riscv's saves ride csframe here, so every exit restores at its marker
           _ (rvx? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
@@ -2414,7 +2414,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ raunmark (radrl g (rakeep g (dlout g (rasubk f2 loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ raunmark (radrl g (rakeep g (dlout g (rasubk (dlstates g f2 loc) loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rvx? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))

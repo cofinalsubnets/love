@@ -568,7 +568,7 @@
        fs (ast 1)
        vs (catmap (f \ f @ ('gdecl ds) (map (d \ [<d (ix (d 1)) !(peep svars <d 0)]) (filter (d \ !(fn? (d 1))) ds)) _ ()) fs)
        sg (foldl (\ t f (f @ ('fn . nm . ps . _) (pin t nm [(ix <(peep sigs nm ['void])) (map (p \ [<p (ix (p 1))]) ps)]) _ t)) {} fs)
-       lt (foldl (\ t f (pin t <f (map ([k par bs] \ [k par (map ([n h ty] \ [n h (ix ty)]) bs)]) (f 1)))) {} lv)
+       lt (foldl (\ t f (pin t <f [(map ([k par bs] \ [k par (map ([n h ty] \ [n h (ix ty)]) bs)]) (f 1)) (f 2)])) {} lv)
        [(map tb ^(tb 'n)) vs sg lt])
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
