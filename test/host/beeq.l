@@ -490,6 +490,41 @@
       (has? (n 11) "is gated on -, not a commit") !(has? (row "4") " gating "))
    0)
 
+; a by-name lane in a gate: one a recipe owes is left out of the plan and named unrun in the log's
+; row; a list that names it runs it; its pass never stands in a later gate, and the row says it
+; once, the other lanes' passes read as before
+(: w (bq-world "byname") lq bq-q
+   (sha r) (bq-sha w r) (row p) (bq-row w p) _ (bq-stub w)
+   calls (bq-calls w lq "")
+   m (sha "test")
+   h (bq-commit w "ant" "" [["test/test.mk" "test_teensy41_board:\n\t@sh test/gate/mcu.sh\ntest_teensy41_ram_board:\n\t@sh test/gate/mcu.sh\n"]
+                            ["test/gate/mcu.sh" "x\n"]])
+   a (calls "ant" [[1 "queue_row" {"state" "waiting" "branch" "ant" "gated_on" m "gated_head" h "leader" "queen"}]])
+   (gated _) (bq-until (\ _ ((row "1") != "" && !(has? (row "1") " gating "))) 300)
+   g1 (bq-held w lq "" "8" "ant" [[2 "queue_gate" {"dir" (w 'repo)}]])
+   ok1 (bq-until (\ _ (has? (row "1") " green  #")) 300)
+   args1 (bq-get (w 'repo + "/out/args")) r1 (row "1")
+   g2 (calls "ant" [[3 "queue_gate" {"dir" (w 'repo) "lanes" "test_teensy41_board"}]])
+   _ (gated 0) args2 (bq-get (w 'repo + "/out/args")) r2 (row "1")
+   g3 (calls "ant" [[4 "queue_gate" {"dir" (w 'repo) "lanes" "test_teensy41_ram_board"}]])
+   _ (gated 0) r3 (row "1")
+   (count s p) (: (go i n) (: k (bq-find s p i) (? (k < 0) n (go (k + 1) (n + 1)))) (go 0 0))
+   ; the lanes of a row's stood piece, up to the next piece; 0 with none
+   (stood r) (: (to l) (? (atom? l) () (<l = "|") () (<l . to >l))
+                (at l) (? (atom? l) 0 (<l = "stood:") (to >l) (at >l))
+                (at (words r)))
+   _ (test
+      ok1 (args1 = "-d out/lanes-gate --slow --remote test test_teensy41_ram_board test_slow\n")
+      (has? r1 "test_teensy41_ram_board=0") !(has? r1 "test_teensy41_board=")
+      (has? r1 "| by name, unrun: test_teensy41_board")
+      (has? (g2 3) "runs test_teensy41_board again")
+      (args2 = "-d out/lanes-gate --slow --remote test_teensy41_board test_slow\n")
+      (has? r2 " green  #") (has? r2 "test_teensy41_board=0") !(has? r2 "by name, unrun")
+      (: st (stood r2) (st != 0 && elem "test" st && elem "test_teensy41_ram_board" st))
+      (has? r3 " green  #") !(has? r3 "test_teensy41_board=") (count r3 "| by name, unrun: test_teensy41_board" = 1)
+      (: st (stood r3) (st != 0 && elem "test" st && !(elem "test_teensy41_board" st))))
+   0)
+
 ; queue_gate from a session holding a folded row and a later live one gates the live one, or the
 ; row it names; a folded row, or another's, refuses by name
 (: w (bq-world "gaterow") lq bq-q

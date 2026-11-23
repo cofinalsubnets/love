@@ -528,9 +528,10 @@
    ; thumb2 (sp too) and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
    ; where it reaches, else lays movw/movt. thumb2's (fli f g k) becomes (flal f g k P) alike, and
-   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one
+   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one. thumb2sp's la is (lalp Rd L
+   ; P), whose far form loads P from the pc: its loader moves abs32 words, never a movw/movt pair
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) fs
+    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) (tgt = 'thumb2sp ? (t16la fs) fs)
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -545,9 +546,10 @@
                              (go >l (pin ix (f 3) q) ((q . f 3) . ps) (n + 1) (['flal (f 1) (f 2) (f 3) q] . a)))))
                     (two? f && (<f = 'la && #f = 3 || big? f))
                     (peep ix (f 2) 0 @ p
-                       (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
-                          (name ".lp\(n)" @ q
-                             (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
+                       (: k (tgt = 'thumb2sp && <f = 'la ? 'lalp 'lal)
+                          (p != 0 ? (go >l ix ps n ([k (f 1) (f 2) p] . a))
+                             (name ".lp\(n)" @ q
+                                (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) ([k (f 1) (f 2) q] . a))))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
                     (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))

@@ -22,6 +22,28 @@ checks the boot image (FCFB tag at 0, IVT at 0x1000, a thumb-bit entry). `make t
 builds it and `make test_teensy41_board` flashes it on a host with a board. The only
 outside program is qemu-arm, to bake the image.
 
+## From the PSRAM
+
+`make loader` builds `loader.c`, a 14 KB flash image that takes a kernel over its USB serial
+port into the PSRAM and enters it, and `make ram` that kernel as `love-ram.pkt`: the same
+objects under `tlink.l -ram`, vectors first at `0x70000000`, `.data` still copied to OCRAM2.
+With the loader in flash (`make flashloader`, one write) a new kernel is a `cat` to the
+port, and the flash is not written again. The loader is `love loader` on the bus, the kernel
+`inle teensy41`; 134 baud on either asks for HalfKay. The kernel finds itself in the PSRAM by
+its vectors' address: it leaves the clocks, caches and PSRAM as the loader set them, and its
+heap starts above its own bytes. It says `; from sram` or `; from flash` at boot.
+
+The PSRAM kernel wakes a smaller image than the flash one: the lush cat (`out/.lush-cat.l`,
+kore's head with no door), so lush, its builtins and `love`, and no `ls` or `cat`. Its own
+bytes come out of the heap's 16 MB, and over all of kore a major collection has no to-space.
+The flash kernel carries the whole kore cat.
+
+Two lanes put a kernel on the board. `test_teensy41_board` writes the flash kernel through
+HalfKay, and so writes over the loader: `make flashloader` puts it back. It runs by name only,
+in no gate's lists. `test_teensy41_ram_board`
+sends `love-ram.pkt` to the loader and writes nothing; it fails, and says so, when the flash
+holds no loader.
+
 ## Console
 
 Two at once, the same shell on both. The Teensy's own USB is a CDC-ACM port (`usb.c`,

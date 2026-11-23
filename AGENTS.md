@@ -218,6 +218,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`
 - `src/inle/a64/*`, `src/inle/mkboot.l`, `src/tools/kflat.l` -> `test_kernel_rpi3`
+- `test_teensy41_board` `test_ch32v203_board` `test_mips_router` run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them
 <!-- /lanes -->
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.

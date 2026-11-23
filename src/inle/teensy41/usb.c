@@ -6,7 +6,11 @@
 uintptr_t te_ms(void);
 #define UCDC_VID 0x16C0
 #define UCDC_PID 0x0483
+#ifdef TE_LOADER
+#define UCDC_PRODUCT "love loader"
+#else
 #define UCDC_PRODUCT "inle teensy41"
+#endif
 #include "../usbcdc.h"
 
 #define USB1(o)  REG(0x402E0000u + (o))
@@ -141,6 +145,12 @@ static void usbhw_reboot(void) {
   USB1(USBCMD) &= ~CMD_RS;
   REG(0xE000EDFCu) &= ~(1u << 16);
   arm_halt251(); }
+
+// off the bus, its interrupt masked and none pending: what the loader leaves an image
+void usb_off(void) {
+  USB1(USBINTR) = 0;
+  USB1(USBCMD) &= ~CMD_RS;
+  for (uint32_t k = 0; k < 8; k++) REG(0xE000E180u + 4u * k) = 0xFFFFFFFFu, REG(0xE000E280u + 4u * k) = 0xFFFFFFFFu; }
 
 void usb_isr(void) {
   uint32_t s = USB1(USBSTS);
