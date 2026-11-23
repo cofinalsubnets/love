@@ -17,7 +17,7 @@
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'window)                        ; the editor's own window
-(borrow 'slip)                          ; and its panes
+(borrow '(slip console))                ; and its panes
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
 (borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
@@ -2191,7 +2191,7 @@
    (j @ 1 (pad "" ((22 - vlen nm) // 2) " " + nm) 3 ((c @ 0 " › " "   ") + "1  " + grave-acts 0) 4 ((c @ 1 " › " "   ") + "2  " + grave-acts 1) ""))
  (grave-hi? st j) (j = 1 || j - 3 = st 'dlg)
  (grave-bands st r0 c0 bw bh) (: pen (view-pen (st 'deep)) bg (pen [22 17 14 233]) hi (pen [244 234 216 230]) lo (pen [156 144 128 245])
-   (charm? (st 'dlg) ? (map (j \ [(r0 + j) [c0 (view-cells (pad (grave-line st j) bw " ")) (grave-hi? st j ? hi lo) bg]]) ^bh) ()))
+   (charm? (st 'dlg) ? (map (j \ [(r0 + j) [c0 (con-cells (pad (grave-line st j) bw " ")) (grave-hi? st j ? hi lo) bg]]) ^bh) ()))
  (grave-text st r0 c0 bw bh) (: hi "[1;38;2;244;234;216m" lo "[22;38;2;156;144;128m"
    (at j) (esc + "[" + show (r0 + j + 1) + ";" + show (c0 + 1) + "H")
    (? (charm? (st 'dlg)) (foldl (\ o j (o + at j + esc + "[49m" + esc + (grave-hi? st j ? hi lo) + pad (grave-line st j) bw " ")) "" ^bh + esc + "[0m")
@@ -2679,10 +2679,10 @@
  ; the console's words here: those of any walk, and the loop's where the level has a deck
  (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
                     ["at" "where you stand" (where st)]
-                    ["fly" "fly (): fly, or walk again" (_ \ (pins st 'fly (1 - peep st 'fly 0) 'mu 0 'fv 0.0 'gv 0.0 'hoist (), st 'fly))]
+                    ["noclip" "noclip (): fly through walls, or walk again" (_ \ (pins st 'fly (1 - peep st 'fly 0) 'mu 0 'fv 0.0 'gv 0.0 'hoist (), st 'fly))]
                     ["warp" "warp file entry: to another level beside this one, entry () its start" (go! st)]]
    + (two? (st 'lvl 'decks) ? [["loop-end" "loop-end (): the loop worn all away, begun if it is not" (con-loop st)]] ()))
- (world-console st ln) (view-console world-words st ln)
+ (world-console st ln) (con-eval world-words st ln)
  (con-loop st _) (: _ (tablet? (st 'music) ? 0 (play! st)) m (st 'music) _ (pin m 'n (int (song-rate * m 'd 'gone) + 1)) (world-loop st))
  (world-tap st x y) (? (view-corner? st x y) [113]
                        (0.88 * window-size (st 'win) 1 < y) [32]

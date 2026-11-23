@@ -1,7 +1,7 @@
 ; test/host/lorewin.l -- view's loop on a headless window ('evq its events): keys to actions,
 ; held keys at the level's pace, repeat no press, ? help; and the world painted on its paper.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
-(borrow '(view world posix window lore))
+(borrow '(view console cli world posix window lore))
 
 (: _ (setenv "HORN" "none")
    _ (setenv "LOVE_NEST" (cwd 0 + "/out/.lorewin-nest-" + show (getpid 0)))   ; no nest: no scene kept
@@ -82,18 +82,28 @@
        (rev (st 'sizes) = [[80 14] [80 25]]))
 ; the panes: the scene over the console, a bar between, the screen all the scene's while it is
 ; away; ctrl-w m puts them side by side, x trades them, and the split is kept for the next time
-(: co (view-con-new ()) l0 (view-con-lay co 80 24) _ (view-con-up co 1) l1 (view-con-lay co 80 24)
-   (cw c) (: _ (view-con-key co (_ \ "") 23) _ (view-con-key co (_ \ "") c) (view-con-lay co 80 24))
-   l2 (cw 109) l3 (cw 120) bx (view-con-box co (l3 1)) _ (cw 119) f (view-con? co) _ (view-con-up co 0) l4 (view-con-lay co 80 24) _ (view-con-up co 1) l5 (view-con-lay co 80 24)
+(: co (con-new ()) l0 (con-lay co 80 24) _ (con-up co 1) l1 (con-lay co 80 24)
+   (cw c) (: _ (con-key co (_ \ "") 23) _ (con-key co (_ \ "") c) (con-lay co 80 24))
+   l2 (cw 109) l3 (cw 120) bx (con-box co (l3 1)) _ (cw 119) f (con-keyed? co) _ (con-up co 0) l4 (con-lay co 80 24) _ (con-up co 1) l5 (con-lay co 80 24)
  (test (l0 = [[0 0 80 24] ()]) (l1 = [[0 0 80 13] [0 14 80 10]]) (l2 = [[0 0 47 24] [48 0 32 24]]) (l3 = [[32 0 48 24] [0 0 31 24]])
        (bx 0 = 0) (#(bx 2) = 24) !f (l4 = [[0 0 80 24] ()]) (l5 = l3)))
 ; ctrl-c drops the line typed and leaves the console up, and stops what runs
-(: co (view-con-new ()) _ (view-con-up co 1) _ (each ["1 + " 3 "2" 13] (view-con-key co (l \ "=" + l)))
+(: co (con-new ()) _ (con-up co 1) _ (each ["1 + " 3 "2" 13] (con-key co (l \ "=" + l)))
    (spin _) (spin ()) n {'n 0}
- (test (view-con? co) (rev (co 'log) = ["> 1 + ^C" "> 2" "=2"]) (view-con-task (_ \ "a") (_ \ 1) = "a")
-       (view-con-task spin (_ \ (pin n 'n (n 'n + 1), 2 < n 'n)) = "^C") (n 'n = 3)))
+ (test (con-keyed? co) (rev (co 'log) = ["> 1 + ^C" "> 2" "=2"]) (con-task (_ \ "a") (_ \ 1) = "a")
+       (con-task spin (_ \ (pin n 'n (n 'n + 1), 2 < n 'n)) = "^C") (n 'n = 3)))
+; a press on the scene gives it the keys and goes on to it, one on the console does not; a
+; terminal's keys are the console's while it has them, and eof puts it away
+(: co (con-new ()) _ (con-up co 1) _ (con-lay co 80 24) (ev e) (con-event co (l \ l) e "" (_ \ ()) 0)
+   a (ev ['press 1 8 300]) ka (con-keyed? co) b (ev ['press 1 8 8]) kb (con-keyed? co) d (con-term co (l \ l) 97 0) o (con-term co (l \ l) 126 1) ko (con-keyed? co)
+   x (con-term co (l \ l) 97 0) t (edtext (co 'ed)) _ (con-term co (l \ l) -7 0)
+ (test (a = 1) ka (b = 0) !kb (d = 97) (o = ()) ko (x = ()) (t = "a") !(co 'on)))
+; page up and down scroll what was said
+(: co (con-new ()) _ (con-up co 1) _ (each ^30 (i \ (con-key co (l \ l) (show i), con-key co (l \ l) 13))) l (con-lay co 80 24)
+   top (_ \ con-box co (l 1) 2 1) a (top ()) _ (con-key co (l \ l) -14) b (top ()) _ (con-key co (l \ l) -15) c (top ())
+ (test (a != b) (a = c)))
 ; a terminal's frame moved to where its pane is
-(: e (string 27) (test (view-shift (e + "[Hab\r\ncd" + e + "[1mx" + e + "[3;4He") 10 2 = (e + "[3;11H" + e + "[3;11Hab\r\n" + e + "[10Ccd" + e + "[1mx" + e + "[5;14He")) (view-shift "q" 0 0 = "q")))
+(: e (string 27) (test (con-shift (e + "[Hab\r\ncd" + e + "[1mx" + e + "[3;4He") 10 2 = (e + "[3;11H" + e + "[3;11Hab\r\n" + e + "[10Ccd" + e + "[1mx" + e + "[5;14He")) (con-shift "q" 0 0 = "q")))
 
 ; the world on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (world-load "test/lore/hall.l")

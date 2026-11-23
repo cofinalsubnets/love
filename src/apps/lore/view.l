@@ -5,12 +5,12 @@
 (module (view esc pi clamp flo wrap over throw sgr view! view-hz view-size view-rays
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
-         view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands view-con-new view-con-key view-con-box view-con-lay view-con-up view-con? view-con-task view-shift view-console
-         view-cells view-pen view-band
+         view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
+         view-pen view-band
          view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
-(borrow 'slip)                          ; the console's pane beside the scene's
+(borrow '(slip console))                ; the console's pane beside the scene's
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'lore)                          ; frame-paint, in C
 (borrow 'posix)    ; close, for the horn
@@ -167,8 +167,6 @@
             30 97 31 115 32 100 33 102 34 103 35 104 36 106 37 107 38 108
             44 122 45 120 46 99 47 118 48 98 49 110 50 109 53 47
             41 96 2 49 3 50 4 51 5 52 6 53 7 54 8 55 9 56 10 57 11 48}
- ; ..and what a console takes by place
- view-con-set1 {1 27 28 13 284 13 14 127 15 9 328 -8 336 -9 331 -1 333 -2 327 -5 335 -6 339 -4 329 2 337 6}
  ; --- the help: the actions listed, a line each in their order, every key b binds to it and
  ;     its name; one b binds no key to is left out ---
  (view-key-name k) (k @ -1 "←" -2 "→" -8 "↑" -9 "↓" 32 "space" 27 "esc" 13 "enter" 10 "enter" 9 "tab"
@@ -199,87 +197,11 @@
  (view-help-bands st ls) (view-box-bands st (view-help-box ls (st 'w) (st 'h // 2)))
  (view-box-bands st b) (b @ [x0 y0 rows]
    (: dp (st 'deep) fg (dp ? (55 << 12 | 53 << 6 | 50) 253) bg (dp ? (6 << 12 | 5 << 6 | 5) 235)
-      (foldl (t \ i \ pin t (y0 + i) [x0 (view-cells (rows i)) fg bg]) {} ^#rows)))
- ; --- the console: a pane beside the scene's, the two slip's, a line of love typed at cli's
- ;     line editor and its answer over it. con: 'on, 'ps the panes, 'cw ctrl-w waiting for its
- ;     key, 'ed the editor, 'log what was said, newest first, 'old the lines entered, newest
- ;     first, 'at which of them is up, -1 none, 'back how many rows up the log is shown ---
- (view-con-new _) {'on 0 'ps (slip-new 'scene 'scene) 'cw 0 'split ['stack 60 'scene 'con] 'ed (ednew ()) 'log () 'old () 'at -1 'back 0}
- ; ..it up, with the keys, or away, its split kept for the next time
- (view-con-up con on) (: ps (con 'ps) _ (on ? (slip-plan ps (con 'split), pin ps 'focus 'con) (pin con 'split (ps 'plan), slip-plan ps 'scene)) (pins con 'on on 'cw 0))
- ; ..whether it is up and has the keys
- (view-con? con) (con 'on && con 'ps 'focus = 'con)
- ; ..the panes on a w by r cell screen: [scene con], each [x y w r], con () while it is away
- (view-con-lay con w r) (: ps (con 'ps) _ (slip-lay ps (8 * w) (16 * r)) [(slip-cells ps 'scene) (con 'on ? (slip-cells ps 'con) ())])
- ; ..a key's code k, or a text: ctrl-d puts it away, ctrl-c drops the line, enter answers (eval line), up
- ; and down the lines before, ctrl-b and ctrl-f the log's pages, ctrl-w then a key slip's,
- ; ctrl-w twice and the rest the line editor's
- (view-con-key con eval k) (: ed (con 'ed) old (con 'old)
-   (up i) (: j (max -1 (min (#old - 1) i)) _ (pin con 'at j) _ (pin con 'ed (ednew ())) (j < 0 ? con (type (chars (old j)))))
-   (type cs) (: _ (each cs (edstep (con 'ed))) con)
-   (say l) (pin con 'log (take 200 (foldl (\ a s (s . a)) (con 'log) l)))
-   (enter t) (: _ (pins con 'ed (ednew ()) 'at -1 'back 0)
-      (? (all (i \ t i = 32) ^#t) con
-         (: _ (say [("> " + t)]) _ (pin con 'old (old @ (q . _) (q = t ? old (t . old)) [t])) _ (say (split "\n" (eval t))) con)))
-   (? (con 'cw) (: _ (pin con 'cw 0) c (string? k && 0 < #k ? (k 0) k) (c = 23 ? (edstep ed 23, con) (slip-key (con 'ps) c, con)))
-      (string? k) (type (chars k))
-      (k @ 4 (view-con-up con 0) 3 (: _ (say [("> " + edtext ed + "^C")]) (pins con 'ed (ednew ()) 'at -1 'back 0)) 23 (pin con 'cw 1) -8 (up (con 'at + 1)) -9 (up (con 'at - 1))
-           2 (pin con 'back (con 'back + 8)) 6 (pin con 'back (max 0 (con 'back - 8)))
-           (9 || 27) con
-           _ (: _ (edstep ed k) (ed 'ev = 10 ? (enter (edtext ed)) con)))))
- ; ..its pane q drawn, as view-box-say has it: what was said, wrapped, and the line, the
- ; cursor a block where it has the keys, and the bar between it and the scene
- (view-con-box con q) (: w (q 2) n (q 3) m (max 1 (w - 2)) row (s \ " " + pad s m " " + " ")
-   (wrapped s) (: c (view-cells s) k (max 1 ((#c + m - 1) // m)) (map (i \ foldl (+) "" (map (j \ c (i * m + j)) ^(max 0 (min m (#c - i * m))))) ^k))
-   ls (foldl (\ a s (#a < n - 1 + con 'back ? (wrapped s + a) a)) () (con 'log))
-   bk (max 0 (min (con 'back) (#ls - (n - 1)))) _ (pin con 'back bk)
-   ls (take (n - 1) (drop (max 0 (#ls - (n - 1) - bk)) ls))
-   ed (con 'ed) l (view-cells ("> " + string (rev (ed 'l)))) r (view-cells (string (ed 'r))) o (max 0 (#l + 1 - m))
-   c (take m (drop o (l + [(view-con? con ? "▏" " ")] + r)))
-   rows (map row (ls + map (_ \ "") ^(max 0 (n - 1 - #ls)) + [(foldl (+) "" c)]))
-   (slip-bars (con 'ps) @
-     (['across y _ k] . _) (: b (foldl (+) "" (map (_ \ "─") ^k)) (y < q 1 ? [(q 0) (q 1 - 1) (b . rows)] [(q 0) (q 1) (rows + [b])]))
-     (['down _ x _] . _) (x < q 0 ? [(q 0 - 1) (q 1) (map (s \ "│" + s) rows)] [(q 0) (q 1) (map (s \ s + "│") rows)])
-     _ [(q 0) (q 1) rows]))
- ; ..a terminal's frame f, drawn from home, with its home at column x of row y
- (view-shift f x y) (? (x = 0 && y = 0) f
-   (: home (esc + "[" + show (y + 1) + ";" + show (x + 1) + "H")
-      (num s i) (: (go j n) (j < #s && 48 <= s j && s j <= 57 ? (go (j + 1) (10 * n + s j - 48)) [n j]) (go i 0))
-      (moved s) (: a (num s 0) i (a 1) b (i < #s && s i = 59 ? (num s (i + 1)) [0 0])
-                   (? (0 < #s && s 0 = 72) (show (y + 1) + ";" + show (x + 1) + s)
-                      (0 < b 1 && b 1 < #s && s (b 1) = 72) (show (a 0 + y) + ";" + show (b 0 + x) + snip s (b 1) #s)
-                      s))
-      ps (split (esc + "[") f) g (foldl (\ o s (: _ (say o (esc + "[" + moved s)) o)) (: o (jug 0) _ (say o <ps) o) >ps)
-      (home + join ("\r\n" + (0 < x ? (esc + "[" + show x + "C") "")) (split "\r\n" (slurp g)))))
- ; ..(f ()) on a task of its own, waited for, ctrl-c stopping it: (stop? ()) is asked after a
- ; moment and then every frame's while, 1 where it was typed
- (view-con-task f stop?) (: t (twirl f 0) t0 (clock 0)
-   (go _) (? (landed? t) (catch t) (clock 0 - t0 < 100) (rest 1, go ()) (stop? ()) (freeze t, "^C") (rest 10, go ()))
-   (go ()))
- ; ..a line evaluated: love, with st and the names ws gives values, [[name doc value] ..];
- ; help lists them. its answer as show has it, as far as con-max characters, then ..; a
- ; tablet's keys sorted
- con-max 4000
- (con-show x) (: j (jug 0) n {'n 0} (full _) (con-max < n 'n)
-   (put s) (: t (#s > con-max ? (snip s 0 con-max) s) _ (pin n 'n (n 'n + #t)) (say j t))
-   (each-of l f) (foldl (\ a y (? (full ()) a (: _ (a ? (put " ") 0) _ (f y) 1))) 0 l)
-   (go x) (? (full ()) 0
-             (tablet? x) (: _ (put "{") _ (each-of (sort (keys x)) (k \ (go k, put " ", go (x k)))) (put "}"))
-             (two? x) (: _ (put "(") (tl l) (? (full ()) 0 (two? l) (: _ (put " ") _ (go <l) (tl >l)) (l = ()) 0 (: _ (put " . ") (go l))) _ (go <x) _ (tl >x) (put ")"))
-             (string? x) (put (show (#x > con-max ? (snip x 0 con-max) x)))
-             (atom? x && con-max < trap (_ \ #x) 0 (a \ b \ 0)) (: _ (put (show (peep x (iota (con-max // 8)) 0))) (pin n 'n (con-max + 1)))
-             (put (show x)))
-   _ (go x) s (slurp j) (full () ? (snip s 0 (min #s con-max) + " ..") s))
- (view-console words st ln) (: ws ([["st" "the walk's state, a tablet" st]] + words st)
-   (? (ln = "help") (join "\n" (map (w \ pad (w 0) 10 " " + w 1) ws))
-      (sound ("(" + foldl (\ a w (a + w 0 + " \\ ")) "" ws + ln + "\n)") @
-        (d . _) (trap (_ \ (: r (foldl (\ f w (f (w 2))) (ev d) ws) (string? r && #r <= con-max ? r (con-show r)))) () (a \ b \ ";; " + show a + " " + show b))
-        _ ";; unfinished")))
- ; a band's text a cell at a time, each one character, and a pen [r g b n] as deep or the 256 has it
- (view-cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
+      (foldl (t \ i \ pin t (y0 + i) [x0 (con-cells (rows i)) fg bg]) {} ^#rows)))
+ ; a band's pen [r g b n] as deep or the 256 has it
  (view-pen deep v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
  ; ..and a line s laid as the band on row r, light on bg
- (view-band st s r bg) {(r - 1) [0 (view-cells s) (view-pen (st 'deep) [240 240 240 255]) (view-pen (st 'deep) bg)]}
+ (view-band st s r bg) {(r - 1) [0 (con-cells s) (view-pen (st 'deep) [240 240 240 255]) (view-pen (st 'deep) bg)]}
  ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
@@ -294,18 +216,11 @@
    hl (view-help binds (peep lv 'listed (view-listed ())))
    hs {'on 0 'p ()}
    ; ..the console, on any level; the level's 'words its own, beside st
-   con (view-con-new ()) said {'l ()} console (view-console (peep lv 'words (_ \ ())))
-   (eval st l) (view-con-task (_ \ console st l) (_ \ win ? (wstop ()) (tstop ())))
-   ; ..ctrl-c while one runs: a terminal's other keys are dropped, a window's events kept
-   (tstop _) (cue? 0 ? (edkey in @ k (? (k = 3 || k = -7) 1 (k = 0) 0 (tstop ()))) 0)
-   (wstop _) (: es (window-events win) _ (pin said 'l (said 'l + es))
-     (foldl (\ a e (e @ ['down c] (? (elem c [29 285]) (pin shifts c 1, a) (view-set1 c = 99 && ctrl? ()) 1 a) ['up c] (? (elem c [29 285]) (pin shifts c 0, a) a) ['close] 1 _ a)) 0 es))
+   con (con-new ()) words (peep lv 'words (_ \ ())) at (c \ view-set1 c)
+   (eval l) (con-task (_ \ con-eval words st l) (_ \ con-stop con win at))
    (con? k) (binds k = 'console)
-   (con! k) (view-con-key con (eval st) k)
-   (ctrl? _) (any (c \ shifts c = 1) [29 285])
    ; ..the keys held let go as the console takes them
-   (let-go _) (each (keys held) (c \ pin held c ()))
-   (let-go? _) (view-con? con ? (each (keys held) (c \ held c @ () () h (con? <h ? () (pin held c ())))) ())
+   (let-go _) (con-keyed? con ? (each (keys held) (c \ pin held c ())) ())
    ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
    ; middle summed for the frame and it put back there, esc lets it go
    look (lv 'look) ms {'on 0 'dx 0 'dy 0}
@@ -322,7 +237,7 @@
    st (lv 'new (sh0 0) (2 * sh0 1))
    pn {'con () 'at [0 0]} gz {'g () 'on 1 'l0 0 't ()}
    (resize _) (shape () @ sh
-               (: l (view-con-lay con (sh 0) (sh 1)) q (l 0) at [(q 0) (q 1)] pw (max 4 (q 2)) pr (max 2 (q 3)) _ (pin pn 'con (l 1))
+               (: l (con-lay con (sh 0) (sh 1)) q (l 0) at [(q 0) (q 1)] pw (max 4 (q 2)) pr (max 2 (q 3)) _ (pin pn 'con (l 1))
                   (? (pw != st 'w || 2 * pr != st 'h || at != pn 'at)
                      (pin st 'pane (con 'on ? (slip-box (con 'ps) 'scene) ()), pin pn 'at at, pin gz 'g (),
                       lv 'size st pw pr, win ? 0 (say out (esc + "[2J"))))))
@@ -360,22 +275,8 @@
                  k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
                     (<e = 'finger) (finger e @ ks (ks + wgo >l))     ; in turn: a quick tap's up may ride with its down
-                    (<e = 'press && look && !(ms 'on) && (!(con 'on) || slip-over (con 'ps) (e 2) (e 3) = 'scene)) (grab! 1, wgo >l)
-                    (elem (e 1) [29 285] && elem <e ['down 'up]) (pin shifts (e 1) (<e = 'down ? 1 0), wgo >l)
-                    (<e = 'down && con 'on && !(elem (e 1) [42 54]) && (view-con? con || con 'cw || ctrl? () && view-set1 (e 1) = 119))
-                      (: pl (view-set1 (e 1)) ctl (ctrl? ())
-                         (? (held (e 1) != ()) ()                        ; what opened it, still down
-                            (ctl && charm? pl && 97 <= pl && pl <= 122) (con! (pl & 31))
-                            (0 < #t && 32 <= t 0 && t 0 != 127 && !ctl) (con! t)
-                            (charm? (view-con-set1 (e 1))) (con! (view-con-set1 (e 1)))
-                            (charm? pl && con 'cw) (con! pl)
-                            ()),
-                         let-go? (), wgo >l)
-                    (<e = 'down && charm? k && con? k && held (e 1) = ())
-                      (let-go (), pin held (e 1) [k (clock 0)], con 'on ? (pin (con 'ps) 'focus 'con) (view-con-up con 1), wgo >l)
-                    (con 'on && !(ms 'on) && <e = 'press) (slip-press (con 'ps) (e 2) (e 3), let-go? (), wgo >l)
-                    (<e = 'move && slip-drag (con 'ps) (e 1) (e 2)) (wgo >l)
-                    (<e = 'release && slip-drop (con 'ps)) (wgo >l)
+                    (!(ms 'on && elem <e ['press 'move 'release]) && con-event con eval e t at (<e = 'down && charm? k && con? k)) (let-go (), wgo >l)
+                    (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
                     (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
                                               (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
@@ -395,21 +296,16 @@
    ; ..and one due before this frame's events and still down after them acts again
    (wkeys _) (: now (clock 0)
                due (filter (c \ held c @ h (h != () && hold? (h 0) && h 1 <= now)) (sort (keys held)))
-               es (said 'l) _ (pin said 'l ()) pressed (wgo (es + window-events win))
+               pressed (wgo (con-events con win))
                again (filter (c \ held c != ()) due)
                _ (each again (c \ pin held c [(held c 0) (now + rep 1)]))
                (pressed + map (c \ held c 0) again))
    ; ..a terminal's: the last waiting; with the help up, any key puts it away and does no more
-   ; ..and with the console up, its own one by one; ctrl-w there is the panes' from either
-   (tkeys last) (cue? 0 && !(view-con? con) ? (edkey in @ k (? !(charm? k) (tkeys last)
-                                                 (con 'on && (con 'cw || k = 23)) (con! k, tkeys last)
-                                                 (con? k) (con 'on ? (pin (con 'ps) 'focus 'con) (view-con-up con 1), tkeys ())
-                                                 (tkeys k))) last)
-   (tcon _) (cue? 0 && view-con? con ? (edkey in @ k (? (k = 0) () (k = -7) (view-con-up con 0) (con! k), tcon ())) ())
-   (tget _) (view-con? con ? (tcon ()) (tkeys () @ k (? !(charm? k) ()
+   (tkeys last) (cue? 0 ? (edkey in @ k (con-term con eval k (charm? k && con? k) @ q (tkeys (? (charm? q) q (con-keyed? con) () last)))) last)
+   (tget _) (tkeys () @ k (? !(charm? k) ()
                              (hs 'on) (pin hs 'on 0, ())
                              (binds k = 'help) (pin hs 'on 1, ())
-                             [k])))
+                             [k]))
    tick (1000 // lv 'fps)
    hn (horn song-rate 2 @ q (nom? q ? () q))
    fd (lv 'song hn)
@@ -435,9 +331,9 @@
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
              _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
              _ (resize ())
-             _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (view-con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) {}))
+             _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
-                    (lv 'frame st @ f (say out (esc + "[H" + (? (two? (pn 'con)) (view-synced (view-shift f (pn 'at 0) (pn 'at 1)) (view-box-say st (view-con-box con (pn 'con)))) (hs 'on) (view-synced f (view-help-say st hl)) f)), flush out)))
+                    (lv 'frame st @ f (say out (esc + "[H" + (? (two? (pn 'con)) (view-synced (con-shift f (pn 'at 0) (pn 'at 1)) (view-box-say st (con-box con (pn 'con)))) (hs 'on) (view-synced f (view-help-say st hl)) f)), flush out)))
              _ (gauged? () ? (steer (clock 0 - t1) (t1 - t0) l0 (clock 0)))
              (each acts (a \ (? (elem a ['finer 'coarser]) (pin gz 'on 0, view-rescale lv st a)
                                 (a = 'auto) (pins gz 'on 1 'g () 'l0 0 't ())
