@@ -83,23 +83,14 @@
         (: k <ks  r (inflate-feed st (i < n ? (snip s i (min n (i + k))) ""))
          (? (two? r) (cats (rev (<r . acc))) !(string? r) 'no (n <= i) 'no (go (i + k) (>ks + [k]) (r . acc))))
      (go 0 '(1 9 4000 2 300) ()))
-   (dw-c s) (inflate s 0 @ r (string? r ? r 'no) @ a (a = dw-feed s ? a 'split))
+   (dw-c s) (inflate s 0 @ r (string? r ? r r ? 'room 'no) @ a (a = dw-feed s ? a 'split))
    (dw-p s) (gz-puff s 0 @ r (two? r ? <>r 'no))
    ; a stream and its meaning: all three say it, its bytes used to the last
    (dw-good s want)
-    (: r (df-run s dw-cap () dw-see)
+    (: r (df-run s dw-cap dw-see)
      (? !(r = [1 want (r 2)]) 0 !(r 2 + 7 >> 3 = #s) 0 !(dw-c s = want) 0 !(dw-p s = want) 0 1))
-   ; a refusal by name: the decoders refuse it too, unless the name is let by; then they read what
-   ; the reference does with it let by, and an over code's meaning is nobody's
-   dw-overs '(cl-over lit-over dist-over)
-   dw-mild (filter (n \ !(elem n dw-overs)) df-lenient)
-   (dw-bad why s)
-    (: r (df-decode s dw-cap)  q (df-run s dw-cap dw-mild (_ \ _ \ 0))
-     (? !(r = [0 why]) 0
-        !(dw-c s = dw-p s) 0
-        (q 0) (dw-c s = q 1)
-        (elem (q 1) dw-overs) 1
-        (dw-c s = 'no)))
+   ; a refusal by name, and the decoders refuse it too
+   (dw-bad why s) (df-decode s dw-cap = [0 why] && dw-c s = 'no && dw-p s = 'no)
    (dw-all f l) (: bad (filter (x \ !(f x)) l) (two? bad ? (puts "deflate: \(#bad) of \(#l): \(show <<bad)\n", 0) 1))
    dw-ok (dw-all (p \ p @ [nm s want] (dw-good s want)))
    dw-no (dw-all (p \ p @ [why s] (dw-bad why s)))
@@ -256,9 +247,8 @@
  (dw-saw 'len (map (+ 3) ^256)) (dw-saw 'far [1 32768])
  (dw-saw 'hlit (map (+ 257) ^30)) (dw-saw 'hdist (map (+ 1) ^30)) (dw-saw 'hclen (map (+ 5) ^15))
  (dw-saw 'rep [(16 . 3) (16 . 6) (17 . 3) (17 . 10) (18 . 11) (18 . 138)]) (dw-saw 'cross [16 18])
- ; each refusal has its near miss, and what is let by is still let by
- (dw-set? df-refusals = dw-set? (map cap dw-misses))
- (dw-set? df-lenient = dw-set? (map cap (filter (p \ !(dw-c (p 1) = 'no)) dw-misses))))
+ ; each refusal has its near miss
+ (dw-set? df-refusals = dw-set? (map cap dw-misses)))
 
 ; gz.l's tables are its own
 (: (dw-tray t l) (map (i \ peep t i -1) ^(1 + #l) = l + [-1])

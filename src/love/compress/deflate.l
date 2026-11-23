@@ -24,8 +24,6 @@
    ; a distance code of none. zlib refuses hdist past 30, which the rfc only says never occurs
    df-refusals '(torn type nlen hlit hdist cl-over cl-short rep-first rep-past noend
                  lit-over lit-short dist-over dist-short nocode sym dsym far)
-   ; what inflate.h and gz-puff let by
-   df-lenient '(hlit hdist cl-over cl-short rep-first rep-past lit-over lit-short dist-over dist-short)
 
    ; --- read off it ---------------------------------------------------------------------------------
    (df-runs l) (catmap (r \ map (_ \ r 1) ^(r 0)) l)
@@ -51,16 +49,16 @@
    (df-walk lens) (foldl (\ t r (pin t (1 << r 2 | r 1) (r 0))) {} (df-canon lens))
 
    ; --- the reference decoder ------------------------------------------------------------------------
-   ; s's stream, at most cap bytes of it -> [1 out bits-read], or [0 why]. a refusal in skip is let
-   ; by; (see kind value) hears what the stream uses
+   ; s's stream, at most cap bytes of it -> [1 out bits-read], or [0 why]. (see kind value) hears what
+   ; the stream uses
    df-lent (df-ladder df-lens)
    df-distt (df-ladder df-dists)
    df-flit (df-runs df-fixlit)
    df-fdist (df-runs df-fixdist)
    (df-no why) (scare 'deflate why)
-   (df-run s cap skip see)
+   (df-run s cap see)
     (: st {'p 0 'n 0}  o (cask cap)  n (8 * #s)
-       (need c why) (? c 1 (elem why skip) 1 (df-no why))
+       (need c why) (c ? 1 (df-no why))
        (bit _) (: p (st 'p) (p < n ? (pin st 'p (p + 1), s (p >> 3) >> (p & 7) & 1) (df-no 'torn)))
        (bits k) (: (go i a) (i < k ? (: b (bit 0) (go (i + 1) (a | b << i))) a) (go 0 0))
        (field f) (: v (bits (f 1)) w (v + f 2) _ (see (f 0) w) w)
@@ -129,4 +127,4 @@
                      (df-no 'type))
          (last ? [1 (snip (string o) 0 (st 'n)) (st 'p)] (blocks 0)))
      (trap blocks 0 (a \ b \ (a == 'deflate ? [0 b] (scare a b)))))
-   (df-decode s cap) (df-run s cap () (_ \ _ \ 0)))
+   (df-decode s cap) (df-run s cap (_ \ _ \ 0)))
