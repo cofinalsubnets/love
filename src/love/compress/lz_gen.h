@@ -1,4 +1,50 @@
 // lz_gen.h -- laid by src/love/compress/lz.l, `make mx`. edit that file.
+static void lz_reset(struct lz_model *m) {
+ lzp *P = (lzp *) m, *L = m->lit;
+ uintptr_t j, litn = (uintptr_t) 768 << (m->lc + m->lp);
+ for (j = 0; j < 1846; j++) P[j] = 1024;
+ for (j = 0; j < litn; j++) L[j] = 1024;
+ m->state = 0;
+ m->reps[0] = 0;
+ m->reps[1] = 0;
+ m->reps[2] = 0;
+ m->reps[3] = 0; }
+static int lz_props(struct lz_model *m, unsigned int b, unsigned int maxlclp) {
+ unsigned int lc = 0, lp = 0, pb = 0, q;
+ if (224 < b) return 0;
+ lc = b % 9;
+ q = b / 9;
+ lp = q % 5;
+ pb = q / 5;
+ if (maxlclp < lc + lp) return 0;
+ m->lc = lc;
+ m->lp = lp;
+ m->pb = pb;
+ return 1; }
+static int rd_init(struct lz_rd *r, uint8_t const *p, uintptr_t n) {
+ uint32_t cd;
+ if (n < 5) return 0;
+ cd = p[0];
+ if (cd != 0) return 0;
+ cd = (uint32_t) p[1] << 24 | (uint32_t) p[2] << 16 | (uint32_t) p[3] << 8 | p[4];
+ r->p = p;
+ r->i = 5;
+ r->n = n;
+ r->range = (uint32_t) -1;
+ r->code = cd;
+ r->bad = 0;
+ return 1; }
+static void rd_norm(struct lz_rd *r) {
+ unsigned int x;
+ if (r->range < 16777216) {
+  r->range = r->range << 8;
+  if (r->i < r->n) {
+   x = r->p[r->i];
+   r->i++;
+   r->code = r->code << 8 | x; }
+  else {
+   r->code = r->code << 8;
+   r->bad = 1; } } }
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
  uint8_t const *inb = r->p;
  uint8_t *ob = o->b;

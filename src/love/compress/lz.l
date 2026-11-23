@@ -346,13 +346,112 @@
      'macros '()
      'proofs pf}
 
-   lz-specs [run]
+   ; --- the model and the coder at a chunk's start and end ------------------------------------------
+   (mput f e) ['raw ['expr ['asn (cf "m" f) e]]]
+   (rput f e) ['raw ['expr ['asn (cf "r" f) e]]]
+   ; every probability even: the fixed ones, then the literals'
+   reset
+    {'name "lz_reset" 'short "zxreset"
+     'attrs '("static")
+     'ret 'void
+     'params '(("m" (ptr (struct "lz_model"))))
+     'fields ()
+     'arrays '((Pr (v "P") 1846) (Lt (v "L") litn))
+     'requires '((w nat) (litn nat) (gw (inf-le 32 w)) (gln (inf-lt litn (inf-pow w))))
+     'decls
+      [['(ptr (named "lzp")) ['P ['raw ['cast '(ptr (named "lzp")) ['var "m"]]]] ['L ['raw (cf "m" "lit")]]]
+       ['(named "uintptr_t") '(j)
+        ['litn ['raw ['bin 'shl ['cast '(named "uintptr_t") ['num 768]] ['bin '+ (cf "m" "lc") (cf "m" "lp")]]]]]]
+     'ensures ()
+     'body
+      ('((f1 for j 0 1846 () ((p1 poke Pr j 1024)))
+         (f2 for j 0 litn () ((p2 poke Lt j 1024))))
+       + [('w1 . mput "state" ['num 0])]
+       + map (k \ ['w2 'raw ['expr ['asn (repk k) ['num 0]]]]) [0 1 2 3])
+     'macros '()
+     'proofs
+      {"f1b-1" '(lz-fit (succ j) 1847 w gw (inf-lelts (succ j) 1846 (inf-ltsu j 1846 f1)) (idpath false))}}
+   ; the props byte, pb lp lc packed as ((pb * 5) + lp) * 9 + lc: 0 refused, 1 and m's three laid
+   props
+    (: q '(un-div 9 b) dq '(un-divlt 9 (idpath true) b 25 (inf-lelts b 224 g1))
+       lcb '(inf-ltsle (inf-mod 9 b) 8 (inf-modlt 8 b)) lpb ['inf-ltsle ['inf-mod 5 q] 4 ['inf-modlt 4 q]]
+       dp ['un-divlt 5 '(idpath true) q 5 dq] pbb ['inf-ltsle ['un-div 5 q] 4 dp]
+       sum ['add '(inf-mod 9 b) ['inf-mod 5 q]] sumb ['inf-add2 '(inf-mod 9 b) 8 ['inf-mod 5 q] 4 lcb lpb]
+    {'name "lz_props" 'short "zxprops"
+     'attrs '("static")
+     'ret 'int
+     'params '(("m" (ptr (struct "lz_model"))) ("b" uint) ("maxlclp" uint))
+     'fields ()
+     'arrays ()
+     'requires '((w nat) (b nat) (maxlclp nat) (gw (inf-le 32 w)))
+     'decls '((uint (lc 0) (lp 0) (pb 0) (q)))
+     'ensures '((e1 (inf-le lc 8)) (e2 (inf-le lp 4)) (e3 (inf-le pb 4)))
+     'body
+      ['(i1 if g1 (lt 224 b) ((r1 ret 0)))
+       '(s1 set lc (d% b 9)) '(s2 set q (d/ b 9)) '(s3 set lp (d% q 5)) '(s4 set pb (d/ q 5))
+       '(i2 if g2 (lt maxlclp (+ lc lp)) ((r2 ret 0)))
+       ('w1 . mput "lc" ['var "lc"]) ('w2 . mput "lp" ['var "lp"]) ('w3 . mput "pb" ['var "pb"])
+       '(r3 ret 1)]
+     'macros '()
+     'proofs {"s2-2" ['lz-fit q 25 'w 'gw dq '(idpath false)]
+              "s4-2" ['lz-fit ['un-div 5 q] 5 'w 'gw dp '(idpath false)]
+              "i2-1" ['lz-fit sum 13 'w 'gw ['inf-lelts sum 12 sumb] '(idpath false)]
+              "r2-1" lcb "r2-2" lpb "r2-3" pbb "r3-1" lcb "r3-2" lpb "r3-3" pbb}})
+   ; n bytes at p, the first five the coder's: 0 refused
+   init
+    (: (rd k) ['inf-lttrans k 5 'n '(idpath true) 'g1]
+    {'name "rd_init" 'short "zxinit"
+     'attrs '("static")
+     'ret 'int
+     'params '(("r" (ptr (struct "lz_rd"))) ("p" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")))
+     'fields ()
+     'arrays '((In (v "p") n))
+     'requires '((In (pi x nat nat)) (n nat))
+     'decls '(((named "uint32_t") (cd)))
+     'ensures '((e1 (pi e (inf-lt 0 res) (inf-le 5 n))))
+     'body
+      ['(i1 if g1 (lt n 5) ((r1 ret 0)))
+       '(h1 havoc cd (at In 0))
+       '(i2 if g2 (ne cd 0) ((r2 ret 0)))
+       '(h2 havoc cd (wor (wor (wor (wshl (u32 (at In 1)) 24) (wshl (u32 (at In 2)) 16)) (wshl (u32 (at In 3)) 8)) (at In 4)))
+       ('w1 . rput "p" ['var "p"]) ('w2 . rput "i" ['num 5]) ('w3 . rput "n" ['var "n"])
+       ('w4 . rput "range" ['cast u32 ['un 'neg ['num 1]]]) ('w5 . rput "code" ['var "cd"]) ('w6 . rput "bad" ['num 0])
+       '(r3 ret 1)]
+     'macros '()
+     'proofs {"h1-1" (rd 0) "h2-1" (rd 1) "h2-2" (rd 2) "h2-3" (rd 3) "h2-4" (rd 4)
+              "r1-1" '(lam e (fromempty (inf-le 5 n) (nopathsfalsetotrue e)))
+              "r2-1" '(lam e (fromempty (inf-le 5 n) (nopathsfalsetotrue e)))
+              "r3-1" '(lam e g1)}})
+   ; one step with no bit after: the byte the coder's last bit left
+   rnorm
+    {'name "rd_norm" 'short "zxnorm"
+     'attrs '("static")
+     'ret 'void
+     'params '(("r" (ptr (struct "lz_rd"))))
+     'fields '(i n range code)
+     'state '((i i0))
+     'arrays '((In (r "p") n))
+     'requires '((In (pi x nat nat)) (w nat) (n nat) (i0 nat) (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))) (gi (inf-le i0 n)))
+     'decls '((uint (x)))
+     'ensures '((e1 (inf-le i n)))
+     'body
+      '((i1 if g1 (wlt range 16777216)
+         ((s1 store "range" (wshl range 8))
+          (j1 join g2 (lt i n)
+           ((h1 havoc x (at In i)) (s2 set i (+ i 1)) (s3 store "code" (wor (wshl code 8) x)))
+           ((s4 store "code" (wshl code 8)) (s5 store "bad" 1))
+           ((a1 (inf-le i n)))))))
+     'macros '()
+     'proofs {}}
+
+   lz-specs [reset props init rnorm run]
    lz-h (cats ["// lz_gen.h -- laid by src/love/compress/lz.l, `make mx`. edit that file.\n"
                (cats (map (s \ clay-show (cl-fn s)) lz-specs))])
    lz-ledger
-    [["pointers" "lz_run's m, r and o" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
+    [["pointers" "lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
      ["model" "the probabilities are struct lz_model's first 1846 words, lit 0x300 << (lc + lp) more, a count that fits" "xz.c's static asserts; lz_new and the casks size lit"]
-     ["props" "lc <= 8, lp <= 4, pb <= 4" "lz_props, which every caller passes the byte through"]
+     ["props" "m's lc, lp and pb are what lz_props proved lc <= 8, lp <= 4, pb <= 4 of" "its raw stores, and no other write: the coder's own are the encoder's, lc 4"]
+     ["coder" "rd_norm's i <= n" "lz_run's epilogue, the least of the two"]
      ["window" "on <= cap, base <= on, cap + 8 and nin + 1 fit" "l2_dec and lzma_feed lay o and r so"]
      ["raw" "a raw statement writes only r, m and o's fields, read again by no term" "lz.l's epilogue and rep moves"]
      ["word" "a word read back fits" "the C type; `havw` states it"]]

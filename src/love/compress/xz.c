@@ -44,34 +44,11 @@ struct lz_model {
  uint32_t reps[4];
  lzp *lit; };                                   // 0x300 << (lc + lp), the caller's
 
-static void lz_reset(struct lz_model *m) {
- lzp *p = (lzp*) m, *e = (lzp*) &m->lc;         // every fixed prob, then the literals
- while (p < e) *p++ = LZ_ONE / 2;
- for (uint32_t i = 0, k = 0x300u << (m->lc + m->lp); i < k; i++) m->lit[i] = LZ_ONE / 2;
- m->state = 0; m->reps[0] = m->reps[1] = m->reps[2] = m->reps[3] = 0; }
-
-// the props byte, pb lp lc packed as ((pb * 5) + lp) * 9 + lc
-static int lz_props(struct lz_model *m, unsigned b, unsigned maxlclp) {
- if (b >= 225 || b % 9 + b / 9 % 5 > maxlclp) return 0;
- m->lc = b % 9; b /= 9; m->lp = b % 5; m->pb = b / 5;
- return 1; }
-
 static unsigned lz_litst(unsigned s) { return s < 4 ? 0 : s < 10 ? s - 3 : s - 6; }
 
 // --- the range decoder: normalize before each bit --------------------------------------------
 // the input is p[0..n), i the next byte; past the end bad, and the coder reads zeros
 struct lz_rd { const uint8_t *p; uintptr_t i, n; uint32_t range, code; int bad; };
-
-static int rd_init(struct lz_rd *r, const uint8_t *p, const uint8_t *e) {
- if (e - p < 5 || p[0]) return 0;
- r->p = p, r->i = 5, r->n = (uintptr_t) (e - p), r->range = 0xffffffffu, r->bad = 0;
- r->code = (uint32_t) p[1] << 24 | (uint32_t) p[2] << 16 | (uint32_t) p[3] << 8 | p[4];
- return 1; }
-
-static void rd_norm(struct lz_rd *r) {
- if (r->range < LZ_TOP) {
-  r->range <<= 8;
-  if (r->i < r->n) r->code = r->code << 8 | r->p[r->i++]; else r->bad = 1, r->code <<= 8; } }
 
 // all ones where a < b, the sign of a - b where a word holds it
 #if UINTPTR_MAX > 0xffffffffu
@@ -95,8 +72,8 @@ struct lz_out { uint8_t *b; uintptr_t n, cap, base; int pause; };
 LZ_AT(isrep, 192); LZ_AT(isg0, 204); LZ_AT(isg1, 216); LZ_AT(isg2, 228); LZ_AT(isrep0l, 240);
 LZ_AT(slot, 432); LZ_AT(spec, 688); LZ_AT(align, 802); LZ_AT(len, 818); LZ_AT(rep, 1332); LZ_AT(lc, 1846);
 
-// decode to lim bytes or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for
-// input, 0 corrupt. laid and proved by lz.l
+// laid and proved by lz.l: lz_reset, lz_props, rd_init, rd_norm, and lz_run, which decodes to lim
+// bytes or, with eopm, the end marker: 1 done, 2 the marker, 3 paused for input, 0 corrupt
 #include "lz_gen.h"
 
 // --- LZMA2: the chunk walk ------------------------------------------------------------------
@@ -144,7 +121,7 @@ static int l2_dec(const uint8_t *s, uint8_t *out, uintptr_t cap, struct lz_model
    needprops = 0; h = 6; }
   else if (needprops) return -1;
   if (c >= 0xa0) lz_reset(m);
-  if (cap - o.n < u || !rd_init(&r, s + i + h, s + i + h + k)) return -1;
+  if (cap - o.n < u || !rd_init(&r, s + i + h, k)) return -1;
   if (lz_run(m, &r, &o, o.n + u, 0) != 1) return -1;
   rd_norm(&r);                                   // the coder flushes a byte the last bit left
   if (r.bad || r.i != r.n || r.code) return -1;
@@ -636,7 +613,7 @@ static intptr_t l2_step(struct l2_st *S, uint8_t *win, const uint8_t *s, uintptr
  l2_slide(S, win, u);
  struct lz_out o = { win, S->n, S->cap, S->base, 0 };
  struct lz_rd r;
- if (!rd_init(&r, s + h, s + h + k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
+ if (!rd_init(&r, s + h, k) || lz_run(&S->m, &r, &o, o.n + u, 0) != 1) return -1;
  rd_norm(&r);
  if (r.bad || r.i != r.n || r.code) return -1;
  *o0 = S->n, S->n = o.n;
@@ -796,7 +773,7 @@ love_noinline static struct g *host_lzma_feed(struct g *g) {
   struct lz_rd r = { buf, 0, in, S->range, S->code, 0 };
   if (!S->started) {
    if (in < 5 && !last) rc = 3;
-   else if (!rd_init(&r, buf, buf + in)) rc = 0;
+   else if (!rd_init(&r, buf, in)) rc = 0;
    else S->started = 1; }
   if (S->started && rc == 1) {
    int known = S->want != (uint64_t) -1;
