@@ -377,7 +377,12 @@
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again; a literal it copies
              ; down folds into the rewrite after it now
-             (nmlit g (nmsub g fs cp kc dn) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+             (nmlit g (dlalias g cp (nmsub g fs cp kc dn)) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+   ; -g keeps what the copies' readers read, so a C name whose vreg went is found under the other:
+   ; 'dlal vreg -> vreg
+   (dlalias g cp fs)
+    (? !(g 'dlcur) fs
+       (g 'dlal @ () (pin g 'dlal cp) u (foldl (\ a x (a x @ () (pin a x (cp x)) _ a)) u (keys cp)), fs))
    ; a multiply by a power of two the fold left is a shift, through a register too;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)

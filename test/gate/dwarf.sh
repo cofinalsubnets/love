@@ -94,7 +94,7 @@ for t in x64 a64 rv64; do
 done
 
 # locals and params in memory and registers, each block its own scope: a shadowed name, a static, a vla, a
-# struct by value, under callee-saved registers
+# struct by value, a copy the optimizer takes in, a param at the entry, under callee-saved registers
 cat > "$d/l.c" <<'EOF'
 struct s { long a, b, c; };
 static long sum;
@@ -111,7 +111,11 @@ long loc(int n, struct s by, long k) {
   sum += v[0];
   return x + by.b + n + k;
 }
-int main(void) { struct s s = {1, 22, 3}; return loc(5, s, 100) - 132; }
+__attribute__((noinline)) long al(long a, long b) {
+  long p = a * b;
+  go(&sum); go(&sum);
+  return p + a; }
+int main(void) { struct s s = {1, 22, 3}; long r = loc(5, s, 100); r += al(6, 7); return r - 180; }
 EOF
 for t in x64 a64 rv64; do
   mc -t $t -os linux -g "$d/l.c" -o "$d/l.$t"
@@ -146,9 +150,10 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
   done
   ( cd "$d" && "$gdb" -q -batch -nx -ex 'break l.c:9' -ex 'break l.c:11' -ex 'break l.c:14' -ex run \
       -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex 'print n' -ex 'print k' -ex 'print i' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' -ex 'print n' \
-      -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' ./l.x64 ) > "$d/gdbl.out" 2>&1
-  l=`sed -n 's/^\([ABC]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.out" | tr '\n' ' '`
-  [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
+      -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' \
+      -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p' ./l.x64 ) > "$d/gdbl.out" 2>&1
+  l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.out" | tr '\n' ' '`
+  [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.out"; echo "FAIL $name: gdb's locals: $l"; exit 1; }
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi

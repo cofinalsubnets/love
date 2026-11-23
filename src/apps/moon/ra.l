@@ -468,14 +468,21 @@
    ; -g's register locals: a mark ahead of a form where the homes of the C's vregs change, and at
    ; each block's start, since the tail may move one. 'dlst holds each mark's (k ((v home)..)), all
    ; of them from there to the next: ('r reg), or ('f o) its slot's. a home lasts while a read of it
-   ; is ahead, so it holds what the C's name does
+   ; is ahead, so it holds what the C's name does.
+   ; the first mark is the entry's, the function's lowest k
    (dlslot g vs sl) (g 'dlsl @ () 0 t (map (v \ pin t (sl v) v) vs))
+   ; own: each vreg and slot that holds a C vreg's value -> those it holds
    (dlstates g fs loc)
-    (: own (foldl (t \ s \ foldl (t2 \ b \ (b @ [_ 'v v _] (two? v ? t2 (pin t2 v v)) _ t2)) t (s 2)) {} (g 'dlsc))
-       _ (map (e \ (own <>e @ () 0 v (pin own <e v))) (g 'dltw))
+    (: al (g 'dlal @ () {} t t)
+       own {}
+       (put y vs) (pin own y (raund vs (peep own y ())))
+       (chain y v) (put y [v], al y @ () 0 z (chain z v))
+       vs (catmap (s \ catmap (b \ b @ [_ 'v v _] (two? v ? () [v]) _ ()) (s 2)) (g 'dlsc))
+       _ (map (v \ chain v v) vs)
+       _ (map (e \ (own (e 1) @ () 0 l (put <e l))) (g 'dltw))
        sls (peep g 'dlsl {})
-       _ (map (o \ (own (sls o) @ () 0 v (pin own o v))) (keys sls))
-       (g 'dlcur && dlcfa g && two? (keys own) ? (dlstates1 g fs loc own) (pin g 'dlst (), fs)))
+       _ (map (o \ (own (sls o) @ () 0 l (put o l))) (keys sls))
+       (g 'dlcur && dlcfa g && two? vs ? (dlstates1 g fs loc own) (pin g 'dlst (), fs)))
    (dlstates1 g fs loc own)
     (: n #fs
        ft {} _ (foldl (i \ f \ (pin ft i f, i + 1)) 0 fs)
@@ -495,23 +502,33 @@
        _ (fix 0)
        lv {} lead {}
        _ (map (b \ (pin lead <b 1, back (b 1) <b (out (b 1)) (\ i o (pin lv i o)))) bs)
-       ; a vreg in its register over its slot
+       ; at the entry a param is where it came till the copy off its register: (v reg index)..
+       ent (: (go i a)
+               (? (n <= i) a
+                  (ft i @ ([('mov || 'movapd || 'movss) v p] && !(lovr? p) && !(any (e \ e 1 = p) a))
+                           (go (i + 1) (own v @ () a l (map (b \ [b p i]) l + a)))
+                          ((_ . _) && dlab? (ft i)) (go (i + 1) a)
+                          _ a))
+              (go 0 ()))
+       (came i s) (s + catmap (e \ (e 2 < i || any (b \ <b = <e) s ? () [[<e ['r (e 1)]]])) ent)
+       ; a vreg's register over a slot of its
        (st l)
-        (: rs (catmap (x \ charm? x || loc x = () ? () [[(own x) ['r (loc x)]]]) l)
-           ss (catmap (x \ charm? x && !(any (r \ <r = own x) rs) ? [[(own x) ['f x]]] ()) l)
-           (sort (rs + ss)))
+        (: rs (catmap (x \ charm? x || loc x = () ? () (map (v \ [v ['r (loc x)]]) (own x))) l)
+           (miss v t) !(any (r \ <r = v) t)
+           ss (catmap (x \ charm? x ? (map (v \ [v ['f x]]) (filter (v \ miss v rs) (own x))) ()) l)
+           (sort (uniq (rs + ss))))
        (lab? f) (two? f && <f = 'label && !(dlab? f))
        (go i cur pend acc)
         (? (n <= i) (rev acc)
            (: f (ft i) p (pend || lead i)
               (? (lab? f || dlab? f) (go (i + 1) cur p (f . acc))
-                 (: s (st (peep lv i ()))
-                    (? (p && cur != () || s != (cur @ () () [c] c))
+                 (: s (came i (st (peep lv i ())))
+                    (? (cur = 'none || p && cur != () || s != (cur @ () () [c] c))
                        (peep g 'dlsn 0 @ k
                           (pins g 'dlsn (k + 1) 'dlst ([k s] . g 'dlst),
                            go (i + 1) [s] () (f . ['label (name ".dls.\(k)")] . acc)))
                        (go (i + 1) cur () (f . acc)))))))
-       (pin g 'dlst (), go 0 () () ()))
+       (pin g 'dlst (), go 0 'none () ()))
    ; each form's estimated frequency, its block's: one at entry; of a branch's two ways the one
    ; inside more loops goes 7 in 8, else each half; solved by sweeps, so a loop weighs about 8
    (rafreq fs sc)

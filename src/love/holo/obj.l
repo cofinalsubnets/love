@@ -957,7 +957,7 @@
               (: sg (peep (dt 2) nm [() ()])
                  sl (peep (dt 3) nm [() ()])
                  scs <sl
-                 fr [f0 k lb scs (sort (catmap ([i s] \ (peep lb (name ".dls.\(i)") () @ a (charm? a ? [[a i s]] ()))) (sl 1)) @ l (map ([a _ s] \ [a s]) l)) (f0 + n)]
+                 fr [f0 k lb scs (sort (catmap ([i s] \ (peep lb (name ".dls.\(i)") () @ a (charm? a ? [[a i s]] ()))) (sl 1)) @ l (: k0 (foldl (\ m r (min m (r 1))) (? (two? l) (<l 1) 0) l) (map ([a i s] \ [(i = k0 ? f0 a) s]) l))) (f0 + n)]
                  ph (catmap (s \ <s = -1 ? (s 2) ()) scs)
                  (par acc p) (: h (filter (b \ <b = <p) ph @ (b . _) (b 1) ())
                                 (@ acc [bs rs]
