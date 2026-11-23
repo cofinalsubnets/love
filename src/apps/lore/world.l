@@ -1420,7 +1420,7 @@
       c (1.0 / (1.0 + eye-h * max 0.0 k)) dip (atan2 (sqrt (1.0 - 2 c)) c) a (atan2 (s 1) h + dip)
       up (h < 1e-6 ? s [(cos a * s 0 / h) (sin a) (cos a * s 2 / h)])
       ; ..its clouds fixed in the world as the sun and stars are, the eye's axes their turn
-      cs (up 1 <= 0.0 ? 0.0 (sky-orb-cloud (sk 'wx) (sk 'sw) (sk 'sim)))
+      cs (sky-orb-cloud (sk 'wx) (sk 'sw) (sk 'sim))
       lt (pins (sky-lit up (sk 'wx) (sk 'sim) cs) 'sun s 'turn (sf 'axes x y z))
       {'lt lt 'wx (sk 'wx) 'sim (sk 'sim) 'k (0.75 * lt 'expo)
        'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0))}))

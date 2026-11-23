@@ -253,11 +253,13 @@
                    I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
                    (#I = 0 ? () [(S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ())]))))))
      sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
-     ; ..the disc by day, the stars by night, on the pixels ok holds of: [S C] their indices,
+     ; ..the disc while it is up, the stars by night, on the pixels ok holds of: [S C] their indices,
      ; -1 for none, and their colours, or ()
      (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
                      (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
-                        [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]))
+                        st [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]
+                        (lt 'hi < (two? (lt 'turn) ? -0.4 -0.06) ? st (disc v ok @ () st d (map (k \ glued (st k) (d k)) ^2)))))
+     (glued a b) (: n #a i (iota (n + #b)) (over (peep b (i - n) 0) (i < n) (peep a i 0)))
      ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
      (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1

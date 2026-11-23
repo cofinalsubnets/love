@@ -80,6 +80,15 @@
  (: wd (pins (sky-weather 0) 'sky [[1.0 0.5 0.0] [1.0 0.5 0.0]] 'dye [0.1 0.2 0.9])
     c (wx \ sky-colour-at (sky-lit [0.0 0.5 (sqrt 0.75)] wx 0.0 0.0) wx 0.0 (gem-tray [1] [0.6]) (gem-tray [1] [0.8]) zn 0.0 0.0 0.0))
  (test (: q (c wd) (q 0 0 > 3.0 * q 2 0)) (: q (c (pins (sky-weather 0) 'dye [0.1 0.2 0.9])) (q 0 0 < q 2 0)))
+ ; the sun's disc as bright low down as high, none of it under a flat horizon; under a 'turn the
+ ; sky by the height over the ground's edge and the disc on down to it
+ (: one (x \ gem-tray [1] [x]) (low y hi t) (pins (sky-lit [0.0 hi (sqrt (1.0 - 2 hi))] we 0.0 0.0) 'sun [0.0 y (sqrt (1.0 - 2 y))] 'turn t)
+    ax [[1.0 0.0 0.0] [0.0 1.0 0.0] [0.0 0.0 1.0]]
+    (seen lt m) (map (c \ c 0) (sky-colour-at lt we 0.0 (one 0.0) (one m) (one (sqrt (1.0 - 2 m))) 0.0 0.0 0.0))
+    (rise y hi t) (: l (low y hi t) (seen l y 0 - seen l (y + 0.08) 0)))
+ (test (all (y \ 2.4 < rise y y ()) [0.5 0.1 0.03 0.01]) (: l (low -0.01 -0.01 ()) (near3 0.01 (seen l -0.01) (seen l -0.06))))
+ (test (all (h \ 2.4 < rise -0.35 h ax) [0.1 0.02 -0.01]))
+ (test (: d (seen (low -0.35 0.2 ax) 0.5) n (seen (low -0.35 -0.25 ax) 0.5) (near3 0.02 d (seen (low 0.2 0.2 ax) 0.775) && 8.0 * n 2 < d 2)))
  ; a level's forms: its sky's weather takes them, a wrong one stops the level
  (: (lv f) (world-read ("(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (start [0 0 0] 0 180) (room [-3 0 -3] [3 3 3]) (sky 12 'clear) " + f + ")")) (skl f) (lv f 'sky))
  (test (skl "(gradient [(rgb 1 0 0) (rgb 0 0 1)])" 'sky = [[1.0 0.0 0.0] [0.0 0.0 1.0]]) (#(skl "(atmosphere [0.02 0.01 0.005 8 0.02 0.021 2 0 0 0 25 15 0.7 0.2])" 'air) = 14) (skl "" 'sky = ()) (skl "" 'air = ()))

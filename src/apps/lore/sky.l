@@ -214,13 +214,14 @@
    tw (sat (1.0 - mag (sy + 0.03) / 0.2) * (1.0 - 0.7 * oc))
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
-   sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f @ 0 1.0 0.3))
+   disc ((1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f @ 0 1.0 0.3))
+   sunk (sat ((sy + 0.005) / 0.05) * disc)
    sunc (air-sunc wx sy)
    night [0.05 0.055 0.075]
    amb0 (c+ (c* (1.0 - day) night) (c* (0.483 * day + 0.073 * tw * (1.0 - 0.5 * day)) (air-amb wx sy)))
    grey (cmix night [0.5 0.51 0.53] day)
    amb (c* (f @ 1 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
-   {'sun s 'day day 'tw tw 'sunk sunk 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
+   {'sun s 'hi sy 'day day 'tw tw 'sunk sunk 'disc disc 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
     'expo (1.0 + 1.2 * (1.0 - day) + 0.3 * oc)})
  ; --- the sky. far weighs what lies past the moon, the sun's own disc: 0 is the
  ; sky nearer than it, what a body in front of it shows ---
@@ -244,11 +245,14 @@
    [(th-of (R 'd) dx dy dz) (foldl (\ a q (a + step q)) 0.0 marches)])
  (paint-with lt wx R sim far T) (paint-mix lt wx R sim far T (sat (0.5 + (T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq (R 'sd)))))
  ; ..the colour as the share g of the sample past the edge, a number or a tray
- (paint-mix lt wx R sim far T) (: s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
+ (paint-mix lt wx R sim far T) (: s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) hi (lt 'hi) t? (two? (R 'B)) oc (lt 'cover)
    dx (R 'dx) dy (R 'dy) dz (R 'dz) th (T 0) od (T 1)
    mu (dx * sx + dy * sy + dz * sz)
-   disc (sat ((mu - 0.9995) * 4000.0))
-   sky0 (c+ (c+ (c* (1.0 - lt 'day) (dyed wx (R 'dark))) (dusked wx lt (air-at wx sy sx sz (two? (R 'B)) dx dy dz))) (c* (3.0 * far * disc * lt 'sunk) (lt 'sunc)))
+   ; ..the disc whole down to the horizon, under a 'turn down to the ground there, as bright
+   ; whatever its height; the rays as high over the ground's edge as the sun is, less up high
+   disc (sat ((mu - 0.9995) * 4000.0) * (t? ? 1.0 (sat (0.5 + 300.0 * dy))))
+   ay (t? ? (dy + (hi - sy) * (1.0 - max dy -dy)) dy)
+   sky0 (c+ (c+ (c* (1.0 - lt 'day) (dyed wx (R 'dark))) (dusked wx lt (air-at wx hi sx sz t? dx ay dz))) (c* (3.0 * far * disc * lt 'disc) (map sqrt (lt 'sunc))))
    ; ..the clouds: what of the sun gets through the cloud on toward it, their edges about it
    ; bright, the sky on the rest, darker the thicker
    ; ..and under smog the thick of them darker still and the thin lit through
@@ -260,7 +264,7 @@
          * (1.0 - 0.45 * sm) * (1.0 - 0.6 * sm * sat ((th - 0.3) * 2.2) + 0.5 * sm * sat ((0.4 - th) * 3.0)))
    cloudc (c* body
               (c+ (c+ (c* (0.95 - 0.35 * core - 0.2 * oc * core) (lt 'amb))
-                      (c* (lit * (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * sy))) (lt 'sunc)))
+                      (c* (lit * (sat ((hi + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * hi))) (lt 'sunc)))
                   (c+ (c* (lt 'tw * (0.3 + 0.7 * lit)) [0.5 0.22 0.14])
                       (c* (0.8 * (1.0 - lt 'day)) [0.06 0.05 0.045]))))
    cd (dyed wx cloudc) sg (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))
@@ -289,7 +293,7 @@
    (: n (1.0 * cloud-n) (dr r k o) (: x (sim * lap wx r k * k + o) (x - n * floor (x / n)))
       s (lt 'sun) d (peep wx 'dye ()) (f x) (1.0 * x)
       [(map f ([ex ez (edge wx sim) (dr 0.006 16.0 0.0) (dr 0.0025 16.0 0.0) (dr 0.011 37.0 11.3) (dr -0.004 37.0 -5.1)
-               (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'sunk)]
+               (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'disc)]
               + lt 'sunc + [(lt 'cover)] + lt 'amb
               + [(sky-cover wx sim) (wx 'cover) (sky-fall wx) (peep wx 'smog 0.0) (two? d ? 1 0)]
               + (two? d ? d [1.0 1.0 1.0]) + smog-ends wx 0 + smog-ends wx 1 + [(peep wx 'sky () = () ? 0 1)])) (sky-maps () 'cloud) (air-of wx (s 1))]))
