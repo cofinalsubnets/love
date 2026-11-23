@@ -49,7 +49,8 @@ for p in "$R"/src/apps/hearts/patches/*.patch; do
 done
 
 mkdir -p "$O"
-(cd "$O" && HEARTS_SRC="$K" HEARTS_ARCH=x86_64 HEARTS_ELFUTILS="$E" \
+# clang answers the config's probes and lays the offsets files, which a build outside a gate refuses
+(cd "$O" && HEARTS_KCC_CLANG=1 HEARTS_SRC="$K" HEARTS_ARCH=x86_64 HEARTS_ELFUTILS="$E" \
   HEARTS_GOALS="defconfig syncconfig headers tools/objtool" "$love" "$R/src/apps/hearts/build.l") > "$B/hearts.log" 2>&1 \
   || { tail -20 "$B/hearts.log"; fail "hearts' build failed"; }
 ot=$O/tools/objtool/objtool

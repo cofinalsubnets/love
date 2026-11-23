@@ -114,5 +114,14 @@
        (swatch-fault '((relief 0 2 1)) 1 = "(relief size octaves depth)")
        (swatch-fault '((stain 4 2 0.5 0 0.1)) 1 = "(stain size octaves cover soft PAINT)")
        (swatch-fault '((fill 1) (fbm 4 13 0.2)) 0 = '(fbm 4 13 0.2))))
+;; art from its templates: each kind a whole picture, no holes and more than one colour, the
+;; same within a run as painted and as read texel by texel; a kind it lacks refused
+(: (pic k) ((swatch 48 32 [['art k 3]]) 0 (iota (48 * 32)))
+   ps (map pic ['drip 'fields 'grid 'discs 'any])
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel w h l)))
+ (test (all (p \ amin p >= 0 && amax p != amin p) ps) (show (pic 'any) = show (pic 'any))
+       (sw-same 24 16 '((art drip 5))) (sw-same 16 24 '((art fields 6)))
+       (swatch-fault '((art grid 1) (shade 0.9)) = ()) (swatch-fault '((art blob 1)) 0 = '(art blob 1))
+       (swatch-fault '((art drip x)) 0 = '(art drip x))))
 (test_fin ())
 (puts "swatch: ok\n")

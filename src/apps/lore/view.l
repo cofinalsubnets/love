@@ -231,6 +231,10 @@
                (sh 0 != st 'w || 2 * sh 1 != st 'h ?
                 (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
    held {}
+   ; ..a held letter as shift has it now, either shift down, whichever was pressed first
+   shifts {}
+   (cased k) (? (65 <= k && k <= 90 || 97 <= k && k <= 122) (any (c \ shifts c = 1) [42 54] ? (k & 95) (k | 32)) k)
+   (shift! d p) (: _ (pin shifts p d) (each (keys held) (c \ held c @ h (h != () && charm? (h 0) ? (pin held c [(cased (h 0)) (h 1)])))))
    rep (peep lv 'repeat view-repeat)
    (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
    ; ..thumbs: the left half a stick centred where it lands, its keys held like a keyboard's,
@@ -266,6 +270,7 @@
                                               (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
                                                (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),
                                                wgo >l))
+                    (elem (e 1) [42 54] && elem <e ['down 'up]) (shift! (<e = 'down ? 1 0) (e 1), wgo >l)
                     (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
                     (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
                     (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],

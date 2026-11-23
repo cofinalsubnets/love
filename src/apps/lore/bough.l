@@ -11,7 +11,8 @@
 ;   (bough-sheared seed pl)            burnt, and pl () or a plane [n d] about the foot:
 ;                                      {'trunk 'segs 'cuts}, the wood kept, a cut [p r dir]
 ;   (bough-burnt seed tex ts pl)       that drawn, each cut closed by a face on the plane
-(module (bough bough-grow bough-solid bough-mesh bough-sheared bough-burnt)
+;   (bough-edges seed pl)              the cut's edge: each piece's segments on the plane
+(module (bough bough-grow bough-solid bough-mesh bough-sheared bough-burnt bough-edges)
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the mesh it makes
 (borrow 'grove)                         ; the tree of heaven
@@ -73,7 +74,10 @@
            dx (px - t * bx) dy (py - t * by) dz (pz - t * bz) (sqrt (2 dx + 2 dy + 2 dz) - s 2))
          ; ..each limb's pieces joined plainly, so its joints keep its girth, the limbs blended
          k crotch-k L (map (r \ foldl min (cap <r) (map cap >r)) (runs ws))
-         F (foldl (\ a d (: e (max (k - max (a - d) (d - a)) 0.0 / k) (min a d - 2 e * k * 0.25))) <L >L)
+         ; ..near its walls the limbs only joined, unblended, as the tubes running in through them are
+         dw (h * min (min (min GX (n - 1 - GX)) (min GY (n - 1 - GY))) (min GZ (n - 1 - GZ)))
+         P (foldl min <L >L) t (max 0.0 (min 1.0 ((dw - h) / (3.0 * h))))
+         F (P + t * (foldl (\ a d (: e (max (k - max (a - d) (d - a)) 0.0 / k) (min a d - 2 e * k * 0.25))) <L >L - P))
          ; ..a point in each cell the surface crosses, at its crossings' mean, facing the slope
          (ix3 i j l) ((i * n + j) * n + l) m (n - 1)
          C (iota (m * m * m)) CI (C // (2 m)) CJ (C // m % m) CK (C % m) c0 (ix3 CI CJ CK)
@@ -115,18 +119,20 @@
    (tt 0 >= tt 1 ? [s] (filter two? [(tt 0 > 0.001 ? [a (at (tt 0)) (s 2)] ()) (tt 1 < 0.999 ? [(at (tt 1)) b (s 2)] ())])))
  ; ..a run of pieces end to end as one tube: a ring at each joint, its radius between the
  ; pieces', turned on from the last ring so it never twists, the texture laid on along the
- ; run; its ends run on a little so it meets what it grows from
- (sweep run tex ts) (: k #run r0 (run 0 2) n (r0 > 0.1 ? 12 (r0 > 0.03 ? 6 (r0 > 0.012 ? 4 3)))
+ ; run; its ends run on a little past a ring at each, narrowing to a point, so it sinks into
+ ; what it grows from and is closed seen from anywhere; its faces' middles at the radius
+ (sweep run tex ts) (: k #run r0 (run 0 2) rl (run (k - 1) 2) n (r0 > 0.1 ? 12 (r0 > 0.03 ? 8 (r0 > 0.012 ? 4 3)))
    d0 (unit (c- (run 0 1) (run 0 0))) dl (unit (c- (run (k - 1) 1) (run (k - 1) 0)))
-   ps ([(c- (run 0 0) (c* (0.8 * r0) d0))] + map (i \ run i 1) ^(k - 1) + [(c+ (run (k - 1) 1) (c* (0.8 * run (k - 1) 2) dl))])
-   rs ([r0] + map (i \ 0.5 * (run i 2 + run (i + 1) 2)) ^(k - 1) + [(run (k - 1) 2)])
+   ps ([(c- (run 0 0) (c* (1.0 * r0) d0)) (c- (run 0 0) (c* (0.8 * r0) d0)) (run 0 0)] + map (i \ run i 1) ^k
+       + [(c+ (run (k - 1) 1) (c* (0.8 * rl) dl)) (c+ (run (k - 1) 1) (c* (0.9 * rl) dl))])
+   rs ([0.0 (0.6 * r0) r0] + map (i \ 0.5 * (run i 2 + run (i + 1) 2)) ^(k - 1) + [rl (0.3 * rl) 0.0])
    m #ps
    ; ..where each ring faces: along the run there, the way to the next joint from the last
    (way i) (unit (c- (ps (min (m - 1) (i + 1))) (ps (max 0 (i - 1)))))
    frames (foldl (\ fs i (: d (way i) e (two? fs ? (: p <fs (unit (c- p (c* (dot p d) d)))) (side d)) (e . fs))) () ^m)
    es (rev frames)
    ls (foldl (\ a i (a + [(a (i - 1) + sqrt (dot (c- (ps i) (ps (i - 1))) (c- (ps i) (ps (i - 1)))))])) [0.0] (drop 1 ^m))
-   (ring i) (: p (ps i) d (way i) e1 (es i) e2 (cross d e1) r (rs i)
+   (ring i) (: p (ps i) d (way i) e1 (es i) e2 (cross d e1) r (rs i / cos (0.5 * tau / n))
      (map (j \ (: an (tau * j / n) o (c+ (c* (cos an) e1) (c* (sin an) e2))
                  (c+ p (c* r o) + [(r0 * an / ts) (ls i / ts)] + o + [1.0 1.0 1.0]))) ^(n + 1)))
    (mesh (catmap ring ^m)
@@ -187,9 +193,19 @@
       r (foldl tri [#vs () () ()] (m 1))
       body (mesh (vs + rev (r 1)) (rev (r 2)))
       (mesh-join [body (caps (r 3) n (front body))])))
- (bough-burnt seed tex ts pl) (: tr (tree-of seed) ss (cats (sheared tr pl 0)) cr (crotch {'fork (tr 'fork) 'segs ss} tex ts)
+ ; ..the wood below the plane, a mesh for the crotch and each run
+ (burnt-wood seed tex ts pl) (: tr (tree-of seed) ss (cats (sheared tr pl 0)) cr (crotch {'fork (tr 'fork) 'segs ss} tex ts)
    ws (atom? cr ? ss (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) ss))
-   (mesh-join (map (m \ clip (turned m) pl) ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ws)))))
+   ((atom? cr ? () [(cr 0)]) + map (r \ sweep r tex ts) (runs ws)))
+ (bough-burnt seed tex ts pl) (mesh-join (map (m \ clip (turned m) pl) (burnt-wood seed tex ts pl)))
+ ; ..where a mesh's triangles cross the plane, the segment each cuts there
+ (crossings m pl) (: vs (m 0) S (map (v \ dot (pl 0) v - pl 1) vs) (in? i) (S i <= 0.0)
+   (at i j) (lerp (take 3 (vs i)) (take 3 (vs j)) (S i / (S i - S j)))
+   (catmap (t \ (: e (filter (e \ in? (t e) != in? (t ((e + 1) % 3))) ^3)
+                  (#e = 2 ? [(map (e \ at (t e) (t ((e + 1) % 3))) e)] ())))
+           (m 1)))
+ ; ..the cut's edge: for each piece of wood the plane cuts, its segments
+ (bough-edges seed pl) (filter two? (map (m \ crossings m pl) (burnt-wood seed 0 1.0 pl)))
  ; ..the wood as runs of tube, the crotch's own cut back to its box, all turned to face out;
  ; and one leaflet in eight, larger, both sides, each facing up so either side takes the light
  ; from above: an ovate leaf, base, side, tip and side, darker at its base and lighter at its
