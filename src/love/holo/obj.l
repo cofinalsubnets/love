@@ -793,13 +793,16 @@
     (: (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(_):\(n):\(f)" [o 0 (read n) f] ())
                                 (starts? s ".dl.") (s @ ".dl.\(_):\(n):\(f)" [o 1 (read n) f] ())
                                 ()))
+       ; a lane's marks, (offset kind line file), by its index, read once
+       rws (foldl (t \ i \ (: l (lanes i) lb (l 6)
+                              (pin t i (? ((l 2 & 4) = 0) () (sort (filter two? (map (k \ row k (lb k) @ r (two? r ? (r + [k]))) (keys lb)))))))) {} ^#lanes)
        ; per code lane: (index length label rows), rows (offset line file) by offset. at one
        ; offset a statement's row wins over a body's, the latest line over the rest
        (seq i l)
         (: lb (l 6)
            fo (sort (filter charm? (map (k \ peep lb (name k) ()) fnl)))
            (snap o) (foldl (\ a f (f <= o ? f a)) o fo)
-           rs (sort (filter two? (map (k \ row k (lb k) @ r (two? r ? (r + [k]))) (keys lb))))
+           rs (rws i)
            ; a body's row moves to its function's start when it is the function's first; an
            ; inlined copy's stays where it is
            (mv l p) (? (atom? l) ()
@@ -821,11 +824,11 @@
               (: a0 (peep ((lanes i) 6) k 0)
                  (step st r) (@ st [b f ln pc]
                                (: f2 (fix (r 2))
-                                  [(b + (f2 = f ? () (4 . uleb f2)) + (r 1 = ln ? () (3 . sleb (r 1 - ln)))
-                                      + (<r = pc ? () (2 . uleb (<r - pc))) + [1])
+                                  [(((f2 = f ? () (4 . uleb f2)) + (r 1 = ln ? () (3 . sleb (r 1 - ln)))
+                                      + (<r = pc ? () (2 . uleb (<r - pc))) + [1]) . b)
                                    f2 (r 1) <r]))
                  st (foldl step [() 1 1 0] rows)
-                 [(bs + [0 9 2] + o-zeros 8 + <st + (n = st 3 ? () (2 . uleb (n - st 3))) + [0 1 1])
+                 [(bs + [0 9 2] + o-zeros 8 + catall (rev <st) + (n = st 3 ? () (2 . uleb (n - st 3))) + [0 1 1])
                   ([(#bs + 3) 'abs64 k (0 - a0) 0] . rels)])))
        pr (foldl prog [() ()] sqs)
        body (le16 4 + le32 #hdr + hdr + <pr)
@@ -854,12 +857,12 @@
            () {(name ".dbg.abbrev") 0}]
        ; per code lane, its functions by pc: (lo label length name file line global? labels)
        (fns i l)
-        (: lb (l 6)
+        (: lb (l 6) al (rws i) bl (filter (r \ r 1 = 0) al)
+           (in l lo hi) (filter (r \ lo <= <r && <r < hi) l)
            (one nm) (: k (name nm) e (fn-end nm)
                        (o-has? lb k && o-has? lb e ?
                           (: lo (lb k) hi (lb e)
-                             ds (sort (filter two? (map (x \ row x (lb x) @ r (two? r && lo <= <r && <r < hi ? r)) (keys lb))))
-                             d (filter (r \ r 1 = 0) ds @ b (two? b ? <b (two? ds ? <ds ())))
+                             d (in bl lo hi @ (b . _) b (in al lo hi @ (b . _) b ()))
                              [[lo k (hi - lo) nm (two? d ? [(peep fix (d 3) 1) (d 2)] [1 0]) (elem nm gfn) lb]])))
            (sort (catmap one (uniq fnl))))
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
@@ -880,7 +883,8 @@
              ('unspec nm) ([20] + str nm))
        tys (dt 0)
        tof (rev >(foldl (\ a e ((<a + #(ty (_ \ le32 0) e)) . a)) [(4 + #cu0)] tys))
-       (ref j) (le32 (tof j))
+       tot (foldl (t \ o \ (pin t (t 'n) o, pin t 'n (t 'n + 1))) (pin {} 'n 0) tof)
+       (ref j) (le32 (tot j))
        tyb (catmap (ty ref) tys)
        ; a variable laid here, at its label
        lbs (map (l \ l 6) lanes)
@@ -947,7 +951,7 @@
                               [[(<a2 + [0]) (a2 1)] e])))))
               <(foldl kid [a1 lo] kids)))
        (die acc f)
-        (@ acc [bs rels]
+        (@ acc [bn bl rels]
            (@ f [f0 k n nm fl ex lb]
               (: sg (peep (dt 2) nm [() ()])
                  sl (peep (dt 3) nm [() ()])
@@ -963,14 +967,14 @@
                       + (<sg = () ? () (ref <sg)) + [1 156])
                  p0 (foldl par [b0 ()] (filter (p \ p 1 != ()) (sg 1)))
                  r (scope p0 fr 0 f0 (f0 + n))
-                 o (4 + #bs)
-                 [(bs + <r + [0])
+                 o (4 + bn)
+                 [(bn + #(<r) + 1) ((<r + [0]) . bl)
                   (map (r \ ((<r + o) . >r)) (r 1) + ([(o + #hd) 'abs64 k 0 0] . rels))])))
-       ds (foldl die vs fs)
-       cu (<ds + [0])
+       ds (foldl die [#(<vs) [<vs] <>vs] fs)
+       cu (catall (rev (ds 1)) + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)
               ([[6 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
-                [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev <>ds) {}]
+                [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev (ds 2)) {}]
        lcl [".debug_loc" 1 0 1 (catall (rev (lc 'b))) (rev (lc 'r)) {(name ".dbg.loc") 0}]
        (atom? sqs ? () ([ab inf ln rgl] + (lc 'n = 0 ? () [lcl]))))
 
