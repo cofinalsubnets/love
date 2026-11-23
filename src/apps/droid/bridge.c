@@ -43,7 +43,8 @@
    text, 'x' the exception thrown, as its toString, 'e' a malformed op. ops run on the loop
    thread, so a call that blocks stalls the screen. every process love starts inherits the
    door: the app's own uid, no reach it lacks. assets/perms names the permissions to ask for at
-   start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
+   start, NUL-separated, but RECORD_AUDIO, the mic's, which is asked when an ear first opens: the
+   ear waits on the answer, and one refused is closed.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
@@ -77,7 +78,7 @@ int ANativeWindow_setBuffersGeometry(void *, int, int, int);
 int ANativeWindow_getWidth(void *); int ANativeWindow_getHeight(void *);
 int ANativeWindow_lock(void *, ANativeWindow_Buffer *, void *);
 int ANativeWindow_unlockAndPost(void *);
-void *ALooper_prepare(int); int ALooper_addFd(void *, int, int, int, void *, void *);
+void *ALooper_prepare(int); void *ALooper_forThread(void); int ALooper_addFd(void *, int, int, int, void *, void *);
 int ALooper_removeFd(void *, int); int ALooper_pollOnce(int, int *, int *, void **); void ALooper_wake(void *);
 void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQueue_detachLooper(void *);
 int AInputQueue_getEvent(void *, void **); int AInputQueue_preDispatchEvent(void *, void *);
@@ -109,7 +110,7 @@ void *mmap(void *, size_t, int, int, int, long); int munmap(void *, size_t);
 int pthread_create(void *, void const *, void *(*)(void *), void *); int pthread_join(long, void **);
 int pthread_mutex_lock(void *); int pthread_mutex_unlock(void *);
 int snprintf(char *, size_t, char const *, ...);
-int pthread_detach(long);
+int pthread_detach(long); int clock_gettime(int, void *);
 int AAudio_createStreamBuilder(void **); int AAudioStreamBuilder_delete(void *);
 void AAudioStreamBuilder_setSampleRate(void *, int); void AAudioStreamBuilder_setChannelCount(void *, int);
 void AAudioStreamBuilder_setFormat(void *, int); void AAudioStreamBuilder_setPerformanceMode(void *, int);
@@ -142,6 +143,8 @@ typedef struct {
   deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
+  int micp[2], mic, ask, earwait, micgen, micok;   /* the mic: pokes to the main thread; its grant; asked 1, our pause seen 2; the ears waiting, the answers, the last */
+  void *main; long askt, mik[8];          /* the main thread's looper; when asked; the lock on earwait, micgen and micok */
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
   char argv[2048], label[64]; long nargv;
   uint32_t *fb; size_t fbsz;              /* a frame as love sent it */
@@ -775,18 +778,36 @@ static void *play(void *p) {
   return 0;
 }
 
-/* one ear: the rate and channels, then an AAudio input stream's frames until love hangs
-   up -- its socket readable, since love says nothing after the rate. a stream refused,
-   as before RECORD_AUDIO is granted, is asked again each half second; out of sight the
-   mic is let go, and taken again on the way back */
+/* one ear: the rate and channels, the mic granted, then an AAudio input stream's frames until
+   love hangs up -- its socket readable, since love says nothing after the rate. a stream
+   refused is asked again each half second; out of sight the mic is let go, and taken again
+   on the way back */
 typedef struct { br *b; int fd; } ear;
 static int hung(int fd) { struct pollfd q = {fd, 1, 0}; return poll(&q, 1, 0) != 0; }
+/* the mic's grant, waited for: the main thread poked each half second until it answers */
+static int granted(br *b, int fd) {
+  if (__atomic_load_n(&b->mic, 2)) return 1;
+  pthread_mutex_lock(b->mik);
+  int g = b->micgen; b->earwait++;
+  pthread_mutex_unlock(b->mik);
+  for (int i = 0, ok, same; ; i++) {
+    if (i % 10 == 0) write(b->micp[1], "m", 1);
+    usleep(50000);
+    int gone = hung(fd);
+    pthread_mutex_lock(b->mik);
+    same = b->micgen == g; ok = b->micok;
+    if (same && gone) b->earwait--;
+    pthread_mutex_unlock(b->mik);
+    if (!same || gone) return !same && ok && !gone;
+  }
+}
 static void *hear(void *p) {
   ear *h = p; br *b = h->b; int fd = h->fd; unsigned char r[4]; void *bd = 0, *st = 0; short buf[2048];
   munmap(h, sizeof *h);
   void (*preset)(void *, int) = (void (*)(void *, int)) dlsym(0, "AAudioStreamBuilder_setInputPreset");
   int rate = 0, ch = 1;
   if (!readall(fd, r, 4)) rate = r[0] | r[1] << 8 | r[2] << 16, ch = r[3] == 2 ? 2 : 1;
+  if (rate && !granted(b, fd)) rate = 0;
   while (rate && !hung(fd)) {
     if (!__atomic_load_n(&b->up, 2)) { usleep(100000); continue; }
     if (!AAudio_createStreamBuilder(&bd)) {
@@ -1098,12 +1119,14 @@ static void lay(br *b) {
 
 static br *me(void *a) { return ((ANativeActivity *) a)->instance; }
 
-/* assets/perms, asked of the user where not granted yet: checkSelfPermission each, then
-   one requestPermissions with the rest, through JNIEnv's table */
-static void perms(ANativeActivity *a) {
+/* assets/perms but the mic's (how 0), or the mic's alone (1), asked of the user where not granted
+   yet: checkSelfPermission each, then one requestPermissions with the rest, through JNIEnv's
+   table. 2 checks the mic's and asks nothing. answers how many are not granted, -1 none listed */
+static int same(char const *a, char const *b) { while (*a && *a == *b) a++, b++; return *a == *b; }
+static int perms(ANativeActivity *a, int how) {
   void *as = AAssetManager_open(a->assetManager, "perms", 3);
-  if (!as) return;
-  char const *s = AAsset_getBuffer(as), *want[8]; long n = AAsset_getLength(as); int k = 0;
+  if (!as) return -1;
+  char const *s = AAsset_getBuffer(as), *want[8]; long n = AAsset_getLength(as); int k = 0, seen = 0;
   void *e = a->env; void *const *t = *(void *const **) e;
   void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
@@ -1117,17 +1140,46 @@ static void perms(ANativeActivity *a) {
     for (long i = 0; s && ck && i < n && k < 8; i++) {
       char const *p = s + i;
       while (i < n && s[i]) i++;
-      if (*p && calli(e, ac, ck, str(e, p))) want[k++] = p;
+      if (!*p || !same(p, "android.permission.RECORD_AUDIO") == !!how) continue;
+      seen = 1;
+      if (calli(e, ac, ck, str(e, p))) want[k++] = p;
     }
-    void *sc = k ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
-    if (k && !sc) clear(e);
+    void *sc = k && how < 2 ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
+    if (k && how < 2 && !sc) clear(e);
     for (int i = 0; v && i < k; i++) seta(e, v, i, str(e, want[i]));
     void *rq = v ? mid(e, cls(e, ac), "requestPermissions", "([Ljava/lang/String;I)V") : 0;
     if (rq) callv(e, ac, rq, v, 1); else clear(e);
     clear(e); pop(e, 0);
   } else clear(e);
   AAsset_close(as);
+  return seen ? k : -1;
 }
+
+/* the mic, on the main thread. the ears waiting answered */
+static void mican(br *b, int ok) {
+  pthread_mutex_lock(b->mik);
+  if (ok) __atomic_store_n(&b->mic, 1, 3);
+  b->ask = 0; b->micok = ok; b->micgen++; b->earwait = 0;
+  pthread_mutex_unlock(b->mik);
+}
+static long now(void) { struct { long s, n; } t = {0, 0}; clock_gettime(1, &t); return t.s; }
+/* an ear's poke: the dialog put up, or, where none came over us in a while, what android says.
+   with no activity in sight there is no one to ask */
+static int micpoke(int fd, int ev, void *p) {
+  br *b = p; char c[64];
+  (void) ev;
+  while (read(fd, c, sizeof c) > 0) ;
+  if (b->ask) { if (b->ask == 1 && now() - b->askt > 2) mican(b, b->a && !perms(b->a, 2)); return 1; }
+  pthread_mutex_lock(b->mik); int w = b->earwait; pthread_mutex_unlock(b->mik);
+  if (!w) return 1;
+  int n = b->a && __atomic_load_n(&b->up, 2) ? perms(b->a, 1) : b->a ? perms(b->a, 2) : -1;
+  if (n > 0 && __atomic_load_n(&b->up, 2)) b->ask = 1, b->askt = now(); else mican(b, !n);
+  return 1;
+}
+/* the dialog covers us; we are back, or hidden under another app: answered */
+static void pause(void *a) { br *b = me(a); if (b->a == a && b->ask) b->ask = 2; }
+static void resume(void *a) { br *b = me(a); if (b->a == a && b->ask == 2) mican(b, !perms(a, 2)); }
+
 
 /* the whole screen: getWindow().getDecorView().setSystemUiVisibility(immersive sticky,
    the bars hidden, laid out under them), through JNIEnv's table -- the spec fixes the slots */
@@ -1170,17 +1222,24 @@ static void qout(void *a, void *q) {
   br *b = me(a); AInputQueue_detachLooper(q); if (b->queue == q) b->queue = 0;
 }
 static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
-static void stop(void *a) { if (me(a)->a == a) __atomic_store_n(&me(a)->up, 0, 3); }
+static void stop(void *a) {
+  br *b = me(a);
+  if (b->a != a) return;
+  __atomic_store_n(&b->up, 0, 3);
+  if (b->ask) mican(b, !perms(a, 2));
+}
 static void destroy(void *a) {
   br *b = me(a);
   if (b->stay) {                               /* the decks run on; an old activity's end, one taken over, is nothing */
     if (b->a == a) {
+      mican(b, 0);
       pthread_mutex_lock(b->act); b->a = 0; pthread_mutex_unlock(b->act);
       b->shown = 0; b->vh = 0; b->bare = 1;
     }
     return;
   }
   the = 0;
+  ALooper_removeFd(b->main, b->micp[0]); mican(b, 0);
   for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) kill(b->decks[i].pid, 15), waitpid(b->decks[i].pid, 0, 0);
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
@@ -1193,7 +1252,7 @@ static void destroy(void *a) {
   close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd); close(b->logw);
   unlink(b->horn); unlink(b->ear); unlink(b->droid);
   if (b->fb) munmap(b->fb, b->fbsz);
-  if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
+  if (!__atomic_load_n(&b->ears, 2)) close(b->micp[0]), close(b->micp[1]), munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
 
 /* the service's onStartCommand: its notification, or with an action the quit it carries.
@@ -1272,6 +1331,7 @@ static void hook(ANativeActivity *a, br *b) {
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
   a->callbacks->onStart = start; a->callbacks->onStop = stop;
+  a->callbacks->onPause = pause; a->callbacks->onResume = resume;
   immersive(a);
 }
 
@@ -1330,7 +1390,10 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   unlink(b->gpu);
   b->gsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->gsock, &gu, sizeof gu); listen(b->gsock, 2);
-  perms(a);
+  pipe2(b->micp, O_CLOEXEC | O_NONBLOCK);
+  b->main = ALooper_forThread(); ALooper_addFd(b->main, b->micp[0], -2, 1, (void *) micpoke, b);   /* POLL_CALLBACK */
+  b->mic = !perms(a, 2);
+  perms(a, 0);
   if (b->stay) service(b, a);
   lay(b); deckup(b, b->d);
   pthread_create(&b->th, 0, loop, b);

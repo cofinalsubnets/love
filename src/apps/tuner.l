@@ -234,7 +234,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
    ; the mic: the last long frames kept, a reading every 100 ms once win + hi are in
    need (2 * (win + hi)) keep (2 * long)
    (listen t h buf fresh)
-    (see h @ c (c = -1 || t 'over ? ()
+    (see h @ c (c = -1 || t 'over ? (c = -1 ? (pin t 'src "no mic: the device is refused or gone") 0, ())
       (: b (buf + string c + chug h) b2 (#b > keep ? (snip b (#b - keep) #b) b)
          n2 (fresh + #b - #buf)
          (n2 >= 4800 && #b2 >= need ? (tuner-hear t (samples b2), listen t h b2 0) (listen t h b2 n2)))))
