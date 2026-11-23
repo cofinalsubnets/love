@@ -161,13 +161,9 @@
                               ? [rt [l h] (fs + [['sub 'sp 'sp 16] ['st 'sp 0 al] ['st 'sp 4 ah] ['st 'sp 8 bl] ['st 'sp 12 bh]
                                                  ['call (op = '/ ? (usg? rt ? '__udivdi3 '__divdi3) (usg? rt ? '__umoddi3 '__moddi3))]
                                                  ['add 'sp 'sp 16] ['mov l 'r0] ['mov h 'r2]])]
-                              (rt = 'ullong && !(soft? g)
-                              ? [rt [l h] (fs + [['mov 'r2 al] ['mov 'r3 ah] ['mov 'r0 bl] ['mov 'r1 bh]
-                                                 ['fix '(r0 r1 r2 r3) (lokc g) [(op = '/ ? '(udivll) '(uremll))]]
-                                                 ['mov l 'r0] ['mov h 'r1]])]
-                                [rt [l h] (fs + (ap g 0 @ [a b] (ap g 2 @ [c e] [['mov a al] ['mov b ah] ['mov c bl] ['mov e bh] ['cuse a b c e]]))
-                                                + [['call (op = '/ ? (usg? rt ? '__udivdi3 '__divdi3) (usg? rt ? '__umoddi3 '__moddi3))]]
-                                                + (rp g @ [a b] [['mov l a] ['mov h b]]))]))
+                              [rt [l h] (fs + (ap g 0 @ [a b] (ap g 2 @ [c e] [['mov a al] ['mov b ah] ['mov c bl] ['mov e bh] ['cuse a b c e]]))
+                                              + [['call (op = '/ ? (usg? rt ? '__udivdi3 '__divdi3) (usg? rt ? '__umoddi3 '__moddi3))]]
+                                              + (rp g @ [a b] [['mov l a] ['mov h b]]))])
                             (lono g ['bin op]))))))))))
    ; -- the wide value: [ty parts fs], low part first, two registers or t32's four; a local in memory.
    ; the kit's ops work rax:rdx or r0-r3, each in a fix over the registers it reads and writes --

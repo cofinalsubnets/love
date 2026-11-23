@@ -63,7 +63,37 @@
                      'tick (st \ pin win 'evq (peep sc (st 't + 1) (st 't + 1 < n ? () [['down 16]])))
                      'fps 50 'linger 0 'next () 'song (_ \ ()) 'win win}
                  (uniq (rev ((view-walk lv) 'seen))))
- (test (lwg {} 60 = [2 4]) (lwg {1 [['down 13] ['text "+"]] 2 [['up 13]]} 14 = [2 1])))
+ (test (lwg {} 60 = [2 4]) (lwg {1 [['down 13] ['text "+"]] 2 [['up 13]]} 14 = [2 1])
+       ; ..and 0 sets it going again, from the scale the key left
+       (lwg {1 [['down 13] ['text "+"]] 2 [['up 13]] 4 [['down 11] ['text "0"]] 5 [['up 11]]} 80 = [2 1 4])))
+; the console: ~ opens it, letting go what is held and giving the scene less of the window;
+; meanwhile keys are typed, q and ~ too, and act on nothing; enter answers a line, up brings it
+; back, ctrl-d shuts it and the scene has its size again
+(: con {0 [['down 37] ['text "k"]] 2 [['down 42] ['down 41] ['text "~"]] 3 [['down 41] ['text "~"] ['up 41] ['up 42] ['up 37]]
+        4 (catmap (t \ [['down 2] ['text t] ['up 2]]) ["s" "a" "y" " " "(" "0" " " "~" " " "9" "q"] + [['down 14] ['up 14] ['down 2] ['text ")"] ['up 2] ['down 28] ['text "\r"] ['up 28]])
+        5 [['down 328] ['up 328] ['down 28] ['up 28]] 6 [['down 29] ['down 32] ['text "d"] ['up 32] ['up 29]] 8 [['down 25] ['text "p"] ['up 25]] 10 [['down 16] ['text "q"]]}
+   win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq (con 0)}
+   st (view-walk {'new (w \ h \ {'w w 'h h 't 0 'log () 'said () 'sizes () 'helped ()}) 'size (st \ w \ r \ pins st 'w w 'h (2 * r) 'sizes ([w r] . st 'sizes))
+                  'frame (st \ ((0 < #(keys (peep st 'over {})) ? (pin st 'helped (st 't . st 'helped))), ""))
+                  'key (st \ a \ pin st 'log ([(st 't) a] . st 'log)) 'words (st \ [["say" "" (x \ (pin st 'said (x . st 'said), x))]])
+                  'tick (st \ pin win 'evq (peep con (st 't + 1) ())) 'binds (view-bind view-binds {112 'where}) 'walking view-walking
+                  'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held (_ \ 1) 'repeat [0 0]}))
+ (test (rev (st 'log) = [[0 'forward] [1 'forward] [8 'where]]) (st 'said = [(0 ~ 9) (0 ~ 9)]) (rev (st 'helped) = [2 3 4 5])
+       (rev (st 'sizes) = [[80 14] [80 25]]))
+; the panes: the scene over the console, a bar between, the screen all the scene's while it is
+; away; ctrl-w m puts them side by side, x trades them, and the split is kept for the next time
+(: co (view-con-new ()) l0 (view-con-lay co 80 24) _ (view-con-up co 1) l1 (view-con-lay co 80 24)
+   (cw c) (: _ (view-con-key co (_ \ "") 23) _ (view-con-key co (_ \ "") c) (view-con-lay co 80 24))
+   l2 (cw 109) l3 (cw 120) bx (view-con-box co (l3 1)) _ (cw 119) f (view-con? co) _ (view-con-up co 0) l4 (view-con-lay co 80 24) _ (view-con-up co 1) l5 (view-con-lay co 80 24)
+ (test (l0 = [[0 0 80 24] ()]) (l1 = [[0 0 80 13] [0 14 80 10]]) (l2 = [[0 0 47 24] [48 0 32 24]]) (l3 = [[32 0 48 24] [0 0 31 24]])
+       (bx 0 = 0) (#(bx 2) = 24) !f (l4 = [[0 0 80 24] ()]) (l5 = l3)))
+; ctrl-c drops the line typed and leaves the console up, and stops what runs
+(: co (view-con-new ()) _ (view-con-up co 1) _ (each ["1 + " 3 "2" 13] (view-con-key co (l \ "=" + l)))
+   (spin _) (spin ()) n {'n 0}
+ (test (view-con? co) (rev (co 'log) = ["> 1 + ^C" "> 2" "=2"]) (view-con-task (_ \ "a") (_ \ 1) = "a")
+       (view-con-task spin (_ \ (pin n 'n (n 'n + 1), 2 < n 'n)) = "^C") (n 'n = 3)))
+; a terminal's frame moved to where its pane is
+(: e (string 27) (test (view-shift (e + "[Hab\r\ncd" + e + "[1mx" + e + "[3;4He") 10 2 = (e + "[3;11H" + e + "[3;11Hab\r\n" + e + "[10Ccd" + e + "[1mx" + e + "[5;14He")) (view-shift "q" 0 0 = "q")))
 
 ; the world on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (world-load "test/lore/hall.l")

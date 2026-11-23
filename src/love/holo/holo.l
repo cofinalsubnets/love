@@ -124,7 +124,7 @@
 
    ;; -- the IR's operand counts. a backend's emitter rows take exactly these operands (an
    ;; arity-0 row is its chunk), and its 'lower is lower-via over them. --
-   ir-arity {'ret 0 'sys 0 'nop 0 'trap 0 'udivll 0 'uremll 0
+   ir-arity {'ret 0 'sys 0 'nop 0 'trap 0
               ; x86 port i/o, register-contracted (dx the port, al/ax/eax the datum). str, a
               ; string op by stem and width, walks rsi/rdi (by rcx under rep, a prefix like lock).
              'inb 0 'inw 0 'inl 0 'outb 0 'outw 0 'outl 0

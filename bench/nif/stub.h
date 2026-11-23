@@ -30,3 +30,15 @@ lvm(lvm_cask) { return g; }
 lvm(lvm_str) { return g; }              // love.h's inline strp() names it, so every nif does
 lvm(lvm_chain) { return g; }
 lvm(_lvm_ghelp) { return g; }
+
+// the port side of a nif's state: named by the wrappers, entered by none of these programs.
+// each dies by name, so a harness that does reach one says so
+#include <stdio.h>
+#include <stdlib.h>
+static void stub_dead(const char *n) { fputs("stub called: ", stdout), puts(n), fflush(stdout), abort(); }
+const struct port_vt state_vt = {0, 0, 0, 0};
+union u *new_state(struct g **gp, uintptr_t n, uintptr_t clear) { stub_dead("new_state"); return 0; }
+lvm(lvm_port_io) { stub_dead("lvm_port_io"); return g; }
+lvm(_lvm_raise) { stub_dead("_lvm_raise"); return g; }
+lvm(lvm_gc) { stub_dead("lvm_gc"); return g; }
+lvm(lvm_big) { stub_dead("lvm_big"); return g; }

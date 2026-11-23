@@ -216,31 +216,6 @@
       (: dn (rn d) an (rn a) bn (rn b) cn (rn acc)
          (t32 ((0xFB00 | an) << 16 | (cn << 12 | (dn << 8 | bn)))))
    (thumb-clz d s) (: dn (rn d) sn (rn s) (t32 ((0xFAB0 | sn) << 16 | (0xF080 | (dn << 8 | sn)))))
-   ;; 64-bit unsigned div/rem: dividend r2:r3, divisor r0:r1, answer r0:r1; r4..r7 saved round it.
-   ;; 64 restoring steps doubling (rem:dividend); a carry out of rem forces the subtract.
-   ;; label-free, offsets by byte count: loop at 28, bcs at 44, bcc at 54, bne at 76
-   (t2-udivmod which)
-      (catall [(thumb-push 'r4) (thumb-push 'r5) (thumb-push 'r6) (thumb-push 'r7)
-                (thumb-movw 'r4 0) (thumb-movw 'r5 0) (thumb-movw 'r6 64)
-                (thumb-aluop 'adds 'r2 'r2 'r2)                ; loop: (rem:dividend) <<= 1
-                (thumb-aluop 'adcs 'r3 'r3 'r3)
-                (thumb-aluop 'adcs 'r4 'r4 'r4)
-                (thumb-aluop 'adcs 'r5 'r5 'r5)
-                (t16 0xD204)                                   ; bcs -> the subtract
-                (thumb-aluop 'subs 'r7 'r4 'r0)                ; trial rem - divisor
-                (thumb-aluop 'sbcs 'r7 'r5 'r1)
-                (t16 0xD305)                                   ; bcc -> next
-                (thumb-aluop 'subs 'r4 'r4 'r0)
-                (thumb-aluop 'sbcs 'r5 'r5 'r1)
-                (thumb-addsub-imm 'add 'r2 'r2 1)              ; the quotient bit
-                (thumb-addsub-imm 'sub 'r6 'r6 1)              ; next
-                (t32 0xF1B60F00)                               ; cmp.w r6, #0, wide for the offsets
-                (t16 0xD1E6)                                   ; bne loop
-                (which @ 'div
-                 (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
-                 (thumb-movr 'r0 'r4 + thumb-movr 'r1 'r5))
-                (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)])
-
    ;; [Rn,#imm12] (T3), else [Rn,#-imm8] (T4), else r12 = base+off and [r12,#0]
    (thumb-mem-far bn off)                                    ; r12 = Rbn +- imm12, else r12 = off ; r12 += Rbn
       (? (-4095 <= off <= 4095)
@@ -602,7 +577,6 @@
           ('cvtss2sd . thumb-cvtss2sd) ('cvtsd2ss . thumb-cvtsd2ss)
           ('movsnxr . thumb-movsnxr) ('movsnrx . thumb-movsnrx)
           ('clz . thumb-clz)
-          ('udivll . t2-udivmod 'div) ('uremll . t2-udivmod 'rem)        ; nullary: the whole expansion
           ('ld . thumb-ld) ('st . thumb-st)
           ('ld1 . thumb-ld1) ('ld2 . thumb-ld2) ('ld4 . thumb-ld4)
           ('st1 . thumb-st1) ('st2 . thumb-st2) ('st4 . thumb-st4)

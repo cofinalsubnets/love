@@ -136,6 +136,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs, binary ops are binary
 ; - u + M u = (+ u (M u)): application binds tighter than infix -- and applying a
 ;   number is the tower (3 2 = 8), so write (u + M) u
+; - (p x ? x + 1 0) is (p x ? x + (1 0)), one arm and no else, with no error: parenthesize an
+;   infix arm, (p x ? (x + 1) 0)
 ; - (1 +) = (+ 1): no sections
 ; - (map < l) is (< map l): an infix operator by value is parenthesised, (<). the
 ;   accessor is cap -- and love orders across kinds, so the misread answers 0 in silence

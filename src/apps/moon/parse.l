@@ -23,6 +23,21 @@
    ; -- where a refusal stood --
    ; cpp's spans ((index file)..) ride a marker token at the head; raw lexer output reads ().
    ; the file is carried since an #include splices the header's own line numbering in
+   ; -- the prefix memo -- the state where a unit's first include ends, kept as (toks k state
+   ; forms key), and given to a later unit whose first k tokens and key are the same, so its
+   ; parse starts at its own text. MOON_NOSNAP=1 parses every unit whole
+   psmemo {}                                        ; 'l -> the entries, newest first, three kept
+   (tcopy t) (foldl (n \ key \ (pin n key (t key))) {} (keys t))
+   ; the fields are tablets of lists and plain values: two levels is the whole copy
+   (pscopy t) (foldl (n \ key \ (t key @ v (pin n key (tablet? v ? (tcopy v) v)))) {} (keys t))
+   (pssame? a b n) (? (n < 1) 1 (atom? a || atom? b) 0 (<a == <b || <a = <b) (pssame? >a >b (n - 1)) 0)
+   (psfind toks k key)
+    (: (go l) (atom? l ? () (<l @ e (((<>e = k) && (e 4 = key) && pssame? toks <e k) ? e (go >l))))
+       (go (peep psmemo 'l ())))
+   (psput e) (pin psmemo 'l (take 3 (e . peep psmemo 'l ())))
+   ; what a unit sets for itself, and a given state leaves alone
+   pskeep '(ehint lazy nomode swch uch ssp dbg dtoks dspans dcur cxls)
+   (psgive ps st) (map (key \ (elem key pskeep ? 0 (st key @ v (pin ps key (tablet? v ? (tcopy v) v), 0)))) (keys st))
    (fspans ts) (two? ts && tkk <ts = 'fspans ? (tkv <ts))
    (fsbody ts) (two? ts && tkk <ts = 'fspans ? >ts ts)
    (filat spans i)                                  ; the file in force at stream index i
@@ -2909,10 +2924,20 @@
             pin ps 'curssp (),
             pin ps 'scopacc (),        ; what a file-scope specifier bound is nobody's to take back
             pin ps 'cursect ()))
+       ; the prefix: the unit opens on an include, which ends at the first span no file names.
+       ; -g keeps token cursors and a second pass carries enum hints: both parse whole
+       snap? (!(string? (getenv "MOON_NOSNAP")) && !(opts 'dbg) && (#(keys eh) = 0))
+       (bnd l) (? (atom? l) #toks (!(string? <><l)) <<l (bnd >l))
+       k (snap? && two? spans && (<<spans = 0) && string? <><spans ? (bnd >spans) 0)
+       kt (0 < k ? (drop k toks) ())
+       pkey [tgt dia lz (opts 'swch) (opts 'uch) (opts 'ssp)]
+       ent (0 < k ? (psfind toks k pkey) ())
+       took {}
        (tops ts2 acc)
         ; the hoisted block-scope externs lead the program; a later real definition takes the
         ; entry back (C's tentative rule)
-        (? (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
+        (? ((0 < k) && atom? ent && (ts2 == kt) && !(took 't)) (pin took 't 1, psput [(take k toks) k (pscopy ps) acc pkey], tops ts2 acc)
+           (two? ts2 && tkk <ts2 = 'pack) (pin ps 'pack (tkv <ts2), tops >ts2 acc)   ; cpp's #pragma pack mark
            (atom? ts2) ((map (nm \ (peep (ps 'c99inl) nm () = 'inl && peep (ps 'sfns) nm () != 'used ? (pin (ps 'sfns) nm 'inl))) (keys (ps 'c99inl))),
                       (peep ps 'lazy () ? (lzres ps acc) acc) @ acc2
                       (acc2 = 'lazyfail ? acc2
@@ -2964,7 +2989,7 @@
                                    "\tadd $168,%rsp\n\tpop %rsi\n\tpop %rdi\n\tret\n"
                                    "\t.size \(nm),.-\(nm)\n\t.popsection\n"])])))
          (rev (peep ps 'msdefs ())))
-       (attrbad toks spans @ ab (gripe? ab ? ab (tops toks ()))))
+       (attrbad toks spans @ ab (gripe? ab ? ab (two? ent ? (psgive ps (ent 2), tops kt (ent 3)) (tops toks ())))))
    ; an __attribute__ whose skip would change the code (cpp.l's gnuattrs 'no) refuses where
    ; written, each item read by its first word. -> a gripe | ()
    (attrbad toks spans)

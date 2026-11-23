@@ -346,14 +346,485 @@
      'macros '()
      'proofs pf}
 
-   lz-specs [run]
+   ; --- the model and the coder at a chunk's start and end ------------------------------------------
+   (mput f e) ['raw ['expr ['asn (cf "m" f) e]]]
+   (rput f e) ['raw ['expr ['asn (cf "r" f) e]]]
+   ; every probability even: the fixed ones, then the literals'
+   reset
+    {'name "lz_reset" 'short "zxreset"
+     'attrs '("static")
+     'ret 'void
+     'params '(("m" (ptr (struct "lz_model"))))
+     'fields ()
+     'arrays '((Pr (v "P") 1846) (Lt (v "L") litn))
+     'requires '((w nat) (litn nat) (gw (inf-le 32 w)) (gln (inf-lt litn (inf-pow w))))
+     'decls
+      [['(ptr (named "lzp")) ['P ['raw ['cast '(ptr (named "lzp")) ['var "m"]]]] ['L ['raw (cf "m" "lit")]]]
+       ['(named "uintptr_t") '(j)
+        ['litn ['raw ['bin 'shl ['cast '(named "uintptr_t") ['num 768]] ['bin '+ (cf "m" "lc") (cf "m" "lp")]]]]]]
+     'ensures ()
+     'body
+      ('((f1 for j 0 1846 () ((p1 poke Pr j 1024)))
+         (f2 for j 0 litn () ((p2 poke Lt j 1024))))
+       + [('w1 . mput "state" ['num 0])]
+       + map (k \ ['w2 'raw ['expr ['asn (repk k) ['num 0]]]]) [0 1 2 3])
+     'macros '()
+     'proofs
+      {"f1b-1" '(lz-fit (succ j) 1847 w gw (inf-lelts (succ j) 1846 (inf-ltsu j 1846 f1)) (idpath false))}}
+   ; the props byte, pb lp lc packed as ((pb * 5) + lp) * 9 + lc: 0 refused, 1 and m's three laid
+   props
+    (: q '(un-div 9 b) dq '(un-divlt 9 (idpath true) b 25 (inf-lelts b 224 g1))
+       lcb '(inf-ltsle (inf-mod 9 b) 8 (inf-modlt 8 b)) lpb ['inf-ltsle ['inf-mod 5 q] 4 ['inf-modlt 4 q]]
+       dp ['un-divlt 5 '(idpath true) q 5 dq] pbb ['inf-ltsle ['un-div 5 q] 4 dp]
+       sum ['add '(inf-mod 9 b) ['inf-mod 5 q]] sumb ['inf-add2 '(inf-mod 9 b) 8 ['inf-mod 5 q] 4 lcb lpb]
+    {'name "lz_props" 'short "zxprops"
+     'attrs '("static")
+     'ret 'int
+     'params '(("m" (ptr (struct "lz_model"))) ("b" uint) ("maxlclp" uint))
+     'fields ()
+     'arrays ()
+     'requires '((w nat) (b nat) (maxlclp nat) (gw (inf-le 32 w)))
+     'decls '((uint (lc 0) (lp 0) (pb 0) (q)))
+     'ensures '((e1 (inf-le lc 8)) (e2 (inf-le lp 4)) (e3 (inf-le pb 4)))
+     'body
+      ['(i1 if g1 (lt 224 b) ((r1 ret 0)))
+       '(s1 set lc (d% b 9)) '(s2 set q (d/ b 9)) '(s3 set lp (d% q 5)) '(s4 set pb (d/ q 5))
+       '(i2 if g2 (lt maxlclp (+ lc lp)) ((r2 ret 0)))
+       ('w1 . mput "lc" ['var "lc"]) ('w2 . mput "lp" ['var "lp"]) ('w3 . mput "pb" ['var "pb"])
+       '(r3 ret 1)]
+     'macros '()
+     'proofs {"s2-2" ['lz-fit q 25 'w 'gw dq '(idpath false)]
+              "s4-2" ['lz-fit ['un-div 5 q] 5 'w 'gw dp '(idpath false)]
+              "i2-1" ['lz-fit sum 13 'w 'gw ['inf-lelts sum 12 sumb] '(idpath false)]
+              "r2-1" lcb "r2-2" lpb "r2-3" pbb "r3-1" lcb "r3-2" lpb "r3-3" pbb}})
+   ; n bytes at p, the first five the coder's: 0 refused
+   init
+    (: (rd k) ['inf-lttrans k 5 'n '(idpath true) 'g1]
+    {'name "rd_init" 'short "zxinit"
+     'attrs '("static")
+     'ret 'int
+     'params '(("r" (ptr (struct "lz_rd"))) ("p" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")))
+     'fields ()
+     'arrays '((In (v "p") n))
+     'requires '((In (pi x nat nat)) (n nat))
+     'decls '(((named "uint32_t") (cd)))
+     'ensures '((e1 (pi e (inf-lt 0 res) (inf-le 5 n))))
+     'body
+      ['(i1 if g1 (lt n 5) ((r1 ret 0)))
+       '(h1 havoc cd (at In 0))
+       '(i2 if g2 (ne cd 0) ((r2 ret 0)))
+       '(h2 havoc cd (wor (wor (wor (wshl (u32 (at In 1)) 24) (wshl (u32 (at In 2)) 16)) (wshl (u32 (at In 3)) 8)) (at In 4)))
+       ('w1 . rput "p" ['var "p"]) ('w2 . rput "i" ['num 5]) ('w3 . rput "n" ['var "n"])
+       ('w4 . rput "range" ['cast u32 ['un 'neg ['num 1]]]) ('w5 . rput "code" ['var "cd"]) ('w6 . rput "bad" ['num 0])
+       '(r3 ret 1)]
+     'macros '()
+     'proofs {"h1-1" (rd 0) "h2-1" (rd 1) "h2-2" (rd 2) "h2-3" (rd 3) "h2-4" (rd 4)
+              "r1-1" '(lam e (fromempty (inf-le 5 n) (nopathsfalsetotrue e)))
+              "r2-1" '(lam e (fromempty (inf-le 5 n) (nopathsfalsetotrue e)))
+              "r3-1" '(lam e g1)}})
+   ; one step with no bit after: the byte the coder's last bit left
+   rnorm
+    {'name "rd_norm" 'short "zxnorm"
+     'attrs '("static")
+     'ret 'void
+     'params '(("r" (ptr (struct "lz_rd"))))
+     'fields '(i n range code)
+     'state '((i i0))
+     'arrays '((In (r "p") n))
+     'requires '((In (pi x nat nat)) (w nat) (n nat) (i0 nat) (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))) (gi (inf-le i0 n)))
+     'decls '((uint (x)))
+     'ensures '((e1 (inf-le i n)))
+     'body
+      '((i1 if g1 (wlt range 16777216)
+         ((s1 store "range" (wshl range 8))
+          (j1 join g2 (lt i n)
+           ((h1 havoc x (at In i)) (s2 set i (+ i 1)) (s3 store "code" (wor (wshl code 8) x)))
+           ((s4 store "code" (wshl code 8)) (s5 store "bad" 1))
+           ((a1 (inf-le i n)))))))
+     'macros '()
+     'proofs {}}
+
+   ; --- LZMA2's chunks --------------------------------------------------------------------------------
+   ; a refusal, and the header's lengths, each one under what it says
+   (no l g c) [l 'if g c [[(intern "\(l)r") 'retneg 1]]]
+   (ix x d) (name? x ? ['+ x d] d)
+   (be2 x d) ['wadd ['wor ['wshl ['u32 ['at 'In (ix x d)]] 8] ['at 'In (ix x (d + 1))]] 1]
+   be3 '(wadd (wor (wor (wshl (and64 c 31) 16) (wshl (u32 (at In (+ si 1))) 8)) (at In (+ si 2))) 1)
+   ; under a header of h bytes (hp: 5 or 3 <= h) with room hm: a read at si + d, and k more after it (km)
+   sile '(inf-ltle si n g1)
+   (nfit x p) ['inf-lelt x 'n '(inf-pow w) p 'gn]
+   (hlt h hp d) (charm? h ? '(idpath true) ['inf-lttrans d 5 h '(idpath true) hp])
+   (hrd h hp hm d) ['bz-nbq 'si d h 'n (hlt h hp d) hm sile]
+   (hpr t L h hp hm ds)
+    (map (r \ r @ [j d] (: x ['add 'si d] p (hrd h hp hm d)
+      (pin t "\(L)-\(j)" ['inf-lttrans x 'n '(inf-pow w) p '(inf-ltle n (inf-pow w) gn)], pin t "\(L)-\(j + 1)" p))) ds)
+   (hk h hm k km) ['bz-nbr h k '(natminus n si) km hm]
+   (hkn h hm k km) ['bz-nbr 'si ['add h k] 'n (hk h hm k km) sile]
+   (hkp h hp k) (charm? h ? '(idpath true)
+                 ['bz-pos ['add h k] ['inf-letrans 1 h ['add h k] ['inf-letrans 1 5 h '(idpath false) hp] ['inf-leaddr h k]]])
+   (hin h hm k km) ['inf-letr ['add 'si ['add h k]] ['add ['add 'si h] k] 'n ['inf-addassoc 'si h k] (hkn h hm k km)]
+   ; si's step past it, at L, and the loop's fall, the back's j
+   (hstep t L j h hp hm k km)
+    (pin t "\(L)-1" (nfit ['add h k] ['inf-letrans ['add h k] '(natminus n si) 'n (hk h hm k km) '(inf-suble n si)]),
+     pin t "\(L)-2" (nfit ['add 'si ['add h k]] (hkn h hm k km)),
+     pin t "w0b-\(j)" ['inf-subby 'si 'n ['add h k] 'g1 (hkp h hp k)])
+   ; the header pass: the bytes it says, *end past the 0x00; -1 malformed
+   wpf {}
+   _ (hpr wpf "h2" 3 () 'g5 [[1 1] [3 2]])
+   _ (hstep wpf "s1" 1 3 () 'g5 'kh2 'g6)
+   _ (hpr wpf "h4" 'hj1 'a1 'g8 [[1 1] [3 2]])
+   _ (hpr wpf "h5" 'hj1 'a1 'g8 [[1 3] [3 4]])
+   _ (hstep wpf "s4" 2 'hj1 'a1 'g8 'kh5 'g9)
+   walk
+    {'name "l2_walk" 'short "zxwalk"
+     'attrs '("static")
+     'ret '(named "int64_t")
+     'params '(("s" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")) ("end" (ptr (named "uintptr_t"))))
+     'fields ()
+     'arrays '((In (v "s") n))
+     'requires '((In (pi x nat nat)) (w nat) (n nat) (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))))
+     'decls '(((named "uintptr_t") (si 0) (k) (h) (u)) ((named "int64_t") (tot 0)) (uint (c)))
+     'ensures ()
+     'body
+      [['w0 'while '(tru) '(natminus n si) ()
+        [(no 'i1 'g1 '(le n si))
+         '(h1 havoc c (at In si))
+         '(i2 if g2 (z c) ((o1 raw (expr (asn (deref (var "end")) (bin + (var "si") (num 1))))) (r2 ret tot)))
+         ['e1 'ife 'g3 '(lt c 128)
+          [(no 'i3 'g4 '(lt 2 c))
+           (no 'i4 'g5 '(lt (- n si) 3))
+           ['h2 'havoc 'k (be2 'si 1)]
+           (no 'i5 'g6 '(lt (- (- n si) 3) k))
+           '(h3 havoc tot (wadd tot k))
+           '(s1 set si (+ si (+ 3 k)))]
+          ['(j1 join g7 (lt c 192) ((s2 set h 5)) ((s3 set h 6)) ((a1 (inf-le 5 h))))
+           (no 'i6 'g8 '(lt (- n si) h))
+           ['h4 'havoc 'u be3]
+           ['h5 'havoc 'k (be2 'si 3)]
+           (no 'i7 'g9 '(lt (- (- n si) h) k))
+           '(h6 havoc tot (wadd tot u))
+           '(s4 set si (+ si (+ h k)))]]]]]
+     'macros '()
+     'proofs wpf}
+   ; the chunks into out, pre bytes of it said already: 0 and cap full, -1 corrupt. a dict reset first
+   ; unless pre, props before the first LZMA chunk and after a 0x01. each header is held to n, and what
+   ; lz_run left is read back guarded, so nothing here leans on l2_walk
+   (of f) ['dot ['var "o"] f]
+   (rf f) ['dot ['var "r"] f]
+   litnx ['raw ['bin 'shl ['cast '(named "uintptr_t") ['num 768]] ['bin '+ (cf "m" "lc") (cf "m" "lp")]]]
+   (oput l f e) [l 'raw ['expr ['asn (of f) e]]]
+   dpf {}
+   _ (hpr dpf "h3" 3 () 'g7 [[1 1] [3 2]])
+   _ (hstep dpf "s4" 3 3 () 'g7 'kh3 'g8)
+   _ (hpr dpf "h5" 'hj1 'a1 'a2 [[1 1] [3 2]])
+   _ (hpr dpf "h6" 'hj1 'a1 'a2 [[1 3] [3 4]])
+   _ (hstep dpf "s8" 6 'hj1 'a1 'a2 'kh6 'g15)
+   ; what fits under cap fits a word
+   (cfit x p) ['inf-lelt x 'cap '(inf-pow w) p '(lz-cw w cap gc)]
+   onk '(bz-nbr on kh3 cap g9 b1) onu '(bz-nbr on uh5 cap g19 b1)
+   kn ['inf-lttrans 'kh6 '(add hj1 kh6) 'n
+       '(inf-lttrans kh6 (add 1 kh6) (add hj1 kh6) (inf-lelts kh6 kh6 (inf-refl kh6)) (inf-addr 1 hj1 kh6 (inf-letrans 1 5 hj1 (idpath false) a1)))
+       ['inf-letrans '(add hj1 kh6) '(natminus n si) 'n (hk 'hj1 'a2 'kh6 'g15) '(inf-suble n si)]]
+   _ (map (r \ pin dpf (r 0) (r 1))
+      [["m1-1" (nfit '(add si 3) ['bz-nbr 'si 3 'n 'g7 sile])] ["m1-2" onk] ["m1-3" (hin 3 'g7 'kh3 'g8)]
+       ["s3-1" (cfit '(add on kh3) onk)] ["w0b-1" onk]
+       ["h4-1" ['inf-lttrans '(add si 5) 'n '(inf-pow w) ['bz-nbq 'si 5 6 'n '(idpath true) 'g13 sile] '(inf-ltle n (inf-pow w) gn)]]
+       ["h4-2" ['bz-nbq 'si 5 6 'n '(idpath true) 'g13 sile]]
+       ["h7-1" (hin 'hj1 'a2 'kh6 'g15)]
+       ["c4-2" (nfit '(add kh6 1) ['inf-lt1 'kh6 'n kn])]
+       ["c4-3" '(inf-letrans 5 kh6 (add kh6 1) (c3e1 g20) (inf-leaddr kh6 1))]
+       ["c4-10" (cfit '(add on uh5) onu)]])
+   dec
+    {'name "l2_dec" 'short "zxdec"
+     'attrs '("static")
+     'ret 'int
+     'params '(("s" (ptr (const (named "uint8_t")))) ("n" (named "uintptr_t")) ("out" (ptr (named "uint8_t")))
+               ("cap" (named "uintptr_t")) ("m" (ptr (struct "lz_model"))) ("pre" (named "uintptr_t")))
+     'fields ()
+     'arrays '((In (v "s") n) (Ob (v "out") cap))
+     'requires
+      '((In (pi x nat nat)) (Ob (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat))
+        (w nat) (n nat) (cap nat) (pre nat)
+        (gw (inf-le 32 w))
+        (gn (inf-lt n (inf-pow w)))
+        (gc (inf-lt (add cap 8) (inf-pow w)))
+        (gp (inf-le pre cap)))
+     'decls
+      '(((struct "lz_out") (o)) ((struct "lz_rd") (r))
+        ((named "uintptr_t") (si 0) (on pre) (base 0) (k) (h) (u) (i) (st) (litn))
+        (uint (c) (b) (x) (nd) (np 1)))
+     'ensures ()
+     'calls [props reset init run rnorm]
+     'body
+      [(oput 'o1 "b" ['var "out"]) (oput 'o2 "cap" ['var "cap"]) (oput 'o3 "pause" ['num 0])
+       '(h0 havoc nd (raw (un not (var "pre"))))
+       ['w0 'while '(tru) '(natminus n si) '((b1 (inf-le on cap)) (b2 (inf-le base on)))
+        [(no 'i1 'g1 '(le n si))
+         '(h1 havoc c (at In si))
+         '(i2 if g2 (z c) ((i2a if g2a (eq on cap) ((r2 ret 0))) (r3 retneg 1)))
+         '(h2 havoc x (raw (lor (bin le (num 224) (var "c")) (bin eq (var "c") (num 1)))))
+         '(j0 join g3 (nz x) ((s0 set np 1) (s1 set nd 0) (s2 set base on))
+           ((i3 if g4 (nz nd) ((r4 retneg 1)))) ((a0 (inf-le base on))))
+         ['e1 'ife 'g5 '(lt c 128)
+          [(no 'i4 'g6 '(lt 2 c))
+           (no 'i5 'g7 '(lt (- n si) 3))
+           ['h3 'havoc 'k (be2 'si 1)]
+           (no 'i6 'g8 '(lt (- (- n si) 3) k))
+           (no 'i7 'g9 '(lt (- cap on) k))
+           '(m1 mcopy Ob on In (+ si 3) k)
+           '(s3 set on (+ on k))
+           '(s4 set si (+ si (+ 3 k)))]
+          [['j1 'join 'g10 '(lt c 192)
+            [(no 'i8 'g11 '(nz np)) (no 'i9 'g12 '(lt (- n si) 5)) '(s5 set h 5)]
+            [(no 'i10 'g13 '(lt (- n si) 6))
+             '(h4 havoc b (at In (+ si 5)))
+             '(c1 calx x "lz_props" ((raw (var "m")) b 4) (w b (maxlclp 4)) ((lc lc) (lp lp) (pb pb)))
+             (no 'i11 'g14 '(z x))
+             '(s6 set np 0) '(s7 set h 6)]
+            '((a1 (inf-le 5 h)) (a2 (inf-le h (natminus n si))))]
+           ['h5 'havoc 'u be3]
+           ['h6 'havoc 'k (be2 'si 3)]
+           (no 'i12 'g15 '(lt (- (- n si) h) k))
+           '(h7 have h7 (inf-le (add (add si h) k) n))
+           ['h8 'havw 'litn litnx 'g16]
+           (no 'i13 'g17 '(lt litn 768))
+           '(j2 join g18 (lt 159 c) ((c2 call "lz_reset" ((raw (var "m"))) (w litn) ())) () ())
+           (no 'i14 'g19 '(lt (- cap on) u))
+           '(c3 calx x "rd_init" ((raw (addr (var "r"))) (raw (bin + (bin + (var "s") (var "si")) (var "h"))) k) (In (n k)) ())
+           (no 'i15 'g20 '(z x))
+           ['h9 'havoc 'st ['raw (cf "m" "state")]]
+           (no 'i16 'g21 '(lt 11 st))
+           (oput 'o4 "n" ['var "on"]) (oput 'o5 "base" ['var "base"])
+           ; what no law reads of lz_run's fields goes as 0
+           '(c4 calx x "lz_run" ((raw (var "m")) (raw (addr (var "r"))) (raw (addr (var "o"))) (+ on u) 0)
+             (In Ob Pr Lt w (nin k) (i 5) cap on base st (r0 0) litn (lim (add on u)) (rg 0) (cd 0) (pz 0) (bd 0) (em 0)) ())
+           (no 'i17 'g22 '(ne x 1))
+           ['h10 'havoc 'on ['raw (of "n")]]
+           (no 'i18 'g23 '(lt cap on))
+           (no 'i19 'g24 '(lt on base))
+           ['h11 'havoc 'i ['raw (rf "i")]]
+           (no 'i20 'g25 '(lt k i))
+           '(c5 call "rd_norm" ((raw (addr (var "r")))) (In w (n k)) ())
+           ['h12 'havoc 'x ['raw ['lor ['lor (rf "bad") ['bin 'ne (rf "i") (rf "n")]] (rf "code")]]]
+           (no 'i21 'g26 '(nz x))
+           '(s8 set si (+ si (+ h k)))]]]]]
+     'macros '()
+     'proofs dpf}
+
+   ; what slides a window down by a multiple of 16, the last dict bytes kept: how far
+   slide
+    {'name "lz_slide" 'short "zxslide"
+     'attrs '("static")
+     'ret '(named "uintptr_t")
+     'params '(("win" (ptr (named "uint8_t"))) ("on" (named "uintptr_t")) ("dict" (named "uintptr_t")))
+     'fields ()
+     'arrays '((Ob (v "win") cap))
+     'requires '((Ob (pi x nat nat)) (w nat) (cap nat) (on nat) (dict nat) (gw (inf-le 32 w))
+                 (gc (inf-lt (add cap 8) (inf-pow w))) (go (inf-le on cap)))
+     'decls '(((named "uintptr_t") (x)))
+     'ensures '((e1 (inf-le res on)))
+     'body
+      ['(i1 if g1 (le on dict) ((r1 ret 0)))
+       '(h1 havoc x (and64 (- on dict) (bnot 15)))
+       '(i2 if g2 (lt on x) ((r2 ret 0)))
+       '(m1 mmove Ob 0 Ob x (- on x))
+       '(r3 ret x)]
+     'macros '()
+     'proofs {"m1-3" '(inf-letrans (add xh1 (natminus on xh1)) on cap (bz-nbr xh1 (natminus on xh1) on (inf-refl (natminus on xh1)) g2) go)}}
+   (sf f) ['dot ['deref ['var "S"]] f]
+   (sput l f e) [l 'raw ['expr ['asn (sf f) e]]]
+   (out l v e) [l 'raw ['expr ['asn ['deref ['var v]] e]]]
+   mdecl ['(ptr (struct "lz_model")) ['m ['raw ['addr (sf "m")]]]]
+   ; room for need: the window slid where it is short
+   (room J g C need)
+    [[J 'join g ['lt '(- cap on) need]
+       [[C 'calx 'sx "lz_slide" '((raw (var "win")) on dict) '(Ob w cap on dict) ()]
+        [(intern "\(C)s") 'set 'on '(- on sx)]
+        [(intern "\(C)j") 'join (intern "\(C)g") '(lt base sx) [[(intern "\(C)t") 'set 'base 0]] [[(intern "\(C)u") 'set 'base '(- base sx)]] [[(intern "\(C)v") '(inf-le base on)]]]]
+       () [[(intern "\(J)a") '(inf-le on cap)] [(intern "\(J)b") '(inf-le base on)]]]
+     (no (intern "\(J)i") (intern "\(J)h") ['lt '(- cap on) need])]
+   ; one LZMA2 chunk into the cask's window: the bytes it put out, from *o0; -1 malformed, the state
+   ; then torn. the end byte is the caller's
+   spf {}
+   _ (: eqle (A \ k \ g \ ['inf-letr A k A g ['inf-refl A]])
+        k3 ['bz-nbr 3 'kh7 'n (eqle '(natminus n 3) 'kh7 'g9) 'g8]
+        (hdr d) ['inf-lttrans d 5 'n '(idpath true) '(inf-letrans 5 hj1 n a1 a2)]
+        hk ['bz-nbr 'hj1 'kh10 'n (eqle '(natminus n hj1) 'kh10 'g16) 'a2]
+        kn ['inf-lttrans 'kh10 '(add hj1 kh10) 'n
+            '(inf-lttrans kh10 (add 1 kh10) (add hj1 kh10) (inf-lelts kh10 kh10 (inf-refl kh10)) (inf-addr 1 hj1 kh10 (inf-letrans 1 5 hj1 (idpath false) a1))) hk]
+      (map (r \ pin spf (r 0) (r 1))
+       [["h7-1" '(inf-lttrans 1 3 n (idpath true) g8)] ["h7-2" '(inf-lttrans 2 3 n (idpath true) g8)]
+        ["m1-1" '(bz-nbr onj3 kh7 cap j3h j3a)] ["m1-2" k3] ["h8-1" '(inf-lttrans 5 6 n (idpath true) g14)]
+        ["h9-1" (hdr 1)] ["h9-2" (hdr 2)] ["h10-1" (hdr 3)] ["h10-2" (hdr 4)]
+        ["c6-2" (nfit '(add kh10 1) ['inf-lt1 'kh10 'n kn])]
+        ["c6-3" '(inf-letrans 5 kh10 (add kh10 1) (c5e1 g21) (inf-leaddr kh10 1))]
+        ["c6-10" (cfit '(add onj4 uh9) '(bz-nbr onj4 uh9 cap j4h j4a))]
+        ["c1jj-2" '(inf-submono basej0 onh2 sxc1 a0)] ["c4jj-2" '(inf-submono basej0 onh2 sxc4 a0)]
+        ["c7-2" ['inf-lttrans 'kh10 'n '(inf-pow w) kn '(inf-ltle n (inf-pow w) gn)]]]))
+   cstep
+    {'name "l2_step" 'short "zxstep"
+     'attrs '("static")
+     'ret '(named "intptr_t")
+     'params '(("S" (ptr (struct "l2_st"))) ("win" (ptr (named "uint8_t"))) ("s" (ptr (const (named "uint8_t"))))
+               ("n" (named "uintptr_t")) ("o0" (ptr (named "uintptr_t"))))
+     'fields ()
+     'arrays '((In (v "s") n) (Ob (v "win") cap))
+     'requires
+      '((In (pi x nat nat)) (Ob (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat))
+        (w nat) (n nat) (cap nat) (dict nat)
+        (gw (inf-le 32 w)) (gn (inf-lt n (inf-pow w))) (gc (inf-lt (add cap 8) (inf-pow w))))
+     'decls
+      [mdecl '((struct "lz_out") (o)) '((struct "lz_rd") (r))
+       ['(named "uintptr_t") ['cap ['raw (sf "cap")]] ['dict ['raw (sf "dict")]] '(on) '(base) '(sx) '(k) '(h) '(u) '(i) '(st) '(litn)]
+       '(uint (c) (b) (x) (nd) (np))]
+     'ensures ()
+     'calls [props reset init run rnorm slide]
+     'body
+      ([(no 'i0 'g0 '(z n))
+        '(h1 havoc c (at In 0))
+        (no 'i1 'g1 '(z c))
+        ['h2 'havoc 'on ['raw (sf "n")]] ['h3 'havoc 'base ['raw (sf "base")]]
+        ['h4 'havoc 'nd ['raw (sf "needdict")]] ['h5 'havoc 'np ['raw (sf "needprops")]]
+        (no 'i2 'g2 '(lt cap on)) (no 'i3 'g3 '(lt on base))
+        '(h6 havoc x (raw (lor (bin le (num 224) (var "c")) (bin eq (var "c") (num 1)))))
+        '(j0 join g4 (nz x) ((s0 set np 1) (s1 set nd 0) (s2 set base on))
+          ((i4 if g5 (nz nd) ((r4 retneg 1)))) ((a0 (inf-le base on))))
+        (sput 'o1 "needdict" ['var "nd"])
+        ['i5 'if 'g6 '(lt c 128)
+         ([(no 'i6 'g7 '(lt 2 c)) (no 'i7 'g8 '(lt n 3))
+           ['h7 'havoc 'k (be2 0 1)]
+           (no 'i8 'g9 '(dif (- n 3) k))]
+          + room 'j3 'g10 'c1 'k
+          + ['(m1 mcopy Ob on In 3 k) (out 'o2 "o0" ['var "on"])
+             (sput 'o3 "n" ['bin '+ ['var "on"] ['var "k"]]) (sput 'o4 "base" ['var "base"]) (sput 'o5 "needprops" ['var "np"])
+             '(r5 ret k)])]
+        ['j1 'join 'g11 '(lt c 192)
+         [(no 'i9 'g12 '(nz np)) (no 'i10 'g13 '(lt n 5)) '(s5 set h 5)]
+         [(no 'i11 'g14 '(lt n 6))
+          '(h8 havoc b (at In 5))
+          '(c2 calx x "lz_props" ((raw (var "m")) b 4) (w b (maxlclp 4)) ((lc lc) (lp lp) (pb pb)))
+          (no 'i12 'g15 '(z x))
+          '(s6 set np 0) '(s7 set h 6)]
+         '((a1 (inf-le 5 h)) (a2 (inf-le h n)))]
+        '(h9 havoc u (wadd (wor (wor (wshl (and64 c 31) 16) (wshl (u32 (at In 1)) 8)) (at In 2)) 1))
+        ['h10 'havoc 'k (be2 0 3)]
+        (no 'i13 'g16 '(dif (- n h) k))
+        ['h11 'havw 'litn litnx 'g17]
+        (no 'i14 'g18 '(lt litn 768))
+        '(j2 join g19 (lt 159 c) ((c3 call "lz_reset" ((raw (var "m"))) (w litn) ())) () ())]
+       + room 'j4 'g20 'c4 'u
+       + [(out 'o6 "o0" ['var "on"])
+        '(c5 calx x "rd_init" ((raw (addr (var "r"))) (raw (bin + (var "s") (var "h"))) k) (In (n k)) ())
+        (no 'i15 'g21 '(z x))
+        ['h12 'havoc 'st ['raw (cf "m" "state")]]
+        (no 'i16 'g22 '(lt 11 st))
+        (oput 'o7 "b" ['var "win"]) (oput 'o8 "n" ['var "on"]) (oput 'o9 "cap" ['var "cap"]) (oput 'o10 "base" ['var "base"]) (oput 'o11 "pause" ['num 0])
+        '(c6 calx x "lz_run" ((raw (var "m")) (raw (addr (var "r"))) (raw (addr (var "o"))) (+ on u) 0)
+          (In Ob Pr Lt w (nin k) (i 5) cap on base st (r0 0) litn (lim (add on u)) (rg 0) (cd 0) (pz 0) (bd 0) (em 0)) ())
+        (no 'i17 'g23 '(ne x 1))
+        ['h13 'havoc 'i ['raw (rf "i")]]
+        (no 'i18 'g24 '(lt k i))
+        '(c7 call "rd_norm" ((raw (addr (var "r")))) (In w (n k)) ())
+        ['h14 'havoc 'x ['raw ['lor ['lor (rf "bad") ['bin 'ne (rf "i") (rf "n")]] (rf "code")]]]
+        (no 'i19 'g25 '(nz x))
+        (sput 'o12 "n" (of "n")) (sput 'o13 "base" ['var "base"]) (sput 'o14 "needprops" ['var "np"])
+        '(r6 ret u)])
+     'macros '()
+     'proofs spf}
+   ; a .lzma body's feed, n bytes at s, the rest of the last feed first: 0 corrupt, 1 paused for room with
+   ; *used of them read, 2 done, 3 the rest kept in pin. the bytes out start at *o0
+   lpf {}
+   _ (map (r \ pin lpf (r 0) (r 1))
+      [["s3-1" (cfit '(add onj1 rm) '(bz-nbr onj1 rm cap g9 a1))] ["j3j-3" '(bz-nbr onj1 rm cap g9 a1)]
+       ["c3-4" '(inf-lelt (add ocj3 8) (add cap 8) (inf-pow w) (inf-addr ocj3 cap 8 a2) gc)]
+       ["m2-3" '(bz-nbr ih9 (natminus n ih9) n (inf-refl (natminus n ih9)) g16)]])
+   (zero l g c) [l 'if g c [[(intern "\(l)r") 'ret 0]]]
+   known ['bin 'ne (sf "want") ['cast '(named "uint64_t") ['un 'neg ['num 1]]]]
+   said-all ['land known ['bin 'eq (sf "tot") (sf "want")]]
+   lmstep
+    {'name "lm_step" 'short "zxlm"
+     'attrs '("static")
+     'ret 'int
+     'params '(("S" (ptr (struct "lm_st"))) ("win" (ptr (named "uint8_t"))) ("s" (ptr (const (named "uint8_t"))))
+               ("n" (named "uintptr_t")) ("last" uint) ("o0" (ptr (named "uintptr_t"))) ("used" (ptr (named "uintptr_t"))))
+     'fields ()
+     'arrays '((In (v "s") n) (Ob (v "win") cap) (Pin (v "pin") 24))
+     'requires
+      '((In (pi x nat nat)) (Ob (pi x nat nat)) (Pin (pi x nat nat)) (Pr (pi x nat nat)) (Lt (pi x nat nat))
+        (w nat) (n nat) (cap nat) (dict nat) (last nat) (rm nat)
+        (gw (inf-le 32 w)) (gn (inf-lt (add n 1) (inf-pow w))) (gc (inf-lt (add cap 8) (inf-pow w))))
+     'decls
+      [mdecl '((struct "lz_out") (o)) '((struct "lz_rd") (r))
+       ['(ptr (named "uint8_t")) ['pin ['raw (sf "pin")]]]
+       ['(named "uintptr_t") ['cap ['raw (sf "cap")]] ['dict ['raw (sf "dict")]] ['rm ['raw ['var "LM_ROOM"]]] '(on) '(sx) '(oc) '(oe) '(i) '(st) '(lim) '(litn)]
+       '(uint (x) (y))]
+     'ensures ()
+     'calls [init run slide]
+     'body
+      [['h1 'havoc 'on ['raw (sf "n")]]
+       (zero 'i1 'g1 '(lt cap on))
+       '(j1 join g2 (le (- cap on) 273)
+         ((c1 calx sx "lz_slide" ((raw (var "win")) on dict) (Ob w cap on dict) ()) (s1 set on (- on sx)))
+         () ((a1 (inf-le on cap))))
+       (sput 'o1 "n" ['var "on"]) (out 'o2 "o0" ['var "on"]) (out 'o3 "used" ['num 0])
+       ['h2 'havoc 'y ['raw (sf "started")]]
+       ['j2 'join 'g3 '(z y)
+        [['i2 'if 'g4 '(lt n 5)
+          [(zero 'i3 'g5 '(nz last)) '(m1 mcopy Pin 0 In 0 n)
+           (sput 'o4 "pend" ['cast '(named "uint32_t") ['var "n"]]) '(r1 ret 3)]]
+         '(c2 calx x "rd_init" ((raw (addr (var "r"))) (raw (var "s")) n) (In n) ())
+         (zero 'i4 'g6 '(z x))
+         (sput 'o5 "started" ['num 1])]
+        [['o6 'raw ['expr ['asn (rf "p") ['var "s"]]]] ['o7 'raw ['expr ['asn (rf "i") ['num 0]]]] ['o8 'raw ['expr ['asn (rf "n") ['var "n"]]]]
+         ['o9 'raw ['expr ['asn (rf "range") (sf "range")]]] ['o10 'raw ['expr ['asn (rf "code") (sf "code")]]] ['o11 'raw ['expr ['asn (rf "bad") ['num 0]]]]]
+        ()]
+       ['h3 'havoc 'i ['raw (rf "i")]]
+       (zero 'i5 'g7 '(lt n i))
+       ['h4 'havoc 'y ['raw said-all]]
+       ['i6 'if 'g8 '(nz y)
+        [(sput 'o12 "range" (rf "range")) (sput 'o13 "code" (rf "code")) (out 'o14 "used" ['var "i"]) (sput 'o15 "done" ['num 1]) '(r2 ret 2)]]
+       '(j3 join g9 (lt (- cap on) rm) ((s2 set oc cap)) ((s3 set oc (+ on rm))) ((a2 (inf-le oc cap)) (a3 (inf-le on oc))))
+       ['h5 'havw 'lim ['raw ['cond known ['bin '+ ['var "on"] ['cast '(named "uintptr_t") ['bin '- (sf "want") (sf "tot")]]] ['num 0]]] 'g10]
+       ['h6 'havw 'litn litnx 'g11]
+       (zero 'i7 'g12 '(lt litn 768))
+       ['h7 'havoc 'st ['raw (cf "m" "state")]]
+       (zero 'i8 'g13 '(lt 11 st))
+       (oput 'o16 "b" ['var "win"]) (oput 'o17 "n" ['var "on"]) (oput 'o18 "cap" ['var "oc"]) (oput 'o19 "base" ['num 0])
+       (oput 'o20 "pause" ['cond ['var "last"] ['num 2] ['num 1]])
+       ['c3 'calx 'x "lz_run" ['(raw (var "m")) '(raw (addr (var "r"))) '(raw (addr (var "o"))) 'lim ['raw ['un 'not known]]]
+        '(In Ob Pr Lt w (nin n) i (cap oc) on (base 0) st (r0 0) litn lim (rg 0) (cd 0) (pz 0) (bd 0) (em 0)) ()]
+       (zero 'i9 'g14 '(z x))
+       ['h8 'havoc 'y ['raw (rf "bad")]]
+       (zero 'i10 'g15 '(nz y))
+       ['h9 'havoc 'i ['raw (rf "i")]]
+       (zero 'i11 'g16 '(lt n i))
+       ['h13 'havoc 'oe ['raw (of "n")]]
+       (zero 'i16 'g22 '(lt oc oe)) (zero 'i17 'g23 '(lt oe on))
+       ['o21 'raw ['expr ['rmw '+ (sf "tot") ['bin '- ['var "oe"] ['var "on"]]]]]
+       (sput 'o22 "n" ['var "oe"]) (sput 'o23 "range" (rf "range")) (sput 'o24 "code" (rf "code")) (out 'o25 "used" ['var "i"])
+       '(h10 havoc y (raw (bin eq (var "x") (num 2))))
+       ['j4 'join 'g17 '(eq x 1) [['h11 'havoc 'y ['raw said-all]]] () ()]
+       ['i12 'if 'g18 '(nz y) [(sput 'o26 "done" ['num 1]) '(r3 ret 2)]]
+       ['h12 'havoc 'y ['raw ['land ['land ['bin 'eq ['var "x"] ['num 1]] ['var "last"]] ['bin 'lt ['var "oe"] ['bin '- ['var "oc"] ['num 273]]]]]]
+       (zero 'i13 'g19 '(nz y))
+       '(i14 if g20 (ne x 3) ((r4 ret 1)))
+       (zero 'i15 'g21 '(lt 24 (- n i)))
+       '(m2 mcopy Pin 0 In i (- n i))
+       (sput 'o27 "pend" ['cast '(named "uint32_t") '(bin - (var "n") (var "i"))])
+       '(r5 ret 3)]
+     'macros '()
+     'proofs lpf}
+
+   lz-specs [reset props init rnorm run walk dec slide cstep lmstep]
    lz-h (cats ["// lz_gen.h -- laid by src/love/compress/lz.l, `make mx`. edit that file.\n"
                (cats (map (s \ clay-show (cl-fn s)) lz-specs))])
    lz-ledger
-    [["pointers" "lz_run's m, r and o" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
+    [["pointers" "lz_run's m, r and o, lz_reset's and lz_props's m, rd_init's n bytes at p, l2_walk's, l2_dec's, l2_step's and lm_step's n at s, the casks' windows of cap" "xz.c's callers hand them over whole: m from lz_new or a cask, r over the input, o over the window"]
      ["model" "the probabilities are struct lz_model's first 1846 words, lit 0x300 << (lc + lp) more, a count that fits" "xz.c's static asserts; lz_new and the casks size lit"]
-     ["props" "lc <= 8, lp <= 4, pb <= 4" "lz_props, which every caller passes the byte through"]
-     ["window" "on <= cap, base <= on, cap + 8 and nin + 1 fit" "l2_dec and lzma_feed lay o and r so"]
+     ["props" "m's lc, lp and pb are what lz_props proved lc <= 8, lp <= 4, pb <= 4 of" "its raw stores, and no other write: the coder's own are the encoder's, lc 4"]
+     ["coder" "rd_norm's i <= n" "the guards of l2_dec and l2_step"]
+     ["window" "on <= cap, base <= on, cap + 8 and nin + 1 fit" "held by l2_dec, l2_step and lm_step, n + 1 and cap + 8 from their callers, whose sizes XZ_MAX and a string's bound"]
+     ["chunk" "rd_init answers 1 with r.i 5 and r.n n; the bad, code, want, tot and props fields are read raw" "its raw stores; a wrong one is a wrong answer, not a read outside"]
      ["raw" "a raw statement writes only r, m and o's fields, read again by no term" "lz.l's epilogue and rep moves"]
      ["word" "a word read back fits" "the C type; `havw` states it"]]
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
