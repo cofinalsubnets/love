@@ -13,7 +13,8 @@
 ;
 ; laws: every rectangle sits inside the wharf, and no two overlap (spans half-open).
 (module '(wharf wharf-at wharf-bars wharf-panes wharf-col wharf-cols wharf-drag wharf-id wharf-lay wharf-layg
-          wharf-row wharf-rows wharf-show? wharf-shut wharf-split wharf-steer)
+          wharf-row wharf-rows wharf-show? wharf-shut wharf-split wharf-steer
+          wharf-mirror wharf-trade wharf-share wharf-next wharf-wm)
 (:
    ; --- reading a laid pane: (id row col rows cols), origins 0-based ----------
    (wharf-id b)    <b
@@ -138,5 +139,22 @@
     (two? p ?
        (: a (wharf-shut <>>p id) b (wharf-shut <>>>p id)
           (? (() = a) b (() = b) a [<p <>p a b]))
-       (p = id ? () p)))
+       (p = id ? () p))
+   ; the plan mirrored, every stack a beside and every beside a stack; each split's halves
+   ; traded, each keeping its size; and the pane after id, round to the first
+   (wharf-mirror p) (p @ [d pct a b] [(d = 'stack ? 'beside 'stack) pct (wharf-mirror a) (wharf-mirror b)] p)
+   (wharf-trade p) (p @ [d pct a b] [d (100 - pct) (wharf-trade b) (wharf-trade a)] p)
+   (wharf-next p id) (: ps (wharf-panes p) (go l) (? (atom? l) <ps (<l = id) (two? >l ? <>l <ps) (go >l)) (two? ps ? (go ps) id))
+   ; pane id's share of the split that holds it n points on, held to 1..99; n () half
+   (wharf-share p id n) (p @ [d pct a b]
+      (: (held v) (max 1 (min 99 v))
+         (? (a = id) [d (n = () ? 50 (held (pct + n))) a b] (b = id) [d (n = () ? 50 (held (pct - n))) a b]
+            [d pct (wharf-share a id n) (wharf-share b id n)]))
+      p)
+   ; what a key does to a plan laid as bs, pane id with the keys: [plan id], or () where the
+   ; key is none of these. slip.l says which
+   (wharf-wm p bs id k) (k @ 119 [p (wharf-next p id)]
+      104 [p (wharf-steer bs id 'left)] 106 [p (wharf-steer bs id 'down)] 107 [p (wharf-steer bs id 'up)] 108 [p (wharf-steer bs id 'right)]
+      109 [(wharf-mirror p) id] 120 [(wharf-trade p) id]
+      43 [(wharf-share p id 5) id] 45 [(wharf-share p id -5) id] 61 [(wharf-share p id ()) id] _ ()))
 ) ; module wharf

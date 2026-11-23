@@ -10,13 +10,14 @@
 (module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
-         world-watch world-free? world-ks world-loop world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
+         world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
 (borrow 'horn)                          ; pad, for the bottom row
 (borrow 'posix)                         ; open, close and stat, for the level and its pictures
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'window)                        ; the editor's own window
+(borrow 'slip)                          ; and its panes
 (borrow 'vec)                           ; triples
 (borrow 'mesh)                          ; the triangles, the lamps, the frame
 (borrow 'gpu)                           ; the frame on the system's gpu, with LORE_GPU=1
@@ -2675,6 +2676,14 @@
  ;     screen, as view-loading calls it; view-spin unless said ---
  (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
  thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom to jump  ·  a top corner leaves"
+ ; the console's words here: those of any walk, and the loop's where the level has a deck
+ (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
+                    ["at" "where you stand" (where st)]
+                    ["fly" "fly (): fly, or walk again" (_ \ (pins st 'fly (1 - peep st 'fly 0) 'mu 0 'fv 0.0 'gv 0.0 'hoist (), st 'fly))]
+                    ["warp" "warp file entry: to another level beside this one, entry () its start" (go! st)]]
+   + (two? (st 'lvl 'decks) ? [["loop-end" "loop-end (): the loop worn all away, begun if it is not" (con-loop st)]] ()))
+ (world-console st ln) (view-console world-words st ln)
+ (con-loop st _) (: _ (tablet? (st 'music) ? 0 (play! st)) m (st 'music) _ (pin m 'n (int (song-rate * m 'd 'gone) + 1)) (world-loop st))
  (world-tap st x y) (? (view-corner? st x y) [113]
                        (0.88 * window-size (st 'win) 1 < y) [32]
                        [101])
@@ -2690,7 +2699,8 @@
                                (world-watch (world-size st w (h // 2)))))
                'stick [119 115 97 100 87] 'tap world-tap
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
-               'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser])
+               'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser 'auto 'console])
+               'words world-words
                'walking (view-walking + ['sprint 'strafe-left 'strafe-right 'sprint-back 'sprint-left 'sprint-right]) 'repeat [0 0] 'held (st \ peep st 'eye 'walk = 'walk)
                'tick (st \ (walk-dt st,
                             world-move st,
@@ -2713,7 +2723,7 @@
    (? (atom? g) st
       (: p (g 0) l2 (world-tick o p)
          (string? l2 ? (say err ("world: " + p + ": " + l2 + "\n"), flush err, st) (world-go (pins o 'level p 'entry (g 1) 'came 1) l2)))))
- world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, a d sidestep, with shift a sprint, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
+ world-usage "usage: love play LEVEL.l [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (w s or k j step, a d sidestep, with shift a sprint, space jumps and pulls up onto a ledge, w and s facing a tree's trunk climb it, h l turn, u n look, walk into a ball to kick it, p where you stand; in a window a click takes a ball or a plush near, held it winds a throw that letting go throws, and the right button drops it; ? the keys, ~ a console (ctrl-d shuts it, ctrl-w m x + - = its pane), 0 the picture's scale by itself again; in a window a click looks by the mouse and esc lets it go; q or esc leaves; the level is read again when it changes)"
  ; the words, as a tablet for world-run, or () where one is wrong or said twice
  (world-opts as) (view-words as [(view-flag "--kitty" 'md 'kitty) (view-flag "--cells" 'md 'cells) (view-flag "--sway" 'sway 1) view-window view-scale
                                     (view-arg "--level" 'level (w \ w)) (l \ <l 0 != 45 ? ['level <l >l])])
@@ -2723,24 +2733,22 @@
  dream-usage "usage: love play dream [--kitty|--cells|-w|--window] [--scale 1|2|4|8] [--sway]   (the world's keys; ? says them)"
  (dream-main as) (view-main "dream" dream-usage world-opts world-run (["--level" (carried "src/apps/lore/levels/apartment.l")] + as))
  ; --- the editor: the level's text in vi on the right and its scene on the left, in one
- ;     window. ctrl-w w goes between them, a click on the scene puts vi on the form that made
+ ;     window. ctrl-w and slip's keys for the panes, a click on the scene puts vi on the form that made
  ;     what it hit, the right button held looks by the mouse, and coming back to the scene
  ;     reads it again from vi's text when that has changed; vi's :w writes the file ---
  ; ..the panes in a window W by H, a scene pixel s by s of the window's, at first about 320
  ; across the scene's half; + and - on the scene finer or coarser, 1 to 8
- (edit-lay W H s) (: sw (W // 2 // s * s)
-   {'W W 'H H 'es s 'sw sw 'pw (sw // s) 'ph (H // s // 2 * 2) 'cols ((W - sw) // 8) 'rows (H // 16)})
+ (edit-lay ps W H s) (: _ (slip-lay ps W H) b (slip-box ps 'scene)
+   {'ps ps 'W W 'H H 'es s 'sx (b 0) 'sy (b 1) 'sw (b 2) 'sh (b 3) 'pw (max 2 (b 2 // s)) 'ph (max 2 (b 3 // s // 2 * 2)) 'rows (slip-cells ps 'vi 3)})
  (edit-scale W) (max 2 (min 8 ((W // 2 + 160) // 320)))
  ; ..the loading screen in the scene's pane as it is laid now
- (edit-load win ly) (_ \ view-loading win [0 0 (ly 'sw) (ly 'H)] view-spin)
+ (edit-load win ly) (_ \ view-loading win [(ly 'sx) (ly 'sy) (ly 'sx + ly 'sw) (ly 'sy + ly 'sh)] view-spin)
  ; ..the panes laid again, the scene sized to them
  (edit-relay ed ly) (: st (ed 'st)
-   (pins ed 'lay ly 'scr (edit-screen ly) 'dirty 1, pin st 'load (edit-load (ed 'win) ly), world-size st (ly 'pw) (ly 'ph // 2), ed))
+   (pins ed 'lay ly 'scr (slip-screen (ly 'ps) 'vi) 'dirty 1, slip-clear (window-paper (ed 'win)) (ly 'W) [0 0 (ly 'W) (ly 'H)], pin st 'load (edit-load (ed 'win) ly), world-size st (ly 'pw) (ly 'ph // 2), ed))
  (edit-rescale ed a) (: ly (ed 'lay) s (ly 'es) s2 (a @ 'finer (max 1 (s - 1)) (min 8 (s + 1)))
-   (s2 = s ? ed (: _ (edit-relay ed (edit-lay (ly 'W) (ly 'H) s2)) ((ed 'vi) 'vmsg (ed 'vs) ("a scene pixel " + show s2 + " of the window's"), ed))))
+   (s2 = s ? ed (: _ (edit-relay ed (edit-lay (ly 'ps) (ly 'W) (ly 'H) s2)) ((ed 'vi) 'vmsg (ed 'vs) ("a scene pixel " + show s2 + " of the window's"), ed))))
  (edit-text ls) (foldl (a \ l \ a + l + "\n") "" ls)
- ; ..the screen vi's frames are scribed onto, cols by rows
- (edit-screen ly) (screen (cask (screen () (ly 'rows) (ly 'cols))) (ly 'rows) (ly 'cols))
  ; ..the scene read again from vi's text, when it is not what the scene was read from
  (edit-sync ed) (: vi (ed 'vi) vs (ed 'vs) t (edit-text (vs 'lines)) st (ed 'st)
    (? (t = ed 'text) ed
@@ -3108,11 +3116,12 @@
  (edit-feed ed s) (: key ((ed 'fc) 1) (each ^#s (key * s)), pins ed 'dirty 1 'typed 1)
  ; ..vi's undo or redo f done from the scene, and the scene read again; nothing kept chosen
  (edit-undo ed f) (: _ (f (ed 'vs)) _ (pins ed 'sel () 'drag () 'dirty 1) (edit-sync ed))
- (edit-focus ed f) (: _ (pins ed 'focus f 'dirty 1) (f @ 'scene (edit-sync ed) ed))
- ; ..a ctrl-w's next key: w the other pane, h the scene, l vi
- (edit-cw ed k) (: _ (pin ed 'cw 0)
-   (k @ 119 (edit-focus ed (ed 'focus @ 'vi 'scene 'vi)) 104 (edit-focus ed 'scene) 108 (edit-focus ed 'vi) _ ed))
- (edit-events ed l) (: st (ed 'st) ly (ed 'lay)
+ (edit-focus ed f) (: _ (pin (ed 'lay 'ps) 'focus f) _ (pins ed 'dirty 1) (f @ 'scene (edit-sync ed) ed))
+ (edit-has ed) (ed 'lay 'ps 'focus)
+ ; ..a ctrl-w's next key, the panes'; laid again where it moved them
+ (edit-cw ed k) (: ly (ed 'lay) ps (ly 'ps) p (ps 'plan) _ (pin ed 'cw 0) _ (slip-key ps k)
+   _ (p = ps 'plan ? 0 (edit-relay ed (edit-lay ps (ly 'W) (ly 'H) (ly 'es)))) (edit-focus ed (ps 'focus)))
+ (edit-events ed l) (: st (ed 'st) ly (ed 'lay) ps (ly 'ps) (px x) ((x - ly 'sx) // ly 'es) (py y) ((y - ly 'sy) // ly 'es)
    (? (atom? l) ed
       (: e <l nx (two? >l ? <>l ()) t0 (two? nx && <nx = 'text ? (nx 1) "")
          k0 (? (0 < #t0) (t0 0) (e 1 @ c (charm? c ? (peep view-set1 c (edit-set1 c)) ())))
@@ -3124,22 +3133,25 @@
          _ (<e = 'down && charm? k && k != 113 ? (pin ed 'qq 0))
          _ (md != () ? (pin ed 'ctrl md) (e @- ()
             ['close] (pin ed 'quit 1)
-            ['size w h] (edit-relay ed (edit-lay w h (ly 'es)))
-            ['press b x y] (? (x >= ly 'sw) (edit-focus ed 'vi)
+            ['size w h] (edit-relay ed (edit-lay ps w h (ly 'es)))
+            ['press b x y] (? (slip-over ps x y = ()) (b = 1 ? (slip-press ps x y))
+                              (slip-over ps x y = 'vi) (edit-focus ed 'vi)
                               (b = 1 && tablet? (ed 'drag) && ed 'drag 'kind = 'turn) (edit-spin ed (ed 'drag 'dl) (ed 'drag 'cl))
-                              (tablet? (ed 'plan)) (edit-focus ed 'scene, plan-press ed b (x // ly 'es) (y // ly 'es))
+                              (tablet? (ed 'plan)) (edit-focus ed 'scene, plan-press ed b (px x) (py y))
                               (b = 3) (pins ed 'look 1 'lx x 'ly y)
-                              (b = 1) (edit-focus ed 'scene, edit-pick ed (x // ly 'es) (y // ly 'es)))
-            ['release b x y] (? (b = 3) (pins ed 'look 0 'pan ())
+                              (b = 1) (edit-focus ed 'scene, edit-pick ed (px x) (py y)))
+            ['release b x y] (? (slip-drop ps) ed
+                                (b = 3) (pins ed 'look 0 'pan ())
                                 (b != 1 || !(tablet? (ed 'drag))) ed
                                 (ed 'drag 'kind @ 'rect (plan-room ed (ed 'drag)) 'edge (plan-resize ed (ed 'drag)) _ (edit-drop ed)))
-            ['move x y] (? (tablet? (ed 'plan)) (plan-move ed (x // ly 'es) (y // ly 'es))
+            ['move x y] (? (two? (ps 'held)) (: p (ps 'plan) _ (slip-drag ps x y) (p = ps 'plan ? ed (edit-relay ed (edit-lay ps (ly 'W) (ly 'H) (ly 'es)))))
+                           (tablet? (ed 'plan)) (plan-move ed (px x) (py y))
                            (ed 'look) (world-look st (x - ed 'lx) (y - ed 'ly), pins ed 'lx x 'ly y)
-                           (tablet? (ed 'drag) && x < ly 'sw) (ed 'drag 'kind @ 'turn (edit-spin-to ed (x // ly 'es) (y // ly 'es)) (edit-drag ed (x // ly 'es) (y // ly 'es))))
+                           (tablet? (ed 'drag) && slip-over ps x y = 'scene) (ed 'drag 'kind @ 'turn (edit-spin-to ed (px x) (py y)) (edit-drag ed (px x) (py y))))
             ['up c] (pin (ed 'held) c ())
             ['down c] (? (ed 'cw) (edit-cw ed k)
-                         (k = 23 && (ed 'focus = 'scene || (ed 'vs 'mode) = 'n)) (pin ed 'cw 1)
-                         (ed 'focus = 'vi) (edit-feed ed (edit-bytes t k))
+                         (k = 23 && (edit-has ed = 'scene || (ed 'vs 'mode) = 'n)) (pin ed 'cw 1)
+                         (edit-has ed = 'vi) (edit-feed ed (edit-bytes t k))
                          (k = 27) (tablet? (ed 'drag) && ed 'drag 'kind = 'turn ? (pin ed 'drag ()) (pins ed 'sel () 'drag ()))
                          (k = 114 && !(tablet? (ed 'plan)) && two? (ed 'sel)) (edit-spin-new ed @ g (tablet? g ? (pin ed 'drag g) ed))
                          (two? (ed 'sel) && elem k [44 46 60 62]) (edit-step ed (k @ 44 -15.0 46 15.0 60 -90.0 62 90.0))
@@ -3152,25 +3164,15 @@
                          (tablet? (ed 'plan) && elem k [91 93]) (plan-step ed (k @ 93 1 -1))
                          (charm? k) (: a ((ed 'binds) k) (? (a = 'fly) (edit-fly ed) (elem a ['finer 'coarser]) (edit-rescale ed a) (pin (ed 'held) c a, nom? a && !(elem a ['quit 'help]) ? (world-step st a)))))))
          (edit-events ed >l))))
- ; ..the scene painted on the left, vi's frame scribed and its rows laid on the right
- (edit-paint ed) (: ly (ed 'lay) W (ly 'W) H (ly 'H) win (ed 'win) P (window-paper win) st (ed 'st) scr (ed 'scr)
-   cols (ly 'cols) rows (ly 'rows) tw (8 * cols) sw (ly 'sw)
+ ; ..the scene painted in its pane, vi's frame scribed and laid in its own
+ (edit-paint ed) (: ly (ed 'lay) ps (ly 'ps) W (ly 'W) P (window-paper (ed 'win)) st (ed 'st) at [(ly 'sx) (ly 'sy) (ly 'es * ly 'pw) (ly 'es * ly 'ph)]
+   vb (slip-cells ps 'vi)
    ; ..none on a frame vi was typed to, so its keys show at once
-   _ (? (ed 'typed) (pin ed 'typed 0) (frame-paint (tablet? (ed 'plan) ? (plan-pens ed) (edit-outline ed (world-pens st))) (ly 'pw) (ly 'es) P W))
-   fr ((ed 'fc) 0 cols rows)
-   _ (? (0 < #fr || ed 'dirty)
-        (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
-           _ (scribe scr fr)
-           _ (each ^rows (r \ dye scr tb tw r (cur >= 0 && cur // cols = r ? cur -1) ()))
-           _ (each ^(rows * 16) (y \ pour P (4 * (y * W + sw)) tb (4 * y * tw) (4 * tw)))
-           (pin ed 'dirty 0)))
-   _ (ed 'focus @ 'vi (edit-border P W sw 0 tw (16 * rows)) (edit-border P W 0 0 sw (ly 'es * ly 'ph)))
-   (window-show win 0 H))
- ; ..a pixel's line round the pane w by h at x y on the paper P, W across: the one with the keys
- (edit-border P W x y w h) (: T (cask (4 * w)) _ (frame-paint (iota w * 0 + edit-ink) w 1 T w)
-   (row j) (pour P (4 * ((y + j) * W + x)) T 0 (4 * w))
-   (side j) (: o (4 * ((y + j) * W + x)) (pour P o T 0 4, pour P (o + 4 * (w - 1)) T 0 4))
-   _ (row 0) _ (row (h - 1)) (each (drop 1 ^(h - 1)) side))
+   _ (? (ed 'typed) (pin ed 'typed 0)
+        (slip-pic (tablet? (ed 'plan) ? (plan-pens ed) (edit-outline ed (world-pens st))) (ly 'pw) (ly 'ph) (ly 'es) P W (slip-box ps 'scene)))
+   _ (slip-face ps 'vi (ed 'scr) ((ed 'fc) 0 (vb 2) (vb 3)) (ed 'dirty) P W ? (pin ed 'dirty 0))
+   _ (edit-has ed @ 'vi (slip-rim P W (slip-box ps 'vi) edit-ink) (slip-rim P W at edit-ink))
+   (window-show (ed 'win) 0 (ly 'H)))
  (edit-loop ed) (: t0 (clock 0) st (ed 'st)
    _ (edit-events ed (window-events (ed 'win)))
    _ (each (keys (ed 'held)) (c \ (ed 'held) c @ a (elem a (view-walking + ['strafe-left 'strafe-right] + (flying? st ? ['jump 'sink] ())) ? (world-step st a))))
@@ -3187,15 +3189,15 @@
  ; ..the editor on a window, over vi's state vs; its scene's pictures from dir
  (edit-new win vs dir) (: vi (cite 'vi) fc (vi 'vi-face vs {}) wh (window-size win)
    t (edit-text (vs 'lines)) lv0 (world-read t) lv (string? lv0 ? (world-read edit-blank) lv0)
-   ly (edit-lay (wh 0) (wh 1) (edit-scale (wh 0))) st (state-new (ly 'pw) (ly 'ph) lv dir (edit-load win ly))
+   ly (edit-lay (slip-new ['beside 50 'scene 'vi] 'vi) (wh 0) (wh 1) (edit-scale (wh 0))) st (state-new (ly 'pw) (ly 'ph) lv dir (edit-load win ly))
    _ (string? lv0 ? (vi 'vmsg vs ("scene: " + lv0)))
-   {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (edit-screen ly) 'text t 'focus 'vi 'cw 0 'held {}
+   {'vi vi 'vs vs 'fc fc 'st st 'win win 'lay ly 'scr (slip-screen (ly 'ps) 'vi) 'text t 'cw 0 'held {}
     'binds (view-bind (view-bind view-binds world-binds) edit-binds) 'look 0 'quit 0 'dirty 1 'typed 0 'ctrl 0 'shift 0 'sel () 'sb () 'drag () 'plan () 'pan () 'pc () 'ppk () 'qq 0})
  (edit-run p) (window-open 1280 720 "lore edit" @ win
    (? !(tablet? win) (say err ("lore edit: no window (" + show win + ")\n"), flush err, 1)
       (: ed (edit-new win ((cite 'vi) 'vi-open p) (dir-of p))
          (mind (_ \ edit-loop ed) () (_ \ window-close win), 0))))
- edit-usage "usage: love play edit LEVEL.l   (the level's text in vi beside its scene: ctrl-w w goes between them; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, r swings it round the upright through its middle after the pointer, 15 degrees at a time or with ctrl 1, a click keeping it and esc letting it go, . and , turn it 15 degrees either way and > and < 90, ctrl-z undoes and ctrl-r does again, the right button held looks, the world's keys walk, f flies through walls (space up, c down) and f again walks, + and - make the scene's pixels finer or coarser; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
+ edit-usage "usage: love play edit LEVEL.l   (the level's text in vi beside its scene: ctrl-w w or h j k l goes between them, ctrl-w m puts them one over the other or side by side, x trades them, + - and = size them, as a drag of the bar between does; on the scene a click puts vi on what made it and outlines it, a drag moves it across the floor or with shift across the face it was taken by, esc lets it go, r swings it round the upright through its middle after the pointer, 15 degrees at a time or with ctrl 1, a click keeping it and esc letting it go, . and , turn it 15 degrees either way and > and < 90, ctrl-z undoes and ctrl-r does again, the right button held looks, the world's keys walk, f flies through walls (space up, c down) and f again walks, + and - make the scene's pixels finer or coarser; tab shows the plan from above, [ and ] a floor down or up, the wheel zooms, the right button pans, a click takes what is there and a drag moves it, a drag on its box's edge moves that wall, shift and a drag draws a room; q twice within a second on the scene or :q leaves, :w writes)"
  (edit-main as) (#as @ 1 (edit-run <as) (say err (edit-usage + "\n"), flush err, 2))
  _ (cite 'lore 'lore-shelve 'world (udoor 'world world-main world-usage 1 1))
  _ (cite 'lore 'lore-shelve 'world-edit (udoor 'world-edit edit-main edit-usage 1 1))
