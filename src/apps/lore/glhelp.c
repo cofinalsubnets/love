@@ -34,6 +34,7 @@
 //                     the sun's view, kept: its depths, SW x SH floats from OFF rows top first,
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   cloud N OFF       the sky's cloud map, kept: N by N floats from OFF, rows first
+//   air W H OFF       the sky's air table, kept: W by H colours of three floats, rows first
 //   skyp K ..         the next frames' sky asked a pixel at a time, as sky.l's sky-colour-at
 //                     asks it: sky-gpu's numbers, then the view's right, up and ahead, its focal
 //                     length in pixels, the radians between pixels, its width and height
@@ -89,7 +90,7 @@ enum {
  GL_TEXTURE_WRAP_T = 0x2803, GL_TEXTURE_MAX_LEVEL = 0x813D, GL_NEAREST = 0x2600,
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
- GL_TEXTURE6 = 0x84C6, GL_TEXTURE7 = 0x84C7, GL_TEXTURE8 = 0x84C8, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
+ GL_TEXTURE6 = 0x84C6, GL_TEXTURE7 = 0x84C7, GL_TEXTURE8 = 0x84C8, GL_TEXTURE9 = 0x84C9, GL_RGB32F = 0x8815, GL_RGB = 0x1907, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
  GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11, GL_ANY_SAMPLES_PASSED = 0x8C2F, GL_QUERY_RESULT = 0x8866, GL_POINTS = 0 };
@@ -194,7 +195,7 @@ struct helper {
  float *scn; int nscn, cscn; int *ids; int cids; struct seen *sn; int csn;   // the scene, 8 floats a buf; a frame's ids, the scene's laid in
  float *mul; int cmul; float kb[1024]; GLint u_sh;   // ..each id's colour times, from the lights' strengths
  float *vis; int nvis, cvis;   // ..and the marks
- GLuint cmt, fva, fvb; float kp[64]; int nkp; GLint u_kp, u_skm;   // the sky a pixel at a time: its map, a triangle over all, its numbers
+ GLuint cmt, amt, fva, fvb; float kp[64]; int nkp; GLint u_kp, u_skm;   // the sky a pixel at a time: its map, a triangle over all, its numbers
  char line[1 << 16], one[1 << 16]; size_t got; };
 
 static void *need(void *h, const char *n) {
@@ -249,7 +250,7 @@ static char const fsrc[] =
  "uniform highp sampler2D fbt; uniform highp sampler2D gbt; uniform int fg;\n"
  "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
  "uniform highp sampler2D dz; uniform vec4 gz; uniform highp sampler2D ov5; uniform int sp;\n"
- "uniform highp sampler2D cm; uniform float kp[43]; uniform int skm;\n"
+ "uniform highp sampler2D cm; uniform highp sampler2D am; uniform float kp[50]; uniform int skm;\n"
  // ..the sky down ray d, sky.l's sky-colour-at step for step: the cloud map bilinear and
  // wrapping, the deck where d crosses it, two layers and a swell, the light on them
  "float cl(vec2 x) { vec2 i = floor(x), u = x - i; ivec2 a = ivec2(mod(i, 128.0)), b = ivec2(mod(i + 1.0, 128.0));\n"
@@ -262,24 +263,27 @@ static char const fsrc[] =
  "float mean(vec3 c) { return (c.r + c.g + c.b) / 3.0; }\n"
  "vec3 dyed(vec3 c) { vec3 d = vec3(kp[27], kp[28], kp[29]); return kp[26] > 0.5 ? mean(c) * d / mean(d) : c; }\n"
  "vec3 smogby(vec3 c, float f) { float k = kp[25], l = mean(c); if (k == 0.0) return c;\n"
- "  vec3 t = mix(vec3(1.35, 0.52, 0.16), vec3(2.0, 1.0, 0.24), clamp(1.6 * l, 0.0, 1.0)); return mix(c, t * l, k * f); }\n"
+ "  vec3 t = mix(vec3(kp[30], kp[31], kp[32]), vec3(kp[33], kp[34], kp[35]), clamp(1.6 * l, 0.0, 1.0)); return mix(c, t * l, k * f); }\n"
  "float clouded(float c) { return kp[23] == 3.0 ? max(c, 0.93) : c; }\n"
+ "vec3 air(vec3 d, vec3 s) { ivec2 z = textureSize(am, 0); float q = length(d.xz) * length(s.xz), c = q > 1e-9 ? dot(d.xz, s.xz) / q : 1.0;\n"
+ "  vec2 p = clamp(vec2(sqrt(max((1.0 - c) / 2.0, 0.0)), sqrt(max(d.y, 0.0))), 0.0, 1.0) * vec2(z - 1); ivec2 i = min(ivec2(p), z - 2); vec2 u = p - vec2(i);\n"
+ "  return mix(mix(texelFetch(am, i, 0).rgb, texelFetch(am, i + ivec2(1, 0), 0).rgb, u.x), mix(texelFetch(am, i + ivec2(0, 1), 0).rgb, texelFetch(am, i + ivec2(1, 1), 0).rgb, u.x), u.y); }\n"
+ "float mar(vec3 d, vec3 s, vec3 W, float n, float w) { return w * clamp((thk(deck(normalize(d + n * s)), W) - kp[2]) * 5.0, 0.0, 1.0); }\n"
  "vec3 skyc(vec3 d) {\n"
- "  float dy = d.y, up = clamp(dy, 0.0, 1.0), fp = kp[40] * 1800.0 / (dlow(dy) * 400.0);\n"
+ "  float dy = d.y, up = clamp(dy, 0.0, 1.0), fp = kp[47] * 1800.0 / (dlow(dy) * 400.0);\n"
  "  vec3 q = vec3(2.0, 4.6, 0.4) * fp, W = 1.0 / (1.0 + q * q);\n"
  "  float sd = 0.2 * sqrt(0.49 * (1.0 - W.x * W.x) + 0.09 * (1.0 - W.y * W.y) + 0.0324 * (1.0 - W.z * W.z));\n"
- "  vec3 blue = mix(vec3(0.55, 0.7, 0.9), vec3(0.2, 0.42, 0.84), clamp(up * 1.3, 0.0, 1.0)), dark = vec3(0.012, 0.016, 0.04) + 0.06 * (1.0 - up) * vec3(0.6, 0.45, 0.3);\n"
- "  float hk = clamp(1.0 - dy / 0.06, 0.0, 1.0); vec3 s = vec3(kp[9], kp[10], kp[11]), X = normalize(d + 0.025 * s);\n"
- "  float th = thk(deck(d), W), ts = thk(deck(X), W), mu = dot(d, s), day = kp[12], tw = kp[13], oc = kp[18], sm = kp[25], ed = kp[2];\n"
+ "  vec3 dark = vec3(0.012, 0.016, 0.04) + 0.06 * (1.0 - up) * vec3(0.6, 0.45, 0.3);\n"
+ "  float hk = clamp(1.0 - dy / 0.06, 0.0, 1.0); vec3 s = vec3(kp[9], kp[10], kp[11]);\n"
+ "  float th = thk(deck(d), W), od = mar(d, s, W, 0.012, 0.6) + mar(d, s, W, 0.03, 0.8) + mar(d, s, W, 0.06, 1.0) + mar(d, s, W, 0.11, 1.2), mu = dot(d, s), day = kp[12], tw = kp[13], oc = kp[18], sm = kp[25], ed = kp[2];\n"
  "  vec3 sunc = vec3(kp[15], kp[16], kp[17]), amb = vec3(kp[19], kp[20], kp[21]);\n"
- "  float warm = clamp((mu + 0.3) / 1.3, 0.0, 1.0), disc = clamp((mu - 0.9995) * 4000.0, 0.0, 1.0), halo = 0.35 * day * exp((mu - 1.0) * 60.0);\n"
- "  vec3 sky0 = mix(dyed(dark), dyed(blue), day) + tw * (1.0 - 0.5 * day) * (warm * warm * warm * vec3(0.9, 0.38, 0.16) + vec3(0.22, 0.12, 0.28))\n"
- "   + (halo + 3.0 * disc * kp[14]) * sunc;\n"
- "  float core = clamp((th - ed) * 5.0, 0.0, 1.0), li = clamp(0.45 + 6.0 * day * (th - ts), 0.0, 1.0);\n"
- "  float body = (0.62 + 0.5 * li - 0.3 * core - 0.2 * oc * core) * (kp[24] == 1.0 ? 0.8 : 1.0) * (1.0 - 0.45 * sm)\n"
+ "  float disc = clamp((mu - 0.9995) * 4000.0, 0.0, 1.0);\n"
+ "  vec3 sky0 = (1.0 - day) * dyed(dark) + mix(dyed(air(d, s)), air(d, s), kp[36] > 0.5 ? 1.0 : 0.6 * tw) + 3.0 * disc * kp[14] * sunc;\n"
+ "  float core = clamp((th - ed) * 5.0, 0.0, 1.0), own = od + 0.6 * core, li = 0.65 * exp(-0.9 * own) + 0.35 * exp(-0.25 * own) + 0.9 * (1.0 - core) * exp((mu - 1.0) * 9.0);\n"
+ "  float body = (kp[24] == 1.0 ? 0.8 : 1.0) * (1.0 - 0.45 * sm)\n"
  "   * (1.0 - 0.6 * sm * clamp((th - 0.3) * 2.2, 0.0, 1.0) + 0.5 * sm * clamp((0.4 - th) * 3.0, 0.0, 1.0));\n"
- "  vec3 cd = dyed(body * (1.15 * amb + clamp((s.y + 0.005) / 0.05, 0.0, 1.0) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * s.y) * sunc\n"
- "   + tw * vec3(0.5, 0.22, 0.14) + (1.0 - day) * vec3(0.06, 0.05, 0.045)));\n"
+ "  vec3 cd = dyed(body * ((0.95 - 0.35 * core - 0.2 * oc * core) * amb + li * clamp((s.y + 0.005) / 0.05, 0.0, 1.0) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * s.y) * sunc\n"
+ "   + tw * (0.3 + 0.7 * li) * vec3(0.5, 0.22, 0.14) + 0.8 * (1.0 - day) * vec3(0.06, 0.05, 0.045)));\n"
  "  float sg = kp[26] > 0.5 ? clamp(1.0 - 1.6 * dy, 0.0, 1.0) : 1.0, hz = clamp(1.2 * kp[22], 0.0, 1.0);\n"
  "  float g = clamp(0.5 + (th - ed) / sqrt(0.0016 + 2.0 * sd * sd), 0.0, 1.0);\n"
  "  return smogby(mix(sky0, cd, clouded(g + 0.85 * hk * (hz - g))), sg); }\n"
@@ -294,8 +298,8 @@ static char const fsrc[] =
  "out vec4 o; vec4 o1;\n"
  "#endif\n"
  "void main(){ vec3 C = col, S = scol; float E = uv.x;\n"
- " if (mode == 5 && skm != 0) { float U = (gl_FragCoord.x - 0.5 * kp[41]) / kp[39], V = (0.5 * kp[42] - gl_FragCoord.y) / kp[39];\n"
- "  C = skyc(normalize(vec3(kp[36], kp[37], kp[38]) + U * vec3(kp[30], kp[31], kp[32]) + V * vec3(kp[33], kp[34], kp[35]))), S = vec3(0.0); }\n"
+ " if (mode == 5 && skm != 0) { float U = (gl_FragCoord.x - 0.5 * kp[48]) / kp[46], V = (0.5 * kp[49] - gl_FragCoord.y) / kp[46];\n"
+ "  C = skyc(normalize(vec3(kp[43], kp[44], kp[45]) + U * vec3(kp[37], kp[38], kp[39]) + V * vec3(kp[40], kp[41], kp[42]))), S = vec3(0.0); }\n"
  " vec3 c = (C + S * (sun != 0 ? vis() : mode == 5 ? clamp(0.5 + E, 0.0, 1.0) : 1.0)) * 255.0, t = vec3(1.0); bool gl = mode >= 2;\n"
  " if (cls != 0) { float d = texelFetch(lz, ivec2(gl_FragCoord.xy), 0).r, z = gl_FragCoord.z;\n"
  "  if (cls == 1 ? !(d < 1.0 && z > d) : !(d >= 1.0 || z < d)) discard; }\n"
@@ -449,7 +453,7 @@ static int setup(struct helper *H, int x) {
  H->u_bu = glGetUniformLocation(H->prog, "bu"); H->u_gz = glGetUniformLocation(H->prog, "gz");
  glUniform1i(glGetUniformLocation(H->prog, "dz"), 6);
  glUniform1i(glGetUniformLocation(H->prog, "ov5"), 7); H->u_sp = glGetUniformLocation(H->prog, "sp");
- glUniform1i(glGetUniformLocation(H->prog, "cm"), 8);
+ glUniform1i(glGetUniformLocation(H->prog, "cm"), 8); glUniform1i(glGetUniformLocation(H->prog, "am"), 9);
  H->u_kp = glGetUniformLocation(H->prog, "kp"); H->u_skm = glGetUniformLocation(H->prog, "skm");
  glPixelStorei(GL_PACK_ALIGNMENT, 4); glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
  glEnable(GL_DEPTH_TEST); glDepthFunc(GL_LESS);
@@ -774,10 +778,19 @@ static void cmd_cloud(struct helper *H, int n, size_t off) {
  glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, n, n, 0, GL_RED, GL_FLOAT, p);
  glActiveTexture(GL_TEXTURE0);
  dprintf(H->out, "ok\n"); }
+static void cmd_air(struct helper *H, int w, int h, size_t off) {
+ float const *p = w > 1 && h > 1 ? (float const*) bytes(H, off, 12 * (size_t) w * h) : NULL;
+ if (!p) { dprintf(H->out, "err air bytes\n"); return; }
+ if (!H->amt) glGenTextures(1, &H->amt);
+ glActiveTexture(GL_TEXTURE9); glBindTexture(GL_TEXTURE_2D, H->amt);
+ glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+ glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, w, h, 0, GL_RGB, GL_FLOAT, p);
+ glActiveTexture(GL_TEXTURE0);
+ dprintf(H->out, "ok\n"); }
 static void cmd_skyp(struct helper *H, char *l) {
  double v[64];
  int const n = words(l, v, 64);
- if (n < 43) { dprintf(H->out, "err skyp args\n"); return; }
+ if (n < 50) { dprintf(H->out, "err skyp args\n"); return; }
  for (int i = 0; i < n; i++) H->kp[i] = (float) v[i];
  H->nkp = n;
  dprintf(H->out, "ok\n"); }
@@ -1051,7 +1064,7 @@ static void cmd_frame(struct helper *H, char *args) {
  glBindVertexArray(0); mode(H, 0); glUniform1f(H->u_sh, 1); glUniform3f(H->u_off, 0, 0, 0);
  // ..and the sky, under what is bare, onto what the frame keeps there
  struct buf *sb = H->spend && H->sky >= 0 ? buf_of(H, H->sky) : NULL;
- int const ps = H->spend && H->sky < 0 && H->cmt && H->nkp >= 43;
+ int const ps = H->spend && H->sky < 0 && H->cmt && H->amt && H->nkp >= 50;
  H->spend = 0;
  if (ps && !H->fva) {   // ..a triangle over the whole frame, in clip
   static float const tri[9] = { -1, -1, 0.5f, 3, -1, 0.5f, -1, 3, 0.5f };
@@ -1074,8 +1087,8 @@ static void cmd_frame(struct helper *H, char *args) {
   else {
    static float const id4[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
    glUniformMatrix4fv(H->u_m, 1, 1, id4); glUniform3f(H->u_off, 0, 0, 0);
-   glUniform1fv(H->u_kp, 43, H->kp); glUniform1i(H->u_skm, 1);
-   glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, H->cmt); glActiveTexture(GL_TEXTURE0);
+   glUniform1fv(H->u_kp, 50, H->kp); glUniform1i(H->u_skm, 1);
+   glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, H->cmt); glActiveTexture(GL_TEXTURE9); glBindTexture(GL_TEXTURE_2D, H->amt); glActiveTexture(GL_TEXTURE0);
    glBindVertexArray(H->fva); glDrawArrays(GL_TRIANGLES, 0, 3);
    glUniform1i(H->u_skm, 0); glUniformMatrix4fv(H->u_m, 1, 1, m); }
   glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); }
@@ -1166,6 +1179,7 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);
   else if (!strncmp(l, "base ", 5) && sscanf(l + 5, "%d %d %ld", &a, &b, &off) == 3) cmd_base(H, a, b, (size_t) off);
   else if (!strncmp(l, "cloud ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_cloud(H, a, (size_t) off);
+  else if (!strncmp(l, "air ", 4) && sscanf(l + 4, "%d %d %ld", &a, &b, &off) == 3) cmd_air(H, a, b, (size_t) off);
   else if (!strncmp(l, "skyp ", 5)) cmd_skyp(H, l + 5);
   else if (!strncmp(l, "place ", 6)) cmd_place(H, l + 6);
   else if (!strncmp(l, "vis ", 4) && sscanf(l + 4, "%d %d %ld", &a, &b, &off) == 3) cmd_vis(H, a, b, (size_t) off);

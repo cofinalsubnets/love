@@ -857,7 +857,7 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (lv 'sky @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'dye (peep s 'dye ()) 'twinkle (peep s 'twinkle 1.0))
+   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0))
         lt (sky-light (sky-sun sim 0.0 lat) wx sim)
         {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under

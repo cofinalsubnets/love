@@ -4,15 +4,17 @@
 ; lays a pixel each.
 ; time is local seconds 'sim and summer offset 'dst; rays are trays of unit [east up north].
 ; weather (sky-weather cover): cover 0 to 3; 'fall 0 none (default), 1 rain, 2 snow;
-; 'smog 0 (default) to 1, the sky and its light browned toward orange; 'dye [r g b] the sky's
+; 'smog 0 (default) to 1, the sky and its light browned toward orange, or toward 'smog-hue [r g b]; 'dye [r g b] the sky's
 ; own blue, dark and clouds turned to that colour, as bright, the smog on it thinning overhead; 'twinkle the air's
-; stir under the stars, 1 earth's (default), 0 none, more a shimmering night. a light with
+; stir under the stars, 1 earth's (default), 0 none, more a shimmering night; 'air another air's 14
+; numbers (air.c); 'sky the sky painted: colours up from the horizon, as bright as the day, or a
+; function of the sun's height, the ray's and their bearings' cosine, trays, to [r g b]. a light with
 ; 'turn, the eye's axes in the world's, has the sky's clouds fixed in the world, far
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
 ; horizon too: sky-lit's csun then sky-orb-cloud's
-(module (sky sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-ends sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
+(module (sky thick-n thick-t air-earth air-of air-at air-base air-amb air-sunc air-hue air-own sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-ends sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
          sky-irr sky-gpu sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
-(borrow '(view vec starmap))
+(borrow '(view vec starmap lore))      ; lore: air.c's tables, in C
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
  ; the sun as [east up north], a unit vector, by solar time and the day of the year
@@ -92,12 +94,16 @@
  ; ..how many tiles of the deck lie between rays a radians apart, across the ray: what a
  ; turn of the eye slides them over
  (deck-fp a dy) (a * deck / (deck-low dy * tile))
+ drifts [[0.006 16.0] [0.0025 16.0] [0.011 37.0] [-0.004 37.0] [0.002 3.0] [0.001 3.0]]
  (thick wx mp u v sim) (thick-fp wx mp u v sim 0.0)
  ; ..each layer toward its middle as a sample spans more of its texels, fp tiles a sample,
  ; so what a ray cannot tell apart never shimmers as the eye turns
  (thick-fp wx mp u v sim fp) (thick-w wx mp u v sim (thick-seen fp))
  (thick-seen fp) (: (seen q) (1.0 / (1.0 + sq (fp * q))) [(seen 2.0) (seen 4.6) (seen 0.4)])
- (thick-w wx mp u v sim W) (: m (mp 'cloud) f fine
+ (thick-w wx mp u v sim W) (? (tray? u && tray? v) (thick-t wx mp (1.0 * u) (1.0 * v) sim W) (thick-n wx mp u v sim W))
+ (thick-t wx mp u v sim W) (cloud-thick (mp 'cloud) (map (q \ 1.0 * sim * lap wx (q 0) (q 1)) drifts + [fine]) u v (map (x \ tray? x ? (1.0 * x) x) W)
+   @ (t && tray? t) t _ (thick-n wx mp u v sim W))
+ (thick-n wx mp u v sim W) (: m (mp 'cloud) f fine
    a (bil m cloud-n ((u + sim * lap wx 0.006 16.0) * 16.0) ((v + sim * lap wx 0.0025 16.0) * 16.0))
    b (bil m cloud-n ((u + sim * lap wx 0.011 37.0) * 37.0 + 11.3) ((v + sim * lap wx -0.004 37.0) * 37.0 - 5.1))
    sw (bil m cloud-n ((u + sim * lap wx 0.002 3.0) * 3.0 + 40.0) ((v + sim * lap wx 0.001 3.0) * 3.0 + 17.0))
@@ -149,10 +155,57 @@
  (smoggy wx c) (smog-by wx c 1.0)
  ; ..f of it, a share or a tray of them
  (smog-by wx c f) (: k (peep wx 'smog 0.0) l ((c 0 + c 1 + c 2) / 3.0)
-   t (cmix [1.35 0.52 0.16] [2.0 1.0 0.24] (sat (1.6 * l)))
+   h (smog-ends wx) t (cmix (h 0) (h 1) (sat (1.6 * l)))
    (k @ 0.0 c (cmix c [(t 0 * l) (t 1 * l) (t 2 * l)] (k * f))))
+ ; ..what it turns the dark toward and the light, its own colour's or a brown's and an orange's
+ (smog-ends wx) (peep wx 'smog-hue () @ () [[1.35 0.52 0.16] [2.0 1.0 0.24]]
+   h (: m (+h / 3.0) (map (b \ map (x \ b * x / m) h) [0.677 1.08])))
  ; ..a colour turned to the dye's, as bright
  (dyed wx c) (peep wx 'dye () @ () c d (: l ((c 0 + c 1 + c 2) / 3.0) n ((d 0 + d 1 + d 2) / 3.0) [(l * d 0 / n) (l * d 1 / n) (l * d 2 / n)]))
+ ; --- the air: hillaire's tables, earth's (air.c says the numbers), the sky's laid again as
+ ; the sun's height moves a step; its light brought up toward the eye's, the dark ones most ---
+ air-earth [0.005802 0.013558 0.0331 8.0 0.003996 0.00444 1.2 0.00065 0.001881 0.000085 25.0 15.0 0.8 0.3]
+ air-w 128 air-h 64 air-kept 16 airs {}
+ air-noon 0.0536 air-gain 5.2 air-p 0.2 air-q 0.35
+ ; ..what is kept of a weather's air and its painted sky, the earth's a kit too: its tables
+ (kit wx) (: k [(peep wx 'air () @ () air-earth a a) (peep wx 'sky ())] q (peep airs k ()) (tablet? q ? q (: t {'a <k 'p (k 1)} (pin airs k t, t))))
+ (air-base wx) (: K (kit wx) (peep K 'lay () @ (l && tray? l) l _ (: l (air-lay (K 'a)) (pin K 'lay l, l))))
+ ; ..a w h table's colours painted: f the sun's height, the ray's and the cosine between their
+ ; bearings, trays; a list's evenly up from the horizon by the root, as bright as the day and on into
+ ; the dusk
+ (painted f y w h) (: j (iota (w * h)) u (j % w / (w - 1.0)) v (j // w / (h - 1.0))
+   q (two? f ? (ramp f v (sat ((y + 0.23) / 0.35))) (f y (2 v) (1.0 - 2.0 * 2 u)))
+   c (map (x \ tray? x ? (1.0 * x) (j * 0.0 + x)) q) n (3 * w * h) at (iota n // 3) k (iota n % 3)
+   (c 0 at * (k = 0) + c 1 at * (k = 1) + c 2 at * (k = 2)))
+ (ramp f v day) (: n (#f - 1) x (v * n) i (min (max 0 (n - 1)) (floor x)) t (x - i)
+   (map (k \ (: col (gem-tray [#f] (map (q \ 1.0 * q k) f)) ((peep col i 0.0 * (1.0 - t) + peep col (i + 1) 0.0 * t) * day))) ^3))
+ (air-raw wx w h y) (: K (kit wx) (K 'p = () ? (air-sky (K 'a) (air-base wx) w h y) (painted (K 'p) y w h)))
+ ; ..the sky's table by the sun's height, a painted one's colours as they are
+ (air-of wx sy) (: K (kit wx) k (int (floor (sy * 2048.0 + 0.5))) t (peep K k ())
+   (tray? t ? t
+    (: t (air-raw wx air-w air-h (k / 2048.0)) t (K 'p = () ? (air-seen t) t)
+       _ (air-kept < #(keys K) ? (each (filter charm? (keys K)) (k \ pin K k ())) 0)
+       (pin K k t, t))))
+ (air-seen t) (: l (net t / #t) i (iota #t // 3 * 3) m (max 1e-9 (0.3 * t i + 0.6 * t (i + 1) + 0.1 * t (i + 2)))
+   (t * (m ** -air-q * (air-gain * (max l 1e-9 / air-noon) ** -air-p))))
+ ; ..down rays, the sun's height and bearing, t under a 'turn
+ (air-at wx sy sx sz t dx dy dz) (: A (air-of wx sy) (f x) (tray? x ? (1.0 * x) (gem-tray [1] [(1.0 * x)]))
+   q (air-look A [air-w air-h sx sz (t ? 1 0)] [(f dx) (f dy) (f dz)])
+   (tray? dx ? q (map (c \ c 0) q)))
+ ; ..its light: the sun's colour sy up, as bright as its brightest, and the sky's hue on what
+ ; is under it, of a mean 1, off a small sky at each of heights closer by the horizon
+ air-n 32 air-own 0.4               ; the rest white, the ground's own and the eye used to it
+ (air-sunc wx sy) (: q (map (c \ c 0) (air-sun (air-base wx) sy)) m (max (q 0) (max (q 1) (q 2))) (map (x \ x / m) q))
+ (air-hue wx y) (: w 12 h 8 t (air-raw wx w h y) j (iota (w * h)) u (j % w / (w - 1.0)) v (j // w / (h - 1.0))
+   k (v * v * v / sqrt (1.04 - 2 u)) q (map (c \ net (k * t (3 * j + c))) ^3) m (net q / 3.0)
+   (m < 1e-30 ? [1.0 1.0 1.0] (map (x \ x / m) q)))
+ (air-hues wx) (: K (kit wx) (peep K 'hues () @ (l && two? l) l
+   _ (: hs (map (i \ (: x (2.0 * i / air-n - 1.0) (air-hue wx (x * mag x)))) ^(air-n + 1))
+        l (map (c \ gem-tray [(air-n + 1)] (map (q \ q c) hs)) ^3) (pin K 'hues l, l))))
+ (air-amb wx sy) (: x ((1.0 + (sy < 0.0 ? -(sqrt -sy) (sqrt sy))) * air-n / 2.0) i (min (air-n - 1) (max 0 (int (floor x)))) f (x - i)
+   (map (t \ 1.0 + air-own * (t i + f * (t (i + 1) - t i) - 1.0)) (air-hues wx)))
+ ; ..the sky's own light, its dusk let through a dye, a painted one's all of it
+ (dusked wx lt c) (peep wx 'sky () = () ? (peep wx 'dye () @ () c _ (cmix (dyed wx c) c (0.6 * lt 'tw))) c)
  (sky-light s wx sim) (sky-lit s wx sim (s 1 <= 0.0 ? 0.0 (sun-cloud wx s sim)))
  ; ..its cloud over the sun given, csun 0 to 1
  (sky-lit s wx sim csun) (: sy (s 1)
@@ -162,9 +215,9 @@
    ; ..rain or snow takes the most of the sun, and rain the light's edge besides
    f (sky-fall wx)
    sunk (sat ((sy + 0.005) / 0.05) * (1.0 - 0.75 * csun - 0.2 * csun * csun * csun * csun) * (f @ 0 1.0 0.3))
-   sunc (cmix [1.0 0.4 0.1] [1.0 0.93 0.82] (sat ((sy - 0.04) / 0.4) @ k (2 k * (3.0 - 2.0 * k))))
+   sunc (air-sunc wx sy)
    night [0.05 0.055 0.075]
-   amb0 (c+ (cmix night [0.42 0.47 0.56] day) (c* (tw * (1.0 - 0.5 * day)) [0.1 0.05 0.07]))
+   amb0 (c+ (c* (1.0 - day) night) (c* (0.483 * day + 0.073 * tw * (1.0 - 0.5 * day)) (air-amb wx sy)))
    grey (cmix night [0.5 0.51 0.53] day)
    amb (c* (f @ 1 0.8 1.0) (cmix amb0 grey (0.7 * oc)))
    {'sun s 'day day 'tw tw 'sunk sunk 'sunc (smoggy wx sunc) 'amb (smoggy wx amb) 'cover oc 'csun csun
@@ -176,41 +229,40 @@
  (rays-of B dx dy dz ex ez a) (: dh (two? B ? (max dy -dy) dy) up (sat dh)
    fp (two? B ? (a * orb-k) (deck-fp a dy))
    {'dx dx 'dy dy 'dz dz 'ex ex 'ez ez 'B B 'fp fp 'sd (thick-sd fp) 'W (thick-seen fp)
-    'blue (cmix [0.55 0.7 0.9] [0.2 0.42 0.84] (sat (up * 1.3)))
     'dark (c+ [0.012 0.016 0.04] (c* (0.06 * (1.0 - up)) [0.6 0.45 0.3]))
     'hk (sat (1.0 - dh / 0.06)) 'd (two? B ? () (deck-at dx dy dz ex ez 0.0))})
  (paint lt wx dx dy dz ex ez sim far a) (paint-by lt wx (rays-of (lt 'turn) dx dy dz ex ez a) sim far)
  (paint-by lt wx R sim far) (paint-with lt wx R sim far (thick-by lt wx R sim))
- ; ..[th ts]: the cloud down the rays, and a step toward the sun, thinner on the side
- ; facing it
- (thick-by lt wx R sim) (: mp (sky-maps ()) s (lt 'sun)
+ ; ..[th od]: the cloud down the rays, and what of it lies on toward the sun, in steps
+ marches [[0.012 0.6] [0.03 0.8] [0.06 1.0] [0.11 1.2]]
+ (thick-by lt wx R sim) (: mp (sky-maps ()) s (lt 'sun) ed (edge wx sim)
    dx (R 'dx) dy (R 'dy) dz (R 'dz) ex (R 'ex) ez (R 'ez) B (R 'B) fp (R 'fp) W (R 'W)
    (th-of d dx dy dz) (? (two? B) (orb-thick wx mp (map (j \ dx * B 0 j + dy * B 1 j + dz * B 2 j) ^3) sim fp)
                          ((two? d ? d (deck-at dx dy dz ex ez sim)) @ e (thick-w wx mp (e 0) (e 1) sim W)))
-   [(th-of (R 'd) dx dy dz)
-    (: n 0.025 X (dx + n * s 0) Y (dy + n * s 1) Z (dz + n * s 2) l (sqrt (2 X + 2 Y + 2 Z))
-       (th-of () (X / l) (Y / l) (Z / l)))])
+   (step q) (: n (q 0) X (dx + n * s 0) Y (dy + n * s 1) Z (dz + n * s 2) l (sqrt (2 X + 2 Y + 2 Z))
+               (q 1 * sat ((th-of () (X / l) (Y / l) (Z / l) - ed) * 5.0)))
+   [(th-of (R 'd) dx dy dz) (foldl (\ a q (a + step q)) 0.0 marches)])
  (paint-with lt wx R sim far T) (paint-mix lt wx R sim far T (sat (0.5 + (T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq (R 'sd)))))
  ; ..the colour as the share g of the sample past the edge, a number or a tray
  (paint-mix lt wx R sim far T) (: s (lt 'sun) sx (s 0) sy (s 1) sz (s 2) oc (lt 'cover)
-   dx (R 'dx) dy (R 'dy) dz (R 'dz) th (T 0) ts (T 1)
+   dx (R 'dx) dy (R 'dy) dz (R 'dz) th (T 0) od (T 1)
    mu (dx * sx + dy * sy + dz * sz)
-   warm (sat ((mu + 0.3) / 1.3))
-   dusk (c* (lt 'tw * (1.0 - 0.5 * lt 'day)) (c+ (c* (warm * warm * warm) [0.9 0.38 0.16]) [0.22 0.12 0.28]))
    disc (sat ((mu - 0.9995) * 4000.0))
-   halo (0.35 * lt 'day * exp ((mu - 1.0) * 60.0))
-   sky0 (c+ (c+ (cmix (dyed wx (R 'dark)) (dyed wx (R 'blue)) (lt 'day)) dusk) (c* (halo + 3.0 * far * disc * lt 'sunk) (lt 'sunc)))
-   ; ..the clouds: lit on the side toward the sun, darker the thicker, greyer the more of them
+   sky0 (c+ (c+ (c* (1.0 - lt 'day) (dyed wx (R 'dark))) (dusked wx lt (air-at wx sy sx sz (two? (R 'B)) dx dy dz))) (c* (3.0 * far * disc * lt 'sunk) (lt 'sunc)))
+   ; ..the clouds: what of the sun gets through the cloud on toward it, their edges about it
+   ; bright, the sky on the rest, darker the thicker
    ; ..and under smog the thick of them darker still and the thin lit through
    sm (peep wx 'smog 0.0)
    core (sat ((th - edge wx sim) * 5.0))
-   lit (sat (0.45 + 6.0 * lt 'day * (th - ts)))
-   body ((0.62 + 0.5 * lit - 0.3 * core - 0.2 * oc * core) * (sky-fall wx @ 1 0.8 1.0)
+   own (od + 0.6 * core)
+   lit (0.65 * exp -(0.9 * own) + 0.35 * exp -(0.25 * own) + 0.9 * (1.0 - core) * exp ((mu - 1.0) * 9.0))
+   body ((sky-fall wx @ 1 0.8 1.0)
          * (1.0 - 0.45 * sm) * (1.0 - 0.6 * sm * sat ((th - 0.3) * 2.2) + 0.5 * sm * sat ((0.4 - th) * 3.0)))
    cloudc (c* body
-              (c+ (c+ (sky-irr lt 1.15 (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.55 + 0.4 * sy)))
-                      (c* (lt 'tw) [0.5 0.22 0.14]))
-                  (c* (1.0 - lt 'day) [0.06 0.05 0.045])))
+              (c+ (c+ (c* (0.95 - 0.35 * core - 0.2 * oc * core) (lt 'amb))
+                      (c* (lit * (sat ((sy + 0.005) / 0.05) * (1.0 - 0.6 * oc) * (0.75 + 0.3 * sy))) (lt 'sunc)))
+                  (c+ (c* (lt 'tw * (0.3 + 0.7 * lit)) [0.5 0.22 0.14])
+                      (c* (0.8 * (1.0 - lt 'day)) [0.06 0.05 0.045]))))
    cd (dyed wx cloudc) sg (peep wx 'dye () @ () 1.0 _ (sat (1.0 - 1.6 * dy)))
    ; ..overcast no sky through it; under a dye the clouds that colour too, and the smog a band
    ; low down, the dye's sky over it
@@ -230,8 +282,9 @@
    sd (thick-sd (two? (lt 'turn) ? (p * orb-k) (deck-fp p dy)))
    [c0 (c+ (f 1.0) (c* -1.0 c0)) ((T 0 - edge wx sim) / sqrt (0.0016 + 2.0 * sq sd))])
  ; ..what a gpu takes to draw the deck a ray at a time as sky-colour-at does, a list of
- ; numbers and the cloud map: the eye's ex ez, the edge, each layer's drift in its map's
- ; texels, the sun, the light, the cover, and the weather's fall, smog and dye; () under a 'turn
+ ; numbers, the cloud map and the air's table: the eye's ex ez, the edge, each layer's drift in its map's
+ ; texels, the sun, the light, the cover, and the weather's fall, smog, dye, the
+ ; smog's two colours and whether the sky is painted; () under a 'turn
  (sky-gpu lt wx ex ez sim) (? (two? (lt 'turn)) ()
    (: n (1.0 * cloud-n) (dr r k o) (: x (sim * lap wx r k * k + o) (x - n * floor (x / n)))
       s (lt 'sun) d (peep wx 'dye ()) (f x) (1.0 * x)
@@ -239,7 +292,7 @@
                (dr 0.002 3.0 40.0) (dr 0.001 3.0 17.0) (s 0) (s 1) (s 2) (lt 'day) (lt 'tw) (lt 'sunk)]
               + lt 'sunc + [(lt 'cover)] + lt 'amb
               + [(sky-cover wx sim) (wx 'cover) (sky-fall wx) (peep wx 'smog 0.0) (two? d ? 1 0)]
-              + (two? d ? d [1.0 1.0 1.0]))) (sky-maps () 'cloud)]))
+              + (two? d ? d [1.0 1.0 1.0]) + smog-ends wx 0 + smog-ends wx 1 + [(peep wx 'sky () = () ? 0 1)])) (sky-maps () 'cloud) (air-of wx (s 1))]))
  ; ..and the sky nearer than the moon: no sun's disc
  (sky-near lt wx dx dy dz ex ez sim) (paint lt wx dx dy dz ex ez sim 0.0 0.0)
  ; ..down rays a scene keeps, laid once by sky-rays, B its light's 'turn

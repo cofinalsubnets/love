@@ -133,7 +133,7 @@
                            d (mesh-dirs v (iota (W * H)))
                            c (sky-tone lt (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim))
                            [(net (gf >> 32 != 1)) (off (gf & 16777215) ((q8 (c 0) << 16) | (q8 (c 1) << 8) | q8 (c 2)) @ f [(amax f) (net (f > 0))])])
-           ps [(px (sky-weather 1) 2.0 0.3) (px (pins (sky-weather 3) 'smog 0.6) 0.0 0.05) (px (pins (sky-weather 2) 'dye [0.9 0.3 0.6]) 1.0 0.4)]
+           ps [(px (sky-weather 1) 2.0 0.3) (px (pins (sky-weather 3) 'smog 0.6 'smog-hue [0.4 0.9 0.5]) 0.0 0.05) (px (pins (sky-weather 2) 'dye [0.9 0.3 0.6] 'smog 0.3 'sky [[0.9 0.6 0.4] [0.3 0.5 0.9]]) 1.0 0.4)]
            ; ..and kept, unread, under it, where every bare pixel is the sky's, mesh-frame's c with
            ; its spots; with no sky, read
            kx (: sim (1.0 * 1790812800 + 12.0 * 3600.0) wx (sky-weather 1) lt (sky-light (sky-sun sim 0.0 0.65) wx sim)
