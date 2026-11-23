@@ -1,7 +1,8 @@
 ; decay -- a disintegration loop: a short orchestral phrase from a die, strings on four
 ; chords, a bass under them and a horn's line over them, played round and round, another
 ; of its moments worn away to silence each time round, none coming back.
-;   (decay-new sd)          the loop from seed sd: its phrase and where it wears
+;   (decay-new sd)          the loop from seed sd: its phrase and where it wears, and its
+;                           'key, the tonic's midi note, and whether 'minor
 ;   (decay-at d t)          its samples at the seconds t since it began, a tray, about -1..1
 (module (decay decay-new decay-at)
 (:
@@ -28,7 +29,8 @@
  ; ..the phrase: a key, major or minor, four chords of it; the strings on each chord's three
  ; notes in the middle, the bass on its root, the horn walking its scale over them, mostly
  ; on the chord; a hall's echoes after, and all of it as loud as it may be
- (phrase sd) (: key (48 + int (12.0 * die sd 1)) minor (die sd 2 < 0.45)
+ (tonic sd) [(48 + int (12.0 * die sd 1)) (die sd 2 < 0.45)]
+ (phrase sd) (: key (tonic sd 0) minor (tonic sd 1)
    sc (minor ? [0 2 3 5 7 8 10] [0 2 4 5 7 9 11])
    ps (minor ? [[0 5 2 6] [0 3 4 0] [0 6 5 4] [0 5 3 4] [5 6 0 4] [0 3 6 2]]
                [[0 5 3 4] [0 3 4 0] [0 4 5 3] [5 3 0 4] [0 2 3 4] [3 4 0 4]])
@@ -61,7 +63,7 @@
                     m (1 + int (wear-k * (0.03 + 0.4 * die sd (4000 + g) * die sd (4000 + g)))) i ((s + iota m) % n)
                     (pin w i (min (peep w i 0.0) (1.0 * b)))))
           w ^gaps))
- (decay-new sd) (: p (phrase sd) L (#p / (1.0 * rate)) {'pcm p 'len L 'wear (wear sd L)})
+ (decay-new sd) (: p (phrase sd) L (#p / (1.0 * rate)) k (tonic sd) {'pcm p 'len L 'wear (wear sd L) 'key (k 0) 'minor (k 1)})
  ; ..the phrase at t, each sample between its two, silenced where the time round has worn,
  ; eased across a slot at a gap's edges
  (decay-at d t) (: L (d 'len) p (d 'pcm) w (d 'wear) N #p n #w k (floor (t / L)) u (t - k * L)

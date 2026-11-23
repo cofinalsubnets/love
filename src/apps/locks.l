@@ -1,13 +1,14 @@
 ; src/apps/locks.l -- the machine's locks for sessions sharing one box: an exclusive lock per
 ; resource, and a pool of heavy slots granted first come first served, at most `max` at once
-; and only while memory is above a floor. state is files under one root, so any session can
+; and only while memory is above a floor and load below a ceiling. state is files under one root, so any session can
 ; read it and a crash leaves evidence; nothing here kills anything.
 ;   (locks-root 0)                              BEE_LOCKS, /run/user/UID/love-locks, the nest's run/locks
 ;   (locks-acquire root nm kind who note floor max) {"granted" 1} | {"granted" 0 "position" ..}
 ;   (locks-release root nm kind who)            1 | ()
 ;   (locks-list root)                           {"exclusive" .. "heavy" .. "waiting" .. "mem_gb" ..}
 ;   (locks-run root reqs note floor max argv)   each [nm kind] in turn, then argv; its status
-; kind 'exclusive or 'heavy, who the holder's pid, floor in GB (() none). acquire never
+; kind 'exclusive or 'heavy, who the holder's pid, floor GB, or [GB load] with a ceiling on the
+; one-minute load (() none, for either). acquire never
 ; waits: a queued heavy ticket keeps its place and asking again polls it. a pid's start time
 ; rides beside it, so a reused pid is not mistaken for the holder.
 (module (locks locks-root locks-acquire locks-release locks-list locks-run)
@@ -57,6 +58,11 @@
        ls (? (string? t) (filter (l \ 13 <= #l && snip l 0 13 = "MemAvailable:") (lines t)) ())
        (? (two? ls) (: w (words <ls) (1 < #w ? (lk-num (w 1) / 1048576))) ()))
    (lk-load _) (: t (lk-read "/proc/loadavg") (? (string? t) (: w (words t) (? (two? w) <w "")) ""))
+   ; the one-minute load as a number, () where there is none
+   (lk-loadn _) (: s (lk-load 0) (? (0 < #s) (: f (read s) (numeric? f ? f ())) ()))
+   ; a floor is GB, or [GB load]
+   (lk-fl floor) (? (two? floor) <floor floor)
+   (lk-ceil floor) (? (two? floor) (floor 1) ())
 
    ; --- exclusive: a directory holding its owner, laid whole by a rename ---
    (lk-xdir root nm) (root + "/x/" + lk-slug nm)
@@ -135,11 +141,13 @@
        waiting (lk-sweep q)
        ws (? (elem t waiting) waiting (sort (t . waiting)))
        pos (lk-at ws t 0)
-       mem (lk-mem 0)
-       (? (may && pos = 0 && #held < max && (? (() = floor) 1 (() = mem) 1 (floor <= mem)))
+       mem (lk-mem 0) fl (lk-fl floor)
+       ld (lk-loadn 0) ce (lk-ceil floor)
+       (? (may && pos = 0 && #held < max && (? (() = fl) 1 (() = mem) 1 (fl <= mem))
+           && (? (() = ce) 1 (() = ld) 1 (ld < ce)))
           (? !(rename (q + "/" + t) (h + "/" + t)) {"granted" 1 "lock" nm}
-             {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem})
-          {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem
+             {"granted" 0 "lock" nm "position" 1 "held" #held "mem_gb" mem "load" ld})
+          {"granted" 0 "lock" nm "position" (pos + 1) "held" #held "mem_gb" mem "load" ld
            "holders" (map (\ n (lk-view (lk-parse (lk-read (h + "/" + n))))) held)}))
    (lk-at l x k) (? !(two? l) -1 (<l = x) k (lk-at >l x (k + 1)))
    (lk-h-drop root nm who)
@@ -191,7 +199,7 @@
            (? (peep a "granted" 0) 1
               (: _ (? (s != last)
                       (say err ("locks: waiting for " + lk-str <r + " (position " + show (peep a "position" 0)
-                                + ", mem " + show (peep a "mem_gb" "?") + " GB)\n"))
+                                + ", mem " + show (peep a "mem_gb" "?") + " GB, load " + show (peep a "load" "?") + ")\n"))
                       0)
                  _ (rest 5000)
                  (wait1 r s))))

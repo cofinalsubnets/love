@@ -19,6 +19,9 @@
 ;                                sun's r g b) and tris (4 a triangle, a texture's id, -1 none,
 ;                                -2 a glow, -3 - t a glass of t), flat trays
 ;   (gpu-verts g id verts st)    buf id's verts laid again, as many and as wide, its tris kept
+;   (gpu-lamps g id cols li)     buf id's lamps: 24 numbers a vertex, 8 slots of r g b, slot k
+;                                lamp li k's light there at full strength; the strengths
+;                                sent with ks times them added to each vertex's colour
 ;   (gpu-sun g sv sd bias)       the sun's view kept: its matrix sv and depths sd, facets's
 ;   (gpu-drop g id)
 ;   (gpu-base g w h t)           the next frame's ground, w*h colours, below 0 bare
@@ -41,13 +44,15 @@
 ;                                (): one named alike holds alike, so is not summed again, and
 ;                                one named 'once is laid anew each frame, unsummed, in a slot
 ;                                of its own. sk [verts tris tone] a sky drawn under what is bare
-;                                as facets draws it with flags 96, its pixels bare alone 2^32
-;                                more, or ()
+;                                as facets draws it with flags 352, 11 a vertex, its pixels bare
+;                                alone 2^32 more, or (); [.. spots e] its places from the eye at e.
+;                                c [v ..] with v 'lamps each batch's [cols li] or () and v 'dks
+;                                the lamps' strengths, as gpu-lamps takes them
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-sun gpu-drop gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -141,9 +146,16 @@
      (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0 \(show st)"))
  (gpu-verts g id verts st) (: nv (#verts // st) c (cask (4 * st * nv)) _ ((cite 'guts 'pinf) c 0 4 verts)
    (put! g c, ask g "verts \(show id) \(show nv) 0 \(show st)"))
+ ; ..a buf's lamps, 8 slots a vertex of 3 words each, slot k lamp li k's light there
+ (gpu-lamps g id cols li) (: nv (#cols // 24) c (cask (4 * 24 * nv)) _ ((cite 'guts 'pinf) c 0 4 cols)
+   (put! g c, ask g ("lamps \(show id) \(show nv) 0 " + unwords (map show li))))
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
     (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
  (gpu-drop g id) (ask g "drop \(show id)")
+ ; ..spots [S C] for the next frame w by h, laid in its sky
+ (gpu-spots g w h sp) (: I (iota (sp 0 >= 0)) ns #I c (cask (8 * ns))
+   _ (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
+   (ns @ 0 () (put! g c, ask g "spots \(show w) \(show h) \(show ns) 0")))
  (gpu-base g w h t) (: c (cask (4 * w * h)) _ ((cite 'guts 'pinv) c 0 4 4 t)
    (put! g c, ask g "base \(show w) \(show h) 0"))
  (gpu-under g cs ds)
@@ -172,7 +184,7 @@
                                      + unwords (map show ids) + "\n"), ())
  (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
- (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {}}
+ (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {} 'lamped {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
  ; place, so an order counts: lore moves and relights a batch in place, so what it holds names
  ; it; [id x t nv]. a name [m x] keeps one buf for m, laid again as x moves: its verts alone
@@ -182,7 +194,7 @@
    key (k = () ? [st #v nt (net (v * weights s #v)) (net (t * weights s #t))] ['k (nm ? <k k) st]) e (peep b key ())
    _ (pin (s 'used) key (s 'fr))
    (kept r f) (string? r ? r (pin b key f, f))
-   (lay id) (gpu-buf (s 'g) id v t st @ () (: _ (id = s 'n ? (pin s 'n (id + 1))) (kept () [id (nm ? (k 1) ()) t #v])) r r)
+   (lay id) (gpu-buf (s 'g) id v t st @ () (: _ (id = s 'n ? (pin s 'n (id + 1))) _ (pin (s 'lamped) id ()) (kept () [id (nm ? (k 1) ()) t #v])) r r)
    (? (two? e) (? (!nm || e 1 = k 1) e
                   (e 2 == t && e 3 = #v) (gpu-verts (s 'g) (e 0) v st @ () (kept () [(e 0) (k 1) t #v]) r r)
                   (lay (e 0)))
@@ -200,8 +212,22 @@
  ; ..the sun's view, laid again only when it moves
  (sun! s sv sd b) (? (s 'sv == sv && s 'sd == sd && s 'sb = b) ()
    (gpu-sun (s 'g) sv sd b @ r (string? r ? r (pins s 'sv sv 'sd sd 'sb b, ()))))
- ; ..the sky, laid each frame
- (sky! s sk) (? !(two? sk) () (once s 'sky (sk 0) (sk 1) 8 @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2))")) r r))
+ ; ..the sky, laid again only as its mesh is new, drawn from the eye each frame, and the spots
+ ; in it a frame w by h asks
+ (sky! s sk w h) (? !(two? sk) ()
+   (: _ (#sk > 3 && two? (sk 3) ? (gpu-spots (s 'g) w h (sk 3)) ())
+      e (#sk > 4 ? (sk 4) [0.0 0.0 0.0])
+      q (? (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
+           (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
+     (q @ [id] (id < 0 ? () (ask (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
+ ; ..the lamps' strengths, sent as they change; and each batch's lamps lm i, [cols li] or (),
+ ; laid on its buf once
+ (lamps! s bs lm ks)
+  (: k (? (!(two? ks) || alike (peep s 'ks ()) ks) () (ask (s 'g) ("ks " + unwords (map num ks)) @ () (pin s 'ks ks, ()) r r))
+     (one i) (: q (lm i) id (bs i 0)
+               (? (!(two? q) || id < 0 || peep (s 'lamped) id () == q 0) ()
+                  (gpu-lamps (s 'g) id (q 0) (q 1) @ () (pin (s 'lamped) id (q 0), ()) r r)))
+     (string? k ? k (: r (filter string? (map one ^(min #bs #lm))) (two? r ? <r ()))))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
  (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
  ; ..the textures, each laid again only when it is not the one laid
@@ -224,8 +250,10 @@
            bs (string? tx ? () (map (i \ batch s i (V i) (T i) (two? ks ? (ks i) ()) st) ^#V))
            (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
+                 cv (two? c && tablet? (c 0) ? (c 0) {})
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
-                 y (string? u ? u (sky! s sk) @ () (glow! s o) r r)
+                 la (string? u ? u (lamps! s bs (peep cv 'lamps ()) (peep cv 'dks ())))
+                 y (string? la ? la (sky! s sk w h) @ () (glow! s o) r r)
                  ; ..kept unread where none of it is the cpu's, once shown on a window, with no sky to finish
                  ; or one that says its spots; but every 'read'th, which a feed in view reads back
                  rd (peep s 'read 0) kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) && !(0 < rd && s 'fr % rd = 0) ? 512 0)

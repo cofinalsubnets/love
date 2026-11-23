@@ -152,7 +152,10 @@
    ; a placemarker (C11 6.10.3.3p2): it pastes to anything and vanishes; leftovers drop at the end --
    (pmk? ('pmark . _)) 1
    (cmt? ('cmt . _)) 1                          ; -C's comment, text alone
-   (nocmt l) (filter (t \ !(cmt? t)) l)
+   ; a comment dropped is one space: the token before it takes the mark
+   (nocmt l) ((: (pad t) (#t @ k (? (5 < k) t (k = 3) (t + [() () 1]) (k = 4) (t + [() 1]) (t + [1])))
+                 (go l a) (? (atom? l) (rev a) (cmt? <l) (go >l (two? a ? (pad <a . >a) a)) (go >l (<l . a))))
+              l ())
    (paste toks line)
     (!(any (t \ pv? t "##" || pmk? t) toks) ? toks         ; nothing to fold: the list as it came
      (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
