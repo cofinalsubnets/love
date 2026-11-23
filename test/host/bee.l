@@ -299,7 +299,7 @@
 
 ; locks through bee in a scratch BEE_LOCKS root; the test holds the one heavy ticket
 ; (heavy-max 1), so bee's ask queues behind it
-(: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n")
+(: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n(heavy-load 1000000)\n")
    lroot (cr-l2 + "/locks")
    (L nm) (cite 'locks nm)
    mine ((L 'locks-acquire) lroot "heavy" 'heavy (getpid 0) "the test holds heavy" 1 1)
