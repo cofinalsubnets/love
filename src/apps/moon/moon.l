@@ -562,7 +562,7 @@
            (arr? ty) ['arr (ix (ty 1)) (ty 2)]
            (stru? ty) (peep stag (ty 1) () @ (fl . sz . _) ['struct (ty 1) sz (map mem fl) (1 < #fl && !(any (m \ m 1 != 0) fl))]
                          _ ['decl (ty 1)])
-           (fn? ty) ['fn (two? >ty ? ix (ty 1) ())]
+           (fn? ty) ['fn (? (two? >ty) (ix (ty 1)))]
            (peep base ty () @ () ['unspec (show ty)] b ('base . b)))
        fs (ast 1)
        vs (catmap (f \ f @ ('gdecl ds) (map (d \ [<d (ix (d 1)) !(peep svars <d 0)]) (filter (d \ !(fn? (d 1))) ds)) _ ()) fs)

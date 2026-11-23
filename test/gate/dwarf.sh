@@ -79,6 +79,7 @@ struct node head = {7, 0};
 struct a aa;
 struct b bb = {&aa, 4};
 union u uu;
+long (*fp)(int);
 static unsigned long cnt = 3;
 int y(struct node *n, unsigned long k) { return n->v + k + cnt + bb.k; }
 int main(void) { return y(&head, 1) - 15; }
@@ -108,10 +109,10 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb finds no scope for twice"; exit 1; }
   grep -q '^#1  0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" && grep -q '^0x[0-9a-f]* in main () at .*t.c:' "$d/gdb.out" \
     || { cat "$d/gdb.out"; echo "FAIL $name: gdb's bt and finish by .debug_frame"; exit 1; }
-  ( cd "$d" && "$gdb" -q -batch -nx -ex 'ptype head' -ex 'ptype struct a' -ex 'ptype uu' -ex 'ptype y' \
+  ( cd "$d" && "$gdb" -q -batch -nx -ex 'ptype head' -ex 'ptype struct a' -ex 'ptype uu' -ex 'ptype y' -ex 'ptype fp' \
       -ex 'print head' -ex 'print cnt' -ex 'print bb.k' ./y.x64 ) > "$d/gdby.out" 2>&1
   for w in 'struct node \*nx;' 'struct b \*pb;' 'char c\[4\];' 'type = int (struct node \*, unsigned long)' \
-           '= {v = 7, nx = 0x0}' '= 3$' '= 4$'; do
+           'type = long (\*)(' '= {v = 7, nx = 0x0}' '= 3$' '= 4$'; do
     grep -q "$w" "$d/gdby.out" || { cat "$d/gdby.out"; echo "FAIL $name: gdb's types: $w"; exit 1; }
   done
 else
