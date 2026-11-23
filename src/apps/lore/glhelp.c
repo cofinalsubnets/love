@@ -190,6 +190,7 @@ struct helper {
  int in, out, zk, vw, vh;   // the lines' fds; the window's pixels a picture's pixel is, and its size
  void *(*hook) (void *, int, int, int); void *ctx, *nw; EGLSurface ps;   // in an app's own process: its window (hook's), nw the one
                                                                // ws is on; ps the pbuffer current without one
+ GLuint dprog; GLint ud_m, ud_off, ud_vp;   // the lenses' depths
  GLuint sprog, stex, kprog, kq; GLint us_r, us_wh, us_swz, us_zk;
  GLuint kt[2]; int kv[2], ks;   // the frames kept unread, none of it the cpu's: a copy each, the next drawn over neither
  GLuint pprog, pva, pvb, ot, ofb; GLint up_sz; int ow, oh;   // spots, laid on ot
@@ -242,7 +243,7 @@ static char const vsrc[] =
  // ..how much of the sun's light the clouds let by at plan x, over what its light was made with
  "float shade(vec2 x) { vec3 s = vec3(kp[9], kp[10], kp[11]); float g = clamp(0.5 + (thk((x + s.xz * 1800.0 / dlow(s.y)) / 400.0, vec3(1.0)) - kp[2]) / 0.08, 0.0, 1.0);\n"
  "  return (1.0 - 0.75 * g - 0.2 * g * g * g * g) * csh; }\n"
- "out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
+ "invariant gl_Position; out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
  "void main(){ vec3 P = (bb != 0 ? p + t.x * br + t.y * bu : p) + off;\n"
  " vec4 q = m * vec4(P, 1.0); uv = t; scol = sc;\n"
  " col = sh * (c + ks[li[0]] * l0 + ks[li[1]] * l1 + ks[li[2]] * l2 + ks[li[3]] * l3 + ks[li[4]] * l4 + ks[li[5]] * l5 + ks[li[6]] * l6 + ks[li[7]] * l7);\n"
@@ -375,6 +376,10 @@ static char const pfsrc[] =
  "#version 300 es\n"
  "precision highp float; precision highp int; flat in vec3 col; out vec4 o; void main(){ o = vec4(col, 1.0); }\n";
 // ..a pixel of the frame that the cpu must finish: bare, or glass over the bare
+// the lenses' depths: the frame's own vertex shader, its places the same to the bit, and no
+// colour out; a shader of two colours onto a target of none hangs an intel gpu
+static char const dfsrc[] = "#version 300 es\nprecision highp float; void main(){}\n";
+
 static char const kfsrc[] =
  "#version 300 es\n"
  "precision highp float; precision highp int; uniform highp sampler2D t; out vec4 o;\n"
@@ -440,6 +445,10 @@ static int setup(struct helper *H, int x) {
  if (!pvs || !pfs || !(H->pprog = program(pvs, pfs))) { dprintf(H->out, "err link\n"); return 0; }
  glUseProgram(H->pprog); H->up_sz = glGetUniformLocation(H->pprog, "sz");
  glUseProgram(H->sprog); glUniform1i(glGetUniformLocation(H->sprog, "ov"), 1);
+ GLuint dfs = shader(H->out, GL_FRAGMENT_SHADER, dfsrc);
+ if (!dfs || !(H->dprog = program(vs, dfs))) { dprintf(H->out, "err link\n"); return 0; }
+ glUseProgram(H->dprog);
+ H->ud_m = glGetUniformLocation(H->dprog, "m"); H->ud_off = glGetUniformLocation(H->dprog, "off"); H->ud_vp = glGetUniformLocation(H->dprog, "vp");
  glGenQueries(1, &H->kq);
  glUseProgram(H->uprog);
  glUniform1i(glGetUniformLocation(H->uprog, "cc"), 0); glUniform1i(glGetUniformLocation(H->uprog, "cd"), 1);
@@ -1030,14 +1039,15 @@ static void cmd_frame(struct helper *H, char *args) {
  // ..seen: the lenses' nearest depths, each alone, before all; else none, as far as can be
  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDepthMask(1); glClear(GL_DEPTH_BUFFER_BIT);
  if ((int) v[10] & 128) {
-  mode(H, 0); glColorMask(0, 0, 0, 0); glUniform1i(H->u_has, 0); glUniform1i(H->u_cls, 0);
+  mode(H, 0); glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, 0); glActiveTexture(GL_TEXTURE0);
+  glUseProgram(H->dprog); glUniformMatrix4fv(H->ud_m, 1, 1, m); glUniform2f(H->ud_vp, (float) w, (float) h);
   for (int k = 0; k < ni; k++) {
    struct buf *b = buf_of(H, ids[k]);
    if (!b) continue;
    glBindVertexArray(b->vao);
    for (int r = 0; r < b->nrun; r++)
-    if (b->runs[r].tex <= -3 - lensed) glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]), glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) b->runs[r].at)); }
-  glColorMask(1, 1, 1, 1); }
+    if (b->runs[r].tex <= -3 - lensed) glUniform3f(H->ud_off, b->off[0], b->off[1], b->off[2]), glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) b->runs[r].at)); }
+  glUseProgram(H->prog); }
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb);
  glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, H->lz);
  glActiveTexture(GL_TEXTURE0);
