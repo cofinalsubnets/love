@@ -159,15 +159,12 @@
    (go rs () () ()))
  (bough-sheared seed pl) (: c (sheared (tree-of seed) pl) {'trunk (c 1 @ () () l (take 5 <l)) 'segs (cats (c 1)) 'cuts (c 2)})
  ; ..a mesh less what lies past the plane: a triangle across it cut along it, and each ring
- ; of cut edges closed by a face on the plane, charred to a glow at its edge
+ ; of cut edges closed by a face on the plane, charred to a glow at its edge, wound to face
+ ; the plane's way out as every piece's outside is
  char [0.05 0.035 0.03] ember [0.9 0.32 0.08]
  (turned m) (mesh (m 0) (map (t \ [(t 0) (t 2) (t 1) (t 3)]) (m 1)))
- ; ..which way round a triangle faces out, by the first one's corners and its normal
- (front m) (: t (m 1) (? (atom? t) 1.0
-   (: v (m 0) q <t (p i) (take 3 (v (q i))) N (drop 5 (take 8 (v (q 0))))
-      (dot (cross (c- (p 1) (p 0)) (c- (p 2) (p 0))) N >= 0.0 ? 1.0 -1.0))))
  (key p) (show (map (k \ floor (p k * 1e4 + 0.5)) ^3))
- (caps sg n f) (? (atom? sg) (mesh () ())
+ (caps sg n) (? (atom? sg) (mesh () ())
    (: adj (foldl (\ t i (foldl (\ t p (: k (key p) (pin t k (i . t k)))) t (sg i))) {} ^#sg)
       (flood c st id) (? (atom? st) c (peep c <st -1 >= 0) (flood c >st id)
                          (flood (pin c <st id) ((catmap (adj * key) (sg <st)) + >st) id))
@@ -175,7 +172,7 @@
       gs (foldl (\ t i (: k (cid i) (pin t k (sg i . t k)))) {} ^#sg)
       (cap l) (: ps (cats l) c (c* (1.0 / #ps) (foldl c+ [0.0 0.0 0.0] ps)) (v p col) (p + [0.0 0.0] + n + col)
         (mesh (catmap (s \ (: a (s 0) b (s 1)
-                              (dot (cross (c- a c) (c- b c)) n * f >= 0.0 ? [(v c char) (v a ember) (v b ember)] [(v c char) (v b ember) (v a ember)])))
+                              (dot (cross (c- a c) (c- b c)) n <= 0.0 ? [(v c char) (v a ember) (v b ember)] [(v c char) (v b ember) (v a ember)])))
                          l)
               (map (j \ [(3 * j) (3 * j + 1) (3 * j + 2) -1]) ^#l)))
       (mesh-join (map (cap * gs) (sort (keys gs))))))
@@ -192,7 +189,7 @@
                ([(take 3 (nw 0)) (take 3 (nw 1))] . st 3)])))
       r (foldl tri [#vs () () ()] (m 1))
       body (mesh (vs + rev (r 1)) (rev (r 2)))
-      (mesh-join [body (caps (r 3) n (front body))])))
+      (mesh-join [body (caps (r 3) n)])))
  ; ..the wood below the plane, a mesh for the crotch and each run
  (burnt-wood seed tex ts pl) (: tr (tree-of seed) ss (cats (sheared tr pl 0)) cr (crotch {'fork (tr 'fork) 'segs ss} tex ts)
    ws (atom? cr ? ss (catmap (s \ elem s (cr 2) ? (outside s (cr 1)) [s]) ss))

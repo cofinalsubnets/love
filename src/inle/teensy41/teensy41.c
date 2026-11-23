@@ -62,6 +62,8 @@ static void caches_init(void) {
   REG(SCB_CCR) |= 1u << 16;                      // D-cache on
   arm_dsb_isb(); }
 
+int te_in_psram(void) { return (uintptr_t) vectors >= PSRAM_BASE; }
+
 // from mkboot.l's cstartup, the stack laid
 void cmain(void) {
   // the LED before anything that can hang: a cold boot dying in clock bring-up still shows it
@@ -71,8 +73,9 @@ void cmain(void) {
   // MON_EN: a bkpt with no debugger vectors to the fault reporter rather than a mute lockup
   REG(0xE000EDFCu) |= (1u << 16);
   arm_dsb_isb();
-  caches_init();
-  clocks_init();          // no .data/.bss reads, so the copy below runs at 600 MHz
+  // no .data/.bss reads, so the copy below runs at 600 MHz. in the psram both are the loader's
+  // work, and caches_init would drop the image's own lines
+  if (!te_in_psram()) caches_init(), clocks_init();
   for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
   for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
   REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;

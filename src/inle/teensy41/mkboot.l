@@ -68,6 +68,9 @@
             ['label 'arm_dsb] ['dsb 'sy] ['ret]
             ['label 'arm_wfi] ['wfi] ['ret]
             ['label 'arm_irq_on] ['raw [0x62 0xB6]] ['ret]                ; cpsie i
+            ['label 'arm_irq_off] ['raw [0x72 0xB6]] ['ret]               ; cpsid i
+            ;; an image's first two words, its stack and its entry: r0 the image
+            ['label 'arm_enter] ['raw [0x01 0x68 0x8D 0x46 0x41 0x68 0x08 0x47]]   ; ldr r1,[r0]; mov sp,r1; ldr r1,[r0,#4]; bx r1
             ['label 'arm_halt251] ['raw [0xFB 0xBE]] ['ret]               ; bkpt #251
             ['label 'arm_ipsr] ['raw [0xEF 0xF3 0x05 0x80]] ['ret]     ; mrs r0, ipsr
             ['label 'arm_bkpt] ['brk 0] ['ret]]
@@ -82,5 +85,5 @@
          [".startup"     1 6 4 startup]
          [".text"        1 6 4 text]]
         '("cstartup" "isr_hardfault" "default_handler"
-          "arm_dsb_isb" "arm_dsb" "arm_wfi" "arm_irq_on" "arm_halt251" "arm_ipsr" "arm_bkpt")
+          "arm_dsb_isb" "arm_dsb" "arm_wfi" "arm_irq_on" "arm_irq_off" "arm_enter" "arm_halt251" "arm_ipsr" "arm_bkpt")
         '("image_vector_table" "boot_data" "vectors") ()))))

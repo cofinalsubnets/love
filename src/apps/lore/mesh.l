@@ -233,8 +233,10 @@
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
- ; the grid's mesh and the spots it lays, [verts tris tone [S C]] or (), what lays the disc or
- ; the stars after, and their spots for a frame the gpu kept, [S C] or ()
+ ; the grid's mesh and the spots it lays, [verts tris tone [S C] e] or (), what lays the disc or
+ ; the stars after, and their spots for a frame the gpu kept, [S C] or (). a sky with no 'turn
+ ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map]]: sky-gpu's, then the
+ ; view's right, up, ahead, focal length, step, width and height; LORE_SKY_PX 0 keeps the grid
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -263,7 +265,10 @@
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
-         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e]))
+         [(v \ (: q (getenv "LORE_SKY_PX" != "0" ? (sky-gpu lt wx (e 0) (e 2) sim) ())
+                  (? (two? q) [() () (1.5 * lt 'expo) (spots v (S \ S >= 0)) e
+                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h)])) (q 1)]]
+                     (sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e])))))
           (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)

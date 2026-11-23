@@ -37,6 +37,9 @@
    ;; lal: la, or li of a number, with its word pooled at p; the relaxer loads it from there
    ;; where p is in reach
    (thumb-lal d x p) (charm? x ? (thumb-li d x) (thumb-la d x))
+   ;; lalp: lal whose far form is p's word loaded from the pc, lap's movw/movt and an ldr, so no
+   ;; absolute half is left for a loader that moves only abs32 words
+   (thumb-lalp d x p) (thumb-lap d p + (thumb-lo? d ? (t16 (0x6800 | rn d << 3 | rn d)) (t32 (0xF8D00000 | rn d << 16 | rn d << 12))))
    ;; lap: la from the pc, movw/movt of label less the pc the add after them reads; a .o leaves
    ;; R_ARM_THM_MOVW_PREL_NC / R_ARM_THM_MOVT_PREL
    (thumb-lap d label) (rn d @ dn ([(fix 4 'movw16p label dn) (fix 4 'movt16p label dn)]
@@ -67,7 +70,9 @@
       (: ty (sh @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift sh))
          base (look thumb-alu op 'badop)
          (t32 ((base | rn a) << 16 | ((k >> 2 & 7) << 12 | (rn d << 8 | ((k & 3) << 6 | (ty << 4 | rn b)))))))
-   ;; addw/subw (T4) #imm12; wider chunks by 4095 -- no flags written, and only the first step reads a
+   ;; addw/subw (T4) #imm12; under 1 MB add.w/sub.w (T3) of the high bits, a modified immediate
+   ;; since they span 8, then addw/subw of the low 12; sp or pc, or wider, chunks by 4095. no
+   ;; flags written, and only the first step reads a
    (thumb-addsub-imm op d a imm)
       (: pos (imm < 0 ? -imm imm)
          fop (imm < 0 ? (op @ 'add 'sub 'sub 'add op) op)
@@ -87,6 +92,9 @@
             (dn <= 7 && rn a = 13 && fop = 'add && pos <= 1020 && pos % 4 = 0)   ; add Rd, sp, #imm8*4
              (t16 (0xA800 | (dn << 8 | (pos >> 2))))
             (pos <= 4095) (one a pos)
+            (pos < 1048576 && dn < 13 && rn a < 13)
+             (: lo (pos & 4095)
+                (thumb-dpimm (fop @ 'add 0xF100 0xF1A0) dn (rn a) (thumb-mimm (pos - lo)) + (lo = 0 ? () (one d lo))))
             (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
    (thumb-mimm n)
@@ -606,7 +614,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
+          ('la . thumb-la) ('lal . thumb-lal) ('lalp . thumb-lalp) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
@@ -695,9 +703,9 @@
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
          (? (<ins = 'flal) (rel < 0 || 1020 < rel ? () [(fix 4 'vldl (ins 4) (sx (ins 1)))])
-            (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
-                                              (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
-                                              ()))
+            (elem <ins '(lal lalp)) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
+                                                        (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
+                                                        ()))
             (#c != 1 || !(fix? x)) ()
             (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())

@@ -2487,5 +2487,5 @@
    ; the frame and emit tail
    (lotail g ir)
     (dp 'final (xtpool g (fldcut g (thunks g (pushsv g (rjoin g (t2pm g (absg g (rawclean (a64sp g (twmv g (bprot g (frrec g (swrap g
-     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (sp64? g || v6m? g ? (t16la ir) ir))))))))))))))))))))))))))
+     (tailarm g (kelse g (jmpm g (csdrop g (cskeep g (rvunframe g (unframe g (lov6s g (csframe g (t2op3 g (deadlabk (cg-refs (g 'fasecs) {}) (v6m? g ? (t16la ir) ir))))))))))))))))))))))))))
 )) ; module 'moon
