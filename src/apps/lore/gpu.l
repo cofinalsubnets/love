@@ -64,7 +64,7 @@
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-suns gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -161,6 +161,10 @@
  ; ..a buf's lamps, 8 slots a vertex of 3 words each, slot k lamp li k's light there
  (gpu-lamps g id cols li) (: nv (#cols // 24) c (cask (4 * 24 * nv)) _ ((cite 'guts 'pinf) c 0 4 cols)
    (put! g c, ask g ("lamps \(show id) \(show nv) 0 " + unwords (map show li))))
+ ; ..a buf's sun, 3 words a vertex, the colour of it that is the sun's: the clouds take it; () none
+ (gpu-suns g id cols) (? !(tray? cols) (ask g "suns \(show id) 0 0")
+   (: nv (#cols // 3) c (cask (12 * nv)) _ ((cite 'guts 'pinf) c 0 4 cols)
+      (put! g c, ask g "suns \(show id) \(show nv) 0")))
  (gpu-scene g rs) (: c (cask (4 * #rs)) _ ((cite 'guts 'pinf) c 0 4 (gem-tray [#rs] (map (x \ 1.0 * x) rs)))
    (put! g c, ask g "scene \(show (#rs // 9)) 0"))
  (gpu-vis g ms ks) (: m (tray? ms ? (1.0 * ms) (gem-tray [#ms] (map (x \ 1.0 * x) ms))) k (gem-tray [#ks] (map (x \ 1.0 * x) ks))
@@ -248,13 +252,15 @@
            (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
            (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
      (q @ [id] (id < 0 && #sk < 6 ? () (ask (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
- ; ..the lamps' strengths, sent as they change; and each batch's lamps lm i, [cols li] or (),
+ ; ..the lamps' strengths, sent as they change; and each batch's lamps lm i, [cols li sun] or (),
  ; laid on its buf once
  (lamps! s bs lm ks)
   (: k (? (!(two? ks) || alike (peep s 'ks ()) ks) () (ask (s 'g) ("ks " + unwords (map num ks)) @ () (pin s 'ks ks, ()) r r))
      (one i) (: q (lm i) id (bs i 0)
-               (? (!(two? q) || id < 0 || peep (s 'lamped) id () == q 0) ()
-                  (gpu-lamps (s 'g) id (q 0) (q 1) @ () (pin (s 'lamped) id (q 0), ()) r r)))
+               t (id >= 0 ? (peep (s 'lamped) id ()) 0) l (two? q ? (q 0) ()) su (two? q && 2 < #q ? (q 2) ()) was (two? t ? (t 1) ())
+               (? (charm? t || (two? t ? (t 0 == l && t 1 == su) (atom? q))) ()
+                  ((tray? l ? (gpu-lamps (s 'g) id l (q 1)) ())
+                   @ () ((tray? su ? (gpu-suns (s 'g) id su) (tray? was ? (gpu-suns (s 'g) id ()) ())) @ () (pin (s 'lamped) id [l su], ()) r r) r r)))
      (string? k ? k (: r (filter string? (map one ^(min #bs #lm))) (two? r ? <r ()))))
  ; ..the scene sc, laid again only as its key is new, its bufs held from the sweep; and its
  ; marks and the lights' strengths, each frame

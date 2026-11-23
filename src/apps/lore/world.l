@@ -1108,7 +1108,7 @@
      ; setting the frame's gain
      q (tablet? sf ? (sun-here sf sk (c 0) (c 1) (c 2)) [s (lt 'amb) (lt 'sunc) (lt 'sunk) (sk 'k)]) sl (q 0)
      a (o * (0.5 + 0.5 * c 6) * q 4) d (o * max 0.0 (c 5 * sl 0 + c 6 * sl 1 + c 7 * sl 2) * (q 3 * q 4))
-     D ((1.0 - dark pk) * facing pk) K (1.0 - inks pts pk) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
+     D ((1.0 - dark pk) * facing pk) K (1.0 - inks pts pk) _ (pin pk 'sun (tablet? sf || q 3 <= 0.0 ? () (map (j \ K * d * q 2 j) ^3))) (map (j \ K * (a * q 1 j + d * q 2 j + o * ls2 j + (1.0 - m - bo) * D * la j)) ^3))
    ; ..a dark room's faces and what faces into it, its doorways' sides too, none of the
    ; ambient: a corner a little way along its facing inside the room's box a wall's thickness over
    (inks ks pk) (? (atom? ks) 0.0 (: c (pk 'cols) X (c 0 + 0.1 * c 5) Y (c 1 + 0.1 * c 6) Z (c 2 + 0.1 * c 7) m 0.15
@@ -1117,8 +1117,9 @@
    ; ..the ambient by a face's facing, so planes part: all of it on a floor, three quarters on
    ; a wall across z, less across x, half on a ceiling
    (facing pk) (: c (pk 'cols) (0.75 + 0.25 * c 6 - 0.1 * c 5 * c 5))
-   (lit pk) {'base (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* ((1.0 - dark pk) * facing pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
-             'chs (map (ch pk) dyn)}
+   ; ..and 'sun the sun's own of its base, () none
+   (lit pk) (: b (lamp-lights (pk 'cols) (c+ amb (tablet? sk && two? ob ? (daylit pk) (c+ (c* ((1.0 - dark pk) * facing pk) la) (c* 0.0 (pk 'cols 0 @ z [z z z]))))) (map LR still))
+             {'base b 'chs (map (ch pk) dyn) 'sun (peep pk 'sun ())})
    {'lit lit 'la la 'ob ob 'DB DB 'up up 'dyn dyn 'still still})
  (scene lv dir was tk) (: ps (lv 'posters) (tick w p) (tk @ () () f (f w p))
    ; ..what the scenes before made, kept where it would be made the same, by a key saying
@@ -1567,8 +1568,10 @@
    (lit-named pk b) (named pk b (mesh-lit-ks pk dk))
    ; ..on the gpu, one its lamps reach laid once with them out and their light by them, which
    ; the gpu adds as strong as they are, once relit so it knows them
-   (hall-of c) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
-     (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1)]] (lit-named pk (relit pk (c 'lit)))))
+   ; ..and the sun's own of it, which the gpu shades by its clouds
+   (sunof c) (gk && st 'gpu 'g != () && two? (peep (c 'lit) 'sun ()) ? (mesh-sun-slots (c 'pk) (c 'lit 'sun) 1.0) ())
+   (hall-of c) (: pk (c 'pk) su (sunof c) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
+     (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1) su]] (: b (lit-named pk (relit pk (c 'lit))) (tray? su && two? (b 2) ? [(b 0) (b 1) (b 2) [() () su]] b))))
    ; ..and on a gpu that keeps a scene, each laid in it once the cells first let it be seen,
    ; marked down while they do not; but one lit here frame by frame, which it sees and lays
    ; with the rest; and with them each light's shines and glows at full strength, which it
