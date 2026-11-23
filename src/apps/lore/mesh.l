@@ -3,7 +3,7 @@
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
 (module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-halo mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-lamp-slots mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-lamp-slots mesh-sun-slots mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
          mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-paint mesh-gone
          mesh-glb mesh-glb-of)
@@ -171,6 +171,8 @@
             q [v (r + map (_ \ 0) ^(8 - #r)) cs]
             (pin pk 'slots q, q))
          q q)))
+ ; ..a mesh's sun su [r g b] trays, its own colour's, for a gpu to shade: 3 numbers a vertex, kept
+ (mesh-sun-slots pk su gain) (pk 'sunned @ () (: c (pk 'cols) q (lace (map (j \ gain * c (8 + j) * su j) ^3)) (pin pk 'sunned q, q)) q q)
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
@@ -236,7 +238,8 @@
  ; the grid's mesh and the spots it lays, [verts tris tone [S C] e] or (), what lays the disc or
  ; the stars after, and their spots for a frame the gpu kept, [S C] or (). a sky with no 'turn
  ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map air]]: sky-gpu's, then the
- ; view's right, up, ahead, focal length, step, width and height; LORE_SKY_PX 0 keeps the grid
+ ; view's right, up, ahead, focal length, step, width, height and
+ ; the sun's share its light was made with, 0 for no shadows of the clouds; LORE_SKY_PX 0 keeps the grid
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -269,7 +272,7 @@
          (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
          [(v \ (: q (getenv "LORE_SKY_PX" != "0" ? (sky-gpu lt wx (e 0) (e 2) sim) ())
                   (? (two? q) [() () (1.5 * lt 'expo) (spots v (S \ S >= 0)) e
-                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h)])) (q 1) (q 2)]]
+                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h) (0.02 < lt 'sun 1 && 0.0 < lt 'bare ? (lt 'disc / lt 'bare) 0.0)])) (q 1) (q 2)]]
                      (sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e])))))
           (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
