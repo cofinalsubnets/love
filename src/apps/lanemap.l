@@ -9,6 +9,8 @@
 ;   lanes-alone     the lanes that rebuild love0 under another cc or run their own fleet: alone
 ;   lanes-early     the lanes that start before the others and run beside them, one at a time:
 ;                   the long ones whose scratch is their own and which only read out/
+;   lanes-byname    the lanes no path owes: each writes a board's flash or wants a person by it,
+;                   so it runs when a gate's list names it and never by a plan
 ;   lanes-place     lane -> where it may run: "source" or "exact" (one that reads love's own bytes),
 ;                   either on a lanes host of this box's isa running this box's build, then the
 ;                   isas it is held to, if any; unnamed is local, here only. a lane is named once
@@ -24,12 +26,14 @@
 ;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
 ;                   always and test_slow last. why is the paths that owed it: a rule's, or a
 ;                   recipe's that names the path
+;   (lanes-held paths baked covers)  the by-name lanes that change would owe, left out of its
+;                   plan: [[lane why] ..] by name
 ;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
-(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-early lanes-place lanes-doc lanes-map
-                 lanes-covers lanes-plan lanes-lines)
+(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-early lanes-byname lanes-place lanes-doc lanes-map
+                 lanes-covers lanes-plan lanes-held lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccmips" "test_ccwasm"
                "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
@@ -84,12 +88,13 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32" "test_esp32_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_ch32v203" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32" "test_esp32_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_ch32v203" "test_ch32v203_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
    lanes-early ["test_gcstress_bake"]
+   lanes-byname ["test_teensy41_board" "test_ch32v203_board" "test_mips_router"]
 
    lanes-place {"test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
                 "test_ccarm" "source" "test_ccwasm" "source" "test_ccport" "source"
@@ -104,7 +109,8 @@
    (lanes-doc _)
     (map (r \ r @ [label globs ls tail]
                 ("- " + (#label > 0 ? label (join ", " (map lm-tick globs))) + " -> " + join " " (map lm-tick ls) + tail))
-         lanes-rules)
+         lanes-rules
+     + [("- " + join " " (map lm-tick lanes-byname) + " run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them")])
    (lanes-map _)
     (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone) ("early " + join " " lanes-early)]
      + map (l \ "place " + l + " " + lanes-place l) (sort (keys lanes-place))
@@ -179,15 +185,21 @@
            (elem <todo seen) (go >todo seen)
            (go (peep covers <todo () + >todo) (<todo . seen))))
    (lm-heavy? l) (any (h \ h = l || (ends? h "%" && starts? l (snip h 0 (#h - 1)))) lanes-heavy)
-   (lanes-plan paths baked covers)
-    (: owed (foldl (\ t p (foldl (\ t r (r @ [_ globs ls _]
+   ; lane -> the paths that owe it, by a rule or by a recipe that names the path
+   (lm-owed paths baked covers)
+    (foldl (\ t p (foldl (\ t r (r @ [_ globs ls _]
                                           (? (any (lm-hit? baked p) globs)
                                              (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t ls) t)))
                                  t lanes-rules))
                    (foldl (\ t p (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t (peep covers p ())))
                           {} paths)
-                   paths)
-       ls (filter (l \ l != "test" && l != "test_slow") (keys owed))
+           paths)
+   (lanes-held paths baked covers)
+    (: owed (lm-owed paths baked covers)
+       (map (l \ [l (owed l)]) (sort (filter (l \ elem l lanes-byname) (keys owed)))))
+   (lanes-plan paths baked covers)
+    (: owed (lm-owed paths baked covers)
+       ls (filter (l \ l != "test" && l != "test_slow" && !(elem l lanes-byname)) (keys owed))
        under (map (l \ [l (filter (m \ m != l) (lm-under covers l))]) ls)
        kept (filter (l \ !(any (u \ <u != l && elem l (u 1)) under)) ls)
        row (\ l why [l (lm-heavy? l) (peep lanes-cost l ()) why])
