@@ -1226,7 +1226,7 @@ test_kernel_rv64 test_kernel_uproc_rv64:
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1800s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
