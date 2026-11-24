@@ -7,7 +7,7 @@
 ; world-read, -new, -at, -step, -move and -frame are pure; world-watch reads the disk, and only
 ; world-walk and world-run touch the tty. a walk may leave for another level's entry, a herald
 ; met or a bed slept in, and world-run walks on there in the same window.
-(module (world world-run world-walk world-main world-new world-at world-size world-step world-binds world-pick world-span world-scene
+(module (world world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
@@ -41,6 +41,10 @@
  eye-h 1.6 body-r 0.25
  mattress-w 0.99 mattress-l 1.905 mattress-h 0.25    ; scenery's
  walk-v 3.4 turn-v 2.0 tilt-v 1.2         ; metres, and radians, a second
+ ; ..what a state's 'tread may say instead, each a console's word: the seconds from rest to full
+ ; speed, 0 at once, to a stop on the ground and in the air, and how far the feet reach
+ tread0 {'accel 0.1 'stop 0.06 'air-stop 0.4 'feet 0.12}
+ (tread st k) (peep (peep st 'tread {}) k (tread0 k))
  run-k 1.65                               ; how much faster a sprint
  ball-r 0.12 ball-e 0.72 ball-kick 2.6    ; a ball: its radius, its bounce, the least kick
  wisp-r 0.13                              ; a wisp's radius
@@ -1820,10 +1824,19 @@
  ; a kick off a void's wall lasts, none of the walk into the wall, and the kick's own way
  (walk! st dt) (: f (peep st 'mf 0) s (peep st 'ms 0) n (sqrt (2 f + 2 s)) th (st 'th) x0 (st 'px) z0 (st 'pz)
    k (walk-v * dt / max 1.0 n * (running? st ? run-k 1.0)) dx (k * (f * sin th + s * cos th)) dz (k * (f * cos th - s * sin th)) b (kick st)
+   ; ..the velocity drawn to the wish's, which the feet take
+   acc (tread st 'accel) top (walk-v * (running? st ? run-k 1.0)) air (peep st 'fv 0.0 != 0.0) h0 (peep st 'hv [0.0 0.0])
+   h1 (acc <= 0.0 ? [0.0 0.0]
+       (: w [(dx / dt) (dz / dt)] e [(w 0 - h0 0) (w 1 - h0 1)] l (sqrt (2 (e 0) + 2 (e 1)))
+          r (top * dt / max 1e-3 (n > 0 ? acc (tread st (air ? 'air-stop 'stop))))
+          (l <= r ? w [(h0 0 + e 0 * r / l) (h0 1 + e 1 * r / l)])))
+   mv (acc > 0.0 ? [(0.5 * dt * (h0 0 + h1 0)) (0.5 * dt * (h0 1 + h1 1))] [dx dz]) dx (mv 0) dz (mv 1)
    d (surf-step st (atom? b ? [dx dz] (: e (min 0.0 (dx * b 0 + dz * b 1)) w (e - b 2 * dt) [(dx - w * b 0) (dz - w * b 1)])))
    x (x0 + d 0) z (z0 + d 1)
-   _ (? (n > 0 || two? b) (: _ (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))
+   _ (? (n > 0 || two? b || dx != 0.0 || dz != 0.0) (: _ (peep st 'fv 0.0 != 0.0 && !(world-free? st x z) && hoist! st x z ? st (put! st x z))
                              (st 'px != x || st 'pz != z ? (ward! st x z dt) st)))
+   ; ..and what it met takes of the velocity
+   _ (? (acc > 0.0) (pin st 'hv (atom? b && abs (st 'px - x) + abs (st 'pz - z) > 1e-9 ? (tablet? (st 'sc 'surf) ? [0.0 0.0] [((st 'px - x0) / dt) ((st 'pz - z0) / dt)]) h1)))
    (pins st 'mf 0 'ms 0 'vx ((st 'px - x0) / dt) 'vz ((st 'pz - z0) / dt)))
  ; ..stopped going past a void's edge it rings there, and not again for a moment; in the air
  ; the way into the wall turns back out of it, kick-e as fast and a hop up, dying away
@@ -1893,6 +1906,7 @@
  ; hand while it is, and the cars
  (play-move st) (: dt (peep st 'dt (1.0 / fps)) fly (flying? st) up (hoisting? st) kn (peep st 'eye 'walk != 'walk)
    _ (fly || up || kn ? st (climb! st dt))
+   _ (fly || up || kn || peep st 'cling 0 = 1 ? (pin st 'hv [0.0 0.0]))
    _ (? kn (kneel-play st dt) fly (fly! st dt) up (hoisting! st dt) (walk! st dt)) _ (surf-wrap! st) _ (fly || kn ? st (pocket-cross! st)) lv (st 'lvl) x (st 'px) z (st 'pz)
    (go i) (: d (lv 'doors i) o (st 'doors i) p (P (d 'ax) (d 'c) 0.0 (0.5 * (d 'a + d 'b)))
              want (d 'hand @ 1 (peep (peep st 'opened {}) i 0 @ 1 1.0 0.0) (sq (p 0 - x) + sq (p 2 - z) < sq door-near ? 1.0 0.0))
@@ -1924,7 +1938,6 @@
  ; is under, a jump flown till it comes down on something; not in a grav shaft nor on a
  ; car's track, whose floors are their own
  climb-v 2.5 fall-g 9.8 fall-max 40.0 head-h 1.75
- feet-r 0.12                              ; the feet stand on what is under this much of the body
  ; ..how hard the level pulls at height y: straight between its gravity's points, held past
  ; their ends
  (grav-at lv y) (: ps (lv 'gravity) n #ps
@@ -1949,7 +1962,7 @@
  (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (lv 'gravs))
    (? (shaft || any (c \ car-track? c x z) (lv 'cars)) (pins st 'fv 0.0 'gt (st 'mt))
-      (: bss (map (q \ [(column (st 'sc 'brushes) (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z feet-r)) bs (bss 0 0)
+      (: bss (map (q \ [(column (st 'sc 'brushes) (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z (tread st 'feet))) bs (bss 0 0)
          ; ..the floor under the middle, or under the feet's edge where that is a step higher
          (num? y) (charm? y || gem? y)
          (top l) (: m <l r (foldl (\ a y (num? y && !(num? a && a >= y) ? y a)) () >l)
@@ -2678,18 +2691,21 @@
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
  (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom to jump  ·  a top corner leaves, the top's middle the console"
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom's middle to jump  ·  a top corner leaves, the top's middle the console"
  ; the console's words here: those of any walk, and the loop's where the level has a deck
  (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
                     ["at" "where you stand" (where st)]
+                    ["tread" "tread 'K V: how walking feels, K accel stop air-stop (seconds, accel 0 off) or feet (metres)" (k \ v \ (pin (peep st 'tread () @ () (: t {} (pin st 'tread t, t)) t t) k (1.0 * v), v))]
                     ["noclip" "noclip (): fly through walls, or walk again" (_ \ (pins st 'fly (1 - peep st 'fly 0) 'mu 0 'fv 0.0 'gv 0.0 'hoist (), st 'fly))]
                     ["warp" "warp file entry: to another level beside this one, entry () its start" (go! st)]]
    + (two? (st 'lvl 'decks) ? [["loop-end" "loop-end (): the loop worn all away, begun if it is not" (con-loop st)]] ()))
  (world-console st ln) (con-eval world-words st ln)
  (con-loop st _) (: _ (tablet? (st 'music) ? 0 (play! st)) m (st 'music) _ (pin m 'n (int (song-rate * m 'd 'gone) + 1)) (world-loop st))
  (world-tap st x y) (? (view-corner? st x y) [113]
-                       (0.88 * window-size (st 'win) 1 < y) [32]
+                       (world-foot? st x y) [32]
                        [101])
+ ; ..along the bottom, its middle third, a jump
+ (world-foot? st x y) (: s (window-size (st 'win)) u (x / (s 0)) (0.88 * (s 1) < y && 1 / 3 < u && u < 2 / 3))
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ; ..the reading's tick going on for the first making, so its screen runs on
