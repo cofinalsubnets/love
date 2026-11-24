@@ -107,11 +107,11 @@ libc_m    = memchr memcmp memcpy memmove memset strlen
 libc_dep  = $(S)/apps/moon/lib/moonlibc/impl.h $(lv)
 libc_o    = $(addprefix $(R)/$(o)/,$(addsuffix .o,$(libc_m)))
 
-# the lm math floor: the one object every port compiles exactly alike.
-$(R)/$(o)/lm.o: $(S)/apps/moon/lib/moonlibc/math/lm.c $(lv)
+# the lm math floor and its float twins: the two objects every port compiles exactly alike.
+$(R)/$(o)/lm.o $(R)/$(o)/lmf.o: $(R)/$(o)/%.o: $(S)/apps/moon/lib/moonlibc/math/%.c $(lv)
 	@echo 'MOON	'$@
 	@mkdir -p $(R)/$(o)
-	@cd $(R) && $(MOONCC) -t $(p_tgt) -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/lm.c $(o)/lm.o
+	@cd $(R) && $(MOONCC) -t $(p_tgt) -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include -c src/apps/moon/lib/moonlibc/math/$*.c $(o)/$*.o
 
 # the compiler runtime: the calls mooncc's own lowering makes where the machine has no
 # instruction (v6-M has neither FPU nor umull nor clz nor a variable 64-bit shift; a
