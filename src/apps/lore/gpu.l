@@ -334,8 +334,8 @@
                     ; ..the last shown again while this one draws, but a kept one, whose frame this one drew over
                     (: (fresh _) (now () @ () () q (pin s 'last q, q))
                        (s 'last @ () (fresh ()) l (nom? (l 0) ? (fresh ()) (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))))
- ; ..a frame sent as [w h c], taken: [f c], or the helper's words
- (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
+ ; ..a frame sent as [w h c], taken: [f c], or the helper's words; s's 'wait the ms spent waiting on it
+ (take s p) (: t0 (clock 0) f (gpu-take (s 'g) (p 0) (p 1)) _ (pin s 'wait (peep s 'wait 0 + clock t0)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..a helper that failed let go, and why: under android's bridge its stderr is the log
  (gone s e) (gpu-quit (s 'g) (" " + e), pins s 'g () 'pend () 'last () 'fail e, gpu-said e, ())
  (gpu-said e) (string? (getenv "LOVE_GPU_FACE") ? (say err "lore: the gpu let go: \(e)\n") ())
