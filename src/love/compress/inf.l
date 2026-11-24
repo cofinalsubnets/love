@@ -2,6 +2,7 @@
 (:
    _ (borrow "src/apps/moon/clay.l")
    _ (borrow "src/love/compress/vc.l")
+   _ (borrow "src/love/compress/deflate.l")
 
    ; --- inf_walk, prefix.h ----------------------------------------------------------------------
    ; a code past the table, read a bit at a time. Cn and Sy are c->cnt and c->sym, bit is what bb
@@ -2320,11 +2321,10 @@
 
    ; --- the constants, one list for the C and the uu -----------------------------------------------
    inf-tables
-    '(("gz_lbase" "uint16_t" inf-tlb (3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59 67 83 99 115 131 163 195 227 258))
-      ("gz_lext" "uint8_t" inf-tle (0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0))
-      ("gz_dbase" "uint16_t" inf-tdb (1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537 2049 3073 4097 6145 8193 12289 16385 24577))
-      ("gz_dext" "uint8_t" inf-tde (0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
-      ("gz_clord" "uint8_t" inf-tob (16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)))
+    (: ls (df-ladder df-lens) ds (df-ladder df-dists)
+     [["gz_lbase" "uint16_t" 'inf-tlb (map cap ls)] ["gz_lext" "uint8_t" 'inf-tle (map (r \ r 1) ls)]
+      ["gz_dbase" "uint16_t" 'inf-tdb (map cap ds)] ["gz_dext" "uint8_t" 'inf-tde (map (r \ r 1) ds)]
+      ["gz_clord" "uint8_t" 'inf-tob df-clord]])
    inf-roots '((LROOT 11) (DROOT 9) (CROOT 7))
    (commas l) (two? >l ? "\(show <l), \(commas >l)" (show <l))
    (table-c t) (t @ [nm ty _ vs] "static const \(ty) \(nm)[\(show #vs)] = { \(commas vs) };\n")

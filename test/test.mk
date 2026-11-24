@@ -180,6 +180,7 @@ hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
 hostnif_tests += test/host/grap.l test/host/chem.l   # grap and chem without plan 9 or groff
 # test/host/sh.l drives out/lush via out/love, not PATH's love
+hostnif_tests += test/host/deflate.l   # deflate streams off the format's description, through every decoder
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
@@ -439,6 +440,7 @@ endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
 src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
+src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l: src/love/compress/deflate.l
 src/love/gpark_gen.h: src/love/boot/glaze.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
