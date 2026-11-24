@@ -41,7 +41,8 @@
 ;   (gpu-send g w h mat ids o)   the same frame begun, the helper drawing it while the caller
 ;   (gpu-take g w h)             goes on, and then its tray
 ;   (gpu-close g)
-; each answers () where it worked, else the helper's words, but gpu-frame and gpu-take
+; each answers () where it worked, else the helper's words, but gpu-frame and gpu-take; all but
+; gpu-win and the frames are posted, and what goes wrong is the next gpu-take's answer
 ;   (gpu-facets s w h base mat verts tris texs opts ks sk c)  facets's answer with flags 64,
 ;                                from the helper in s (gpu-state's), or () where facets must
 ;                                draw it:
@@ -113,7 +114,14 @@
            (? (moon? ()) [mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
- (ask g s) (say (g 'to) (s + "\n"), (line (g 'from) @ () "the helper has gone" "ok" () r r))
+ (answer g) (line (g 'from) @ () "the helper has gone" "ok" () r r)
+ ; ..a line answered at once; or posted, its answer owed and read when the next frame's is
+ (ask g s) (: _ (settle g) e (due g) _ (say (g 'to) (s + "\n")) r (answer g) (string? e ? e r))
+ (post g s) (settle g, say (g 'to) (s + "\n"), pin g 'owed (peep g 'owed 0 + 1), (g 'owed < 1000 ? () (owe g, ())))
+ ; ..what is owed, read: the first that went wrong or (); the file free again
+ (due g) (: (go n e) (n = 0 ? e (: r (answer g) (go (n - 1) (string? e ? e r)))) e (go (peep g 'owed 0) (peep g 'err ()))
+            _ (pins g 'owed 0 'at 0 'err ()) e)
+ (owe g) (pin g 'err (due g))
  (gpu-how g) (g 'how)
  ; ..the file the bulk goes through: in a tmpfs, else where the process keeps its own
  (bulk-file _) (: sp (dir? "/dev/shm" ? "/dev/shm" (getenv "TMPDIR" @ t (string? t && dir? t ? t (cache-dir ()))))
@@ -143,55 +151,58 @@
  (gpu-close g) (say (g 'to) "quit\n", close (g 'to), (g 'pid @ () 0 p (close (g 'from), wait p)), close (g 'w), close (g 'r), ())
  ; ..the shared file at least n bytes, once the shows it holds are done with
  (room! g n) (settle g, (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g))
- (settle g) (0 < peep g 'shows 0 ? (line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)
- (put! g c) (room! g #c, fdpush (g 'w) c 0 0 #c)
+ (settle g) (0 < peep g 'shows 0 ? ((0 < peep g 'owed 0 ? (owe g) g), line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)
+ ; ..c past what the helper may not have read yet: where
+ put-cap 4194304
+ (put! g c) (: _ (settle g) _ (0 < peep g 'at 0 && put-cap < g 'at + #c ? (owe g) g) o (peep g 'at 0)
+   (room! g (o + #c), fdpush (g 'w) c 0 o #c, pin g 'at ((o + #c + 7) // 8 * 8), o))
  ; ..a line with its numbers l, floats laid in the file
  (tell g s l) (: t (gem-tray [#l] (map (* 1.0) l)) c (cask (4 * #l)) _ ((cite 'guts 'pinf) c 0 4 t)
-   (put! g c, ask g "\(s) \(show #l) 0"))
+   (put! g c @ o (post g "\(s) \(show #l) \(show o)")))
  (gpu-tex g id w h t)
   (: ls (two? t && !(tray? t) ? t [t])
      (side n k) (max 1 (n // (k 2)))
      sz (map (k \ side w k * side h k) ^#ls)
      c (cask (4 * +sz))
      _ (foldl (\ o k ((cite 'guts 'pinv) c o 4 4 (ls k), (o + 4 * sz k))) 0 ^#ls)
-     (put! g c, ask g "tex \(show id) \(show w) \(show h) \(show #ls) 0"))
+     (put! g c @ o (post g "tex \(show id) \(show w) \(show h) \(show #ls) \(show o)")))
  (gpu-buf g id verts tris st)
   (: nv (#verts // st) nt (#tris // 4) c (cask (4 * st * nv + 16 * nt))
      _ ((cite 'guts 'pinf) c 0 4 verts) _ ((cite 'guts 'pinv) c (4 * st * nv) 4 4 tris)
-     (put! g c, ask g "buf \(show id) \(show nv) \(show nt) 0 \(show st)"))
+     (put! g c @ o (post g "buf \(show id) \(show nv) \(show nt) \(show o) \(show st)")))
  (gpu-verts g id verts st) (: nv (#verts // st) c (cask (4 * st * nv)) _ ((cite 'guts 'pinf) c 0 4 verts)
-   (put! g c, ask g "verts \(show id) \(show nv) 0 \(show st)"))
+   (put! g c @ o (post g "verts \(show id) \(show nv) \(show o) \(show st)")))
  ; ..a buf's lamps, 8 slots a vertex of 3 words each, slot k lamp li k's light there
  (gpu-lamps g id cols li) (: nv (#cols // 24) c (cask (4 * 24 * nv)) _ ((cite 'guts 'pinf) c 0 4 cols)
-   (put! g c, ask g ("lamps \(show id) \(show nv) 0 " + unwords (map show li))))
+   (put! g c @ o (post g ("lamps \(show id) \(show nv) \(show o) " + unwords (map show li)))))
  ; ..a buf's sun, 3 words a vertex, the colour of it that is the sun's: the clouds take it; () none
- (gpu-suns g id cols) (? !(tray? cols) (ask g "suns \(show id) 0 0")
+ (gpu-suns g id cols) (? !(tray? cols) (post g "suns \(show id) 0 0")
    (: nv (#cols // 3) c (cask (12 * nv)) _ ((cite 'guts 'pinf) c 0 4 cols)
-      (put! g c, ask g "suns \(show id) \(show nv) 0")))
+      (put! g c @ o (post g "suns \(show id) \(show nv) \(show o)"))))
  (gpu-scene g rs) (: c (cask (4 * #rs)) _ ((cite 'guts 'pinf) c 0 4 (gem-tray [#rs] (map (x \ 1.0 * x) rs)))
-   (put! g c, ask g "scene \(show (#rs // 9)) 0"))
+   (put! g c @ o (post g "scene \(show (#rs // 9)) \(show o)")))
  (gpu-vis g ms ks) (: m (tray? ms ? (1.0 * ms) (gem-tray [#ms] (map (x \ 1.0 * x) ms))) k (gem-tray [#ks] (map (x \ 1.0 * x) ks))
    c (cask (4 * (#m + #k))) _ ((cite 'guts 'pinf) c 0 4 m) _ ((cite 'guts 'pinf) c (4 * #m) 4 k)
-   (put! g c, ask g "vis \(show #m) \(show #k) 0"))
+   (put! g c @ o (post g "vis \(show #m) \(show #k) \(show o)")))
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
-    (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
- (gpu-drop g id) (ask g "drop \(show id)")
+    (put! g c @ o (post g ("sun \(show (shape sd 1)) \(show (shape sd 0)) \(show o) " + unwords (map num (bias . map (i \ sv i) ^16))))))
+ (gpu-drop g id) (post g "drop \(show id)")
  (gpu-place g ps) (tell g "place" (catmap (p \ (p 0 . p 1)) ps))
  ; ..spots [S C] for the next frame w by h, laid in its sky
  (gpu-spots g w h sp) (: I (iota (sp 0 >= 0)) ns #I c (cask (8 * ns))
    _ (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
-   (ns @ 0 () (put! g c, ask g "spots \(show w) \(show h) \(show ns) 0")))
+   (ns @ 0 () (put! g c @ o (post g "spots \(show w) \(show h) \(show ns) \(show o)"))))
  (gpu-base g w h t) (: c (cask (4 * w * h)) _ ((cite 'guts 'pinv) c 0 4 4 t)
-   (put! g c, ask g "base \(show w) \(show h) 0"))
+   (put! g c @ o (post g "base \(show w) \(show h) \(show o)")))
  (gpu-under g cs ds)
   (: ch (shape ds 0) cw (shape ds 1) n (cw * ch) c (cask (8 * n))
      _ ((cite 'guts 'pinv) c 0 4 4 cs) _ ((cite 'guts 'pinf) c (4 * n) 4 ds)
-     (put! g c, ask g "under \(show cw) \(show ch) 0"))
+     (put! g c @ o (post g "under \(show cw) \(show ch) \(show o)")))
  (gpu-win g xid) (ask g "win \(show xid)")
  ; ..laid past the frame's own room, which the helper may still be filling, a kept one from the
  ; copy the helper made of it, the last taken; and answered when the file is next written
  (gpu-show g f w h W H at rs P)
-  (: o (8 * w * h) kp (two? f) sp (kp && two? (f 1) ? (f 1) ()) I (two? sp ? (iota (sp 0 >= 0)) ()) ns #I
+  (: o (max (8 * w * h) (peep g 'at 0)) kp (two? f) sp (kp && two? (f 1) ? (f 1) ()) I (two? sp ? (iota (sp 0 >= 0)) ()) ns #I
      n (kp ? (8 * ns) (4 * w * h)) (size r) (4 * (r 2 - r 0) * (r 3 - r 1)) c (cask (n + +(map size rs)))
      _ (? kp (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
           ((cite 'guts 'pinv) c 0 4 4 f))
@@ -206,8 +217,8 @@
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
   (: l (o + map (i \ mat i) ^16 + ids) c (cask (8 * #l)) _ ((cite 'guts 'pind) c 0 (gem-tray [#l] (map (* 1.0) l)))
-   (put! g c, room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) 0\n", ()))
- (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
+   (put! g c @ o (room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) \(show o)\n", ())))
+ (gpu-take g w h) (: e (due g) f (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r) (string? e ? e f))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {} 'lamped {} 'held {} 'placed {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
@@ -249,12 +260,12 @@
            (: P (sk 5) m (P 1) A (P 2)
               (lay k t say) (? (peep s k () == t) ()
                    (: c (cask (4 * #t)) _ ((cite 'guts 'pinf) c 0 4 t)
-                      ((put! (s 'g) c, ask (s 'g) say) @ () (pin s k t, ()) r r)))
-              r (lay 'cmap m "cloud \(show (int (sqrt #m))) 0" @ () (lay 'amap A "air 128 \(show (#A // 384)) 0") q q)
+                      (put! (s 'g) c @ o (post (s 'g) (say + show o)) @ () (pin s k t, ()) r r)))
+              r (lay 'cmap m "cloud \(show (int (sqrt #m))) " @ () (lay 'amap A "air 128 \(show (#A // 384)) ") q q)
               (string? r ? r (tell (s 'g) "skyp" (P 0) @ () [-1] r r)))
            (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
            (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
-     (q @ [id] (id < 0 && #sk < 6 ? () (ask (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
+     (q @ [id] (id < 0 && #sk < 6 ? () (post (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
  ; ..the lamps' strengths, sent as they change; and each batch's lamps lm i, [cols li sun] or (),
  ; laid on its buf once
  (lamps! s bs lm ks)

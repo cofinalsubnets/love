@@ -199,6 +199,14 @@
    die (: g (gpu-open ()) (? (two? g) 'none
      (: s (gpu-state g) f (_ \ gpu-facets s W H -1 mat [verts] [tris] [(int (gem-tray [8 8] ckl))] (gem-tray [8] [40.0 60.0 80.0 0.3 0.9 64.0 1.5 0.0]) () () ())
         a (f ()) _ (hark ["kill" "-9" (show (g 'pid))]) _ (rest 100) b (f ()) [(tray? a) b (s 'g) (string? (s 'fail))])))
-   (test (fine? moon) (fine? cc) (near? 60 one) (elem die ['none [1 () () 1]])))
+   ; ..what is posted answers at the frame: a bad one's words, then none; and more than the file
+   ; holds at once, each as laid
+   po (: g (gpu-open ()) (? (two? g) 'none
+     (: f (_ \ gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0]) _ (gpu-buf g 1 verts tris 8) _ (gpu-tex g 0 8 8 (gem-tray [64] ckl)) a (f ())
+        _ (gpu-buf g 2 verts (tris * 0 + 99) 8) b (f ()) c (f ())
+        _ (each ^1200 (i \ (gpu-place g [[1 [(0.001 * i) 0.0 0.0]]]))) _ (gpu-place g [[1 [0.0 0.0 0.0]]])
+        _ (each ^9 (i \ (gpu-tex g (10 + i) 512 512 (iota (512 * 512) * 0 + i)))) d (f ()) _ (gpu-close g)
+        [(tray? a) (string? b) (tray? c && amax (a != c) = 0) (tray? d && amax (a != d) = 0)])))
+   (test (fine? moon) (fine? cc) (near? 60 one) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
 (test_fin ())
 (puts "gpu: ok\n")
