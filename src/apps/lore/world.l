@@ -1564,7 +1564,8 @@
    ; the gpu adds as strong as they are, once relit so it knows them
    ; ..and the sun's own of it, which the gpu shades by its clouds
    (sunof c) (gk && st 'gpu 'g != () && two? (peep (c 'lit) 'sun ()) ? (mesh-sun-slots (c 'pk) (c 'lit 'sun) 1.0) ())
-   (hall-of c) (: pk (c 'pk) su (sunof c) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
+   (hall-of c) (slotted c (sunof c))
+   (slotted c su) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
      (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1) su]] (: b (lit-named pk (relit pk (c 'lit))) (tray? su && two? (b 2) ? [(b 0) (b 1) (b 2) [() () su]] b))))
    ; ..and on a gpu that keeps a scene, each laid in it once the cells first let it be seen,
    ; marked down while they do not; but one lit here frame by frame, which it sees and lays
@@ -1626,12 +1627,14 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   glass (map (i \ lit-named (sc 'panes i 'pk) (relit (sc 'panes i 'pk) (sc 'panes i 'lit))) ^#(sc 'panes))
-   ; ..the sheets apart from the chunks, their texels drifting as they flow
+   glass (map (c \ slotted c ()) (sc 'panes))
+   ; ..the sheets apart from the chunks, their texels drifting as they flow, on a gpu by it
    (drift x w) (x - w * floor (x / w))
-   sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
-                       (foldl (\ b j (c 'flow j @ 0.0 b [(pin (b 0) (ix + 3 + j) (pk 'cols (3 + j) + drift (c 'flow j * st 'mt) (c 'wh j))) (b 1)]))
-                              b ^2)))
+   (sheet c) (: d (map (j \ drift (c 'flow j * st 'mt) (c 'wh j)) ^2)
+     (? (gk && st 'gpu 'g != ()) (slotted c () @ b (b + (#b < 4 ? [()] ()) + [([0.0 0.0 0.0] + d)]))
+        (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
+           (foldl (\ b j (c 'flow j @ 0.0 b [(pin (b 0) (ix + 3 + j) (pk 'cols (3 + j) + d j)) (b 1)])) b ^2))))
+   sheets (map sheet
                (sc 'sheets))
    ; ..each ball where it is, made again only once it has moved
    balls (map (b \ (: d (tablet? (b 'pk) ? (b 'pk) (: d (ball-pk sc b) (pin b 'pk d, d))) (b 'kind = 'wisp ? (mesh-shine (d 'pk) (wisp-k st b)) (relit (d 'pk) (d 'lit)))))
