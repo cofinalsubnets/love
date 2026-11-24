@@ -172,7 +172,7 @@
    ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it, in the
    ; brush's box
    (meets c pl) (catmap (k \ (: g (c 'faces k) s (map (side pl) g)
-                                  (#g >= 3 && foldl min 1e9 s <= 1e-6 && foldl max -1e9 s >= -1e-6 
+                                  (#g >= 3 && foldl min 1e9 s <= 1e-4 && foldl max -1e9 s >= -1e-4 
                                    ? [(c 'planes k + [[(c 'lo) (c 'hi)]])] ())))
                            ^#(c 'planes))
    (piece i b j C) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near-in fb C)
