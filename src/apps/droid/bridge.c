@@ -1177,7 +1177,7 @@ static int micpoke(int fd, int ev, void *p) {
   if (n > 0 && __atomic_load_n(&b->up, 2)) b->ask = 1, b->askt = now(); else mican(b, !n);
   return 1;
 }
-/* the dialog covers us; we are back, or hidden under another app: answered */
+/* the dialog covers us; in front again, it is answered or gone */
 static void pause(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 0; if (b->ask) b->ask = 2; }
 static void resume(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 1; if (b->ask == 2) mican(b, !perms(a, 2)); }
 
@@ -1226,8 +1226,7 @@ static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
 static void stop(void *a) {
   br *b = me(a);
   if (b->a != a) return;
-  __atomic_store_n(&b->up, 0, 3);
-  if (b->ask) mican(b, !perms(a, 2));
+  __atomic_store_n(&b->up, 0, 3);          /* a dialog left up by home is there on the way back: its ears wait */
 }
 static void destroy(void *a) {
   br *b = me(a);
