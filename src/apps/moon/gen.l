@@ -175,6 +175,7 @@
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
+   (t2c? g) (elem (g 'tgt) '(thumb2 thumb2sp arm))   ; thumb2's code, linux's arm with it: the list frame, q4, the literal's respill
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
    (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family
@@ -1679,7 +1680,7 @@
    ; with pc. the saves sit just under fp (a free one pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
    (t2pm g fs)
-    (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
+    (cz g 't2pm fs (? (!(t2c? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
                       !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
        (: r0 (drop 4 fs)
           cs '(r4 r5 r6 r7 r8 r9 r10)
