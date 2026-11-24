@@ -64,7 +64,7 @@
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-suns gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu gpu-said gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-suns gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
@@ -296,7 +296,7 @@
            _ (pin s 'fr (s 'fr + 1)) V (tray? vs ? [vs] vs) T (tray? ts ? [ts] ts)
            tx (texs! s texs @ () (sun ? (sun! s sv sd (o 7)) ()) r r)
            bs (string? tx ? () (map (i \ batch s i (V i) (T i) (two? ks ? (ks i) ()) st) ^#V))
-           (? (string? pr || string? tx || any string? bs) (pin s 'g (), ())
+           (? (string? pr || string? tx || any string? bs) (gone s <(filter string? ([pr tx] + bs)))
               (: _ (s 'fr % 60 = 0 ? (sweep s) 0)
                  cv (two? c && tablet? (c 0) ? (c 0) {})
                  u ((bt ? (gpu-base (s 'g) w h G) ()) @ () (two? un ? (gpu-under (s 'g) (un 1) (un 2)) ()) e e)
@@ -310,8 +310,8 @@
                  ; or one that says its spots; but every 'read'th, which a feed in view reads back
                  rd (peep s 'read 0) kp (peep s 'keep 0 && (!(two? sk) || 2 < #(c 2 2)) && !(0 < rd && s 'fr % rd = 0) ? 512 0)
                  e (string? y ? y (gpu-send (s 'g) w h mat (atom? at ? ids (catmap (i \ laid i + (i < #ids ? [(ids i)] ())) ^(#ids + 1))) [(bt ? -1 G) (o 0) (o 1) (o 2) (o 3) (o 4) (o 6) ((fl & 136) + (sun ? 256 0) + kp)]))
-                 p [w h c] (now _) (take s p @ q (string? q ? (pin s 'g (), ()) q))
-                 (? (string? e) (pin s 'g (), ())
+                 p [w h c] (now _) (take s p @ q (string? q ? (gone s q) q))
+                 (? (string? e) (gone s e)
                     !(peep s 'pipe 0) (now () @ () () q (q 0))
                     (two? pr) (pins s 'pend p 'last pr, pr)
                     ; ..the last shown again while this one draws, but a kept one, whose frame this one drew over
@@ -319,6 +319,9 @@
                        (s 'last @ () (fresh ()) l (nom? (l 0) ? (fresh ()) (pin s 'pend p, [(l 0 + 0) (l 1)]))))))))))
  ; ..a frame sent as [w h c], taken: [f c], or the helper's words
  (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
+ ; ..a helper that failed let go, and why: under android's bridge its stderr is the log
+ (gone s e) (gpu-close (s 'g), pins s 'g () 'pend () 'last () 'fail e, gpu-said e, ())
+ (gpu-said e) (string? (getenv "LOVE_GPU_FACE") ? (say err "lore: the gpu let go: \(e)\n") ())
  ; ..and one sent and no longer wanted, the last shown forgotten with it
  (drain s) (s 'pend @ () () p (pins s 'pend () 'last (), take s p, ()))
  (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))

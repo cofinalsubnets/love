@@ -838,9 +838,13 @@ static int peer(int fd) {
 }
 /* the window off the cpu, which a lock left connected, so egl may: perform's api disconnect.
    the ndk has no call for it; the window's own table does, past its base and fields */
+struct anw { int magic, ver; void *res[4], *ref[2];      /* android_native_base_t */
+  unsigned flags; int lo, hi; float xd, yd; long oem[4];
+  void *swap, *deq, *lock, *que, *query; int (*perform)(void *, int, ...); };
+_Static_assert(__builtin_offsetof(struct anw, perform) == (sizeof(void *) == 8 ? 152 : 88), "the window's table");
 static void uncpu(void *w) {
-  int (*perform)(void *, int, ...) = *(int (**)(void *, int, ...)) ((char *) w + 152);
-  if (*(int *) w == ('_' << 24 | 'w' << 16 | 'n' << 8 | 'd')) perform(w, 14, 2);   /* NATIVE_WINDOW_API_DISCONNECT, _CPU */
+  struct anw *a = w;
+  if (a->magic == ('_' << 24 | 'w' << 16 | 'n' << 8 | 'd')) a->perform(w, 14, 2);   /* NATIVE_WINDOW_API_DISCONNECT, _CPU */
 }
 /* the window the cpu's again, its love told to draw all of it. the lock held */
 static void regive(br *b) {
@@ -1074,6 +1078,7 @@ static void spawn(br *b, deck *d) {
     snprintf(path, sizeof path, "%s/%s", b->data, de->name);
     if (n > 11 && prefix(de->name, "love-") && prefix(de->name + n - 6, ".image") && !prefix(de->name, me)) unlink(path); }
   if (dd) closedir(dd);
+  snprintf(bin, sizeof bin, "%s/.love", b->data); mkdir(bin, 0700);   /* the nest, else nothing is kept until a shell makes it */
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
   void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
   for (struct dirent *de; bd && (de = readdir(bd)); )

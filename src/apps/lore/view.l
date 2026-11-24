@@ -130,7 +130,7 @@
  ; this one's; back a step a second on where this one's is not under 0.9 of the finer's,
  ; measured; finer three seconds from a step, where its frame is guessed under 0.8 of the
  ; goal, or tried where this one's is under half the goal and the finer's is not measured;
- ; neither back nor finer within three seconds of a low horn. a step's frame is its own, a
+ ; neither within three seconds of a low horn, but back where this step is over the goal. a step's frame is its own, a
  ; slow mean with a spike held to twice it, measured half a second on and kept half a minute,
  ; else a line through this step's and the nearest other measured, a part fixed and a part by
  ; the pixels, else the pixels' share of this one. the feed's share is a slow mean, so a
@@ -148,7 +148,7 @@
                         c (max 0.0 ((sl - fresh m) / (pix i - pix m))) a (max 0.0 (sl - c * pix i))
                         (a + c * pix k))))
                q q)
-   bk (0 < i && 1000 <= held && quiet && (fresh (i - 1) @ () 0 q (0.9 * q <= sl)))
+   bk (0 < i && 1000 <= held && (quiet || b < sl) && (fresh (i - 1) @ () 0 q (0.9 * q <= sl)))
    j (? (i + 1 < #pix && (low && 500 <= held || b < sl && (g 'bk = i ? 5000 1000) <= held) && guess (i + 1) < 0.9 * sl) (i + 1)
         bk (i - 1)
         (0 < i && 3000 <= held && quiet && (guess (i - 1) < 0.8 * b || fresh (i - 1) = () && sl < 0.5 * b)) (i - 1)
