@@ -361,9 +361,9 @@ crewfiles ?= src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/
   src/apps/libra/salt.l src/apps/libra/spans.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l src/apps/harp/horn.l \
-  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/mitty/wharf.l src/apps/mitty/slip.l src/apps/lore/rove.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/toys.l src/apps/stow.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/mitty/wharf.l src/apps/mitty/slip.l src/apps/lore/rove.l src/apps/lore/console.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/stow.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/toys.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/hexedit.l src/apps/mc.l src/apps/help.l \
-  src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/crypt.l src/apps/login.l src/apps/lore/saver.l src/apps/greet.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
+  src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/crypt.l src/apps/login.l src/apps/lore/saver.l src/apps/greet.l src/apps/opens.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc) $(kore_net)
 # the KERNEL's crew: the host's, and the compiler ahead of it. a metal seat has no
 # ambient toolchain, so the one it carries is the only one there is -- `love seed` and
@@ -797,8 +797,8 @@ $(k_odir)/transpose.l: $(transpose_l) $(k_odir)/transpose.list
 # at the host's own arch the elf is the shipped love transposed, with $(kart_o) laid
 # past its data and bound to its doors, and it WAKES the image the binary carries. an arch
 # whose processes run love (a src/inle/<arch>/proc.c) transposes the cross lane's love the
-# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
-# board (kb=) has metal files of its own, so it takes the pie.
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh); a
+# board (kb=) too, with its own metal files (xbkart, below).
 # $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
 # link, the kernel's bodies bound in. test_disk rides the transpose, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
@@ -809,10 +809,10 @@ k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
 else
-ifneq ($(and $(if $(kb),,1),$(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+ifneq ($(and $(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
 # rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
 k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
-k_pie_o = $(xkart_o)
+k_pie_o = $(if $(kb),$(xbkart_o),$(xkart_o))
 endif
 endif
 $(k_elf): $(k_odir)/transpose.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
@@ -860,9 +860,9 @@ kmain_o: $(k_free_o)
 
 # THE SEAT: the metal objects a transpose lays beside the one binary; `love seed kernel` compiles
 # them from the source it carries and transposes itself to a bootable elf. one shape,
-# worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
-# the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
-# carries no seat and its roster is empty.
+# worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR[,CVAR]), every argument but
+# the first a variable NAME so the body stays deferred; CVAR names the metal files, else the
+# arch's own. an arch with no src/inle/<arch>/ carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
 # kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
@@ -870,8 +870,8 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 define kart
-$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
-$(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
+$(1)_h = $$(love_h) $$S/inle/k.h $$S/inle/kboot.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
+$(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(if $(5),$$($(5)),$$(wildcard $$S/inle/$$($(4))/*.c)))
 $(1)_kern_o = $$(k_free_c:$$S/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
   $$($(1)_arch_o) $$($(2))/kvec.o,)
@@ -896,6 +896,12 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 endef
 $(eval $(call kart,kart,moon_d,moonc,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
+# a board: the cross lane's, its metal files the board's and k_$(kb) defined
+ifdef kb
+xbod = $(xod)/$(kb)
+moonxb = $(moonx) -Dk_$(kb)
+$(eval $(call kart,xbkart,xbod,moonxb,xa,k_arch_c))
+endif
 # the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
 	@echo '$(kart_o)' > out/kart.list

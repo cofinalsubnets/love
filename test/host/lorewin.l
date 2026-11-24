@@ -1,7 +1,7 @@
 ; test/host/lorewin.l -- view's loop on a headless window ('evq its events): keys to actions,
 ; held keys at the level's pace, repeat no press, ? help; and the world painted on its paper.
 ; not in the corpus: crew modules. run: cat test/00-init.l test/host/lorewin.l | out/love
-(borrow '(view world posix window lore))
+(borrow '(view console cli world posix window lore))
 
 (: _ (setenv "HORN" "none")
    _ (setenv "LOVE_NEST" (cwd 0 + "/out/.lorewin-nest-" + show (getpid 0)))   ; no nest: no scene kept
@@ -80,20 +80,45 @@
                   'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win 'held (_ \ 1) 'repeat [0 0]}))
  (test (rev (st 'log) = [[0 'forward] [1 'forward] [8 'where]]) (st 'said = [(0 ~ 9) (0 ~ 9)]) (rev (st 'helped) = [2 3 4 5])
        (rev (st 'sizes) = [[80 14] [80 25]]))
+; a phone's: a tap at the top's middle opens it, beside the scene, the keyboard up and the touches
+; the panes'; the same spot, esc or Back puts it away, and Back alone does nothing, the thumbs back and the screen all the scene's
+(: tap (_ \ [['finger 1 0 320 10] ['finger 1 1 320 10]]) back (_ \ [['down 362] ['up 362]]) path ("/tmp/lorewin-face-" + show (getpid 0)) ls (listen ['unix path])
+   srv (twirl (_ \ (: _ (await ls) c (accept ls) (slurp c))) ()) line (connect ['unix path])
+   con {0 [['finger 1 0 100 200] ['finger 1 1 100 200]] 2 (tap 0) 4 [['press 1 320 10] ['release 1 320 10]] 6 (tap 0) 8 [['down 1] ['up 1]]
+       9 (back 0) 10 (tap 0) 12 (back 0) 14 [['finger 1 0 10 10] ['finger 1 1 10 10]]}
+   win {'how 'droid 's line 'w 640 'h 400 'H 400 'row 0 'held () 'paper (cask (640 * 400 * 4)) 'said (con 0)}
+   st (view-walk {'new (w \ h \ {'w w 'h h 't 0 'win win 'sizes () 'typing () 'thumbs () 'gpu ()}) 'size (st \ w \ r \ pins st 'w w 'h (2 * r) 'sizes ([w r] . st 'sizes))
+                  'frame (_ \ "") 'key (st \ a \ st)
+                  'tick (st \ (pins st 'typing (peep win 'typing 0 . st 'typing) 'thumbs (peep win 'thumbs 0 . st 'thumbs), pin win 'said (peep con (st 't + 1) ())))
+                  'stick [119 115 97 100 87] 'binds view-binds 'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win})
+ z (close line, catch srv, close ls, unlink path)
+ (test (elem 1 (st 'typing)) (st 'typing 0 = 0) (st 'thumbs 0 = 1) (all (i \ st 'typing i = 1 - st 'thumbs i) ^#(st 'typing))
+       (rev (st 'typing) @ l (filter (i \ 0 < i && l i = 1 && l (i - 1) = 0) ^#l) = [2 6 10])
+       (0 < #(filter (q \ q 0 < 60) (st 'sizes))) (st 'sizes 0 = [80 25])))
 ; the panes: the scene over the console, a bar between, the screen all the scene's while it is
 ; away; ctrl-w m puts them side by side, x trades them, and the split is kept for the next time
-(: co (view-con-new ()) l0 (view-con-lay co 80 24) _ (view-con-up co 1) l1 (view-con-lay co 80 24)
-   (cw c) (: _ (view-con-key co (_ \ "") 23) _ (view-con-key co (_ \ "") c) (view-con-lay co 80 24))
-   l2 (cw 109) l3 (cw 120) bx (view-con-box co (l3 1)) _ (cw 119) f (view-con? co) _ (view-con-up co 0) l4 (view-con-lay co 80 24) _ (view-con-up co 1) l5 (view-con-lay co 80 24)
+(: co (con-new ()) l0 (con-lay co 80 24) _ (con-up co 1) l1 (con-lay co 80 24)
+   (cw c) (: _ (con-key co (_ \ "") 23) _ (con-key co (_ \ "") c) (con-lay co 80 24))
+   l2 (cw 109) l3 (cw 120) bx (con-box co (l3 1)) _ (cw 119) f (con-keyed? co) _ (con-up co 0) l4 (con-lay co 80 24) _ (con-up co 1) l5 (con-lay co 80 24)
  (test (l0 = [[0 0 80 24] ()]) (l1 = [[0 0 80 13] [0 14 80 10]]) (l2 = [[0 0 47 24] [48 0 32 24]]) (l3 = [[32 0 48 24] [0 0 31 24]])
        (bx 0 = 0) (#(bx 2) = 24) !f (l4 = [[0 0 80 24] ()]) (l5 = l3)))
 ; ctrl-c drops the line typed and leaves the console up, and stops what runs
-(: co (view-con-new ()) _ (view-con-up co 1) _ (each ["1 + " 3 "2" 13] (view-con-key co (l \ "=" + l)))
+(: co (con-new ()) _ (con-up co 1) _ (each ["1 + " 3 "2" 13] (con-key co (l \ "=" + l)))
    (spin _) (spin ()) n {'n 0}
- (test (view-con? co) (rev (co 'log) = ["> 1 + ^C" "> 2" "=2"]) (view-con-task (_ \ "a") (_ \ 1) = "a")
-       (view-con-task spin (_ \ (pin n 'n (n 'n + 1), 2 < n 'n)) = "^C") (n 'n = 3)))
+ (test (con-keyed? co) (rev (co 'log) = ["> 1 + ^C" "> 2" "=2"]) (con-task (_ \ "a") (_ \ 1) = "a")
+       (con-task spin (_ \ (pin n 'n (n 'n + 1), 2 < n 'n)) = "^C") (n 'n = 3)))
+; a press on the scene gives it the keys and goes on to it, one on the console does not; a
+; terminal's keys are the console's while it has them, and eof puts it away
+(: co (con-new ()) _ (con-up co 1) _ (con-lay co 80 24) (ev e) (con-event co (l \ l) e "" (_ \ ()) 0)
+   a (ev ['press 1 8 300]) ka (con-keyed? co) b (ev ['press 1 8 8]) kb (con-keyed? co) d (con-term co (l \ l) 97 0) o (con-term co (l \ l) 126 1) ko (con-keyed? co)
+   x (con-term co (l \ l) 97 0) t (edtext (co 'ed)) _ (con-term co (l \ l) -7 0)
+ (test (a = 1) ka (b = 0) !kb (d = 97) (o = ()) ko (x = ()) (t = "a") !(co 'on)))
+; page up and down scroll what was said
+(: co (con-new ()) _ (con-up co 1) _ (each ^30 (i \ (con-key co (l \ l) (show i), con-key co (l \ l) 13))) l (con-lay co 80 24)
+   top (_ \ con-box co (l 1) 2 1) a (top ()) _ (con-key co (l \ l) -14) b (top ()) _ (con-key co (l \ l) -15) c (top ())
+ (test (a != b) (a = c)))
 ; a terminal's frame moved to where its pane is
-(: e (string 27) (test (view-shift (e + "[Hab\r\ncd" + e + "[1mx" + e + "[3;4He") 10 2 = (e + "[3;11H" + e + "[3;11Hab\r\n" + e + "[10Ccd" + e + "[1mx" + e + "[5;14He")) (view-shift "q" 0 0 = "q")))
+(: e (string 27) (test (con-shift (e + "[Hab\r\ncd" + e + "[1mx" + e + "[3;4He") 10 2 = (e + "[3;11H" + e + "[3;11Hab\r\n" + e + "[10Ccd" + e + "[1mx" + e + "[5;14He")) (con-shift "q" 0 0 = "q")))
 
 ; the world on a window's paper: the lit hall, and with p the bottom row's words
 (: hall (world-load "test/lore/hall.l")

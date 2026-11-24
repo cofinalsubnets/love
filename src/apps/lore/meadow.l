@@ -182,7 +182,7 @@
  (meadow-pens st g wx) (: lt (meadow-light g wx) s (lt 'sun) sim (cloud-sim g) t0 (g 'fr)
    ; the moon over the sun takes its light as it covers it, and the sky's with it
    mo (meadow-moon st g) ph (meadow-phase st g) ec (eclipse st s mo)
-   _ (? (0.0 < ec) (pins lt 'sunk (lt 'sunk * (1.0 - ec)) 'disc (lt 'disc * (1.0 - ec)) 'day (lt 'day * (1.0 - 0.85 * ec * ec))
+   _ (? (0.0 < ec) (pins lt 'sunk (lt 'sunk * (1.0 - ec)) 'disc (lt 'disc * (1.0 - ec)) 'bare (lt 'bare * (1.0 - ec)) 'day (lt 'day * (1.0 - 0.85 * ec * ec))
                           'amb (c* (1.0 - 0.7 * ec * ec) (lt 'amb))) 0)
    w (st 'w) h (st 'h) G (st 'G) S (st 'S) (only ix v) (peep v ix 0.0)
    wxv (-(sin (g 'head * pi / 180.0) * g 'wind) * g 'gust)

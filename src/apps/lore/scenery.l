@@ -332,6 +332,8 @@
 ;                                      'seed, and 'skin of 'top 'frame 'body 'soft 'feet, a
 ;                                      tv's 'screen and a painting's 'picture, each a texture, a skin
 ;                                      or a kind; 'feet a star's casters, the frame's unless said
+;   (fine k TEXTURE)                   the texture in texels k times finer, 2 to 8, its
+;                                      layers as they read; for a pattern of hard edges
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
 ;                                      the kind is: 'wood 'plank 'stone 'sandstone 'brick
@@ -357,8 +359,8 @@
 ;
 ; a word given what it does not take stops the level, saying what it takes.
 (module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera missing watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
-(borrow '(view swatch))
+         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture fine feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+(borrow '(view swatch stow))
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
@@ -802,6 +804,10 @@
       (swatch-fault ls @ () {'kind 'texture 'w w 'h h 'm (f m) 'layers ls}
                          e (scare 'level ("in a texture, " + show (e 0) + " -- it reads " + e 1)))))
  (texture? t) (kind? t ['texture])
+ (fine k t) (: u "(fine k TEXTURE), k 2 to 8, to 2048 texels a side and no art in it"
+   (? (!(charm? k && 2 <= k <= 8)) (no u k) (!(texture? t)) (no u t)
+      (2048 < k * max (t 'w) (t 'h) || atom? (swatch-fine k (t 'layers))) (no u t)
+      (with (with (with t 'w (k * t 'w)) 'h (k * t 'h)) 'layers (swatch-fine k (t 'layers)))))
  ; --- materials: a texture from its kind and the parameters it changes, a number or [lo hi]
  ; thrown under the seed, or a colour; [w h metres layers feel] of the parameters, g ---
  (sh k) ['shade k]
@@ -1348,11 +1354,15 @@
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
-   used (foldl (\ a t (elem t a ? a (a + [t]))) () (catmap (b \ map (bare * b 'skin) (sort (keys (b 'skin)))) bs
+   ; ..by what a texture is, not which, so a load's numbers are the same; but art's, painted anew
+   (texkey t) (: b (bare t) k (any (q \ two? q && <q = 'art) (b 'layers) ? ()
+       (stow [(map (k \ [k (b k)]) (sort (keys b))) (kind? t ['laid] ? [(t 'deg) (t 'off)] ())])) (string? k ? k t))
+   used0 (foldl (\ a t (: k (texkey t) (peep a k () = () ? (pin (pin a k 1) 'l (t . a 'l)) a))) {'l ()} (catmap (b \ map (bare * b 'skin) (sort (keys (b 'skin)))) bs
                                                      + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad + of 'tree) + catmap (d \ peep d 'feed () + (peep d 'cards () @ () () c (c 0))) (of 'ad)
                                                      + map (d \ d 'glass) (filter (d \ peep d 'glass () != ()) (of 'door + of 'car))
                                                      + catmap (s \ [(s 't1) (s 't2)]) (of 'spin) + map (o \ o 'tex) (of 'orb + of 'lift + of 'gate + of 'fence + of 'herald)))
-   (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
+   used (rev (used0 'l)) usedn (foldl (\ t i (pin t (texkey (used i)) i)) {} ^#used)
+   (tname t) (peep usedn (texkey t) ())
    (skin-of b) (: s (b 'skin) (catmap (k \ (: (e c) ([c (tname (bare (s k)))] + lay (s k)) (k @ 'all (map e ['wall 'floor 'ceiling]) [(e (k @ 'walls 'wall k))])))
                                        (filter (k \ elem k (keys s)) ['all 'walls 'floor 'ceiling])))
    (tex nm t) (: b (bare t) {'name nm 'w (b 'w) 'h (b 'h) 'm (b 'm) 'layers (b 'layers) 'feel (peep b 'feel 'hard) 'lay (kind? t ['laid] ? [(t 'deg) (t 'off)] ())})
