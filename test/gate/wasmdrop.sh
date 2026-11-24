@@ -64,4 +64,46 @@ printf 'int pick(void) { return 2; }\n' > "$w/g.c"
 cc -o "$w/f.wasm" "$w/f.c" "$w/g.c" || fail "weak under strong does not link"
 [ "$("$node" src/inle/wasm/loader.js "$w/f.wasm")" = "2 0" ] || fail "strong over weak, a null weak reference"
 inmod "$w/f.wasm" 'pick\.wk\.' && fail "a weak body under a strong one was laid"
-echo "  wasmdrop: ok -- calls, addresses and data keep; the unreached, the unexported and the shadowed weak go"
+# a weak body that stands is kept by every way it is reached, and answers; a strong twin answers for it
+cat > "$w/h.c" <<'XEOF'
+#include <stdio.h>
+__attribute__((weak, noinline)) int wcall(int x) { return x + 1; }
+__attribute__((weak)) int waddr(int x) { return x + 20; }
+__attribute__((weak)) int wdata(int x) { return x + 300; }
+__attribute__((weak, noinline)) int wtail(int x) { return x + 4000; }
+__attribute__((noinline)) int viatail(int x) { return wtail(x); }
+static int (*const tab[])(int) = { wdata };
+int (*volatile slot)(int);
+int main(void) {
+  slot = waddr;
+  printf("%d\n", wcall(1) + slot(0) + tab[0](0) + viatail(0));
+  return 0; }
+XEOF
+cc -o "$w/h.wasm" "$w/h.c" || fail "weak bodies reached four ways do not link"
+o=$("$node" src/inle/wasm/loader.js "$w/h.wasm") || fail "the weak program does not run"
+[ "$o" = 4322 ] || fail "a weak body reached by a call, an address, a data pointer and a tail call answers (got '$o')"
+printf 'int waddr(int x) { return x + 7; }\nint wdata(int x) { return x + 9; }\n' > "$w/i.c"
+cc -o "$w/i.wasm" "$w/h.c" "$w/i.c" || fail "strong over weak by address and by data does not link"
+o=$("$node" src/inle/wasm/loader.js "$w/i.wasm") || fail "the strong-over-weak program does not run"
+[ "$o" = 4018 ] || fail "a strong twin answers for an address and a data pointer (got '$o')"
+# the guard: a marker that errs drops a function the kept code or data still names, and the
+# link refuses it by name where it would have laid a null or an import (wasmguard.l)
+cat > "$w/x.c" <<'XEOF'
+__attribute__((weak, noinline)) int wk(int x) { return x + 1; }
+__attribute__((weak)) int wd(int x) { return x + 2; }
+static int (*const tab[])(int) = { wd };
+int _start(void) { return wk(1) + tab[0](0); }
+XEOF
+cc -c -o "$w/x.o" "$w/x.c" || fail "the guard's object does not compile"
+printf '__attribute__((noinline)) int st(int x) { return x + 3; }\nint _start(void) { return st(1); }\n' > "$w/y.c"
+cc -c -o "$w/y.o" "$w/y.c" || fail "the guard's strong object does not compile"
+g=$(WGDIR=$w LOVE_NO_IMAGE= "$m" test/gate/wasmguard.l 2>&1) || fail "the guard's law died: $g"
+want='sound 1
+flat (wasm-dropped (wk))
+root (wasm-dropped (wd))
+edge (wasm-dropped (wk))
+import (wasm-dropped (st))
+wins ()'
+[ "$g" = "$want" ] || fail "a marker's error is not refused by name (got '$g')"
+[ "$("$node" test/holo/drop.mjs "$w/x.wasm" _start)" = 4 ] || fail "the guard's object does not run unplanted"
+echo "  wasmdrop: ok -- calls, addresses and data keep, weak bodies too; a marker's error is refused; the unreached, the unexported and the shadowed weak go"

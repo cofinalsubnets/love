@@ -390,4 +390,8 @@
  (dm-second = 1) (dm-t1 = [0]) (dm-drew = 1) (0 < dm-pid)
  (dm-back = 1) (dm-bk = [0 1]) (dm-t2 = [1 0])
  (dm-none = 0) (dm-t3 = [1]))
+; the bridge on arm is softfp, as the android libraries it calls: the elf header says so
+(: br-d (cwd 0 + "/out/.droid-so-" + show (getpid 0)) _ (mkdir br-d 448)
+   br-so (bridge-so br-d "armeabi-v7a") _ (wait (spawn ["rm" "-r" br-d])))
+(test (rdle br-so 0 4 = 0x464c457f) (rdle br-so 36 4 = 0x05000200))
 (puts "droid: ok") (putc 10)

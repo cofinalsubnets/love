@@ -159,13 +159,13 @@
    ; sub-word rmw, thumb2 no doubleword, thumb1 no exclusives)
    (atomdefs tgt sw)
     (: ws (tgt @ ('thumb1 || 'xtensa || 'mips) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips) ? 4 8)
+       tm (tmof tgt)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
         + map (p \ "__GCC_ATOMIC_\(<p)_LOCK_FREE=\(lf (p 1))")
                 [["BOOL" 1] ["CHAR" 1] ["CHAR16_T" 2] ["CHAR32_T" 4] ["WCHAR_T" (sw ? 2 4)]
-                 ["SHORT" 2] ["INT" 4] ["LONG" lw] ["LLONG" 8] ["POINTER" lw]]
+                 ["SHORT" 2] ["INT" (tmint tm)] ["LONG" (tmlong tm)] ["LLONG" (tmll tm)] ["POINTER" (tmptr tm)]]
         + map (n \ "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_\(n)") ws))
    ; C11's conditional features (6.10.8.3), each absence target-true; u"" is utf-16, U"" utf-32
    (featdefs tgt)
@@ -179,7 +179,7 @@
     ; __mooncc__ says the compiler, __moonlibc__ the libc; __moon__ (cc-defs) the dialect
     '("__mooncc__=1" "__moonlibc__=1"
       "__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
-      "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
+      "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16"
       "__LONG_LONG_MAX__=0x7fffffffffffffffLL" "__LONG_LONG_WIDTH__=64"
       "__ORDER_LITTLE_ENDIAN__=1234" "__ORDER_BIG_ENDIAN__=4321" "__ORDER_PDP_ENDIAN__=3412"
       "__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" "__FLOAT_WORD_ORDER__=__ORDER_LITTLE_ENDIAN__"
@@ -197,8 +197,7 @@
       "__INT_LEAST32_TYPE__=int" "__UINT_LEAST32_TYPE__=unsigned int"
       "__INT_LEAST32_MAX__=0x7fffffff" "__UINT_LEAST32_MAX__=0xffffffffU" "__INT_LEAST32_WIDTH__=32"
       "__WINT_TYPE__=unsigned int" "__WINT_MAX__=0xffffffffU" "__WINT_MIN__=0U" "__WINT_WIDTH__=32"
-      "__SIZEOF_SHORT__=2" "__SIZEOF_INT__=4" "__SIZEOF_LONG_LONG__=8"
-      "__SIZEOF_FLOAT__=4" "__SIZEOF_DOUBLE__=8" "__SIZEOF_WINT_T__=4"
+      "__SIZEOF_SHORT__=2" "__SIZEOF_FLOAT__=4" "__SIZEOF_WINT_T__=4"
       "__FLT_RADIX__=2"
       "__FLT_MANT_DIG__=24" "__FLT_DIG__=6" "__FLT_DECIMAL_DIG__=9"
       "__FLT_MIN_EXP__=(-125)" "__FLT_MIN_10_EXP__=(-37)" "__FLT_MAX_EXP__=128" "__FLT_MAX_10_EXP__=38"
@@ -225,8 +224,6 @@
       "__DECIMAL_DIG__=17")
    stdlp64
     '("__LP64__=1" "_LP64=1"
-      "__LONG_MAX__=0x7fffffffffffffffL" "__LONG_WIDTH__=64"
-      "__SIZEOF_LONG__=8" "__SIZEOF_POINTER__=8" "__SIZEOF_SIZE_T__=8" "__SIZEOF_PTRDIFF_T__=8"
       "__INT64_TYPE__=long int" "__UINT64_TYPE__=long unsigned int"
       "__INT64_MAX__=0x7fffffffffffffffL" "__UINT64_MAX__=0xffffffffffffffffUL"
       "__INT64_C(c)=c ## L" "__UINT64_C(c)=c ## UL"
@@ -247,15 +244,9 @@
       "__INTMAX_TYPE__=long int" "__UINTMAX_TYPE__=long unsigned int"
       "__INTMAX_MAX__=0x7fffffffffffffffL" "__UINTMAX_MAX__=0xffffffffffffffffUL"
       "__INTMAX_C(c)=c ## L" "__UINTMAX_C(c)=c ## UL" "__INTMAX_WIDTH__=64"
-      "__INTPTR_TYPE__=long int" "__UINTPTR_TYPE__=long unsigned int"
-      "__INTPTR_MAX__=0x7fffffffffffffffL" "__UINTPTR_MAX__=0xffffffffffffffffUL" "__INTPTR_WIDTH__=64"
-      "__SIZE_TYPE__=long unsigned int" "__SIZE_MAX__=0xffffffffffffffffUL" "__SIZE_WIDTH__=64"
-      "__PTRDIFF_TYPE__=long int" "__PTRDIFF_MAX__=0x7fffffffffffffffL" "__PTRDIFF_WIDTH__=64"
       "__BIGGEST_ALIGNMENT__=16")                    ; the widest ask, and bare aligned
    stdt32
-    '("__LONG_MAX__=0x7fffffffL" "__LONG_WIDTH__=32"
-      "__SIZEOF_LONG__=4" "__SIZEOF_POINTER__=4" "__SIZEOF_SIZE_T__=4" "__SIZEOF_PTRDIFF_T__=4"
-      "__INT64_TYPE__=long long int" "__UINT64_TYPE__=long long unsigned int"
+    '("__INT64_TYPE__=long long int" "__UINT64_TYPE__=long long unsigned int"
       "__INT64_MAX__=0x7fffffffffffffffLL" "__UINT64_MAX__=0xffffffffffffffffULL"
       "__INT64_C(c)=c ## LL" "__UINT64_C(c)=c ## ULL"
       "__INT_LEAST64_TYPE__=long long int" "__UINT_LEAST64_TYPE__=long long unsigned int"
@@ -273,16 +264,27 @@
       "__INTMAX_TYPE__=long long int" "__UINTMAX_TYPE__=long long unsigned int"
       "__INTMAX_MAX__=0x7fffffffffffffffLL" "__UINTMAX_MAX__=0xffffffffffffffffULL"
       "__INTMAX_C(c)=c ## LL" "__UINTMAX_C(c)=c ## ULL" "__INTMAX_WIDTH__=64"
-      "__INTPTR_TYPE__=int" "__UINTPTR_TYPE__=unsigned int"
-      "__INTPTR_MAX__=0x7fffffff" "__UINTPTR_MAX__=0xffffffffU" "__INTPTR_WIDTH__=32"
-      "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
-      "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32"
       "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
+   ; what the type model says: int's, long's and double's widths, and size_t, ptrdiff_t and intptr_t
+   ; as floor.l's tmsz spells them
+   (modeldefs tm)
+    (: l? (tmsz tm = 'ulong) n (tmptr tm) s (l? ? "long " "") w (show (8 * n))
+       (hex c n) ((c = 102 ? "f" "7") + cats (map (_ \ "f") ^(2 * n - 1)))
+       sm "0x\(hex 55 n)\(l? ? "L" "")" um "0x\(hex 102 n)\(l? ? "UL" "U")"
+       (sz t v) "__SIZEOF_\(t)__=\(show v)"
+       ["__INT_WIDTH__=\(show (8 * tmint tm))" "__LONG_WIDTH__=\(show (8 * tmlong tm))"
+        "__LONG_MAX__=0x\(hex 55 (tmlong tm))L"
+        (sz "INT" (tmint tm)) (sz "LONG" (tmlong tm)) (sz "LONG_LONG" (tmll tm)) (sz "DOUBLE" (tmdbl tm))
+        (sz "POINTER" n) (sz "SIZE_T" n) (sz "PTRDIFF_T" n)
+        "__SIZE_TYPE__=\(s)unsigned int" "__SIZE_MAX__=\(um)" "__SIZE_WIDTH__=\(w)"
+        "__PTRDIFF_TYPE__=\(s)int" "__PTRDIFF_MAX__=\(sm)" "__PTRDIFF_WIDTH__=\(w)"
+        "__INTPTR_TYPE__=\(s)int" "__UINTPTR_TYPE__=\(s)unsigned int"
+        "__INTPTR_MAX__=\(sm)" "__UINTPTR_MAX__=\(um)" "__INTPTR_WIDTH__=\(w)"])
    ; wchar_t forks by ABI: int on SysV, unsigned int on AAPCS; -fshort-wchar unsigned short
    (wchdefs tgt sw)
     (? sw '("__WCHAR_TYPE__=short unsigned int" "__WCHAR_MAX__=0xffff" "__WCHAR_MIN__=0" "__WCHAR_WIDTH__=16"
             "__SIZEOF_WCHAR_T__=2")
-       (tgt = 'a64 || arm32? tgt)
+       (wchu? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32"
          "__SIZEOF_WCHAR_T__=4")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"
@@ -304,13 +306,14 @@
        (key d) <(usplit 61 d)
        (filter (d \ !(elem (key d) (map key own))) stdt32 + own))
    (stddefs tgt sw)
-    (? (i386? tgt)
+    (modeldefs (tmof tgt) +
+     (? (i386? tgt)
        (stdi386 + (sw ? (wchdefs tgt sw)
                       '("__WCHAR_TYPE__=long int" "__WCHAR_MAX__=0x7fffffffL" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)"
                         "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
         + stdcommon)
        (tgt = 'mips) (stdmips + wchdefs tgt sw + map (d \ peep stdbe d d) stdcommon)
-       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
+       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)))
    ; a gripe prints "cc: <file>:<line>:<col>: msg" (no file: the source; no line/col: elided);
    ; anything else prints plain. both exit 1
    (ccdie val src plain)
