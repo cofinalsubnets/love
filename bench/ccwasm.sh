@@ -55,7 +55,7 @@ ms() {     # median wall-clock ms of SAMPLES runs
   while [ $i -lt "$SAMPLES" ]; do
     s=$(date +%s%N); run "$1" "$2" > /dev/null 2>&1 || { echo dnf; return; }; e=$(date +%s%N)
     echo $(( (e - s) / 1000000 )); i=$((i + 1))
-  done | sort -n | awk -v n="$SAMPLES" 'NR == int((n+1)/2) { print }'
+  done | sort -n | awk -v n="$SAMPLES" '$1 == "dnf" { d = 1 } NR == int((n+1)/2) { v = $1 } END { print d || v == "" ? "dnf" : v }'
 }
 
 rows="sum:s:sha256 sum:m:md5 sum:c:crc32 sum:k:cksum gz:d:deflate gz:i:inflate"
@@ -87,7 +87,7 @@ for row in sum:s:sha256 gz:d:deflate; do
   for l in $have; do
     v=$(bytes "$l" "$W/$lbl.$l" 2>/dev/null || echo dnf)
     [ -n "$base" ] || base=$v
-    if [ "$l" = mooncc ] || [ "$v" = dnf ]; then printf '%14s' "$v"
+    if [ "$l" = mooncc ] || [ "$v" = dnf ] || [ "$base" = dnf ] || [ "$v" = 0 ]; then printf '%14s' "$v"
     else printf '%14s' "$v($(awk -v a="$base" -v b="$v" 'BEGIN{printf "%.1fx", a/b}'))"; fi
   done; echo
 done

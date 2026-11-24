@@ -115,7 +115,7 @@ syms() {   # "<name> <bytes>" for an object's text symbols, gap-derived, section
   end=$(objdump -h "$1" | awk '$2==".text"{print strtonum("0x" $3)}')
   nm -n --defined-only "$1" 2>/dev/null | awk -v e="$end" '
     $2 ~ /^[tT]$/ { na[++k]=$3; ad[k]=strtonum("0x" $1) }
-    END { for (i = 1; i <= k; i++) print na[i], (i<k ? ad[i+1]-ad[i] : e-ad[i]) }' | sort
+    END { for (i = 1; i <= k; i++) print na[i], (i<k ? ad[i+1]-ad[i] : e-ad[i]) }' | LC_ALL=C sort -k1,1
 }
 printf '%-16s' "file"; for l in $have; do printf '%12s' "$l"; done; echo
 for f in hash gz; do
@@ -142,7 +142,7 @@ for f in hash gz; do
     # its opposite number already paid for inside another row. The whole-file
     # line above is the sound total; these are per-function readings, worst
     # first, and each is still generous to the lane that inlined into it.
-    join "$W/$f.mooncc.syms" "$W/$f.$l.syms" | awk -v l="$l" -v a="$mine" -v b="$theirs" '
+    LC_ALL=C join "$W/$f.mooncc.syms" "$W/$f.$l.syms" | awk -v l="$l" -v a="$mine" -v b="$theirs" '
       $3 > 0 { r[++n] = $2 / $3; nm[n] = $1 }
       END { printf "    vs %-10s %d fns against %d, %d in both", l, a, b, n
             if (!n) { print "" ; exit }
@@ -166,7 +166,7 @@ ms() {   # median wall-clock ms of SAMPLES runs of "$@"
     e=$(date +%s%N)
     echo $(( (e - s) / 1000000 ))
     i=$((i + 1))
-  done | sort -n | awk -v n="$SAMPLES" 'NR == int((n+1)/2) { print }'
+  done | sort -n | awk -v n="$SAMPLES" '$1 == "dnf" { d = 1 } NR == int((n+1)/2) { v = $1 } END { print d || v == "" ? "dnf" : v }'
 }
 printf '%-16s' "row"; for l in $have; do printf '%12s' "$l"; done; echo
 for row in "sum s sha256" "sum m md5" "sum c crc32" "sum k cksum" \

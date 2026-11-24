@@ -179,8 +179,8 @@
                    (neon [x 14.65 21.35] [s 0 0] 0.85 "品" (rgb 1 0.2 0.55))
                    (neon [x 13.75 21.35] [s 0 0] 0.55 "中心" (rgb 0.3 0.85 1))])
 ; ..the board a security monitor: what the eye saw a frame before, framed as a camera's
-; picture is, its brackets, its labels and the hour stamped on it in a pixel font three by
-; five, s texels a dot; the red dot blinking. before the first frame, no signal
+; picture is, its brackets and the hour stamped on it in a pixel font three by
+; five, s texels a dot. before the first frame, no signal
 (: dots {48 "111101101101111" 49 "010110010010111" 50 "111001111100111" 51 "111001111001111" 52 "101101111001001"
          53 "111100111001111" 54 "111100111101111" 55 "111001001001001" 56 "111101111101111" 57 "111101111001111"
          65 "010101111101101" 67 "111100100100111" 69 "111100111100111" 71 "111100101101111" 73 "111010010010111"
@@ -193,10 +193,9 @@
 (: camwhite '(grey 0.92))
 (: (corner x y dx dy) [['rect (min x (x + 18 * dx)) (min y (y + 2 * dy)) (max x (x + 18 * dx)) (max y (y + 2 * dy)) camwhite]
                        ['rect (min x (x + 2 * dx)) (min y (y + 12 * dy)) (max x (x + 2 * dx)) (max y (y + 12 * dy)) camwhite]])
-(: (camover rec) (texture 192 104 13
-                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1
-                   + (rec ? [['disc 17 17 4 '(rgb 0.95 0.1 0.08)]] ()) + type 25 12 2 "REC" camwhite)))
-(: camfeed [(camover 1) (camover 0)])
+(: camover (texture 192 104 13
+                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1)))
+(: camfeed [camover])
 (: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
 ; ..a black board, a radio mast on it in neon green: two legs braced across and crossed, a
 ; mast and its tip
@@ -805,6 +804,8 @@
   (sky 18.35 'mostly)
   (smog 0.9)
   (dye (rgb 0.5 0.22 0.72))
+  ; ..pink where it breaks
+  (gradient [(rgb 0.88 0.4 0.24) (rgb 0.75 0.34 0.38) (rgb 0.61 0.3 0.4)])
   ; ..and all through it far traffic, and a music box now and then
   (hum 'traffic [-1000 -1000 -1000] [1000 1000 1000])
   (hum 'musicbox [-1000 -1000 -1000] [1000 1000 1000])

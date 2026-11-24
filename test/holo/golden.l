@@ -1309,6 +1309,14 @@
       ("t2.s.set"    "00f2010040f2000108bf40f20101" ((add r0 r0 1) (set eq r1))) ; addw: set reads them
       ("t2.leasp"    "04a8" ((lea r0 sp 16))) ; add r0, sp, #16
       ("t2.leasp.w"  "0df20040" ((lea r0 sp 1024))) ; addw r0, sp, #1024
+      ;; past imm12 and under 1 MB: add.w/sub.w of the high bits, then addw/subw of the low 12
+      ("t2.addfar"     "01f5104000f23430" ((add r0 r1 37684)))      ; add.w r0, r1, #0x9000 ; addw r0, r0, #0x334
+      ("t2.addfar.k"   "01f58050"         ((add r0 r1 4096)))       ; add.w r0, r1, #0x1000
+      ("t2.addfar.top" "04f57f2909f6ff79" ((add r9 r4 1048575)))    ; add.w r9, r4, #0xff000 ; addw r9, r9, #0xfff
+      ("t2.addfar.in"  "03f50053"         ((add r3 r3 8192)))       ; add.w r3, r3, #0x2000
+      ("t2.subfar"     "a2f51042a2f23432" ((sub r2 r2 37684)))      ; sub.w r2, r2, #0x9000 ; subw r2, r2, #0x334
+      ("t2.addfar.neg" "a6f58055a5f20105" ((add r5 r6 -4097)))      ; sub.w r5, r6, #0x1000 ; subw r5, r5, #1
+      ("t2.leasp.far"  "0df6ff7000f28930" ((lea r0 sp 5000)))       ; sp keeps the chain: addw #4095 ; addw #905
       ("t2.leax.1"   "0844" ((leax r0 r1 r0 1 0))) ; add r0, r1 (t2, no flags)
       ("t2.leax.4"   "01eb8000" ((leax r0 r1 r0 4 0))) ; add.w r0, r1, r0, lsl #2
       ("t2.jmpr"    "1847"              ((jmpr r3)))                  ; bx r3
@@ -1395,13 +1403,7 @@
       ("t2.wfi"     "30bf"              ((wfi)))                      ; wfi
       ;; MRS: the two stack pointers, which a fault handler reads to find the frame
       ("t2.mrsmsp"  "eff30880"          ((mrs r0 msp)))               ; mrs r0, msp
-      ("t2.mrspsp"  "eff30983"          ((mrs r3 psp)))               ; mrs r3, psp
-      ;; the 64-bit unsigned divide/remainder: r2:r3 / r0:r1 -> r0:r1, a 64-step restoring loop,
-      ;; fixed narrow branches, r4-r7 saved
-      ("t2.udivll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1104619465df8047b5df8046b5df8045b5df8044b"
-                     ((udivll)))
-      ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
-                     ((uremll))))
+      ("t2.mrspsp"  "eff30983"          ((mrs r3 psp))))               ; mrs r3, psp
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb2 (t 2)) 0 t2tests)
    ;; -- laylax on thumb2: an in-reach b or bcc goes narrow (b t2 +-2KB, bcc t1 +-256), judged at
    ;; the all-wide layout; goldens from llvm-mc --filetype=obj --
@@ -1455,6 +1457,12 @@
    _ (chk-eq "t2.rlx.lal.mid" 2008 (#(txl 'r0 'p 1000)))
    _ (chk-eq "t2.rlx.lal.far" 4212 (#(txl 'r0 'p 2100)))
    _ (chk-eq "t2.rlx.lal.num" "45f27860c1f23420" (snip (hexs (txl 'r0 305419896 2100)) 0 16))
+   ;; lalp is lal near; far it loads the pool word from the pc, lap's pair and an ldr, no absolute half
+   (txp d n) (tx ([['lalp d 'x 'p]] + map (_ \ '(nop)) ^n + '((align 4) (label p) (raw (1 2 3 4)))) {})
+   _ (chk-eq "t2.rlx.lalp.near" "004800bf01020304" (hexs (txp 'r0 0)))
+   _ (chk-eq "t2.rlx.lalp.far" "41f26800c0f2000078440068" (snip (hexs (txp 'r0 2100)) 0 24))
+   _ (chk-eq "t2.rlx.lalp.far.len" 4216 (#(txp 'r0 2100)))
+   _ (chk-eq "t2.rlx.lalp.far.hi" "41f26c08c0f20008f844d8f80080" (snip (hexs (txp 'r8 2100)) 0 28))
 
    ;; -- the thumb1 backend: armv6-m, 16-bit, two-address, low registers, no movw/movt (`li`
    ;; byte-builds), no wide alu, no it (`set` branches over), no divide. goldens from llvm-mc

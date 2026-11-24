@@ -136,6 +136,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs, binary ops are binary
 ; - u + M u = (+ u (M u)): application binds tighter than infix -- and applying a
 ;   number is the tower (3 2 = 8), so write (u + M) u
+; - (p x ? x + 1 0) is (p x ? x + (1 0)), one arm and no else, with no error: parenthesize an
+;   infix arm, (p x ? (x + 1) 0)
 ; - (1 +) = (+ 1): no sections
 ; - (map < l) is (< map l): an infix operator by value is parenthesised, (<). the
 ;   accessor is cap -- and love orders across kinds, so the misread answers 0 in silence
@@ -218,6 +220,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`
 - `src/inle/a64/*`, `src/inle/mkboot.l`, `src/tools/kflat.l` -> `test_kernel_rpi3`
+- `test_teensy41_board` `test_ch32v203_board` `test_mips_router` run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them
 <!-- /lanes -->
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.

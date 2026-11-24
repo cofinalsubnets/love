@@ -173,15 +173,15 @@
    (ev r) (synth-wstep st r)
    (keys l) (each l ev)
    (typed t) (each (chars t) (c \ ev ['text (string c)]))
-   f0 (st 'focus)
-   _ (keys [['down 29] ['down 17] ['up 17] ['up 29] ['down 17]]) f1 (st 'focus)      ; ctrl-w w, then w
+   f0 (st 'ps 'focus)
+   _ (keys [['down 29] ['down 17] ['up 17] ['up 29] ['down 17]]) f1 (st 'ps 'focus)      ; ctrl-w w, then w
    _ (typed "w") nv (#(st 'hv)) _ (keys [['down 18] ['up 18]]) _ (typed "i") _ (typed "bd sn")
    _ (keys [['down 1] ['up 1]]) md (vs 'mode) ov (st 'over)
    ln (vs 'lines)
-   _ (keys [['down 29] ['down 17] ['up 17] ['up 29] ['down 37]]) f2 (st 'focus)      ; ctrl-w k
+   _ (keys [['down 29] ['down 17] ['up 17] ['up 29] ['down 37]]) f2 (st 'ps 'focus)      ; ctrl-w k
    _ (keys [['down 28] ['up 28]]) sent (st 'lmsg) on (st 'on)
-   _ (synth-wstep st ['press 1 10 (synth-top + 40)]) f3 (st 'focus)
-   _ (synth-wstep st ['press 1 10 10]) f4 (st 'focus)
+   _ (synth-wstep st ['press 1 10 (synth-top + 40)]) f3 (st 'ps 'focus)
+   _ (synth-wstep st ['press 1 10 10]) f4 (st 'ps 'focus)
    _ (synth-wstep st ['press 1 10 (synth-top + 40)])
    _ (synth-paint st win)
    _ (typed ":q!") _ (keys [['down 28]])

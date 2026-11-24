@@ -148,10 +148,14 @@
    (k-words l) (foldl (\ s w (s + (w + k-nul))) "" l)
    (k-pump q) (cue? q ? () (kpump 0 @ 0 () 2 (rest 0, k-pump q) _ (rest 10, k-pump q)))
    ; love's own process wakes from an image: the door's /proc/image, else one baked here the
-   ; first time, by love itself as a process. bake and wake run bare
+   ; first time, by love itself as a process. bake and wake run bare. a bake that leaves no
+   ; image says so: every love process after it reads its sources
    k-img "/tmp/.love.img"
    (k-image _) (? (two? (stat "/proc/image")) () (two? (stat k-img)) ()
-                  (k-procrun ["/proc/self/exe" "bake" k-img]))
+                  (k-procrun ["/proc/self/exe" "bake" k-img] @ s
+                   (two? (stat k-img) ? ()
+                    (say err ("love: no image baked (status " + show s + "): its processes read their sources"),
+                     put err 10))))
    (k-procrun argv)
      (: _ (elem 47 <argv || elem <argv ["bake" "wake"] ? () (k-image 0))
         (kproc (k-words argv) (k-words (environ 0)) @ r

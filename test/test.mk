@@ -1,7 +1,7 @@
 # test/test.mk -- the test_* gates, included by ./Makefile; paths resolve from the root
 
 # every gate is phony: one missing here stops running once a file of its name appears
-.PHONY: \
+.PHONY: test_psnap \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
@@ -15,7 +15,7 @@
   test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_esp32 test_esp32_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
+  test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32 test_esp32_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_mips test_mips_router test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
@@ -56,7 +56,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
 	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
-	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_esp32_board test_esp32s3_board test_esp32c6_board test_teensy41_board test_links \
+	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32_board test_esp32s3_board test_esp32c6_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
 
@@ -174,16 +174,18 @@ test_front: $(ho)/front $(ho)/frontseat
 	@sh test/gate/run.sh -a hornseat "$(ho)/frontseat" "hornseat: ok" test/front/hornseat.l
 # standalone smoke tests kept out of the corpus: each wants a crew module, is not idempotent
 # (love0 evaluates twice), or can hang. gate = exit 0 and "<name>: ok"
-hostnif_tests = test/host/gcpause.l test/host/gcage.l test/host/gcroom.l test/host/gcbudget.l test/host/mop.l test/host/stow.l test/host/deepeq.l test/host/wharf.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/pier.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/site.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/saver.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/gpu.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/netstack.l test/host/netsock.l test/host/netduct.l test/host/netstream.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
+hostnif_tests = test/host/gcpause.l test/host/gcage.l test/host/gcroom.l test/host/gcbudget.l test/host/mop.l test/host/stow.l test/host/deepeq.l test/host/wharf.l test/host/slip.l test/host/cb.l test/host/rune.l test/host/pty.l test/host/loader.l test/host/rdiff.l test/host/run.l test/host/luxui.l test/host/sh.l test/host/pier.l test/host/vi.l test/host/overlay.l test/host/bake.l test/host/rove.l test/host/tty.l test/host/lapiz.l test/host/papel.l test/host/kiosko.l test/host/site.l test/host/sbhttp.l test/host/salt.l test/host/libra.l test/host/clay.l test/host/tls.l test/host/tlsc.l test/host/ssh.l test/host/sshd.l test/host/gz.l test/host/gzc.l test/host/png.l test/host/imgenc.l test/host/jpeg.l test/host/webp.l test/host/pnm.l test/host/bmp.l test/host/qoi.l test/host/im.l test/host/font.l test/host/story.l test/host/design.l test/host/slop.l test/host/score.l test/host/grass.l test/host/grass99.l test/host/wade.l test/host/dusk.l test/host/apartment.l test/host/garage.l test/host/shaft.l test/host/court.l test/host/saver.l test/host/stones.l test/host/world.l test/host/brush.l test/host/swatch.l test/host/gpu.l test/host/flicker.l test/host/walk.l test/host/gesture.l test/host/mesh.l test/host/lore.l test/host/synth.l test/host/opl.l test/host/mus.l test/host/ops.l test/host/aplay.l test/host/flac.l test/host/icy.l test/host/ogg.l test/host/mp3.l test/host/opus.l test/host/player.l test/host/hexedit.l test/host/seek.l test/host/ptui.l test/host/mc.l test/host/torrent.l test/host/pom.l test/host/tuner.l test/host/helm.l test/host/wget.l test/host/www.l test/host/smallweb.l test/host/net.l test/host/netstack.l test/host/netsock.l test/host/netduct.l test/host/netstream.l test/host/ed.l test/host/cook.l test/host/x11.l test/host/window.l test/host/lorewin.l test/host/wad.l test/host/mittywin.l test/host/kitpng.l test/host/bee.l test/host/beeq.l test/host/locks.l test/host/hosts.l test/host/showbig.l test/host/bigprint.l test/host/lovefs.l test/host/droid.l test/host/imgcheck.l test/host/sshkeys.l
 hostnif_tests += test/host/manifest.l   # the spreadsheet, raised off /love
 hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
 hostnif_tests += test/host/grap.l test/host/chem.l   # grap and chem without plan 9 or groff
 # test/host/sh.l drives out/lush via out/love, not PATH's love
+hostnif_tests += test/host/deflate.l   # deflate streams off the format's description, through every decoder
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
 hostnif_tests += test/host/greet.l   # love greet headless: its keys, its box, laid over a saver
+hostnif_tests += test/host/sky.l    # lore's sky: the air's tables, the clouds and the light off them
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
 hostnif_tests += test/host/lazyglaze.l   # LOVE_LAZY_GLAZE: first-call compiles, tasks on a compile in flight
@@ -392,8 +394,22 @@ test_vi: host
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0) $(ho)/mooncc0.image
+test_moon: host $(love0) $(ho)/mooncc0.image test_psnap
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
+# the parser's prefix memo: its laws, then its oracle -- each runtime group of an isa compiled
+# with every unit parsed whole is the archive the build laid. psnap_isas="$(rt_isas)" runs them all
+psnap_isas ?= x64
+psnap_legs = $(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),psnap-$i-$g))
+define psnapleg
+.PHONY: psnap-$(1)-$(2)
+psnap-$(1)-$(2): out/rt/$(1)/$(2).a
+	@MOON_NOSNAP=1 $$(rtlove) src/tools/mkrt.l -m $$(ho)/.psnap-$(1)-$(2).a $(1) $$(patsubst %/mksys.l,$(if $(filter $(rt_nosys),$(1)),,mksys),$$(call rt_src,$(2))) && cmp $$(ho)/.psnap-$(1)-$(2).a $$< && rm -f $$(ho)/.psnap-$(1)-$(2).a || { echo "  psnap: FAIL -- $$< is not its whole parse"; exit 1; }
+endef
+$(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call psnapleg,$i,$g))))
+test_psnap: $(love0) $(ho)/mooncc0.image $(psnap_legs)
+	@echo 'TEST test/gate/psnap.sh (the prefix memo against the whole parse)'
+	@$(gsh) test/gate/psnap.sh $(love0) wake $(ho)/mooncc0.image
+	@echo '  psnap: ok -- $(words $(psnap_legs)) runtime groups ($(psnap_isas)) are their whole parse'
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
 mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:kinds-h:mx-ok src/love/nifs.h:src/love/nifs.l:nifs-h:nifs-ok \
@@ -424,6 +440,7 @@ endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
 src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
+src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l: src/love/compress/deflate.l
 src/love/gpark_gen.h: src/love/boot/glaze.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
@@ -615,12 +632,13 @@ test_virt test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke: test_%: ho
 test_playdate: host
 	@$(gsh) test/gate/playdate.sh "$(MAKE)" $m
 # test_teensy41 -- the inle kernel: kmain over the board's drivers and the arm love's objects (-t arm,
-# thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified
+# thumb-2), the lib image baked under qemu-arm, tlink.l, mkimg.l, ocopy.l, the boot image verified;
+# beside it the flash's loader and the same kernel linked for the psram, each layout verified
 test_teensy41: host
 	@echo TEST out/teensy41/love.hex
 	@if ! command -v qemu-arm >/dev/null 2>&1; then \
 	   sh test/gate/skip.sh gate-skip "test_teensy41: no qemu-arm to bake the kernel's image, skipped"; exit $$?; fi; \
-	  $(MAKE) -C src/inle/teensy41 kernel || { echo "FAIL teensy41 kernel build (the boot-image verify is inside)"; exit 1; }; \
+	  $(MAKE) -C src/inle/teensy41 kernel loader ram || { echo "FAIL teensy41 kernel build (the boot-image verifies are inside)"; exit 1; }; \
 	  echo "test_teensy41: the inle kernel (all-mooncc thumb-2), its image baked under qemu-arm, OUR linker -- nothing foreign"
 # test_nucleo446 -- mooncc, nlink.l, ocopy.l; arm-none-eabi-gcc only for its libgcc.a
 test_nucleo446: host
@@ -706,9 +724,15 @@ test_microbit_board: test_microbit
 	@echo TEST out/microbit/firm-ram.bin "(on silicon, from sram)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ microbit-swd out/microbit/firm-ram.bin
 # test_teensy41_board -- that kernel on a teensy 4.1, flashed over its usb on a host with teensy41-usb
+# ..by name, not in test_extra: it writes the flash, over the loader the psram lane wants
 test_teensy41_board: test_teensy41
 	@echo TEST out/teensy41/love.bin "(on silicon)"
 	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-usb out/teensy41/love.bin
+# test_teensy41_ram_board -- the psram kernel on the same board, through the loader its flash holds on
+# a host with teensy41-loader: nothing written
+test_teensy41_ram_board: test_teensy41
+	@echo TEST out/teensy41/love-ram.pkt "(on silicon)"
+	@$(gsh) test/gate/mcuboard.sh $(ho) $@ teensy41-loader out/teensy41/love-ram.bin
 # test_boards -- the ports still compile; prerequisites, so a wide make runs them at once
 test_boards: test_mps2_build test_virt_build test_rp2040 test_rp2350 test_nucleo446 test_nrf52840 test_microbit test_esp32 test_esp32c6 test_ch32v203 test_teensy41 test_playdate test_trinkey
 	@echo "test_boards: thirteen ports build and link -- mooncc and our linker, no emulator"
@@ -801,8 +825,9 @@ test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
 	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
-	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
+	    src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
+	@cat test/00-init.l src/love/holo/reach.l test/law/reach.l | $(gsh) test/gate/run.sh reach "$m" "test/law/reach:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/machobind.sh "$m"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
@@ -1219,7 +1244,7 @@ test_kernel_rv64 test_kernel_uproc_rv64:
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1800s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
@@ -1415,12 +1440,14 @@ test_nestwasm:
 # holo's wasm writer: three modules, wasm-opt if present, run by node, and the fuzz vs its model
 test_holowasm: host
 	@echo TEST test/holo/wasm.l
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
 	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
 	@$(NODE) test/holo/loader.mjs out/.holo3.wasm
+	@echo TEST test/gate/wasmdrop.sh "(the wasm link's drop)"
+	@$(gsh) test/gate/wasmdrop.sh $(ho) $m $(NODE)
 	@echo TEST test/holo/fuzz/wasm.l "(the wasm lane's second opinion: v8 against the model)"
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
 	@$(NODE) test/holo/fuzz/wasm.mjs out/.wasmfuzz.wasm out/.wasmfuzz.json
 endif
 

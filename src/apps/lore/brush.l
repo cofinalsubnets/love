@@ -152,7 +152,8 @@
    ; ..and the medium at points ps, a tray, of only those: a brush holding a place a hair off
    ; the face is near it. the last brush holding a point says, each weighed over all at once;
    ; a land at the points hs instead, raised as high as a piece reaches to half a metre over
-   ; its middle, so a wall rising out of it stays whole
+   ; its middle, so a wall rising out of it stays whole; a carve's lowered so, as low as it
+   ; reaches to half a metre under, so a shaft up through it keeps its walls to its lip
    (xyz ps) (map (k \ gem-tray [#ps] (map (p \ 1.0 * p k) ps)) ^3)
    (media ks ps hs) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
      (out pl) (pl @ [k 1 d] (V k <= d) [k -1 d] (V k >= 0.0 - d) [q d] (q 0 * X + q 1 * Y + q 2 * Z - d <= 0.0))
@@ -181,7 +182,8 @@
                             pls (catmap (k \ meets (bt k) (b 'planes j)) others)
                             ps (poly-carve f pls)
                             pt (tab ps) cs (tab (map mid ps)) np #ps
-                            (top i e) (: c (c+ (cs i) (c* e n)) [(c 0) (min (cs i 1 + 0.5) (foldl max -1e300 (map (q \ q 1) (pt i))) + e * n 1) (c 2)])
+                            (top i e) (: c (c+ (cs i) (c* e n)) ys (map (q \ q 1) (pt i))
+                                        [(c 0) ((b 'air = 1 ? (max (cs i 1 - 0.5) (foldl min 1e300 ys)) (min (cs i 1 + 0.5) (foldl max -1e300 ys))) + e * n 1) (c 2)])
                             M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np)
                                      (map (i \ top i 1e-3) ^np + map (i \ top i -1e-3) ^np))
                             F (np = 0 || atom? later ? () (flush later (xyz (map cs ^np)) n))

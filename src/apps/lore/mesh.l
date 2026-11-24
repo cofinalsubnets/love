@@ -233,8 +233,10 @@
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
- ; the grid's mesh and the spots it lays, [verts tris tone [S C]] or (), what lays the disc or
- ; the stars after, and their spots for a frame the gpu kept, [S C] or ()
+ ; the grid's mesh and the spots it lays, [verts tris tone [S C] e] or (), what lays the disc or
+ ; the stars after, and their spots for a frame the gpu kept, [S C] or (). a sky with no 'turn
+ ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map air]]: sky-gpu's, then the
+ ; view's right, up, ahead, focal length, step, width and height; LORE_SKY_PX 0 keeps the grid
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
@@ -251,11 +253,13 @@
                    I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
                    (#I = 0 ? () [(S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ())]))))))
      sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
-     ; ..the disc by day, the stars by night, on the pixels ok holds of: [S C] their indices,
+     ; ..the disc while it is up, the stars by night, on the pixels ok holds of: [S C] their indices,
      ; -1 for none, and their colours, or ()
      (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
                      (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
-                        [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]))
+                        st [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]
+                        (lt 'hi < (two? (lt 'turn) ? -0.4 -0.06) ? st (disc v ok @ () st d (map (k \ glued (st k) (d k)) ^2)))))
+     (glued a b) (: n #a i (iota (n + #b)) (over (peep b (i - n) 0) (i < n) (peep a i 0)))
      ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
      (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1
@@ -263,7 +267,10 @@
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
          (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
-         [(v \ sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e]))
+         [(v \ (: q (getenv "LORE_SKY_PX" != "0" ? (sky-gpu lt wx (e 0) (e 2) sim) ())
+                  (? (two? q) [() () (1.5 * lt 'expo) (spots v (S \ S >= 0)) e
+                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h)])) (q 1) (q 2)]]
+                     (sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e])))))
           (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
@@ -479,8 +486,10 @@
  ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
+ ; ..a window's share that is the picture's, where the console has the rest: 'pane its box in pixels
+ (mesh-pane st) (: wh (window-size (st 'win)) (peep st 'pane () @ () wh q [(max 1 (q 2)) (max 1 (q 3))]))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
+   wh (tablet? win ? (mesh-pane st) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
          'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
@@ -508,7 +517,16 @@
  ; when the gpu did; answers ""
  (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
    wh (window-size win) W <wh H (wh 1) P (window-paper win) gp (st 'gpu)
-   (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P)))
+   (? (two? (peep st 'pane ())) (mesh-split st f bands w h W H P)
+      (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P))))
+ ; ..beside the console the picture painted into its pane, the gpu keeping none of its frames
+ (mesh-split st f bands w h W H P) (: b (st 'pane) pw (b 2) ph (b 3) gp (st 'gpu) ov (peep st 'over {}) _ (tablet? gp ? (pin gp 'keep 0))
+   T (cask (4 * max 1 (pw * ph)))
+   _ (tray? f && #f = w * h && 0 < pw && 0 < ph ? (: _ (mesh-paint f w h T pw ph)
+                                    _ (each (sort (keys bands)) (r \ mesh-band st T pw ph r (bands r)))
+                                    (each ^(min ph (H - b 1)) (j \ pour P (4 * ((b 1 + j) * W + b 0)) T (4 * j * pw) (4 * min pw (W - b 0))))) 0)
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   (window-show (st 'win) 0 H, ""))
  ; ..its frames kept by the gpu from the next on
  (mesh-gpu-win st gp f w h W H P bands) (: ov (peep st 'over {})
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))

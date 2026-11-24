@@ -4,7 +4,7 @@
 ; glass on what drew and on what is bare, and a pane's classes behind and before a lens. a box
 ; with no gpu or no compiler answers a nom saying so, the frame left to facets
 ; host-side: a crew module. run: cat test/00-init.l test/host/gpu.l | out/love
-(borrow '(gpu posix lore))
+(borrow '(gpu posix lore sky mesh))
 
 (: W 96 H 64
    ; a checker, one texel a hole, on a square leaning back; a vertex-coloured triangle before it
@@ -111,6 +111,39 @@
            (lamped k) (apart (facets W H -1 mat [(lk k)] [tris] X nf)
                              (gpu-facets s W H -1 mat [vh] [tris] X nf () () [{'lamps [[lc [2 0 0 0 0 0 0 0]]] 'dks [0.0 0.0 k]}]))
            la [(lamped 0.7) (lamped 0.2)]
+           ; ..the batch kept as a scene, drawn where its group's mark lies, its colours its light's
+           ; strength times its weight; under another strength; and not at all, its mark down
+           (sn k m) {'key 1 'make (_ \ [[vh tris ['sn 1] () [0.0 0.0 0.5 2.0] 0 2.0 0 3]]) 'at [0 0] 'vis [1.0 1.0 1.0 m] 'kb [k]}
+           (dim k) (foldl (\ a j (: ix (iota 7 * 8 + 5 + j) (pin a ix (k * vh ix)))) vh ^3)
+           (kept k m) (apart (facets W H -1 mat (m ? [(dim (2.0 * k))] []) (m ? [tris] []) X nf)
+                             (gpu-facets s W H -1 mat [] [] X nf () () [{'scene (sn k m)}]))
+           ke [(kept 0.25 1.0) (kept 0.4 1.0) (kept 0.25 0.0)]
+           ; ..a batch drawn moved by its offset as the cpu draws it moved so, at two offsets
+           (shove x y) (foldl (\ a j (: ix (iota 7 * 8 + j) (pin a ix (verts ix + [x y 0.0] j)))) verts ^2)
+           (budge x y) (apart (facets W H -1 mat [(shove x y)] [tris] X nf)
+                            (gpu-facets s W H -1 mat [verts] [tris] X nf ['mv] () [{'offs [[x y 0.0]]}]))
+           mv [(budge 0.1 0.0) (budge -0.2 0.15)]
+           ; ..the sky asked a pixel at a time, as the cpu asks it at each: partly cloudy from an
+           ; eye off the middle, overcast under smog low down, and mostly cloudy dyed
+           (q8 x) (int (min 1.0 (max 0.0 x) * 255.0 + 0.5))
+           (px wx th ph) (: sim (1.0 * 1790812800 + 12.0 * 3600.0) lt (sky-light (sky-sun sim 0.0 0.65) wx sim)
+                           e [30.0 2.0 -50.0] v (mesh-view W H e th ph 1.4 0.1 100.0)
+                           m (mesh-sky (sky-stars sim 0.0 0.65) lt wx e sim 0.0 4 {} 2 0 v)
+                           gf (gpu-facets s W H -1 (v 'cam) [] [] [] nf () [() () (m 2) () e (m 5)] ())
+                           d (mesh-dirs v (iota (W * H)))
+                           c (sky-tone lt (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim))
+                           [(net (gf >> 32 != 1)) (off (gf & 16777215) ((q8 (c 0) << 16) | (q8 (c 1) << 8) | q8 (c 2)) @ f [(amax f) (net (f > 0))])])
+           ps [(px (sky-weather 1) 2.0 0.3) (px (pins (sky-weather 3) 'smog 0.6 'smog-hue [0.4 0.9 0.5]) 0.0 0.05) (px (pins (sky-weather 2) 'dye [0.9 0.3 0.6] 'smog 0.3 'sky [[0.9 0.6 0.4] [0.3 0.5 0.9]]) 1.0 0.4)]
+           ; ..and kept, unread, under it, where every bare pixel is the sky's, mesh-frame's c with
+           ; its spots; with no sky, read
+           kx (: sim (1.0 * 1790812800 + 12.0 * 3600.0) wx (sky-weather 1) lt (sky-light (sky-sun sim 0.0 0.65) wx sim)
+                 e [0.0 0.0 0.0] v (mesh-view W H e 2.0 0.3 1.4 0.1 100.0)
+                 m (mesh-sky (sky-stars sim 0.0 0.65) lt wx e sim 0.0 4 {} 2 0 v) _ (pin s 'keep 1)
+                 c [{} -1 [0 0 [0 0 0]] 1] (sh sk) (gpu-facets s W H -1 mat [verts] [ta] [] nf () sk c)
+                 a (sh [() () (m 2) () e (m 5)]) b (sh ()) _ (pin s 'keep 0)
+                 [a (tray? b)])
+           ; ..a batch moved every frame, a buf of its own each: those not drawn for a while dropped
+           sw (: _ (each ^300 (i \ gpu-facets s W H -1 mat [(shove (0.001 * i) 0.0)] [tris] X nf () () ())) #(keys (s 'bufs)))
            ; ..a batch named [m x], laid again under a new x: its verts alone, in the buf it had
            (rl x V) (apart (facets W H -1 mat [V gv] [tc tl] X (o 64)) (gpu-facets s W H -1 mat [V gv] [tc tl] X (o 64) [['sq x] ['ln 0]] () ()))
            rv (: a (rl 1 verts) n (s 'n) b (rl 2 (verts * 0.5)) c (rl 2 (verts * 0.5)) [a b c (s 'n - n)])
@@ -119,16 +152,18 @@
            un (: cs ((iota 80 >= 60) * 65281 - 1) ds (gem-tray [1 80] (map (x \ x >= 60 ? 0.0 2.0) ^80))
                  u (gpu-under g cs ds) f (gpu-frame g 640 8 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 0])
                  (u = () && tray? f ? [(net (f < 0)) (net ((f >= 0) * ((f & 16777215) = 65280)))] f))
-           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la]))))
+           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx sw]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
-   ; few pixels on an edge apart at most
+   ; few pixels on an edge apart at most; the sky a pixel at a time all bare, a step off at most,
+   ; and kept under it; a moving batch's old bufs dropped
    (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
                  && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
                  && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6) && all (f \ f <= 4) (r 7)
                  && all (f \ f 0 <= 4 && f 1 = 0 && 0 < f 2) (r 8)
                  && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0
-                 && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13)))
+                 && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13) && all (f \ f <= 4) (r 14) && all (f \ f <= 4) (r 15)
+                 && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16) && r 17 = ['kept 1] && r 18 < 200))
    moon (drawn "moon") cc (drawn "cc")
    (test (fine? moon) (fine? cc)))
 (test_fin ())

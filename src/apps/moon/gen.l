@@ -42,9 +42,8 @@
    ; the flag family sets or reads the flags for the form beside it: never pure, never in aluops (the two-address rewrites); off every list rdsp answers 'bar
    flagops '(adds subs adcs sbcs adc sbc ors)
    divops '(div rem udiv urem)
-   ; (umull dl dh a b) defines two; udivll/uremll are nullary, owning r0..r3 (r4..r7 saved inside)
+   ; (umull dl dh a b) defines two
    wmops '(umull smull)
-   llops '(udivll uremll)
    vshops '(shlv shrv sarv rorv rorv4)              ; x64: count in r1
    qfile '(r0 r1 r2 r3 r4 r5 r6 r7 r8 r9 r10 r11 r12)   ; the gp file a 32-bit pair move walks
    unops '(neg not sx1 sx2 sx4 zx1 zx2 zx4)         ; one-register rewrites
@@ -1046,7 +1045,6 @@
                                   (a64? g || rv? g || t32? g && !(v6m? g)) (<>f . (#f = 5 ? [(f 4)] ()))
                                   '(r0 r1 r2 r3))
                                ()]))
-       _ (arm llops (g \ f \ ['(r0 r1 r2 r3) '(r0 r1 r2 r3) ()]))
        _ (arm wmops (g \ f \ [[(f 3) (f 4)] [<>f <>>f] 1]))
        _ (arm '(mla) (g \ f \ [[<>>f <>>>f (f 4)] [<>f] 1]))
        _ (arm '(clz) (g \ f \ [[<>>f] [<>f] 1]))

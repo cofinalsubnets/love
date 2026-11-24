@@ -55,7 +55,7 @@ static void oneshot(unsigned char const *p, unsigned n)
 	say_s("sha256", h);
 	md5_hex(p, n, h);
 	say_s("md5", h);
-	say_u("crc32", crc32_of(p, n));
+	say_u("crc32", crc32(p, n));
 	say_u("cksum", cksum_of(p, n));
 }
 
@@ -129,7 +129,7 @@ static int spin(char const *what, unsigned reps)
 		switch (*what) {
 		case 's': sha256_hex(big, sizeof big, h); acc += (unsigned char) h[3]; break;
 		case 'm': md5_hex(big, sizeof big, h);    acc += (unsigned char) h[3]; break;
-		case 'c': acc += crc32_of(big, sizeof big); break;
+		case 'c': acc += crc32(big, sizeof big); break;
 		case 'k': acc += cksum_of(big, sizeof big); break;
 		default: return 2;
 		}
@@ -150,7 +150,7 @@ int main(int argc, char **argv)
 	 * its 128 at 56, blk_feed's whole-block loop opens at 64, and the crc
 	 * walks take eight at a time and then a tail of 0..7 --- */
 	for (unsigned n = 0; n <= 200; n++) {
-		say_u("crc32.n", crc32_of(buf, n));
+		say_u("crc32.n", crc32(buf, n));
 		say_u("cksum.n", cksum_of(buf, n));
 	}
 	for (unsigned n = 0; n <= 136; n++) {
@@ -173,7 +173,7 @@ int main(int argc, char **argv)
 	 * sign-extended load reads the wrong row for everything over 127 --- */
 	for (unsigned v = 0; v < 256; v++) {
 		unsigned char one = (unsigned char) v;
-		say_u("crc32.byte", crc32_of(&one, 1));
+		say_u("crc32.byte", crc32(&one, 1));
 		say_u("cksum.byte", cksum_of(&one, 1));
 	}
 

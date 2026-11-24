@@ -37,6 +37,9 @@
    ;; lal: la, or li of a number, with its word pooled at p; the relaxer loads it from there
    ;; where p is in reach
    (thumb-lal d x p) (charm? x ? (thumb-li d x) (thumb-la d x))
+   ;; lalp: lal whose far form is p's word loaded from the pc, lap's movw/movt and an ldr, so no
+   ;; absolute half is left for a loader that moves only abs32 words
+   (thumb-lalp d x p) (thumb-lap d p + (thumb-lo? d ? (t16 (0x6800 | rn d << 3 | rn d)) (t32 (0xF8D00000 | rn d << 16 | rn d << 12))))
    ;; lap: la from the pc, movw/movt of label less the pc the add after them reads; a .o leaves
    ;; R_ARM_THM_MOVW_PREL_NC / R_ARM_THM_MOVT_PREL
    (thumb-lap d label) (rn d @ dn ([(fix 4 'movw16p label dn) (fix 4 'movt16p label dn)]
@@ -67,7 +70,9 @@
       (: ty (sh @ 'shl 0 'shr 1 'sar 2 'ror 3 (scare 'badshift sh))
          base (look thumb-alu op 'badop)
          (t32 ((base | rn a) << 16 | ((k >> 2 & 7) << 12 | (rn d << 8 | ((k & 3) << 6 | (ty << 4 | rn b)))))))
-   ;; addw/subw (T4) #imm12; wider chunks by 4095 -- no flags written, and only the first step reads a
+   ;; addw/subw (T4) #imm12; under 1 MB add.w/sub.w (T3) of the high bits, a modified immediate
+   ;; since they span 8, then addw/subw of the low 12; sp or pc, or wider, chunks by 4095. no
+   ;; flags written, and only the first step reads a
    (thumb-addsub-imm op d a imm)
       (: pos (imm < 0 ? -imm imm)
          fop (imm < 0 ? (op @ 'add 'sub 'sub 'add op) op)
@@ -87,6 +92,9 @@
             (dn <= 7 && rn a = 13 && fop = 'add && pos <= 1020 && pos % 4 = 0)   ; add Rd, sp, #imm8*4
              (t16 (0xA800 | (dn << 8 | (pos >> 2))))
             (pos <= 4095) (one a pos)
+            (pos < 1048576 && dn < 13 && rn a < 13)
+             (: lo (pos & 4095)
+                (thumb-dpimm (fop @ 'add 0xF100 0xF1A0) dn (rn a) (thumb-mimm (pos - lo)) + (lo = 0 ? () (one d lo))))
             (chunks pos a ())))
    ;; ThumbExpandImm backwards: n's low word -> i:imm3:imm8 as 12 bits, -1 when it has none
    (thumb-mimm n)
@@ -208,31 +216,6 @@
       (: dn (rn d) an (rn a) bn (rn b) cn (rn acc)
          (t32 ((0xFB00 | an) << 16 | (cn << 12 | (dn << 8 | bn)))))
    (thumb-clz d s) (: dn (rn d) sn (rn s) (t32 ((0xFAB0 | sn) << 16 | (0xF080 | (dn << 8 | sn)))))
-   ;; 64-bit unsigned div/rem: dividend r2:r3, divisor r0:r1, answer r0:r1; r4..r7 saved round it.
-   ;; 64 restoring steps doubling (rem:dividend); a carry out of rem forces the subtract.
-   ;; label-free, offsets by byte count: loop at 28, bcs at 44, bcc at 54, bne at 76
-   (t2-udivmod which)
-      (catall [(thumb-push 'r4) (thumb-push 'r5) (thumb-push 'r6) (thumb-push 'r7)
-                (thumb-movw 'r4 0) (thumb-movw 'r5 0) (thumb-movw 'r6 64)
-                (thumb-aluop 'adds 'r2 'r2 'r2)                ; loop: (rem:dividend) <<= 1
-                (thumb-aluop 'adcs 'r3 'r3 'r3)
-                (thumb-aluop 'adcs 'r4 'r4 'r4)
-                (thumb-aluop 'adcs 'r5 'r5 'r5)
-                (t16 0xD204)                                   ; bcs -> the subtract
-                (thumb-aluop 'subs 'r7 'r4 'r0)                ; trial rem - divisor
-                (thumb-aluop 'sbcs 'r7 'r5 'r1)
-                (t16 0xD305)                                   ; bcc -> next
-                (thumb-aluop 'subs 'r4 'r4 'r0)
-                (thumb-aluop 'sbcs 'r5 'r5 'r1)
-                (thumb-addsub-imm 'add 'r2 'r2 1)              ; the quotient bit
-                (thumb-addsub-imm 'sub 'r6 'r6 1)              ; next
-                (t32 0xF1B60F00)                               ; cmp.w r6, #0, wide for the offsets
-                (t16 0xD1E6)                                   ; bne loop
-                (which @ 'div
-                 (thumb-movr 'r0 'r2 + thumb-movr 'r1 'r3)
-                 (thumb-movr 'r0 'r4 + thumb-movr 'r1 'r5))
-                (thumb-pop 'r7) (thumb-pop 'r6) (thumb-pop 'r5) (thumb-pop 'r4)])
-
    ;; [Rn,#imm12] (T3), else [Rn,#-imm8] (T4), else r12 = base+off and [r12,#0]
    (thumb-mem-far bn off)                                    ; r12 = Rbn +- imm12, else r12 = off ; r12 += Rbn
       (? (-4095 <= off <= 4095)
@@ -594,7 +577,6 @@
           ('cvtss2sd . thumb-cvtss2sd) ('cvtsd2ss . thumb-cvtsd2ss)
           ('movsnxr . thumb-movsnxr) ('movsnrx . thumb-movsnrx)
           ('clz . thumb-clz)
-          ('udivll . t2-udivmod 'div) ('uremll . t2-udivmod 'rem)        ; nullary: the whole expansion
           ('ld . thumb-ld) ('st . thumb-st)
           ('ld1 . thumb-ld1) ('ld2 . thumb-ld2) ('ld4 . thumb-ld4)
           ('st1 . thumb-st1) ('st2 . thumb-st2) ('st4 . thumb-st4)
@@ -606,7 +588,7 @@
           ('shl . thumb-shift 'shl) ('shr . thumb-shift 'shr) ('sar . thumb-shift 'sar)
           ('rol . thumb-shift 'rol) ('ror . thumb-shift 'ror)
           ('lea . thumb-lea) ('lean . thumb-lea)
-          ('la . thumb-la) ('lal . thumb-lal) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
+          ('la . thumb-la) ('lal . thumb-lal) ('lalp . thumb-lalp) ('lap . thumb-lap) ('lapool . thumb-lapool) ('addpc . thumb-addpc)
           ('leax . thumb-leax) ('ldx . thumb-ldx) ('ldxb . thumb-ldxb) ('stx . thumb-stx) ('stxb . thumb-stxb)
           ('push . thumb-push) ('pop . thumb-pop) ('pushm . thumb-pushm) ('popm . thumb-popm)
           ('umlal . thumb-umlal) ('alush . thumb-alush)
@@ -695,9 +677,9 @@
    (thumb-short ins c rel)
       (: x <c o (rel - 4)
          (? (<ins = 'flal) (rel < 0 || 1020 < rel ? () [(fix 4 'vldl (ins 4) (sx (ins 1)))])
-            (<ins = 'lal) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
-                                              (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
-                                              ()))
+            (elem <ins '(lal lalp)) (rn (ins 1) @ dn (? (rel < 0) () (dn <= 7 && rel <= 1022) [(fix 2 'ldl16 (ins 3) dn)]
+                                                        (rel <= 4094) [(fix 4 'ldlw (ins 3) dn)]
+                                                        ()))
             (#c != 1 || !(fix? x)) ()
             (fix-k x = 'b) (-2048 <= o <= 2046 ? [(fix 2 'b16 (fix-l x) 0)] ())
             (fix-k x = 'bcc) (-256 <= o <= 254 ? [(fix 2 'b8 (fix-l x) (fix-a x))] ())
