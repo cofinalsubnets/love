@@ -447,7 +447,7 @@
                                   (open g) (: s (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0"))
                                               (? (x && gpu-win g (w 'xw) = ()) (pin s 'win 1) (dr && peep g 'face 0) (pin s 'win 1) s))
                                   ge (getenv "LORE_GPU") on? (ge = "1" || ge != "0" && (x || dr || string? (getenv "LOVE_GPU_FACE")))
-                                  s (on? ? (gpu-open x @ g (tablet? g ? (open g) 'off)) 'off)
+                                  s (on? ? (gpu-open x @ g (tablet? g ? (open g) (gpu-said (unwords (map string g)), 'off))) 'off)
                                 (pin st 'gpu s, s))
                           s s)
  ; ..f's bare pixels filled as bare asks, through v, B0 the ground: again, none is left to fill

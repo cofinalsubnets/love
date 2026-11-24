@@ -92,7 +92,7 @@ enum {
  GL_NEAREST_MIPMAP_NEAREST = 0x2700, GL_REPEAT = 0x2901, GL_RENDERER = 0x1F01,
  GL_CULL_FACE = 0x0B44, GL_BACK = 0x0405, GL_CW = 0x0900, GL_R32F = 0x822E, GL_RED = 0x1903,
  GL_TEXTURE6 = 0x84C6, GL_TEXTURE7 = 0x84C7, GL_TEXTURE8 = 0x84C8, GL_TEXTURE9 = 0x84C9, GL_RGB32F = 0x8815, GL_RGB = 0x1907, GL_READ_FRAMEBUFFER = 0x8CA8, GL_DRAW_FRAMEBUFFER = 0x8CA9,
- GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304,
+ GL_TEXTURE1 = 0x84C1, GL_TEXTURE3 = 0x84C3, GL_TEXTURE4 = 0x84C4, GL_TEXTURE5 = 0x84C5, GL_RGBA32F = 0x8814, GL_TEXTURE2 = 0x84C2, GL_DEPTH_COMPONENT32F = 0x8CAC, GL_DEPTH_COMPONENT = 0x1902, GL_BLEND = 0x0BE2, GL_ONE = 1, GL_ZERO = 0, GL_DST_ALPHA = 0x0304 , GL_SRC_COLOR = 0x0300, GL_SRC_ALPHA = 0x0302,
  GL_SRC1_COLOR = 0x88F9, GL_SRC1_ALPHA = 0x8589, GL_COLOR = 0x1800, GL_FUNC_ADD = 0x8006, GL_MAX = 0x8008,
  GL_PACK_ALIGNMENT = 0x0D05, GL_UNPACK_ALIGNMENT = 0x0CF5, GL_CLAMP_TO_EDGE = 0x812F, GL_LINEAR = 0x2601, GL_SCISSOR_TEST = 0x0C11, GL_ANY_SAMPLES_PASSED = 0x8C2F, GL_QUERY_RESULT = 0x8866, GL_POINTS = 0 };
 
@@ -253,7 +253,8 @@ static char const vsrc[] =
  " gl_Position = q; }\n";
 // mode 0 opaque, 1 a glow (added), 2 a glass on what is there (times its tint, its colour
 // added where something drew), 3 the same glass on what is bare (the tint kept, the sheen),
-// 4 its mark on what is bare, half an alpha, 5 the sky under what is bare, its u an edge as
+// 4 its mark on what is bare, half an alpha, 6 and 7 a glass's tint alone, before 2 and 3 where
+// the driver blends with one colour, 5 the sky under what is bare, its u an edge as
 // facets's 256 takes it, asking a copy of the marks: 254 its alpha where it was bare alone,
 // 253 onto a glow or through a glass; a spot laid for it there in its stead
 static char const fsrc[] =
@@ -337,6 +338,7 @@ static char const fsrc[] =
  " if (mode == 0) o = vec4(c.b, c.g, c.r, 1.0);\n"
  " else if (mode < 3) o = vec4(c.b, c.g, c.r, 0.0), o1 = vec4(t.b, t.g, t.r, 0.0);\n"
  " else if (mode == 3) o = vec4(0.0, 0.0, 0.0, (c.r + c.g + c.b) / 12.0), o1 = vec4(t.b, t.g, t.r, (t.r + t.g + t.b) / 3.0);\n"
+ " else if (mode == 6) o = vec4(t.b, t.g, t.r, (t.r + t.g + t.b) / 3.0);\n"
  " else o = vec4(0.0, 0.0, 0.0, 0.5); }\n";
 
 // the ground, or the smaller frame: one triangle over the whole frame, each pixel its own of
@@ -463,7 +465,8 @@ static int setup(struct helper *H, int x) {
  H->u_li = glGetUniformLocation(H->prog, "li"); H->u_ks = glGetUniformLocation(H->prog, "ks");
  H->u_sh = glGetUniformLocation(H->prog, "sh"); glUniform1f(H->u_sh, 1);
  char const *ex = (char const *) glGetString(0x1F03);   // GL_EXTENSIONS
- H->dual = ex && strstr(ex, "GL_EXT_blend_func_extended") != NULL;
+ char const *du = getenv("LOVE_GPU_DUAL");   // 0 does without, as a driver with none must
+ H->dual = ex && strstr(ex, "GL_EXT_blend_func_extended") != NULL && !(du && !strcmp(du, "0"));
  H->fglass = ex && strstr(ex, "GL_EXT_color_buffer_float") && strstr(ex, "GL_EXT_float_blend");
  glUniform1i(H->u_tx, 0); glUniform1i(glGetUniformLocation(H->prog, "lz"), 2);
  H->u_cls = glGetUniformLocation(H->prog, "cls");
@@ -923,16 +926,23 @@ static int code(int t) { return t <= -3 - lensed ? t + lensed : t >= lensed - 1 
 
 // a run's state: opaque writes its depth, a glow or a glass leaves it and blends
 static void mode(struct helper *H, int m) {
- glUniform1i(H->u_mode, m);
+ glUniform1i(H->u_mode, m == 7 ? 6 : m);
  glDepthMask(m == 0);
  if (m == 0 || m == 5) glDisable(GL_BLEND);
  else glEnable(GL_BLEND);
  glColorMask(m != 4, m != 4, m != 4, 1);
  glBlendEquationSeparate(GL_FUNC_ADD, m == 4 ? GL_MAX : GL_FUNC_ADD);
  if (m == 1) glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE);
- else if (m == 2) glBlendFuncSeparate(GL_DST_ALPHA, GL_SRC1_COLOR, GL_ZERO, GL_ONE);
- else if (m == 3) glBlendFuncSeparate(GL_ZERO, GL_SRC1_COLOR, GL_ONE, GL_SRC1_ALPHA);
+ else if (m == 2) glBlendFuncSeparate(GL_DST_ALPHA, H->dual ? GL_SRC1_COLOR : GL_ONE, GL_ZERO, GL_ONE);
+ else if (m == 3) glBlendFuncSeparate(GL_ZERO, H->dual ? GL_SRC1_COLOR : GL_ONE, GL_ONE, H->dual ? GL_SRC1_ALPHA : GL_ONE);
+ else if (m == 6) glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_ONE);
+ else if (m == 7) glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_SRC_ALPHA);
  else if (m == 4) glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE); }
+// a run of glass, m 2 or 3: in one draw, else a triangle at a time, its tint and then its colour
+static void glass(struct helper *H, int m, int n, uintptr_t at) {
+ if (H->dual) { mode(H, m); glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, (void*) (4 * at)); return; }
+ for (int i = 0; i + 3 <= n; i += 3)
+  for (int k = 0; k < 2; k++) mode(H, k ? m : m + 4), glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*) (4 * (at + (uintptr_t) i))); }
 
 enum { scene_id = -9, groups = 2 };
 static void cmd_scene(struct helper *H, int n, size_t off) {
@@ -1077,20 +1087,17 @@ static void cmd_frame(struct helper *H, char *args) {
    for (int r = 0; r < b->nrun; r++) {
     int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
     if ((m != 0) != pass) continue;
-    if (m == 2 && !H->dual) { glassy = -1; continue; }
     glUniform1i(H->u_cls, class(b->runs[r].tex));
     struct tex *t = tx >= 0 ? tex_of(H, tx) : tx <= -3 ? tex_of(H, -3 - tx) : NULL;
     glUniform1i(H->u_has, t != NULL);
     if (t) glBindTexture(GL_TEXTURE_2D, t->gl), glUniform2f(H->u_ts, (float) t->w, (float) t->h);
-    void *at = (void*) (4 * (uintptr_t) b->runs[r].at);
-    mode(H, m);
-    glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, at);
-    if (m == 2) {   // ..and on what is bare, its tint and sheen
-     glBindFramebuffer(GL_FRAMEBUFFER, H->gb); mode(H, 3);
-     glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, at);
-     glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glassy = glassy < 0 ? glassy : 1; } } } }
+    uintptr_t const at = (uintptr_t) b->runs[r].at;
+    if (m != 2) { mode(H, m); glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * at)); continue; }
+    glass(H, 2, b->runs[r].n, at);
+    glBindFramebuffer(GL_FRAMEBUFFER, H->gb);   // ..and on what is bare, its tint and sheen
+    glass(H, 3, b->runs[r].n, at);
+    glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glassy = 1; } } }
  glUniform1i(H->u_bb, 0); glUniform4f(H->u_gz, 0, 0, 0, 0);
- if (glassy < 0) { glBindVertexArray(0); mode(H, 0); dprintf(H->out, "err no glass here\n"); return; }
  // ..last, where any glass fell on the bare: in any order, a glow there is what it shows
  glUniform1i(H->u_cls, 0);
  for (int k = 0; glassy && k < ni; k++) {

@@ -56,6 +56,13 @@
            ; the square where they cross and the square shows past it elsewhere
            (half fl) (facets (W // 2) (H // 2) -1 mat [verts] [(iota 4 * 0 + gem-tray [4] [4 5 6 -1])] [] (o fl))
            un [-1 (half 64) (half 16)] sky (iota (W * H) % 7 * 1193046)
+           ; ..and with no fog, which at that depth leaves a glass clear: two panes crossed in one
+           ; run, on the bare and over a ground
+           gw (gem-tray [64] (map (i \ gv (i % 32) @ v (32 <= i && i % 8 = 0 ? -v (32 <= i && i % 8 = 6 ? 0.3 v))) ^64))
+           gi (iota 16 * 0 + gem-tray [16] [0 1 2 -3  0 2 3 -3  4 5 6 -3  4 6 7 -3])
+           (clear B) (: o (gem-tray [8] [0.0 0.0 0.0 0.0 0.0 64.0 0.0 0.0]) V [verts gw] T [ta gi] X [(int (gem-tray [8 8] ckl))]
+                        c (facets W H B mat V T X o) g (gpu-facets s W H B mat V T X o () () ()) (? (tray? g) (apart c g) 9999))
+           gc [(clear -1) (clear bg) (clear sky)]
            fs [(both -1 64) (both -1 72) (both bg 72) (both un 72) (both sky 72) (both [sky (half 64) (half 16)] 72)]
            ; ..the square's halves one behind a lens and one before it, the triangle before, and a
            ; lens over the square's corner, seen or not
@@ -164,11 +171,12 @@
            un (: cs ((iota 80 >= 60) * 65281 - 1) ds (gem-tray [1 80] (map (x \ x >= 60 ? 0.0 2.0) ^80))
                  u (gpu-under g cs ds) f (gpu-frame g 640 8 mat [] [-1 0.0 0.0 0.0 0.0 0.0 0.0 0])
                  (u = () && tray? f ? [(net (f < 0)) (net ((f >= 0) * ((f & 16777215) = 65280)))] f))
-           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx sw sh]))))
+           (gpu-close g, [up d dr e fs gl pi su sk rv pk un se la ke mv ps kx sw sh gc]))))
    ; ..no channel more than a step off, and a dropped buf draws nothing; through gpu-facets a
    ; few pixels on an edge apart at most; the sky a pixel at a time all bare, a step off at most,
    ; and kept under it; a moving batch's old bufs dropped
-   (fine? r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
+   (fine? r) (near? 8 r)
+   (near? gk r) (? (<r = 'no-gpu || <r = 'no-helper) (string? (r 1) || nom? (r 1))
                 (r 0 = [() ()] && charm? (r 1) && r 1 <= 1 && r 2 = () && r 3 = 0
                  && all (f \ f 0 + f 1 <= 8) (r 4) && all (f \ f <= 4) (r 5)
                  && r 6 0 = '(a a b c () z) && all (f \ f <= 4) >(r 6) && all (f \ f <= 4) (r 7)
@@ -176,8 +184,14 @@
                  && r 9 0 <= 4 && r 9 1 <= 4 && r 9 2 <= 4 && r 9 3 = 0
                  && r 10 = ['(z a b d e) 1 1] && r 11 = [3840 1280] && r 12 <= 4 && all (f \ f <= 4) (r 13) && all (f \ f <= 4) (r 14) && all (f \ f <= 4) (r 15)
                  && all (f \ f 0 = 0 && f 1 0 <= 1 && f 1 1 <= 16) (r 16) && r 17 = ['kept 1] && r 18 < 200
-                 && r 19 0 <= 1 && r 19 1 <= 1 && r 19 2 <= 1 && 8 < r 19 3 && r 19 4 = 0))
+                 && r 19 0 <= 1 && r 19 1 <= 1 && r 19 2 <= 1 && 8 < r 19 3 && r 19 4 = 0 && all (f \ f <= gk) (r 20)))
    moon (drawn "moon") cc (drawn "cc")
-   (test (fine? moon) (fine? cc)))
+   ; ..and where the driver blends with one colour alone, glass in two, rounded at each
+   _ (setenv "LOVE_GPU_DUAL" "0") one (drawn "moon") _ (setenv "LOVE_GPU_DUAL" "")
+   ; ..a helper that dies lets go, its words kept, and the frame is the cpu's
+   die (: g (gpu-open ()) (? (two? g) 'none
+     (: s (gpu-state g) f (_ \ gpu-facets s W H -1 mat [verts] [tris] [(int (gem-tray [8 8] ckl))] (gem-tray [8] [40.0 60.0 80.0 0.3 0.9 64.0 1.5 0.0]) () () ())
+        a (f ()) _ (hark ["kill" "-9" (show (g 'pid))]) _ (rest 100) b (f ()) [(tray? a) b (s 'g) (string? (s 'fail))])))
+   (test (fine? moon) (fine? cc) (near? 60 one) (elem die ['none [1 () () 1]])))
 (test_fin ())
 (puts "gpu: ok\n")
