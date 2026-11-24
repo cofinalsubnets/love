@@ -518,7 +518,10 @@
    as-loops {'loop 226 'loope 225 'loopz 225 'loopne 224 'loopnz 224 'jecxz 227 'jrcxz 227 'jcxz 227}
 
    ;; an immediate spelled unsigned in w bytes, as the signed value those bytes hold
-   (as-sx w v) (v >= 1 << (8 * w - 1) && v < 1 << 8 * w ? (v - (1 << 8 * w)) v)
+   (as-sx w v) (: f (1 << 8 * w) (v >= f // 2 && v < f ? (v - f) w < 4 && 0 - f < v && v < 0 - (f // 2) ? (v + f) (w = 4 ? (as-lo32 v) v)))
+   ; a dword's constant of 64 bits whose high half is all ones, or a negative past -2^31: its low dword, as gas
+   (as-lo32 v) (: hi (1 << 32) s ((hi - 1) * hi < v && v < hi * hi ? (v - hi * hi) v)
+                  (0 - hi < s && s < 0 - (hi // 2) ? (s + hi) s))
    ;; a string op spelled with its operands: they say only the source's override and the
    ;; address size, laid ahead of the table's bare row as gas does. () when the line is not one
    as-bmi '(andn bzhi bextr pdep pext mulx sarx shlx shrx rorx blsr blsmsk blsi)
@@ -657,6 +660,8 @@
           (#ops < 2 && elem tn as-x87d && all (o \ <o = 'st) ops && !(two? (enc 0)))
            (foldl (\ b o (two? b ? b (enc1 0 o))) () sts)
           (tn = 'jrcxz) (enc 0 @ b (two? b && mn = 'jecxz && md = 64 ? ([103] + b) b))
+          ; a far transfer's symbol is as wide as its offset
+          (elem tn '(ljmp lcall) && #ops = 2) (x64-encm md tn bw (map (o \ (as-tabo md (<o = 'ims ? ow bw) o)) os) 0)
           (elem tn '(call jmp loop loope loopne ljmp lcall)) (enc bw)
           (w != 0) (enc w)
           (mn = 'movd) (enc 4)

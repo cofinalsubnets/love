@@ -3,14 +3,17 @@
 ; v holds anything else; (unstow s) the value, or () for bytes stow did not lay. a tablet
 ; comes back with its keys pinned in the order keys gave them. the bytes are this machine's:
 ; a real tray's elements as they lie in memory
-(module (stow stow unstow)
+(module (stow stow stow-canon unstow)
 (: pinv (cite 'guts 'pinv) peepv (cite 'guts 'peepv) pind (cite 'guts 'pind) peepd (cite 'guts 'peepd)
    magic "lstow 1\n"
    ; ..a tag a node: 0 (), 1 a list cell, 2 an int, 3 a real, 4 a string, 5 a name, 6 a
    ; tablet, 7 an int tray, 8 a real tray, 9 a complex; a tray's rank and dims after its tag.
    ; ints, tags and lengths ride one int stream, reals another, string bytes a third, trays'
    ; elements the last
-   (stow v) (: T {'l ()} F {'l ()} S {'l () 'n 0} A {'l () 'n 0}
+   (stow v) (stow-by (x \ x) v)
+   ; ..the same for the same value, whatever the order its tablets keep
+   (stow-canon v) (stow-by sort v)
+   (stow-by ord v) (: T {'l ()} F {'l ()} S {'l () 'n 0} A {'l () 'n 0}
      (t x) (pin T 'l (x . T 'l))
      (str s) (t #s, pin S 'l (s . S 'l), pin S 'n (S 'n + #s))
      (blob b) (pin A 'l (b . A 'l), pin A 'n (A 'n + #b))
@@ -22,7 +25,7 @@
        'gem (t 3, pin F 'l (x . F 'l))
        'string (t 4, str x)
        'nom (t 5, str (show x))
-       'tablet (: ks (keys x) (t 6, t #ks, each ks (k \ (enc k, enc (x k)))))
+       'tablet (: ks (ord (keys x)) (t 6, t #ks, each ks (k \ (enc k, enc (x k)))))
        'trayz (t 7, dims x @ n (n = 0 ? 0 (blob (string (pinv (cask (8 * n)) 0 8 8 x)))))
        'trayr (t 8, dims x @ n (n = 0 ? 0 (blob (string (pind (cask (8 * n)) 0 x)))))
        'twin (t 9, enc (re x), enc (im x))

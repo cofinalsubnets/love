@@ -184,7 +184,7 @@ hostnif_tests += test/host/deflate.l   # deflate streams off the format's descri
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
-hostnif_tests += test/host/greet.l   # love greet headless: its keys, its box, laid over a saver
+hostnif_tests += test/host/greet.l test/host/opens.l   # love greet headless: its keys, its box, laid over a saver
 hostnif_tests += test/host/sky.l    # lore's sky: the air's tables, the clouds and the light off them
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
@@ -696,7 +696,7 @@ test_esp32: host
 	@echo "test_esp32: the esp32's and the s3's firmware (all-mooncc xtensa call0, soft float), linked by mooncc at iram and dram, images verified"
 test_esp32_board: test_esp32
 	@echo TEST test/holo/xtrun.l out/esp32/firm.elf "(on the esp32, from ram)"
-	@$(gsh) test/gate/esp32board.sh $(ho)/love out/esp32/firm.elf $(ho)
+	@MAKE="$(MAKE)" $(gsh) test/gate/esp32board.sh $(ho)/love out/esp32/firm.elf $(ho)
 test_esp32s3_board: test_esp32
 	@echo TEST test/holo/xtrun.l out/esp32/firm-s3.elf "(on the esp32-s3, from ram)"
 	@$(gsh) test/gate/esp32s3board.sh $(ho)/love out/esp32/firm-s3.elf $(ho)

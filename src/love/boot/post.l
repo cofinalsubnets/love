@@ -1983,12 +1983,16 @@
                 (<>v = 36 ? (see p) 0,
                  <m = 2027 && <>v = 36 ? (pin edgc 'on (<v = 1 || <v = 3 ? 1 0)) 0,
                  0))
+   ; ..a page key, plain; a modified one (; M ~) is a miss, read whole
+   (edpage p k) (see p @ 126 k 59 (see p, see p, 0) 0)
    (edcsi p) (: c (see p) e (peep arrow c 0)
                (e != 0 ? e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
                        55 (see p, -5)
                        (52 || 56) (see p, -6)
                        51 (see p, -4)
+                       53 (edpage p -14)           ; page up, page down
+                       54 (edpage p -15)
                        60 (edmouse p)
                        50 (edpaste p)
                        63 (edrqm p)
