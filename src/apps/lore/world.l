@@ -7,7 +7,7 @@
 ; world-read, -new, -at, -step, -move and -frame are pure; world-watch reads the disk, and only
 ; world-walk and world-run touch the tty. a walk may leave for another level's entry, a herald
 ; met or a bed slept in, and world-run walks on there in the same window.
-(module (world world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
+(module (world scene-key scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
@@ -1312,14 +1312,23 @@
  ; ..written beside, then renamed onto, so no reader meets a torn one
  (scene-put f bs) (: t "\(f).\(getpid ())" q (open t "w")
    (hot? q ? (say q bs, close q), hot? q && !(rename t f) ? () (unlink t), ()))
- ; ..the binary's identity its bytes, memoized under its stat
- (scene-id d) (: x (selfpath 0) st (string? x && stat x) k (two? st && sha256 "lore-cid 1\n\(x)\n\(show st)")
+ ; ..what makes a scene, by its source as the binary carries it, so another build of the same
+ ; makers finds the scenes the last one kept; one with no source, its own bytes
+ scene-by (map (n \ "src/apps/lore/\(n).l") ['bough 'brush 'grove 'mesh 'neon 'sky 'starmap 'swatch 'toys 'vec 'view 'world]
+           + ["src/apps/stow.l"] + map (n \ "src/love/\(n).c") ['air 'lamp 'poly 'raster 'swatch])
+ (scene-made get) (: rs (map (f \ get f @ r (two? r ? [f <>r] ())) scene-by)
+   (all two? rs && sha256 (cats (map (q \ "\(q 0) \(#(q 1))\n\(q 1)") rs))))
+ ; ..memoized under the binary's stat
+ (scene-id d) (: x (selfpath 0) st (string? x && stat x) k (two? st && sha256 "lore-cid 2\n\(x)\n\(show st)")
    f "\(d)\(k).cid" r (string? k && uread f)
    (two? r && #(<>r) = 64 ? (utime f (clock ()), <>r)
-      (string? k && uread x @ b (two? b ? (sha256 <>b @ h (scene-put f h, h))))))
- ; ..the level by its stowed bytes, for show takes seconds over a big one
+      (string? k && (scene-made (f \ uread ("/love/" + f)) @ m (string? m ? m (uread x @ b (two? b ? sha256 <>b)))
+                     @ h (string? h ? (scene-put f h, h))))))
+ ; ..the level by its stowed bytes, for show takes seconds over a big one, less where it is come
+ ; to, but on a surface, whose sun stands over the start
+ (scene-of lv) (tablet? (peep lv 'surface ()) ? lv (foldl (\ t k (pin t k (lv k))) {} (filter (!= 'start) (keys lv))))
  (scene-key d lv dir) (scene-id d @ id
-   (string? id && sha256 (cats (["lore-scene 2\n" id "\n" (stow lv @ b (string? b ? b (show lv))) "\n"]
+   (string? id && sha256 (cats (["lore-scene 3\n" id "\n" (stow-canon (scene-of lv) @ b (string? b ? b (show lv))) "\n"]
                                 + map (f \ uread f @ r "\(f)\n\(two? r ? <>r "")\n") (scene-files lv dir)))))
  ; ..bounded by count, ordered by use, the touch on a hit
  (scene-sweep d) (: (old e most) (: es (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) f] . a) a))) () (readdir d))
