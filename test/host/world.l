@@ -177,7 +177,7 @@
    _ ((cite 'vi) 'vload edv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
    edw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} ed (edit-new edw edv "")
    _ (edit-events ed [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
-   edf (ed 'focus)
+   edf (ed 'lay 'ps 'focus)
    _ (edit-events ed [['press 1 80 80] ['release 1 80 80]])
    _ (edit-paint ed) edp (edw 'paper)
    (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
@@ -193,7 +193,7 @@
    tye (ty 'lay 'es)
    _ (edit-events ty [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 13] ['text "+"] ['up 13]])
  (test (tyt = 1) (tyt2 = 0) !(lit? 0 150 0 150) (tyv 'row = 1) (tye = 2) (ty 'lay 'es = 1)
-       (ty 'lay 'pw = 160) (ty 'st 'w = 160)))
+       (ty 'lay 'pw = 152) (ty 'st 'w = 152)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
 ; its own numbers moved as far, and the scene read again with it there; dragged back, as it was
 (: dgv ((cite 'vi) 'vi-open "")
@@ -344,13 +344,13 @@
    plw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} pl (edit-new plw plv "")
    _ (edit-events pl [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
    pp (pl 'plan) _ (pin pp 'k 8.0)
-   _ (edit-events pl [['down 42] ['press 1 96 96] ['move 144 64] ['release 1 144 64] ['up 42]])
+   _ (edit-events pl [['down 42] ['press 1 92 96] ['move 140 64] ['release 1 140 64] ['up 42]])
    pl1 (plv 'lines 3) ps (pl 'sel)
-   _ (edit-events pl [['press 1 144 80] ['move 152 80] ['release 1 152 80]])
+   _ (edit-events pl [['press 1 140 80] ['move 148 80] ['release 1 148 80]])
    pl2 (plv 'lines 3)
-   _ (edit-events pl [['press 1 120 80] ['move 136 80] ['release 1 136 80]])
+   _ (edit-events pl [['press 1 116 80] ['move 132 80] ['release 1 132 80]])
    pl3 (plv 'lines 3)
-   _ (edit-events pl [['press 1 112 80] ['move 120 80] ['release 1 120 80]])
+   _ (edit-events pl [['press 1 108 80] ['move 116 80] ['release 1 116 80]])
    pl4 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
    (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
    _ (edit-events pl [['down 15] ['up 15]])
@@ -902,6 +902,17 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; a light given the loop gone: lit with the deck still and as the loop plays, out once it has
+; all worn away, lit again begun afresh; one given the loop playing is dimmed then
+(: owl (lv "(room [0 0 0] [10 4 10]) (given 'loop-gone (dim 0) (strip-light [5 4 5])) (given 'loop (dim 0.5) (bulb [2 2 2] (rgb 1 1 1))) (deck [4 0 6] [6 1 6.5]) (start [5 0 5.3] 0 -30)")
+   ows (world-new 8 8 owl "") (lit _) (world-ks (ows 'sc) 0.0 [] (world-loop ows) {}) go (_ \ world-step ows 'tap)
+   o0 (lit ()) _ (go ()) o1 (lit ()) m (ows 'music) _ (pin m 'n (int (1e6 * m 'd 'gone))) o2 (lit ()) _ (go ()) _ (go ()) o3 (lit ()))
+ (test ([o0 o1 o2 o3] = [[1.0 1.0] [1.0 0.5] [0.0 0.5] [1.0 0.5]]) (has? (lv "(given 'dusk (dim 0) (strip-light [5 4 5]))") "(given WHEN change LIGHT)"))
+; the console: a line of love on the walk's state, its answer short, a fault said
+(: cst (world-new 8 8 (lv "(room [0 0 0] [10 4 10]) (deck [4 0 6] [6 1 6.5]) (start [5 0 5.3] 0 -30)") "") c (world-console cst))
+ (test (c "st 'px" = "5.0") (has? (c "tp 2 0 3") "[2.0 0.0 3.0]") (cst 'px = 2.0) (has? (c "(1 +") "unfinished") (has? (c "nosuch 3") ";; missing nosuch")
+       (c "{'b 2 'a [1 (2 . 3) {}]}" = "{a (1 (2 . 3) {}) b 2}") (#(c "st") < 4100) (c "iota 100" = show (iota 100)) (has? (c "iota 100000") " ..") (c "loop-end ()" = "2.0") (tablet? (cst 'music)) (has? (c "help") "loop-end")
+       (has? (world-console (world-new 8 8 (lv "(room [0 0 0] [10 4 10]) (start [5 0 5.3] 0 0)") "") "loop-end ()") ";; missing loop-end"))
 ; a speaker's reach: the loop gone fifteen metres off a plain one, still heard there off one
 ; reaching twenty
 (: (rch sp x) (: l (lv ("(room [0 0 0] [40 4 4]) (deck [1 0 1] [2 1 2]) " + sp + " (start [1.5 0 2.5] 180 -30)"))
@@ -936,6 +947,13 @@
        (has? (lv "(camera [0 0 0] 0 0 (ball [0 0 0]))") "(camera [x y z] bearing pitch FEED)")
        (has? (lv "(cards [] 1 1 (ball [0 0 0]))") "(cards [TEXTURE ..] every hold FEED)")
        (has? (lv "(watch [0 0 0] 1 [3 2] 30 (ball [0 0 0]))") "(watch [x y z] radius [near far] cone FEED)")))
+; ..and one that moves while a plush lies down a hole, not held over it nor on the ground by it
+(: ml (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (plush [2 0 3] 90 'mouse) (missing [8 2 4] 90 -20 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   ms (world-new 32 20 ml "") mb (ms 'balls 0) mq (ms 'sc 'feeds 0) _ (pin (ms 'lvl) 'pits [[[1.0 -50.0 2.0] [3.0 0.0 4.0]]])
+   (seen p held) (pins mb 'p p 'held held, pin ms 'mt (ms 'mt + 1.0), world-pens ms, mq 'cam 0 0)
+ (test (seen [2.0 0.1 3.0] 0 = 5.0) (seen [2.0 -20.0 3.0] 0 = 8.0) (seen [2.0 -20.0 3.0] 1 = 5.0) (seen [6.0 -20.0 3.0] 0 = 5.0)
+       (has? (lv "(missing [0 0 0] 0 0 (ball [0 0 0]))") "(missing [x y z] bearing pitch FEED)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
@@ -959,7 +977,8 @@
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
    (dce k) (: y (decay-at dc0 (dct + k * dcl)) (sqrt (net (y * y) / 4000.0))))
- (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0))
+ (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0)
+       (dce (int (dc0 'gone / dcl + 0.5) + 1) = 0.0) (0.0 < dce (int (dc0 'gone / dcl + 0.5) - 2)) (0.0 < dc0 'gone <= 902 * dcl))
 ; the way between levels: a herald within its reach makes for the eye and meeting it leaves
 ; for its file, by the level's own folder; a bed tapped is lain on, then left for its entry;
 ; and one come to by a bed's entry wakes on it and stands beside it, on its left

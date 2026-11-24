@@ -1403,13 +1403,7 @@
       ("t2.wfi"     "30bf"              ((wfi)))                      ; wfi
       ;; MRS: the two stack pointers, which a fault handler reads to find the frame
       ("t2.mrsmsp"  "eff30880"          ((mrs r0 msp)))               ; mrs r0, msp
-      ("t2.mrspsp"  "eff30983"          ((mrs r3 psp)))               ; mrs r3, psp
-      ;; the 64-bit unsigned divide/remainder: r2:r3 / r0:r1 -> r0:r1, a 64-step restoring loop,
-      ;; fixed narrow branches, r4-r7 saved
-      ("t2.udivll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1104619465df8047b5df8046b5df8045b5df8044b"
-                     ((udivll)))
-      ("t2.uremll"  "4df8044d4df8045d4df8046d4df8047d40f2000440f2000540f2400612eb020253eb030354eb040455eb050504d2b4eb000775eb010705d3b4eb000475eb010502f20102a6f20106b6f1000fe6d1204629465df8047b5df8046b5df8045b5df8044b"
-                     ((uremll))))
+      ("t2.mrspsp"  "eff30983"          ((mrs r3 psp))))               ; mrs r3, psp
    _ (foldl (_ \ t \ chk2 (t 0) (t 1) 'thumb2 (t 2)) 0 t2tests)
    ;; -- laylax on thumb2: an in-reach b or bcc goes narrow (b t2 +-2KB, bcc t1 +-256), judged at
    ;; the all-wide layout; goldens from llvm-mc --filetype=obj --

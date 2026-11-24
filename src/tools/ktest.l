@@ -93,9 +93,9 @@
    kvm  (? far (arch = "x64" ? ["-enable-kvm" "-cpu" "host"] ["-enable-kvm"])   ; -cpu host hands the guest VT-x
            (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
            ())
-   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg nears 900s loaded, the
+   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg ~950s, past 1200s loaded, the
    ; pi's raspi3b ~800s quiet. KTEST_CEIL: a lane's own, for one that bakes inside the boot
-   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" (arch = "rv64" ? "1200" (pi? ? "1800" "900")))))
+   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" ((arch = "rv64" || pi?) ? "1800" "900"))))
    ; the scratch disk: truncate leaves an existing image's bytes alone, so the
    ; persistence gate's two boots share it (test/kernel/disk.l). force-legacy=false
    ; makes virtio-mmio speak version 2, the one blk.c drives.

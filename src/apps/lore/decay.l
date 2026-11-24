@@ -2,7 +2,8 @@
 ; chords, a bass under them and a horn's line over them, played round and round, another
 ; of its moments worn away to silence each time round, none coming back.
 ;   (decay-new sd)          the loop from seed sd: its phrase and where it wears, and its
-;                           'key, the tonic's midi note, and whether 'minor
+;                           'key, the tonic's midi note, whether 'minor, and the seconds
+;                           till it is 'gone
 ;   (decay-at d t)          its samples at the seconds t since it began, a tray, about -1..1
 (module (decay decay-new decay-at)
 (:
@@ -58,12 +59,12 @@
    (wet * (0.9 / max 1e-6 pk)))
  ; ..where it wears: each slot the time round it first falls silent, a gap more each
  ; time round from the second, short most often, some a good part of a second
- (wear sd L) (: n (int (L * wear-k)) w (iota n * 0.0 + 1e9)
+ (wear sd L) (: n (int (L * wear-k)) w (iota n * 0.0 + gaps + 1.0)
    (foldl (\ w g (: b (1 + int (g + die sd (2000 + g))) s (int (n * die sd (3000 + g)))
                     m (1 + int (wear-k * (0.03 + 0.4 * die sd (4000 + g) * die sd (4000 + g)))) i ((s + iota m) % n)
                     (pin w i (min (peep w i 0.0) (1.0 * b)))))
           w ^gaps))
- (decay-new sd) (: p (phrase sd) L (#p / (1.0 * rate)) k (tonic sd) {'pcm p 'len L 'wear (wear sd L) 'key (k 0) 'minor (k 1)})
+ (decay-new sd) (: p (phrase sd) L (#p / (1.0 * rate)) k (tonic sd) w (wear sd L) {'pcm p 'len L 'wear w 'gone (L * amax w) 'key (k 0) 'minor (k 1)})
  ; ..the phrase at t, each sample between its two, silenced where the time round has worn,
  ; eased across a slot at a gap's edges
  (decay-at d t) (: L (d 'len) p (d 'pcm) w (d 'wear) N #p n #w k (floor (t / L)) u (t - k * L)

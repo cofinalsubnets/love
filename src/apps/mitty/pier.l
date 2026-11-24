@@ -6,7 +6,7 @@
 ; 'key reads its keys, 'tick asks for a frame. the clip is one vi-shaped register, sent out by
 ; osc 52 or to 'own. host-only; a module, so a guest that berths itself (vi's splits) cites it.
 (module '(pier pier pier-stage pier-up hberth hsail hopen-stage
-          hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hshut
+          hstage hpty? hpane hshow hsoil hrelay hframe hmoor hsplit hsteer hwm hshut
           hfeed hkey oars hsize htide htick hswim hquick? hcopy hpaste hclip-text hscreen-text
           hseq hmouse hpeer hpasted hfaces hgo hcycle hfresh hsub? hswap hpicker pier-launch pier-switch pier-hive pier-queues pier-barx hin hout hlive? hgreet hbye hattach hdetach pier-lush pier-here pier-serve pier-attach pier-sock pier-dir pier-ls pier-size hname hlr hbarat hdrag hmice hbarline hbarface hbartick hnote pier-window pier-main)
 (borrow ((cite 'wharf) @ m (m ? m "src/apps/mitty/wharf.l")))   ; the baked module, else the tree's file
@@ -199,6 +199,10 @@
 
  (hsteer hb d) (wharf-steer (hb 'lay) (hb 'focus) d @ id
                   (id = hb 'focus ? 0 (pin hb 'focus id, hsoil hb)))
+
+ ; a stage's own ctrl-w key, wharf's
+ (hwm hb k) (wharf-wm (hb 'plan) (hb 'lay) (hb 'focus) k @ () 0
+               q (: p (hb 'plan) _ (pins hb 'plan (q 0) 'focus (q 1)) (p = q 0 ? (hsoil hb) (hrelay hb))))
 
  ; shutting twice is safe: a child may hang up on a pane the user already shut. a pane on
  ; a hidden face leaves that face's plan; the shown face emptied hands over to the first left
