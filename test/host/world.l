@@ -251,6 +251,27 @@
  (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
        (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
        (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
+; a tap, with no button to it: nothing in reach, nothing; a ball in reach taken; tapped again
+; let fall; a door by hand opens and the thing stays in hand; in a dialogue it moves nothing
+(: (tw d x) (: st (world-new 160 100 (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) (ball [5 0 3]) " + x + " (start [5 0 " + d + "] 0 0))")) "")
+              _ (pin st 'dt 0.05) _ (world-move st) (pin st 'ph (-44.6 * pi / 180.0)))
+   (go st n) (each ^n (_ \ (pin st 'dt 0.05, world-move st)))
+   far (tw "0.4" "") _ (world-step far 'tap) fb (far 'balls 0)
+   a (tw "1.5" "") b (a 'balls 0) w0 (world-winds? a) _ (world-step a 'tap) h1 (b 'held) w1 (world-winds? a) wd (a 'wind) _ (go a 2) p1 (b 'p)
+   _ (pin a 'dlg 0) w2 (world-winds? a) _ (pin a 'dlg ()) _ (world-step a 'tap) h2 (b 'held) _ (go a 60) p2 (b 'p)
+   d (tw "1.5" "") db (d 'balls 0) _ (world-step d 'tap) _ (pin d 'lvl (pin (foldl (\ u k (pin u k (d 'lvl k))) {} (keys (d 'lvl))) 'decks [[[4.0 0.0 1.8] [6.0 4.0 2.2]]]))
+   _ (pin d 'ph 0.0) _ (world-step d 'tap) dm (d 'music)
+ (test (peep fb 'held 0 = 0) (w0 = 0) (h1 = 1) (w1 = 1) (wd = ()) (w2 = 0) (h2 = 0)
+       (mag (p2 0 - p1 0) < 0.05) (mag (p2 2 - p1 2) < 0.05) (mag (p2 1 - 0.12) < 0.02) (db 'held = 1) (tablet? dm)))
+; the stick: at a full lean the key's walk to the digit, past the rim the sprint's, half way less, in
+; its dead middle nothing
+(: (wk n f) (: st (world-new 160 100 (world-read "(level \"t\" (room [0 0 0] [40 5 40]) (start [5 0 5] 0 0))") "")
+      _ (each ^n (_ \ (f st, pin st 'dt 0.05, world-move st))) [(st 'px) (st 'pz) (peep st 'vx 0.0) (peep st 'vz 0.0)])
+   (ln dx dy) (: v (view-lean dx dy 720) (\ st (v 0 != 0.0 || v 1 != 0.0 ? (world-lean st (v 0) (v 1) (v 2)) st)))
+   key (a \ st \ world-step st a) still (wk 1 (key 'none)) full (wk 20 (ln 0 -120)) run (wk 20 (ln 0 -200)) half (wk 20 (ln 0 -58)) slow (wk 20 (ln 0 -16)) creep (wk 20 (ln 10 -8))
+ (test (full = wk 20 (key 'forward)) (run = wk 20 (key 'sprint)) (wk 20 (ln 120 0) = wk 20 (key 'strafe-right)) (wk 20 (ln 0 200) = wk 20 (key 'sprint-back))
+       (creep 0 = still 0) (creep 1 = still 1) (still 1 < slow 1) (slow 1 < half 1) (half 1 < full 1) (full 1 < run 1)
+       (mag (half 3 - 0.5 * full 3) < 0.05 * full 3)))
 ; a plush lies where it is put facing its bearing, a turn swinging that on, its model made
 ; by name and set on the floor, the ball it is taken for half its height; one whose file
 ; will not read is a ball. a click takes it like a ball, held it looks back at the player,
@@ -951,8 +972,11 @@
    (rset is) (: _ (each ws (b \ pins b 'in () 'p [(b 'p 0) 0.13 (b 'p 2 + 5.0)])) _ (each ^#is (k \ (: c (bs (is k)) (pins (ws k) 'in (is k) 'p [(c 0) (c 1 + 1.13) (c 2)]))))
                 (rgo 60, [(world-whole? rst) (rst 'lifts 0 'g)]))
    _ (pins <ws 'p [7.0 2.0 2.0] 'v [0.0 0.0 0.0] 'rest 0) _ (rgo 30) kept (peep <ws 'in ())
+   ; ..one taken and set in brazier 1 by taps alone
+   tst (world-new 8 8 rsl "") tw0 (<(filter (b \ b 'kind = 'wisp) (tst 'balls))) _ (pins tst 'cut () 'px 20.0 'pz 2.0 'py 1.6 'th 0.0 'ph (atan -1.47))
+   _ (world-step tst 'tap) th1 (peep tw0 'held 0) _ (pins tst 'px 7.0 'pz 0.5 'th 0.0 'ph (atan (-0.5 / 1.5))) _ (world-step tst 'tap) th2 [(peep tw0 'held 0) (peep tw0 'in ())]
    r0 (rset []) r67 (rset [0 1]) r64 (rset [0 2]) r146 (rset [3 0])
- (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
+ (test (th1 = 1) (th2 = [0 1]) (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
        (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
        (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
 ; a camera's feed: shot from where the camera stands while its monitor is in view; with
@@ -1202,7 +1226,7 @@
    _ (each ^6 (i \ (hole "o\(i).scene" 300, utime "\(kc)o\(i).scene" (1000000 * (i + 1)))))
    _ (each ^7 (i \ (hole "s\(i).scene" 0, utime "\(kc)s\(i).scene" 100000000)))
    (held fr) (: _ (scene-sweep kc fr) (sort (filter (f \ #f = 8) (readdir kc)))) (os l) (filter (f \ f 0 = 111) l)
-   h1 (held ()) h2 (held 2300000000) _ (hole "z0.scene" 2000) h3 (held ())
+   h1 (held ()) h2 (held 2300000000) _ (hole "z0.scene" 2000) _ (utime "\(kc)z0.scene" (clock () + 5000)) h3 (held ())
    _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
    (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
    ks (filter (k \ k != 'memo) (sort (keys ka)))

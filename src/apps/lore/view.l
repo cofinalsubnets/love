@@ -7,7 +7,7 @@
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
          view-pen view-band
-         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-middle? view-tap)
+         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-middle? view-tap view-lean)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
 (borrow '(slip console))                ; the console's pane beside the scene's
@@ -162,8 +162,16 @@
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
- ; ..a thumb's pixels before it counts as moved, and how much further its drag looks than a mouse
- view-thumb-still 10 view-thumb-look 2 view-thumb-run 50
+ ; ..the stick's lean, as shares of the window's shorter way: still, a full walk, a run
+ view-lean-still 0.02 view-lean-full 0.14 view-lean-run 0.22
+ ; ..a stick's lean dx dy pixels from where it landed, in a window s the shorter way: [right
+ ; ahead run], nothing within its dead middle, growing to 1 out at full, a run past the rim
+ (view-lean dx dy s) (: d (sqrt (2 (1.0 * dx) + 2 (1.0 * dy))) u (d / max 1.0 s)
+   k (min 1.0 (max 0.0 ((u - view-lean-still) / (view-lean-full - view-lean-still))))
+   (k <= 0.0 ? [0.0 0.0 0] [(k * dx / d) (k * -dy / d) (view-lean-run < u)]))
+ ; ..a thumb's pixels before it counts as moved, how long still before it is held, and how much
+ ; further its drag looks than a mouse
+ view-thumb-still 10 view-thumb-hold 300 view-thumb-look 2 view-thumb-run 50
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
  ; the arrows; the rest come by what they type
@@ -212,7 +220,9 @@
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
  ; optional 'words (st) the console's, [[name doc value] ..], 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
 ; and 'held (st) to stop a repeat; 'stick [ahead back left right], those keys for a phone's
-; thumbs, and 'tap (st x y) the keys a tap at pixel x y is, view-tap unless said.
+; thumbs, 'tap (st x y) the keys a tap at pixel x y is, view-tap unless said, and 'winds (st)
+; whether a looking thumb held still is the left button, down till it lifts; 'lean (st x y run),
+; where 'leans (st), the stick as it leans instead of its keys: view-lean's, each frame.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
  (view-walk lv) (:
@@ -256,14 +266,22 @@
    rep (peep lv 'repeat view-repeat)
    (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
    ; ..thumbs: the left half a stick centred where it lands, its keys held like a keyboard's,
-   ; the right half looking, and a touch that stays put a tap
+   ; the right half looking, and a touch that stays put a tap; held, where 'winds, the button
    stick (lv 'stick) fg {}
    _ (stick && win ? (window-thumbs win) 0)
    ; ..a phone's console: a tap at the top's middle opens it and puts it away, as esc and Back do; the
    ; keyboard up and its touches the panes' while it is up, the gpu let go, which would hide it
    pc {'on 0}
+   ; ..asked past a frame's events, so a slow frame's tap has had its up
+   winds (peep lv 'winds (_ \ 0))
+   (winding now) (each (filter (i \ (: f (fg i) (tablet? f && !(f 'walk) && !(f 'far) && !(f 'btn) && f 't + view-thumb-hold <= now && !(phone && view-middle? st (f 'x) (f 'y))))) (keys fg))
+     (i \ (winds st ? (pin (fg i) 'btn 1, mouse st 'press 1))))
+   leans (peep lv 'leans (_ \ 0))
+   (leaning _) (? (leans st) (each (filter (i \ tablet? (fg i) && fg i 'walk) (keys fg) @ () () l [<l])
+     (i \ (: f (fg i) _ (pins held 'stick-x () 'stick-y ()) v (view-lean (f 'x - f 'x0) (f 'y - f 'y0) (window-size win @ s (min (s 0) (s 1))))
+              (v 0 != 0.0 || v 1 != 0.0 ? (lv 'lean st (v 0) (v 1) (v 2)))))))
    (phone-con _) (: on (con 'on) gp (st 'gpu) (? (!phone || on = pc 'on) ()
-     (: _ (pin pc 'on on) _ (each (keys fg) (i \ pin fg i ())) _ (each (keys held) (c \ pin held c ()))
+     (: _ (pin pc 'on on) _ (each (keys fg) (i \ (tablet? (fg i) && fg i 'btn ? (mouse st 'cancel 1)), pin fg i ())) _ (each (keys held) (c \ pin held c ()))
         (on ? (: _ (tablet? gp && tablet? (gp 'g) ? ((cite 'gpu 'gpu-close) (gp 'g), pin st 'gpu 'off, pin pc 'gpu 1) 0) (pin win 'thumbs 0, window-typing win 1))
               (: _ (peep pc 'gpu 0 ? (pins pc 'gpu 0, pin st 'gpu ()) 0) (window-thumbs win))))))
    (phone-shut? e) (phone && con 'on && (<e = 'press ? (view-middle? st (e 2) (e 3)) (<e = 'down && elem (e 1) [1 362])))
@@ -272,13 +290,15 @@
         (want = ()) (pin held slot (), ())
         (pin held slot [want (clock 0 + rep 0)], [want])))
    (finger [_ id a x y]) (: f (fg id)
-     (? (a = 0) (pin fg id {'walk (x < <(window-size win) // 2) 'x0 x 'y0 y 'x x 'y y 'far 0}, ())
+     (? (a = 0) (pin fg id {'walk (x < <(window-size win) // 2) 'x0 x 'y0 y 'x x 'y y 'far 0 'btn 0 't (clock 0)}, ())
         !(tablet? f) ()
         (a = 2) (: dx (x - f 'x0) dy (y - f 'y0) d view-thumb-still
-                   ks (? (f 'walk) (axis 'stick-x (? (dx < -d) (stick 2) (d < dx) (stick 3) ())
+                   ks (? (f 'walk && leans st) ()
+                         (f 'walk) (axis 'stick-x (? (dx < -d) (stick 2) (d < dx) (stick 3) ())
                                     + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
                          (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
                    (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
+        (f 'btn) (pin fg id (), mouse st 'release 1, ())
         (: mid (phone && !(f 'far) && view-middle? st x y) _ (mid ? (con-up con 1) 0)
            ks (f 'far || mid ? () (peep lv 'tap view-tap st x y))
            ((f 'walk ? (pins held 'stick-x () 'stick-y ())),
@@ -313,7 +333,7 @@
    ; ..and one due before this frame's events and still down after them acts again
    (wkeys _) (: now (clock 0)
                due (filter (c \ held c @ h (h != () && hold? (h 0) && h 1 <= now)) (sort (keys held)))
-               pressed (wgo (con-events con win))
+               pressed (wgo (con-events con win)) _ (winding (clock 0)) _ (leaning ())
                again (filter (c \ held c != ()) due)
                _ (each again (c \ pin held c [(held c 0) (now + rep 1)]))
                (pressed + map (c \ held c 0) again))
@@ -341,9 +361,8 @@
      gp (st 'gpu) hp (phone && tablet? gp && tablet? (gp 'g)) _ (pin g 'wait (hp ? (peep gp 'wait 0) ())) _ (hp ? (pin gp 'wait 0))
      j (view-gauged g paint feed lw t)
      (pins gz 'l0 l0 't t, j != i ? (scale-said i j paint (g 'wait), view-scaled lv st (scales j))))
-   ; ..the steps, under android's bridge whose log stderr is
-   (scale-said i j paint wt) (string? (getenv "LOVE_GPU_FACE")
-     ? (say err "lore: scale \(scales i) to \(scales j) on a frame of \(paint) ms, \(wt) waiting\n", flush err) ())
+   ; ..the steps, in a phone's log
+   (scale-said i j paint wt) (phone ? (cite 'said 'said "lore: scale \(scales i) to \(scales j) on a frame of \(paint) ms, \(wt) waiting") ())
    (scale-step s) (s @ 1 0 2 1 4 2 3)
    (go _) (: t0 (clock 0)
              l0 (hn ? (horn-lag hn) 0)
