@@ -35,7 +35,7 @@ int twice(int v) {
 EOF
 
 mc() { "$ho/love" mooncc "$@" || { echo "FAIL $name: mooncc $*"; exit 1; }; }
-for t in x64 a64 rv64; do
+for t in x64 a64 rv64 rv32; do
   mc -t $t -g -c "$d/t.c" -o "$d/t.$t.o"
   mc -t $t -g -c "$d/u.c" -o "$d/u.$t.o"
   mc -t $t -os linux "$d/t.$t.o" "$d/u.$t.o" -o "$d/two.$t"
@@ -54,7 +54,7 @@ for t in x64 a64 rv64; do
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
 # .debug_frame under -g, an fde for each function: raster.c's, past jump tables, restores and d29
-for t in x64 a64 rv64; do
+for t in x64 a64 rv64 rv32; do
   [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; }
   mc -t $t -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
   if [ -n "$dd" ]; then
@@ -256,9 +256,9 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-# the same on a64, rv64 and rv32, under qemu's user stub
-for t in a64 rv64 rv32; do
-  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; *) q=qemu-riscv32;; esac
+# the same on a64, rv64, rv32 and mips, under qemu's user stub
+for t in a64 rv64 rv32 mips; do
+  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; rv32) q=qemu-riscv32;; *) q=qemu-mips;; esac
   [ -f "$d/two.$t" ] || mc -t $t -os linux -g "$d/t.c" "$d/u.c" -o "$d/two.$t"
   if [ -z "$gdb" ] || ! command -v $q > /dev/null 2>&1 || ! "$gdb" -q -batch -nx -ex "file $d/two.$t" -ex 'info line main' 2>/dev/null | grep -q 'Line 9'; then
     gate_partly "$name: no gdb or $q for $t, its session skipped"; continue
@@ -281,4 +281,4 @@ for t in a64 rv64 rv32; do
   l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.$t" | tr '\n' ' '`
   [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.$t"; echo "FAIL $name: $t's gdb's locals: $l"; exit 1; }
 done
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; every function of raster.c has an fde"
+echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; every function of raster.c has an fde"
