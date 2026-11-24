@@ -61,7 +61,7 @@
 //                     as facets asks it; W x H
 //                     of facets's words to OFF, rows top first, each 8 bytes. an ID -9 - G is scene group G.
 //                     CLEAR is the ground, or with CLEAR below 0 bare
-//   quit
+//   quit [WHY]         done, WHY told the app's log
 #include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,6 +70,28 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdarg.h>
+
+#ifdef GLHELP_IN
+int __android_log_write(int, char const *, char const *);
+static void note(char const *s) {
+ char b[256]; snprintf(b, sizeof b, "lore: the gpu: %.200s", s);
+ __android_log_write(4, "love", b); }
+// in the app, what goes wrong told its log too, each thing once in a row
+static int answer(int fd, char const *f, ...) {
+ static char last[128];
+ char b[640]; va_list a;
+ va_start(a, f); int n = vsnprintf(b, sizeof b, f, a); va_end(a);
+ if (n >= (int) sizeof b) n = sizeof b - 1;
+ if (n < 0) return n;
+ if ((!strncmp(b, "err", 3) || !strncmp(b, "ready", 5)) && strncmp(b, last, sizeof last - 1)) {
+  snprintf(last, sizeof last, "%.127s", b);
+  note(b); }
+ return (int) write(fd, b, (size_t) n); }
+#define dprintf answer
+#else
+static void note(char const *s) { (void) s; }
+#endif
 
 typedef void *EGLDisplay, *EGLConfig, *EGLContext, *EGLSurface;
 typedef int32_t EGLint;
@@ -1241,7 +1263,7 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "vis ", 4) && sscanf(l + 4, "%d %d %ld", &a, &b, &off) == 3) cmd_vis(H, a, b, (size_t) off);
   else if (!strncmp(l, "scene ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_scene(H, a, (size_t) off);
   else if (!strncmp(l, "frame ", 6) && sscanf(l + 6, "%d %d %ld %d %ld", &a, &b, &off, &c, &at) == 5) cmd_frame(H, a, b, (size_t) off, c, (size_t) at);
-  else if (!strcmp(l, "quit")) break;
+  else if (!strncmp(l, "quit", 4) && (l[4] == ' ' || !l[4])) { if (l[4]) note(l + 5); break; }
   else dprintf(H->out, "err what: %s\n", l); }
  return 0; }
 

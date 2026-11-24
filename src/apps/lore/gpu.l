@@ -148,7 +148,9 @@
               {'to >a 'from q 'pid p 'w w 'r r 'room 0 'how (snip hi 6 #hi) 'argv argv}
               (close >a, close q, close w, close r, (charm? p ? (wait p) 0),
                  ['no-gpu (string? hi ? hi "the helper said nothing")])))))
- (gpu-close g) (say (g 'to) "quit\n", close (g 'to), (g 'pid @ () 0 p (close (g 'from), wait p)), close (g 'w), close (g 'r), ())
+ (gpu-close g) (gpu-quit g "")
+ ; ..and why
+ (gpu-quit g why) (say (g 'to) ("quit" + why + "\n"), close (g 'to), (g 'pid @ () 0 p (close (g 'from), wait p)), close (g 'w), close (g 'r), ())
  ; ..the shared file at least n bytes, once the shows it holds are done with
  (room! g n) (settle g, (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g))
  (settle g) (0 < peep g 'shows 0 ? ((0 < peep g 'owed 0 ? (owe g) g), line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)
@@ -334,7 +336,7 @@
  ; ..a frame sent as [w h c], taken: [f c], or the helper's words
  (take s p) (: f (gpu-take (s 'g) (p 0) (p 1)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..a helper that failed let go, and why: under android's bridge its stderr is the log
- (gone s e) (gpu-close (s 'g), pins s 'g () 'pend () 'last () 'fail e, gpu-said e, ())
+ (gone s e) (gpu-quit (s 'g) (" " + e), pins s 'g () 'pend () 'last () 'fail e, gpu-said e, ())
  (gpu-said e) (string? (getenv "LOVE_GPU_FACE") ? (say err "lore: the gpu let go: \(e)\n") ())
  ; ..and one sent and no longer wanted, the last shown forgotten with it
  (drain s) (s 'pend @ () () p (pins s 'pend () 'last (), take s p, ()))
