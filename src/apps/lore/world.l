@@ -7,7 +7,7 @@
 ; world-read, -new, -at, -step, -move and -frame are pure; world-watch reads the disk, and only
 ; world-walk and world-run touch the tty. a walk may leave for another level's entry, a herald
 ; met or a bed slept in, and world-run walks on there in the same window.
-(module (world scene-key scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
+(module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
@@ -1292,7 +1292,7 @@
    (dir? n && map (s \ mkdir s 493) [(n + "/cache") d], dir? d && d))
  ; ..written beside, then renamed onto, so no reader meets a torn one
  (scene-put f bs) (: t "\(f).\(getpid ())" q (open t "w")
-   (hot? q ? (say q bs, close q), hot? q && !(rename t f) ? () (unlink t), ()))
+   (hot? q ? (say q bs, close q), hot? q && (stat t @ s (two? s && s 0 = #bs)) && !(rename t f) ? () (unlink t), ()))
  ; ..what makes a scene, by its source as the binary carries it, so another build of the same
  ; makers finds the scenes the last one kept; one with no source, its own bytes
  scene-by (map (n \ "src/apps/lore/\(n).l") ['bough 'brush 'grove 'mesh 'neon 'sky 'starmap 'swatch 'toys 'vec 'view 'world]
@@ -1311,11 +1311,14 @@
  (scene-key d lv dir) (scene-id d @ id
    (string? id && sha256 (cats (["lore-scene 3\n" id "\n" (stow-canon (scene-of lv) @ b (string? b ? b (show lv))) "\n"]
                                 + map (f \ uread f @ r "\(f)\n\(two? r ? <>r "")\n") (scene-files lv dir)))))
- ; ..bounded by count, ordered by use, the touch on a hit
- (scene-sweep d) (: (old e most) (: es (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) f] . a) a))) () (readdir d))
-                                    (go l k) (two? l ? (most <= k && unlink (d + <>(<l)), go >l (k + 1)) 0)
-                                  (go (sortby (a \ b \ <b <= <a) es) 0))
-   (old ".scene" 4, old ".cid" 8))
+ ; ..bounded by bytes, 1 GB or a tenth of what would be free with them gone, ordered by use,
+ ; the touch on a hit; the newest stays whatever its size. fr the bytes free, () unknown
+ (scene-bound fr used) (fr = () ? 1073741824 (min 1073741824 ((fr + used) // 10)))
+ (scene-free d) (statfs d @ s (two? s ? (s 0 * s 3) ()))
+ (scene-sweep d fr) (: (kept e) (sortby (a \ b \ <b <= <a) (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) (st 0) f] . a) a))) () (readdir d)))
+   (old es most cost) (: (go l k) (two? l ? (: n (k + cost (<l 1)) _ (k > 0 && most < n && unlink (d + <l 2)) (go >l n)) 0) (go es 0))
+   es (kept ".scene")
+   (old es (scene-bound fr (foldl (+) 0 (map (e \ e 1) es))) (n \ n), old (kept ".cid") 64 (_ \ 1)))
  ; ..read back, its light made again of what it keeps and its memo spent, so the next scene
  ; begins one
  (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
@@ -1337,7 +1340,7 @@
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
           (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b
-                          (string? b && (scene-put f (zstd-pack b 3), scene-sweep d))),
+                          (string? b && (scene-put f (zstd-pack b 3), scene-sweep d (scene-free d)))),
            sc)))))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,

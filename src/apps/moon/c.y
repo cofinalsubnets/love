@@ -34,7 +34,7 @@
    (cx-alty ps st) (cx-szn ps (tyask ps st) "alignof")
    (cx-alof ps e) (ptype ps e @ ty (ty ? (cx-szn ps (exal ps e ty) "alignof") (cx-bad ps)))
    (cx-addr ps e) (nulloff ps e @ n (charm? n ? ['num n] ['addr e]))
-   (cx-pos ps e) (ptype ps e @ ty (ty && pprom ty != ty ? ['cast (pprom ty) e] e))
+   (cx-pos ps e) (ptype ps e @ ty (ty && pprom (ptm ps) ty != ty ? ['cast (pprom (ptm ps) ty) e] e))
    (cx-call ps e as) (bicall e (tuargs ps e as))
    (cx-id ps t)
     (: nm (tkv t)
@@ -44,25 +44,14 @@
    (cx-num ps t)
     (: k (tkk t) v (tkv t)
        (? (k = 'num && pchar ps = 'char && chq? t && 127 < v && v < 256) ['num (v - 256)]
-          (k = 'num) (pst32? ps && 2147483647 < v ? ['cast 'llong ['num v]] ['num v])
-          (k = 'unum) ['cast 'uint ['num v]]
-          (k = 'ulnum) ['cast (pst32? ps && (v < 0 || 4294967295 < v) ? 'ullong 'ulong) ['num v]]
-          (k = 'ullnum) ['cast (pst32? ps ? 'ullong 'ulong) ['num v]]
-          (k = 'llnum) ['cast (pst32? ps ? 'llong 'long) ['num v]]
-          (k = 'lnum)
-           (: sp (t 4)
-              dec !(sp 0 = 48 && 1 < #sp && !(elem (sp 1) '(108 76 117 85)))
-              ty (? !(pst32? ps && 2147483647 < v) 'long
-                    (!dec && v <= 4294967295) 'ulong
-                    'llong)
-              ['cast ty ['num v]])
+          (elem k '(num unum ulnum ullnum llnum lnum)) (plit (ptm ps) t)
           (k = 'flo) ['flo (cflo v)]
           (k = 'flof) ['cast 'float ['flo (cflo32 v)]]
           ['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (cflo v)]]]]))
    (cx-wstr ps t)
     (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
               (tkk t = 'str32) 'uint
-              (elem (ps 'tgt) '(a64 thumb2 thumb2sp arm thumb1)) 'uint
+              (wchu? (ps 'tgt)) 'uint
               'int)
        (s16 l) (? (atom? l) ()
                   (65536 <= <l) (<l - 65536 @ v
@@ -116,8 +105,8 @@
           (pin (ps 'labs) nm 1, pin ps 'cxlab (nm . peep ps 'cxlab ()), ['lbl nm])))
    ; `case A ... B:` lays a label per value when narrow, else ('case A B)
    (cx-case ps e h c)
-    (: v (cfold (pw64 ps) e)
-       hi (two? h ? (cfold (pw64 ps) h))
+    (: v (cfold (ptm ps) e)
+       hi (two? h ? (cfold (ptm ps) h))
        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
        (? !(cint? v) (cx-no ps () c)
           (atom? h) ['case v]

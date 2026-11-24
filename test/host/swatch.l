@@ -67,7 +67,10 @@
        (sw-same 5 5 ()) (sw-same 6 6 '((fill 1) (rows 1 (grey 2))))
        ; the plan not as it says, and sides out of reach
        (swatch-pic 4 4 '((() 12 () 0 (1 0.0 0.0 0.0 0.0) ())) = ()) (swatch-pic 4 4 '(junk) = ())
-       (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
+       (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())
+       ; a seed past a fixnum, its low 64 bits: none refused where words are 32
+       (two? (swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] 3450932619 [1 0.2 0.3 0.45 0.0] ()]]))
+       (swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] (64 2 + 5) [1 0.2 0.3 0.45 0.0] ()]] = swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] 5 [1 0.2 0.3 0.45 0.0] ()]])))
 ; an oval and a ball painted in C as in love: the oval its turned shape, the ball brighter toward
 ; its light, only inside itself and over no hole
 (: (at l x y) (swatch-texel 32 32 l x y) red [1.0 0.0 0.0]
