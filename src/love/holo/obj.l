@@ -722,13 +722,14 @@
    ; x1, the cfa sp+0. a state is as above but its sixth slot, unused, and its last, (t6 . pro):
    ; t6 ('k n) a constant, ('a n) an address, cfa-relative, else () --
    rv-dcie [12 0 0 0 255 255 255 255 1 0 1 120 1 12 2 0]
+   rv32-dcie [12 0 0 0 255 255 255 255 1 0 1 124 1 12 2 0]
    rv-st0 [2 0 0 () () 0 '(() . ())]
    ; rv64.l's r0.. and f0.., dwarf's numbers
    rv-dwr [10 11 12 13 14 15 16 17 5 6 7 28 29 18 19 9 0 0 0 20 21 22 23 24 25 26 27]
    rv-dwf [42 43 44 45 46 47 48 49 32 33 34 35 36 37 38 39 60 61 62 63]
    (rv-cs? r) (elem r '(1 8 9 18 19 20 21 22 23 24 25 26 27 40 41 50 51 52 53 54 55 56 57 58 59))
-   ; an instruction, read: (length kind ..). f registers are 32 and up
-   (rv-dec s pc)
+   ; an instruction, read: (length kind ..), 'ld and 'sd a whole register's, x32 rv32's. f registers are 32 and up
+   (rv-ehdec x32 s pc)
     (: h (s pc | (s (pc + 1) << 8))
        (bt i n) ((h >> i) & ((1 << n) - 1))
        (pr i) (8 + bt i 3)
@@ -741,12 +742,13 @@
                   (h = 0 ? ['trap]
                      f3 = 0 ? ['addi (pr 2) 2 ((bt 7 4 << 6) | (bt 11 2 << 4) | (bt 5 1 << 3) | (bt 6 1 << 2))]
                      f3 = 1 ? ['ld (32 + pr 2) (pr 7) o8]
-                     f3 = 2 ? ['wr (pr 2)]
-                     f3 = 3 ? ['ld (pr 2) (pr 7) o8]
+                     f3 = 2 ? (x32 ? ['ld (pr 2) (pr 7) ((bt 10 3 << 3) | (bt 6 1 << 2) | (bt 5 1 << 6))] ['wr (pr 2)])
+                     f3 = 3 ? (x32 ? ['no] ['ld (pr 2) (pr 7) o8])
+                     f3 = 6 && x32 ? ['sd (pr 2) (pr 7) ((bt 10 3 << 3) | (bt 6 1 << 2) | (bt 5 1 << 6))]
                      f3 = 5 ? ['sd (32 + pr 2) (pr 7) o8]
-                     f3 = 7 ? ['sd (pr 2) (pr 7) o8] ['no]))
+                     f3 = 7 && !x32 ? ['sd (pr 2) (pr 7) o8] ['no]))
              1 (f3 = 0 ? ['addi rd rd im6]
-                f3 = 1 ? ['addiw rd rd im6]
+                f3 = 1 ? (x32 ? ['jal 1 cj] ['addiw rd rd im6])
                 f3 = 2 ? ['addi rd 0 im6]
                 f3 = 3 ? (rd = 2 ? ['addi 2 2 (o-sx ((bt 12 1 << 9) | (bt 6 1 << 4) | (bt 5 1 << 6) | (bt 3 2 << 7) | (bt 2 1 << 5)) 10)]
                                    ['lui rd (im6 << 12)])
@@ -755,7 +757,10 @@
                 ['br cb])
              (f3 = 0 ? ['wr rd]
               f3 = 1 ? ['ld (32 + rd) 2 ((bt 12 1 << 5) | (bt 5 2 << 3) | (bt 2 3 << 6))]
-              f3 = 2 ? ['wr rd]
+              f3 = 2 ? (x32 ? ['ld rd 2 ((bt 12 1 << 5) | (bt 4 3 << 2) | (bt 2 2 << 6))] ['wr rd])
+              f3 = 6 && x32 ? ['sd r2 2 ((bt 9 4 << 2) | (bt 7 2 << 6))]
+              f3 = 3 && x32 ? ['no]
+              f3 = 7 && x32 ? ['no]
               f3 = 3 ? ['ld rd 2 ((bt 12 1 << 5) | (bt 5 2 << 3) | (bt 2 3 << 6))]
               f3 = 4 ? (bt 12 1 = 0 ? (r2 = 0 ? ['jalr 0 rd] ['add rd 0 r2])
                         rd = 0 ? ['trap] r2 = 0 ? ['jalr 1 rd] ['add rd rd r2])
@@ -769,9 +774,9 @@
                0x1B (g3 = 0 ? ['addiw d a i] ['wr d])
                0x33 (g3 = 0 && f7 = 0 ? ['add d a b] g3 = 0 && f7 = 32 ? ['sub d a b] ['wr d])
                0x37 ['lui d (o-sx (w & 0xFFFFF000) 32)]
-               0x03 (g3 = 3 ? ['ld d a i] ['wr d])
+               0x03 (g3 = (x32 ? 2 3) ? ['ld d a i] ['wr d])
                0x07 (g3 = 3 ? ['ld (32 + d) a i] ['wr (32 + d)])
-               0x23 (g3 = 3 ? ['sd b a si] ['no])
+               0x23 (g3 = (x32 ? 2 3) ? ['sd b a si] ['no])
                0x27 (g3 = 3 ? ['sd (32 + b) a si] ['no])
                0x6F ['jal d (o-sx (((w >> 31) << 20) | (((w >> 12) & 255) << 12) | (((w >> 20) & 1) << 11) | (((w >> 21) & 1023) << 1)) 21)]
                0x67 ['jalr d a]
@@ -834,8 +839,8 @@
                 _ st)))
    ; the instruction at pc: [state successors indirect?]. a jump out of a frame is a table's, one
    ; with the entry's state a tail call
-   (rv-ehstep s pc st nm lo hi rl)
-    (: d (rv-dec s pc) n <d it >d nx (pc + n < hi ? [(pc + n)] ())
+   (rv-ehstep x32 s pc st nm lo hi rl)
+    (: d (rv-ehdec x32 s pc) n <d it >d nx (pc + n < hi ? [(pc + n)] ())
        (to v) (elem pc rl ? () (pc + v @ t (lo <= t && t < hi ? [t] ())))
        [(rv-ehst st it nm)
         (it @ ['jal 0 v] (to v)
@@ -863,7 +868,7 @@
    ; whether it is an indirect jump. x: the isa
    (o-ehstep x s pc st nm lo hi rl)
     (? (x = 'x64) (x-ehstep s pc st nm lo hi rl)
-       (x = 'rv64) (rv-ehstep s pc st nm lo hi rl)
+       (x = 'rv64 || x = 'rv32) (rv-ehstep (x = 'rv32) s pc st nm lo hi rl)
        (: w (o-w32 s pc) [(o-ehst st w nm) (o-ehnx w pc lo hi rl) ((w & 0xFFFFFC1F) = 0xD61F0000)]))
    ; paths that meet while the cfa rides fp: sp's height is lost where they differ. past the entry's
    ; straight line a save one path lacks was restored there, its slot, above fp or sp, still the entry's: kept. else ()
@@ -878,7 +883,7 @@
    ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
    (o-ehrows x s lo hi rl labs nm)
     (: sts {}
-       st0 (x @ 'x64 x-st0 'rv64 rv-st0 _ o-st0)
+       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 _ o-st0)
        (s6 st) (take 6 st)
        ; jst: the state at a br that is no tail call, which a table's targets share
        (walk stk jst)
@@ -901,7 +906,7 @@
                          (foldl (\ _ t (sts t = () ? (pin sts t jst, walk [t] ()) ())) () (uniq (sort left)))) 0)
        pcs (sort (keys sts))
        (foldl (\ acc pc (@ acc [cur at bs]
-                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops (x = 'a64 ? 4 8) cur n)]))))
+                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops (elem x '(x64 rv64) ? 8 4) cur n)]))))
               [(o-ehvis st0) lo ()] pcs @ r (r 2)))
    ; the .eh_frame lane for the functions uw names, () where none is laid; x: the isa.
    ; df: the same rows as .debug_frame, for -g: no augmentation, each fde's cie and pc relocated
@@ -909,7 +914,7 @@
    o-dcie [12 0 0 0 255 255 255 255 1 0 1 124 30 12 31 0]
    (o-eh lanes uw x df)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) 'rv64 '(j21 cj b13 cb pcrel) _ '(b26 b19 b14))) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) _ '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -924,13 +929,13 @@
                     (: ins (df ? (trap (_ \ o-ehrows x s lo hi rl lb k) 0 (_ \ _ \ 'none)) (o-ehrows x s lo hi rl lb k))
                        fo #bs
                        (? (ins == 'none) acc
-                          df (: n (20 + #ins) pad ((8 - (4 + n) % 8) % 8)
-                                [(bs + le32 (n + pad) + le32 0 + le64 0 + le64 (hi - lo) + ins + o-zeros pad)
-                                 ([(fo + 8) 'abs64 k 0 0] . [(fo + 4) 'abs32 (name ".dbg.frame") 0 0] . rs)])
+                          df (: z (elem x '(x64 a64 rv64) ? 8 4) n (4 + 2 * z + #ins) pad ((z - (4 + n) % z) % z)
+                                [(bs + le32 (n + pad) + le32 0 + o-zeros z + (z = 8 ? (le64 (hi - lo)) (le32 (hi - lo))) + ins + o-zeros pad)
+                                 ([(fo + 8) (z = 8 ? 'abs64 'abs32) k 0 0] . [(fo + 4) 'abs32 (name ".dbg.frame") 0 0] . rs)])
                           (: n (13 + #ins) pad ((4 - n % 4) % 4)
                              [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
                               ([(fo + 8) 'secrel32 k 0 0] . rs)])))))
-             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
+             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
              (? df [".debug_frame" 1 0 8 <r (rev <>r) {(name ".dbg.frame") 0}]
                 [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
@@ -1070,7 +1075,7 @@
        ; a state names no home for it there is none. .debug_loclists grows in lc: (length bytes relocs), newest first
        lc (pin {} 'n 0)
        (dwreg r) (show r @ s (: i (read (snip s 1 #s))
-                                (? (isa = 'rv64) ((s 0 = 102 ? rv-dwf rv-dwr) i)
+                                (? (isa = 'rv64 || isa = 'rv32) ((s 0 = 102 ? rv-dwf rv-dwr) i)
                                    (s 0 = 102) (i + (isa = 'a64 ? 64 17))
                                    (isa = 'a64) i
                                    ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))
@@ -1212,7 +1217,7 @@
               secs)
        ; -g's third word: the unit's unwind tables are .eh_frame, else -g lays .debug_frame
        df (5 < #ax && two? (ax 5) && !(ax 5 2))
-       lanes1 ((a64 || target = 'x64 || target = 'rv64 && df) && two? uw ? (o-eh lanes0 uw target df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       lanes1 ((a64 || target = 'x64 || elem target '(rv64 rv32) && df) && two? uw ? (o-eh lanes0 uw target df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
        lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0) funcnames target) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)

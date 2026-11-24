@@ -256,9 +256,10 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-# the same on a64 and rv64, under qemu's user stub
-for t in a64 rv64; do
-  case $t in a64) q=qemu-aarch64;; *) q=qemu-riscv64;; esac
+# the same on a64, rv64 and rv32, under qemu's user stub
+for t in a64 rv64 rv32; do
+  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; *) q=qemu-riscv32;; esac
+  [ -f "$d/two.$t" ] || mc -t $t -os linux -g "$d/t.c" "$d/u.c" -o "$d/two.$t"
   if [ -z "$gdb" ] || ! command -v $q > /dev/null 2>&1 || ! "$gdb" -q -batch -nx -ex "file $d/two.$t" -ex 'info line main' 2>/dev/null | grep -q 'Line 9'; then
     gate_partly "$name: no gdb or $q for $t, its session skipped"; continue
   fi
