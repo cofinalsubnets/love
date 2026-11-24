@@ -1152,19 +1152,35 @@
    ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error);
    ; a hosted isa under -os none owes one too, whose door answers ENOSYS. a bare isa's archive
    ; speaks no kernel under any os
+   (rtcut? tgt os) (? (os = 'none && !(rtbare? tgt)) 1 (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)))
    (rtcarried home tgt os)
-    (? (os = 'none && !(rtbare? tgt)) ()
-       (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)) ()
+    (? (rtcut? tgt os) ()
        (string tgt @ nm
           (string? home && rtcid home != runtime-ar "id" ? ()
              (runtime-ar nm @ a
                 (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))
    ; the isas no kernel runs on, whose leaves are nosys.c's
    (rtbare? tgt) (elem tgt '(thumb1 thumb2 thumb2sp xtensa))
-   ; the carried archive first; the cache key is cut only on the lane it refused
-   (rtarch home tgt os vb)
+   ; the built runtime: -rt DIR names group archives as make lays them, DIR/<isa>/<group>.a
+   ; (mkrt.l -m), cut under linux like the carried ones and refused where those are. served
+   ; only whole, in roster order; a roster member short, and the cache answers, said once.
+   ; the directory is trusted to be this compiler's over these sources: make's order says so
+   (rtbuilt dir home tgt os vb)
+    (? (!(string? dir) || rtcut? tgt os) ()
+       (: d "\(dir)/\(tgt)/"
+          (add t f) (uread (d + f) @ r
+                       (dota? f && two? r && ld-ar? <>r ? (foldl (t \ m \ pin t <m <>m) t (rt-armems <>r)) t))
+          t (foldl add {} (stat d @ st (sdir? st ? (sort (readdir d)) ())))
+          want (map cap (rtplan home tgt 'linux vb))
+          lack (filter (n \ !(string? (peep t n ()))) want)
+          (two? lack ? (say err "cc: -rt \(dir): \(tgt) lacks \(#lack) of \(#want) members (\(mfew lack)); compiling the runtime\n", ())
+             (arbytes (map (n \ [n (t n)]) want)))))
+   ; the carried archive first, then the built one; the cache key is cut only on the lane they refused
+   (rtarch home tgt os vb rtd)
     (rtcarried home tgt os @ cr
        (string? cr ? cr
+        (rtbuilt rtd home tgt os vb @ bl
+         (string? bl ? bl
           ; the key carries the OS: two kernels' archives can share a target name
           (: id (string? home && mcid home)
              cd (string? id && mcdir ())        ; no identity, no cache, no directory made
@@ -1176,7 +1192,7 @@
                       (string? k && mcput cd "\(k).a" b,
                        b)))
              (string? cd && mcsweep cd,
-              bs))))
+              bs))))))
    ; the roster: [name source includes] per member, an empty source naming one laid, not
    ; compiled. moonlibc's .c files and one level down, flattened with _ (an archive resolves by
    ; name alone; time.c and sys/time.c share a basename)
@@ -1213,7 +1229,7 @@
                     (elf-flat (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
-   (rtpull srcs tgt os nostd vb imp? bare)
+   (rtpull srcs tgt os nostd vb imp? bare rtd)
     (: mach (peep elf-machines tgt 0)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright when the set owes
        ; the runtime anything or lays a constructor: nothing else pulls it. a set that owes nothing
@@ -1229,7 +1245,7 @@
        (two? owed && !(string? home) && !vb
         && udie 1 "cc: undefined reference to \(qfew owed); no runtime in reach to supply it either (looked in \(mfew (mroots ()))) -- check the spelling, then the nest",
         nostd || !(two? owed) || !(string? home) && !vb ? ()      ; nothing owed compiles nothing
-          (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach @ pr
+          (arpull "moon-runtime" (rtarch home tgt os vb rtd) dt owed mach @ pr
              ; the owe left at the end is exactly what nothing defines, said whole
              (two? <>pr && !imp? && undie <>pr,
               <pr))))
@@ -1385,7 +1401,7 @@
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm?))
+       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm? (t 'rtd)))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
              mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)) prod)
@@ -1395,7 +1411,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-rt dir] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1559,6 +1575,9 @@
           ("-o" . o . r) (flags r (pin t 'o o))
           ("-t" . w . r) (flags r (pin t 'tgt (totgt w)))
           ("-os" . w . r) (flags r (pin t 'os (toos w)))
+          ; -rt DIR: the runtime's group archives as make built them, ahead of the cache. DIR is
+          ; trusted: nothing ties its groups to this compiler or these sources, so an old one links old code
+          ("-rt" . d . r) (flags r (pin t 'rtd d))
           ("-Ttext" . w . r) (flags r (pin t 'org (tonum w)))
           ; -Tdata: .data runs there, stored after the code (xip)
           ("-Tdata" . w . r) (flags r (pin t 'dorg (tonum w)))

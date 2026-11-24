@@ -2586,3 +2586,23 @@ fi
 moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
   && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"
+# the built runtime: the bootstrap compiler carries no archive, so its link reads the groups
+# make laid (-rt out/rt) where it would compile them. the same members in the same order as
+# the carried archive, so its hello is love's own byte for byte, and no archive is cached for it
+"$m" mooncc "$ho/.os.c" -o "$ho/.rt.car" > /dev/null 2>&1 || fail "built runtime: love's own hello does not link"
+na=$(ls out/cache/moon 2>/dev/null | grep -c '\.a$')
+moon0 -rt out/rt "$ho/.os.c" -o "$ho/.rt.blt" > "$ho/.rt.say" 2>&1 || fail "built runtime: -rt out/rt does not link"
+[ -s "$ho/.rt.say" ] && fail "built runtime: a whole directory was not taken ($(head -1 "$ho/.rt.say"))"
+[ "$(ls out/cache/moon 2>/dev/null | grep -c '\.a$')" = "$na" ] || fail "built runtime: the link cached an archive beside the built one"
+cmp -s "$ho/.rt.car" "$ho/.rt.blt" || fail "built runtime: the hello it links is not the carried runtime's"
+[ "$("$ho/.rt.blt")" = "os lane" ] || fail "built runtime: its hello does not run"
+# a directory short of the roster is said once and the cache answers, with the same bytes
+ra=$(uname -m | sed 's/x86_64/x64/; s/aarch64/a64/; s/riscv64/rv64/')
+rm -rf "$ho/.rt.short"; mkdir -p "$ho/.rt.short/$ra"; cp "out/rt/$ra/ctype.a" "$ho/.rt.short/$ra/"
+moon0 -rt "$ho/.rt.short" "$ho/.os.c" -o "$ho/.rt.sht" > "$ho/.rt.say" 2>&1 || fail "built runtime: a short directory does not fall to the cache"
+[ "$(grep -c 'lacks .* members' "$ho/.rt.say")" = 1 ] || fail "built runtime: a short directory is not said once (got '$(cat "$ho/.rt.say")')"
+cmp -s "$ho/.rt.car" "$ho/.rt.sht" || fail "built runtime: the cache's hello is not the carried runtime's"
+# it refuses where the carried archive does
+moon0 -rt out/rt -t i386 -os netbsd "$ho/.os.c" -o "$ho/.rt.nb" > /dev/null 2>&1 \
+  && fail "built runtime: -t i386 -os netbsd linked -- it took linux's groups for a BSD"
+echo "mooncc: the built runtime answers the bootstrap link (whole or not at all; refused where the carried one is) ok"
