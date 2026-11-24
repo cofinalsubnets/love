@@ -102,6 +102,8 @@ static inline int inf_stcl(struct inf_rd *r, struct inf_ms *s) {
   s->cl[gz_clord[s->i]] = x;
   s->i++; }
  inf_build(&r->t->cl, s->cl, 19, r->t->csym, r->t->ctab, CROOT);
+ x = inf_whole(&r->t->cl);
+ if (0 < x) return -3;
  memset(s->lens, 0, sizeof(s->lens));
  s->i = 0;
  s->prev = 0;
@@ -111,8 +113,8 @@ static inline int inf_stcl(struct inf_rd *r, struct inf_ms *s) {
 static inline int inf_stln(struct inf_rd *r, struct inf_ms *s) {
  int x;
  unsigned int tot, rr, v, k;
- if (288 < s->hlit) return -3;
- if (32 < s->hdist) return -3;
+ if (286 < s->hlit) return -3;
+ if (30 < s->hdist) return -3;
  tot = s->hlit + s->hdist;
  while (s->i < tot) {
   if (!s->stage) {
@@ -126,6 +128,7 @@ static inline int inf_stln(struct inf_rd *r, struct inf_ms *s) {
   else {
    if (18 < s->sy) return -3;
    if (s->sy <= 16) {
+    if (!s->i) return -3;
     x = inf_take(r, 2);
     if (x < 0) return x;
     rr = x + 3;
@@ -140,12 +143,18 @@ static inline int inf_stln(struct inf_rd *r, struct inf_ms *s) {
      if (x < 0) return x;
      rr = x + 11; }
     v = 0; } }
-  for (k = 0; k < rr; k++) if (s->i + k < 320) s->lens[s->i + k] = v;
+  if (tot < s->i + rr) return -3;
+  for (k = 0; k < rr; k++) s->lens[s->i + k] = v;
   s->i += rr;
   s->prev = v;
   s->stage = 0; }
+ if (!s->lens[256]) return -3;
  inf_build(&r->t->lit, s->lens, s->hlit, r->t->lsym, r->t->ltab, LROOT);
  inf_build(&r->t->dst, s->lens + s->hlit, s->hdist, r->t->dsym, r->t->dtab, DROOT);
+ x = inf_whole(&r->t->lit);
+ if (1 < x) return -3;
+ x = inf_whole(&r->t->dst);
+ if (2 < x) return -3;
  s->mode = 6;
  s->stage = 0;
  return 0; }

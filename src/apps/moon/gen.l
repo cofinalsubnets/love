@@ -62,21 +62,40 @@
                (has? x ? (cut x) x))
    ; past allocation the marks leave the forms, each run held by the form after it, and come back
    ; ahead of that very form once the tail is laid (dlin), so no pass from there on sees one. a
-   ; form a pass remade loses its marks, never its code
+   ; form a pass remade hands its marks to the next form, in the order dlout saw, that survived
    (dlout g fs)
     (: (go l ms) (l @ (f . u) (? (dlab? f) (go u (f . ms))
                                         (two? ms) (: _ (pin g 'dlp ([f (rev ms)] . g 'dlp)) (f . go u ()))
                                         (f . go u ()))
                             _ ())
-       _ (pin g 'dlp ())
-       (any dlab? fs ? (go fs ()) fs))
+       _ (pins g 'dlp () 'dlo ())
+       (any dlab? fs ? (pin g 'dlo (filter (f \ !(dlab? f)) fs), go fs ()) fs))
    (dlin g fs)
     (g 'dlp @ () fs
-       ps (: t (foldl (t \ p \ (show <p @ k (pin t k (p . peep t k ())))) {} ps)
+       ps (: (book l key) (foldl (t \ x \ (show (key x) @ k (pin t k (x . peep t k ())))) {} l)
+             now (book fs 1) own (book ps cap)
+             (alive? f) (any (h \ h == f) (peep now (show f) ()))
+             (mk f) (filter (p \ <p == f) (peep own (show f) ()) @ (p . _) <>p _ ())
+             ; the marks by the form that lays them, a remade one's riding to the next that survived
+             t {}
+             _ (foldl (\ pend f (: m (pend + mk f)
+                                   (? (alive? f) ((two? m ? (show f @ k (pin t k ([f m] . peep t k ())))), ()) m)))
+                      () (g 'dlo))
              (hit f) (filter (p \ <p == f) (peep t (show f) ()) @ (p . _) <>p _ ())
              (go l) (l @ (f . u) (hit f + (f . go u)) _ ())
-             _ (pin g 'dlp ())
+             _ (pins g 'dlp () 'dlo ())
              (go fs)))
+   ; a laid function's scopes with each name's home: ('f o) at cfa+o, ('d o) at the address there,
+   ; ('g label), ('v vreg) by the states, (k ((vreg home)..)) at the mark .dls.K. csframe's shift is in, and the link sits 16 or 32 under the cfa
+   (dlfin g nm)
+    (: ln (dlcfa g) sh (g 'dlfd)
+       (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
+       (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
+                     [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
+       (pin g 'dlv ([nm (map ([k par bs in sp] \ [k par (map (b \ (<b . home b)) bs) in sp]) (g 'dlsc))
+                  (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
+   ; the frame base's distance under the cfa, () where no cfa is described
+   (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -2116,6 +2135,7 @@
            hw (foldl (a \ s \ max a (0 - <s)) b0 (g 'slots))
            dk (aup (hw + d) 16 - aup hw 16)               ; what rides under the slots keeps its room
            offs (map (k \ 0 - (b0 + 8 * (k + 1))) ^n)
+           _ (pin g 'dlfd [b0 d])
            sv ((r3 ? [['st fb -8 'r3]]) + map (k \ [(elem (cs k) fcs ? 'stsd 'st) fb (offs k) (cs k)]) ^n)
            (rs S) (catmap (k \ ((cs k) @ r
                                  (? (elem r fcs) [['ldsd r fb (offs k)]]
@@ -2882,21 +2902,24 @@
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? "\(nm)\(<>a)" "\(nm)+\(<>a)")))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
-   (asmw g env e) ((asmcty g e @ k (k ? k (peekty g env e))) @ ty
+   (asmw g env e) ((asmcty g env e @ k (k ? k (peekty g env e))) @ ty
                      (bad? ty ? 8 (tsz g ty @ n (elem n '(1 2 4 8) ? n 8))))
-   ; a constant operand's C type, so "a"(3 * 8) is %eax as in gcc: its literals' and casts'
-   ; types through the promotions and conversions. () for anything else
-   (asmcty g e)
+   ; an integer operand's C type, so "a"(3 * 8) is %eax and "r"(~i) is i's width as in gcc (the
+   ; backend's own word for an int sum is a long's): through the promotions and conversions. ()
+   ; for anything else, a pointer's among them
+   (asmcty g env e)
     (knum g e @ k
        (? (two? k) (k 1)
-          (two? e && <e = 'bin)
-           (asmcty g (e 2) @ ta
+          (!(two? e)) ()
+          (<e = 'bin)
+           (asmcty g env (e 2) @ ta
               (? !ta ()
                  (elem (e 1) '(== != < > <= >= && ||)) 'int
                  (elem (e 1) '(<< >>)) (pprom (gtm g) ta)
-                 (asmcty g (e 3) @ tb (tb ? (puac (gtm g) ta tb)))))
-          (two? e && <e = 'un) (asmcty g (e 2) @ ta (ta ? (pprom (gtm g) ta)))
-          ()))
+                 (asmcty g env (e 3) @ tb (tb ? (puac (gtm g) ta tb)))))
+          (<e = 'un) (e 1 = 'not ? 'int (asmcty g env (e 2) @ ta (ta ? (pprom (gtm g) ta))))
+          (elem <e '(land lor)) 'int
+          (peekty g env e @ ty (nom? ty && elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong) || bitf? ty ? ty))))
    asmho holo-bytes-open                            ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    ; a template's bytes: one opaque raw, unless it carries a directive or a label beside an
    ; instruction -- then gas-top reads it in place: raw runs split at its labels (numbered per
@@ -3532,8 +3555,20 @@
        ; if's test, 'expr a conditional or looped position: the body's one expression in place, nothing
        ; hoisted; ('exprh ws) the same where a non-trapping arg may hoist to a decl, not inside ws.
        ; always_inline whose returns do not fold away splices again on the jump lane
-       (site nm as d mode) (site1 nm as d mode () @ r
-                              (two? r || !(peep (g 'alw) nm ()) ? r (site1 nm as d mode 1)))
+       (site nm as d mode)
+        (: k (n9 'k) r (site1 nm as d mode ())
+           (? (two? r) (dlsite nm k mode r d)
+              !(peep (g 'alw) nm ()) r
+              (: k2 (n9 'k) (dlsite nm k2 mode (site1 nm as d mode 1) d))))
+       ; under -g a splice laid as statements has a mark at each end (lo.l dlopen), at the call's
+       ; place: st9's 'l, in a copy the copied body's `{`. a lone expression has no statement to mark, and a pushed-down test holds the caller's arms
+       (dlsite nm0 k mode r d)
+        (: nm <(split "`" nm0)
+           at (two? >d ? (peep (g 'dlfnl) <(split "`" <d) ()) (st9 'l))
+           (st? s) (<s != 'decl || any (p \ starts? <p "`r") <>s)
+           (at @ ([f l] && two? r && mode != 'expr && !(two? mode && elem <mode '(exprh push)) && any st? <r)
+             [([['loc f l 'in k nm]] + <r + [['loc f l 'out k nm]]) <>r]
+             _ r))
        (site1 nm as d mode jf)
         (: c (? (elem nm d || dn nm) ()
                 ; a body that compiles only spliced, or always_inline, splices at any depth
@@ -3885,7 +3920,13 @@
            (? (two? st) (<ha + <st)
               (two? fl) fl
               (hxb c d @ r (<r + [['if <>r (hb t d) (hb e d)]]))))
-       (hitems l d) (two? l ? (hs <l d + hitems >l d))
+       ; each item under the mark ahead of it, whichever operand runs first
+       (hitems l d) (: l0 (st9 'l) r (hit l d l0) (pin st9 'l l0, r))
+       (hit l d at)
+        (two? l ?
+           (: at2 (<l @ ('loc . f . n . _) [f n] _ at)
+              (here _) (pin st9 'l at2, hs <l d)
+              (here 0 + hit >l d at2)))
        [<rf <>rf <>>rf ['blk (hitems (dprune (gtm g) ety <>(rf 3)) [<>rf])]])
    ; a test that folds (in C's types) prunes its dead arm before anything splices in: gcc's
    ; `__builtin_constant_p(n) ? f(n) : g(n)` never lays f's "i"(n). an arm a jump may reach (a label,
@@ -4793,7 +4834,7 @@
        ; lo.l lays after this file: its names resolve at the call
        (mprof 'lo (_ \ (cite 'moon 'lofn) g f params sig) @
          'bad ((cite 'moon 'lorefuse) g)
-         fs (dlin g (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs)))))
+         fs (dlin g (mprof 'lotail (_ \ (cite 'moon 'lotail) g fs)) @ r (g 'dlcur && dlfin g <>f, r))))
 
    ; the data tail -> (dataforms nifforms imgforms extras bssforms rodataforms) | 'bad, extras ((name forms
    ; ro?) ..) per other named section in declaration order. love_nifs packs for the linker's __start_/__stop_
@@ -4966,7 +5007,7 @@
           'abl (ablenv 0)                           ; the pricing knob, read per unit at run time
           'census (cenv 0)
           'laid {}                                  ; names already on 'globs (a tentative repeat lays no twin)
-          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'stag stbl 'sigs sigs
+          'fns {} 'csites {} 'cloop {} 'inl {} 'inlk {} 'nocap {} 'ineed {} 'alw {} 'nopf {} 'fnret {} 'kretm {} 'ainlc {} 'dlfnl {} 'stag stbl 'sigs sigs
           'tgt tgt                                  ; (the epilogue is per fn: cgfn pins g 'epi)
           'weaks weaks                              ; the unit's weak names, never speculated
           'sects (two? xtra ? <>>xtra {})
@@ -4992,7 +5033,8 @@
        _ (pin g 'reach (cgreach <>ast (two? xtra ? <xtra {}) (g 'alias)))
        (recfns fs) (!(two? fs) ? 1
                       (dlsx <fs @ f
-                         (elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
+                         (<fs @ ('fn . nm . _ . ('blk (('loc . fl . ln . _) . _)) . _) (pin (g 'dlfnl) nm [fl ln]) _ 0,
+                          elem <f '(fn proto) ? (pin (g 'fns) <>f 1),
                           ; a body that does nothing: a call to it here is its arguments' effects alone
                           (<f = 'fn && nelem <>f weaks && empty? (f 3) ? (pin (g 'nopf) <>f 1) 0),
                           ; ..and one that is a single `return E`, for kcall to answer where E is one constant
@@ -5223,7 +5265,7 @@
                   ['ldxb d b i s o] ['ldxbl d b i s o] ['ldxh d b i s o] ['ldxhl d b i s o] _ f)
    ; the relocatable object view: the .o emitter turns the names into a symbol table + relocations;
    ; the static fns ride as lnames (local func symbols, so nm/gdb see real boundaries)
-   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs) | ()
+   (cgen-obj ast stbl sigs weaks xtra tgt)          ; -> (1 textforms dataforms funcnames globnames nifforms imgforms lnames xsecs bssforms rodataforms xfnsecs asecs scopes) | ()
     (xnar tgt (cgen-core ast stbl sigs weaks xtra tgt) @ r
        (? (gripe? r) r                               ; a named cause rides out
           !(two? r) ()
@@ -5294,5 +5336,5 @@
                     (pfsec <>r + catmap (x \ pfsec (x 1)) xfns))
              [1 <>r <dat fnames gnames
                 <>dat <>>dat (lnames + lvars + lals) (<>>>dat + pfs) <>>>>dat <>>>>>dat
-                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)])]))))
+                xfns (asecs-live <r [<>r (map (x \ x 1) xfns)]) (<r 'dlv)]))))
 ) ; module 'moon

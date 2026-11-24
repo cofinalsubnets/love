@@ -14,8 +14,9 @@
 ; paints: (rgb r g b), (grey g) or a number, 0 to 1; (shade k) and (tint rgb) multiply what is
 ; there, (mix rgb t) goes t of the way to a colour, (noise size [sy] amount) multiplies by 1 less
 ; up to amount, smooth over size texels, (fbm size octaves amount) as much by fbm. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
+; (swatch-fine k l) is l for a picture k times as wide and high, () where it has art.
 ; (swatch-fault l) is () or [Q USAGE]; (swatch-texel w h l) is (\ x y colour-or-()).
-(module (swatch swatch swatch-fault swatch-texel swatch-plan)
+(module (swatch swatch swatch-fault swatch-fine swatch-texel swatch-plan)
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic
 (borrow 'view)                          ; throw
@@ -185,6 +186,13 @@
                             dx (x1 - x0) dy (y1 - y0) l (max 1.0 (sqrt (dx * dx + dy * dy))) ox (0.0 - dy / l) oy (dx / l)
                             ['poly x0 y0 x1 y1 (x1 + ox) (y1 + oy) (x0 + ox) (y0 + oy) (c3 [0.08 0.08 0.1])]))
                     ^3))))
+ ; ..a recipe k times finer: every length in it k times as long, no ratio, angle or count
+ lengths {'rows 2 'cols 2 'rect 4 'disc 3 'grid 3 'checker 2 'stripes 2 'dots 3 'bevel 3 'patches 1
+          'cracks 4 'grain 4 'cells 1 'oval 4 'ball 4 'relief 1 'stain 1 'fbm 1 'within 4}
+ (fine-of k q) (? (!(two? q) || <q = 'seed) q
+   (: n (<q @ 'poly (#q - 2) 'noise (#q - 2) h (peep lengths h 0))
+      (<q . map (i \ (: a (q (i + 1)) (i < n ? (k * a) two? a ? (fine-of k a) a))) ^(#q - 1))))
+ (swatch-fine k l) (any art? l ? () (map (fine-of k) l))
  (swatch-fault l) (? (atom? l) ()
    (art? <l) (art-ok? <l ? (swatch-fault >l) [<l "(art KIND n), KIND drip fields grid discs or any"])
    (seed? <l || two? (layer <l 0 [1 1])) (swatch-fault >l)

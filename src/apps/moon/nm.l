@@ -23,12 +23,21 @@
    nmxw {'ldxh 2 'stx 8 'stxb 1 'stsdx 8 'stssx 4 'ldsdx 8 'ldssx 4}
    (nmxfar g xo o) (a64? g && cint? o && (nmxw xo @ () 0 w !(-256 <= o <= 255 || 0 <= o <= w * 4095 && o % w = 0)))
 
+   ; -g's marks between two forms a pair rule would take as one go ahead of both: go is the rule's
+   ; own walk, asked of the pair alone
+   (dlrun l ms) (l @ ((m . u) && dlab? m) (dlrun u (m . ms)) _ [(rev ms) l])
+   (dlflo go fs)
+    (: (w l) (l @ (f . u) (? (dlab? f) (f . w u)
+                             (dlrun u () @ [ms v] (two? ms && two? v && go [f <v] != go [f] + go [<v] ? (ms + (f . w v)) (f . w u))))
+                  _ ())
+       (any dlab? fs ? (w fs) fs))
    ; (mov d a) (op d d b) -> (op d a b): b is read before d is written. a64's register ALU
    ; cannot read sp
-   (nmfuse g fs)
+   (nmfuse g fs) (nmfuse1 g (dlflo (nmfuse1 g) fs))
+   (nmfuse1 g fs)
     (fs @ ((['mov d a] . [op x y b] . u) && lovr? d && d = x && d = y && b != d && elem op raalu && (x86? g || a != 'sp))
-           ([op d a b] . nmfuse g u)
-          (f . u) (f . nmfuse g u)
+           ([op d a b] . nmfuse1 g u)
+          (f . u) (f . nmfuse1 g u)
           _ ())
    ; a branch over a lone jump is the jump's branch; thumb's short branches stay put, and only
    ; x64's reaches a symbol
@@ -37,6 +46,8 @@
        (: labs (map (f \ f 1) (filter (f \ two? f && <f = 'label) fs))
           (go l) (l @ ((['br cc L] . ['jmp X] . u) && nmnext? u L && elem cc '(eq ne lt le gt ge below be above ae s ns) && (x64? g || elem X labs))
                        (['br (negcc cc) X] . go u)
+                      ((['br cc L] . m . u) && dlab? m && (dlrun u () @ [_ (['jmp _] . v)] (nmnext? v L) _ 0))
+                       (m . go (['br cc L] . u))
                       (f . u) (f . go u)
                       _ ())
           (go fs)))
@@ -290,7 +301,7 @@
                (go ([(nmsv op) d k] . u))
               (f . u) (f . go u)
               _ ())
-       (go fs))
+       (go (dlflo go fs)))
 
    ; within a block, a vreg's one def but its declaration's while what it read still holds: copies
    ; read through, an add or lea of a literal moves into the offset, an add of a scaled index into an
@@ -358,7 +369,7 @@
                          ((map (y \ y = t ? x y) f) . go u)
                         (f . u) (f . go u)
                         _ ())
-          (go fs)))
+          (go (dlflo go fs))))
 
    (nmround g fs0)
     (nmwid g (nmlit g fs0) @ fs
@@ -366,7 +377,12 @@
           (nmmaps fs dn @ [cp kc]
              ; the substitution may add defs, so the block pass counts again; a literal it copies
              ; down folds into the rewrite after it now
-             (nmlit g (nmsub g fs cp kc dn) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+             (nmlit g (dlalias g cp (nmsub g fs cp kc dn)) @ f2 (nmdn g f2 @ d2 (nmsink g (radce g (nmshl g (nmloc g f2) d2))))))))
+   ; -g keeps what the copies' readers read, so a C name whose vreg went is found under the other:
+   ; 'dlal vreg -> vreg
+   (dlalias g cp fs)
+    (? !(g 'dlcur) fs
+       (g 'dlal @ () (pin g 'dlal cp) u (foldl (\ a x (a x @ () (pin a x (cp x)) _ a)) u (keys cp)), fs))
    ; a multiply by a power of two the fold left is a shift, through a register too;
    ; x86's literal by 3, 5 or 9 of one a lea, then the shift
    (nmshl g fs dn)
@@ -381,7 +397,7 @@
                                      (['imul d a k] && lovr? k && p2 (kv k)) ((a = d ? () [['mov d a]]) + [['shl d (lg (kv k))]])
                                      _ [f])) + go u)
                      ())
-       (x86? g ? (go fs)
+       (x86? g ? (go (dlflo go fs))
           (catmap (f \ (f @ (['imul d a k] && lovr? k && p2 (kv k)) [['mov d a] ['shl d (lg (kv k))]] _ [f])) fs)))
    ; a wide literal or an address a loop makes again each time round, one-def, is made once ahead of
    ; the outermost loop entered only by its head or a jump to its test; the same one again is a
@@ -394,8 +410,10 @@
        refs (catmap (i \ map (L \ [i (peep lab L -1)]) (dests (ft i))) ^n)
        far (foldl (t \ r \ (r @ ([i a] && 0 <= a <= i && peep t a -1 < i) (pin t a i) _ t)) {} refs)   ; head -> last jump back
        spans (sort (keys far))
+       (bk i) (0 <= i && dlab? (ft i) ? (bk (i - 1)) i)
        (pre a b)                                         ; the index the span's values go ahead of | ()
-        (: p (0 < a && (ft (a - 1) @ ['jmp E] (a < peep lab E -1 <= b) _ 0) ? (a - 1) a)
+        (: q (bk (a - 1))
+           p (0 <= q && (ft q @ ['jmp E] (a < peep lab E -1 <= b) _ 0) ? q a)
            (any (r \ r @ [i t] (a <= t <= b && !(a <= i <= b) && i != p) _ 0) refs ? () p))
        (hoist? f) (f @ (['li t k] && lovr? t && peep dn t 0 = 1 && cint? k && !(fits32 k)) 1
                        (['la t _] && lovr? t && peep dn t 0 = 1) 1
@@ -519,7 +537,7 @@
     (: (has k o c) (k @ ([o2 c2 v] . u) (o2 = o && c2 = c ? v (has u o c)) _ ())
        (near o k) (filter (e \ abs (<e - o) >= 8) k)
        ; w read again in its block before a write, so the copy keeps it no longer
-       (rd? w u) (u @ (f . u2) (f @ ('label . _) 0 _ (raops g f @ [r d] (elem w r ? 1 (elem w d ? 0 (rd? w u2))) _ 0)) _ 0)
+       (rd? w u) (u @ (f . u2) (f @ ((_ . _) && dlab? f) (rd? w u2) ('label . _) 0 _ (raops g f @ [r d] (elem w r ? 1 (elem w d ? 0 (rd? w u2))) _ 0)) _ 0)
        (go fs k)
         (fs @ (f . u)
               (f @ ([op v 'r4 o] && elem op '(ld ldss ldsd) && charm? o && lovr? v)
@@ -529,6 +547,7 @@
                    ([op 'r4 o v] && elem op '(st stss stsd) && charm? o && lovr? v)
                     (f . go u ([o (nmsfk op) v] . near o k))
                    ([op 'r4 o _] && elem op stops9 && charm? o) (f . go u (near o k))
+                   ((_ . _) && dlab? f) (f . go u k)
                    _ (!(two? f) || !(nmsfq g <f) ? (f . go u ())
                         (raops g f @ [_ d] (f . go u (filter (e \ nelem (e 2) d) k)) _ (f . go u ()))))
               _ ())
@@ -547,7 +566,7 @@
                 [('add || 'sub || 'imul || 'and || 'or || 'xor) t x y] (low? t ? () [x y])
                 ['mov t a] (lovr? t && low? t ? () [a])
                 _ (raops g f @ [u _] u _ ())))
-       (sweep l c) (l @ (f . u) (sweep u (foldl (c2 \ x \ (lv x = 1 ? (pin lv x 0, 1) c2)) c (full f (u @ (n . _) n _ ())))) _ c)
+       (sweep l c) (l @ (f . u) (sweep u (foldl (c2 \ x \ (lv x = 1 ? (pin lv x 0, 1) c2)) c (full f (dlrun u () @ [_ (n . _)] n _ ())))) _ c)
        (fix _) (sweep fs 0 @ 0 0 _ (fix 0))
        _ (fix 0)
        (filter (f \ !(f @ [('zx4 || 'sx4) v] (lv v = 1) _ 0)) fs))
