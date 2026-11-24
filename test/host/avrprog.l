@@ -1,5 +1,6 @@
 ; test/host/avrprog.l -- src/tools/avrprog.l against bootloaders played here on a pty: the bytes
-; read are the flash's, every command is a whole reading one, and a wrong chip is refused
+; read are the flash's, a read sends no writing command, a write changes the pages that differ
+; alone and is read back, and a wrong chip, the bootloader's range and a real port are refused
 ; run: cat test/00-init.l test/host/avrprog.l | out/love
 (borrow 'cli)
 (: dir (cwd 0 + "/out/.avrprogd")
@@ -7,25 +8,30 @@
    img (string (map (i \ (i * 7 + i // 256) % 256) ^32768))
    (file f) (uread (dir + "/" + f) @ [1 s] s _ ())
    (waitfor pid) (gather pid @ s (two? s ? s (nom? s) s (rest 2, waitfor pid)))
-   (run chip f) (tether ["sh" "-c" ("exec '" + selfpath 0 + "' src/tools/avrprog.l -p /dev/tty " + chip + " read '" + dir + "/" + f + "' >'" + dir + "/" + f + ".log' 2>&1")])
+   (run chip f verb) (tether ["sh" "-c" ("exec '" + selfpath 0 + "' src/tools/avrprog.l -p /dev/tty " + chip + " " + verb + " '" + dir + "/" + f + "' >'" + dir + "/log' 2>&1")])
    ; the device's side: (cmd c k) answers a command's reply, k reading n more of its bytes
-   (play chip f cmd)
-    (: r (run chip f) m >r seen {'c () 'w 0}
+   (playv chip f verb cmd)
+    (: r (run chip f verb) m >r seen {'c () 'w 0 'img img 'pages ()}
        (more n) (map (_ \ see m) ^n)
        (go _) (see m @ c (c = -1 ? 0 (pin seen 'c (c . seen 'c), cmd c more seen @ a (say m a, flush m, go 0))))
        _ (twirl go 0)
        st (waitfor <r)
-       [<st (seen 'c)])
-   (cut seen n) (seen 'w @ w (pin seen 'w (w + n), snip img w (w + n)))
+       [<st (seen 'c) (seen 'img) (rev (seen 'pages))])
+   (play chip f cmd) (playv chip f "read" cmd)
+   (cut seen n) (seen 'w @ w (pin seen 'w (w + n), snip (seen 'img) w (w + n)))
+   (lay seen b) (seen 'w @ w (pin seen 'img (snip (seen 'img) 0 w + b + snip (seen 'img) (w + #b) 32768),
+                              pin seen 'pages (w . seen 'pages), pin seen 'w (w + #b)))
    ; each bootloader by its command bytes
    (caterina sig c more seen)
     (? (c = 83) "CATERIN" (c = 115) (string (rev sig)) (c = 69) "\r"
        (c = 65) (more 2 @ l (pin seen 'w (2 * (l 0 * 256 + l 1)), "\r"))
+       (c = 66) (more 3 @ l (more (l 0 * 256 + l 1) @ b (l 2 = 70 ? (lay seen (string b), "\r") "?")))
        (c = 103) (more 3 @ l (l 2 = 70 ? (cut seen (l 0 * 256 + l 1)) "?")) "?")
    (opti sig c more seen)
     (: (ok s) ("\x14" + s + "\x10")
        (? (c = 48) (more 1, ok "") (c = 117) (more 1, ok (string sig)) (c = 81) (more 1, ok "")
           (c = 85) (more 3 @ l (pin seen 'w (2 * (l 0 + 256 * l 1)), ok ""))
+          (c = 100) (more 3 @ l (more (l 0 * 256 + l 1) @ b (more 1, l 2 = 70 ? (lay seen (string b), ok "") "?")))
           (c = 116) (more 4 @ l (l 2 = 70 ? (ok (cut seen (l 0 * 256 + l 1))) "?")) "?"))
    (only l s) (foldl (a \ c \ a && 0 <= findsub s (string [c])) 1 l)
    u (play "32u4" "u" (caterina [30 149 135]))
@@ -38,6 +44,36 @@
            (x 0 = 1) (file "x" = ()) (only (x 1) "SsE") (<(x 1) = 69)
            (y 0 = 1) (file "y" = ()) (only (y 1) "0uQ") (<(y 1) = 81)
            (<(hark [(selfpath 0) "src/tools/avrprog.l" "-p" "/dev/null" "328p" "write" "f"]) = 1))
+   ; an image of 301 bytes whose second page is the flash's own: pages 0 and 2 alone are written
+   (poke s i c) (snip s 0 i + string [c] + snip s (i + 1) #s)
+   im (poke (snip img 0 301) 5 (255 - img 5))
+   want (im + string (map (_ \ 255) ^83) + snip img 384 32768)
+   (save f s) (uwrite (dir + "/" + f) s)
+   _ (save "im" im, save "e" "", save "b1" (snip img 0 28673), save "b2" (snip img 0 32257), save "there" "x")
+   (w f) ("write '" + dir + "/" + f + "'")
+   v (playv "32u4" "v" (w "im") (caterina [30 149 135]))
+   q (playv "328p" "q" (w "im") (opti [30 149 15]))
+   ; a bootloader that takes a page and lays one bit wrong
+   (bad cmd c more seen) (cmd c more seen @ a (c = 66 || c = 100 ? (seen 'img @ g (pin seen 'img (poke g 7 (255 - img 7)), a)) a))
+   z (playv "32u4" "z" (w "im") (bad (caterina [30 149 135])))
+   k (playv "328p" "k" (w "im") (bad (opti [30 149 15])))
+   n (playv "328p" "n" (w "im") (opti [30 149 135]))
+   t1 (playv "32u4" "t1" (w "b1") (caterina [30 149 135]))
+   t2 (playv "328p" "t2" (w "b2") (opti [30 149 15]))
+   t3 (playv "328p" "t3" (w "e") (opti [30 149 15]))
+   t4 (playv "328p" "there" (w "im") (opti [30 149 15]))
+   r1 (hark ["sh" "-c" ("'" + selfpath 0 + "' src/tools/avrprog.l -p /dev/null 328p write '" + dir + "/im' '" + dir + "/null' 2>'" + dir + "/r1'")])
+   o (playv "32u4" "nodir/o" (w "im") (caterina [30 149 135]))
+   _ (test (v 0 = 0) (v 2 = want) (v 3 = [0 256]) (file "v" = img) (only (v 1) "SsAgBE")
+           (q 0 = 0) (q 2 = want) (q 3 = [0 256]) (file "q" = img) (only (q 1) "0uUtdQ")
+           (z 0 = 1) (<(z 1) = 69) (file "z" = img) (k 0 = 1) (<(k 1) = 81)
+           (n 0 = 1) (only (n 1) "0uQ") (file "n" = ())
+           ; refused before a byte is sent
+           (t1 0 = 1) (t1 1 = ()) (t2 0 = 1) (t2 1 = ()) (t3 0 = 1) (t3 1 = ()) (t4 0 = 1) (t4 1 = ()) (file "there" = "x")
+           (#(filter (c \ c = 66 || c = 100) (u 1 + p 1)) = 0)
+           (<r1 = 1) (file "r1" = "avrprog: write takes a pty alone\n") (file "null" = ())
+           ; the flash not saved: nothing written
+           (o 0 = 1) (o 3 = ()) (only (o 1) "SsAgE"))
    _ (hark ["rm" "-rf" dir])
    0)
 (test_fin (), puts "avrprog: ok", putc 10, 0)

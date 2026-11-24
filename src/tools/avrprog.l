@@ -1,16 +1,21 @@
-; avrprog -- an avr board's flash read back through its own bootloader. it reads alone:
-; no command it sends writes or erases
+; avrprog -- an avr board's flash, read or written through its own bootloader
 ;   love src/tools/avrprog.l -p TTY 328p read FILE    optiboot: stk500v1 (avr061) at 115200
 ;   love src/tools/avrprog.l -p TTY 32u4 read FILE    caterina: avr109 over usb, entered by a
 ;                                                     1200 baud touch
+;   love src/tools/avrprog.l -p TTY CHIP write IMAGE OLD   IMAGE flat, from address 0, its last
+;                                                     page filled with ff; OLD, a new file, gets
+;                                                     the flash as it was. only pages that differ
+;                                                     are written, then all of it is read back
+; write takes a pty alone, as /dev/tty
 ; the board's sketch stops, and starts again after. TTY is best a /dev/serial/by-path name,
 ; which stays the same when the 32u4 comes back as its bootloader
 (borrow 'posix)
 (: dtr 2 rts 4
    flash 32768
    chunk 128
-   chips {"328p" "\x1e\x95\x0f" "32u4" "\x1e\x95\x87"}
-   usage "usage: avrprog -p TTY 328p|32u4 read FILE"
+   ; the signature, and where the bootloader starts
+   chips {"328p" ["\x1e\x95\x0f" 32256] "32u4" ["\x1e\x95\x87" 28672]}
+   usage "usage: avrprog -p TTY 328p|32u4 read FILE | write IMAGE OLD"
    (die m) (say err ("avrprog: " + m + "\n"), flush err, quit 1)
    (hex s) (join "" (map (i \ (s i < 16 ? "0" "") + radix (s i) 16) ^#s))
    (open? dev k) (openfd dev 5 @ fd (charm? fd || k = 0 ? fd (rest 100, open? dev (k - 1))))
@@ -29,10 +34,17 @@
        _ (raw fd 1200, modem fd 0 (dtr | rts), close fd)
        (cycle dev "after the touch"))
    (main as)
-    (: a (as @ ["-p" d c "read" f] [d c f] _ (die usage))
-       dev (a 0) chip (a 1) path (a 2)
-       sig (chips chip)
-       _ (string? sig ? 0 (die usage))
+    (: a (as @ ["-p" d c "read" f] [d c f ()] ["-p" d c "write" i f] [d c f i] _ (die usage))
+       dev (a 0) chip (a 1) path (a 2) src (a 3)
+       row (chips chip)
+       _ (two? row ? 0 (die usage))
+       sig (row 0) top (row 1)
+       write (string? src)
+       _ (write && dev != "/dev/tty" ? (die "write takes a pty alone"))
+       raw0 (write ? (uread src @ [1 t] t _ (die ("cannot read " + src))) "")
+       _ (write && #raw0 = 0 ? (die "empty image") (top < #raw0) (die "the image reaches the bootloader"))
+       _ (write && two? (stat path) ? (die (path + ": there already")))
+       new (raw0 + string (map (_ \ 255) ^((chunk - #raw0 % chunk) % chunk)))
        usb (chip = "32u4")
        _ (usb ? (touch dev))
        fd (open? dev 30)
@@ -77,6 +89,15 @@
        _ (s = sig ? 0 (fail ("signature " + hex s + ", not the " + chip + "'s")))
        d (go 0 ())
        w (uwrite path d)
+       ; one page, erased and written by the bootloader
+       put (usb ? (b \ want (ask (string [66 (hi #b) (lo #b) 70] + b) 1 2000) "write" @ r (r 0 = 13 ? 0 (fail "write refused")))
+              (b \ stk (string [100 (hi #b) (lo #b) 70] + b + " ") 0 "write"))
+       (lay i n) (#new <= i ? n
+                  (: b (snip new i (i + chunk))
+                     (b = snip d i (i + chunk) ? (lay (i + chunk) n) (seek (i // 2), put b, lay (i + chunk) (n + 1)))))
+       _ (write ? (w ? 0 (fail ("cannot write " + path)),
+                   lay 0 0 @ n (go 0 () = new + snip d #new flash ? (say out "\(n) pages of \(#new // chunk) written, read back the same\n", flush out)
+                                (fail "the flash read back is not the image"))))
        _ (bye 0)
        (w ? (say out "\(chip) signature \(hex s), \(#d) bytes to \(path)\n", flush out, quit 0)
         (die ("cannot write " + path))))
