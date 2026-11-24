@@ -176,10 +176,10 @@ static bool sw_read(word pl, struct sw_layer *l, flo_t *f) {
   for (int k = 0; k < 6; k++, q = B(q)) { if (!chainp(q)) return 0; part[k] = A(q); }
   struct sw_layer *y = l + i;
   y->nbox = llen(part[0]) / 4, y->nnum = llen(part[2]);
-  if (llen(part[0]) % 4 || !charmp(part[1]) || !charmp(part[3])) return 0;
+  if (llen(part[0]) % 4 || !charmp(part[1]) || !intp(part[3])) return 0;
   y->box = f + used, used += 4 * y->nbox;
   y->num = f + used, used += y->nnum;
-  y->kind = (int) getcharm(part[1]), y->seed = getcharm(part[3]);
+  y->kind = (int) getcharm(part[1]), y->seed = toi64(part[3]);   // past a fixnum on a 32-bit word
   if (!sw_nums(part[0], (flo_t*) y->box, 4 * y->nbox) || !sw_nums(part[2], (flo_t*) y->num, y->nnum) || !sw_paint_of(part[4], &y->p)) return 0;
   if (y->kind < 0 || y->kind > 18 || ((y->kind == 17 || y->kind == 18) && (y->nnum != 4 || !sw_octs(y->num) || (y->kind == 18 && y->num[3] <= 0))) || (y->kind == 10 ? y->nnum != 3 || !sw_paint_of(part[5], &y->d) : y->kind == 11 ? y->nnum < 6 || y->nnum % 2 :
       y->kind == 15 ? y->nnum != 6 || y->num[2] == 0 || y->num[3] == 0 : y->kind == 16 ? y->nnum != 10 || y->num[2] == 0 || y->num[3] == 0 : y->nnum != 4)) return 0; }

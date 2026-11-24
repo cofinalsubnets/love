@@ -477,7 +477,8 @@
        (? !(two? r && two? <r) () (two? h) (wo-fill <r (wo-blobs text >(<h) (<>h + <<h))) <r))
    ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all,
    ;; and under a list 'exports? (name ..), exported where defined; a list drops what it cannot reach;
-   ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so the link holds
+   ;; 'stack bytes; 'base addr; 'marker the drop's marker, reach unless a law hands another: the
+   ;; laws' door. an input is a tu, or its text -- read here, so the link holds
    ;; one copy of the program
    (wasm-link tus0 opts)
     (: ntu #tus0
@@ -538,7 +539,7 @@
                  units (map (fn \ (<fn . map of (keys (w-refs <>fn {})))) fns0)
                  dref ({} @ t (map (d \ (w-refs d t)) (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7), t))
                  roots (map of (map nom (want + peep opts 'exports? ()) + keys dref))
-                 (reach-keep fns0 (reach units roots))))
+                 (reach-keep fns0 ((peep opts 'marker reach) units roots))))
        ;; 4. the data, section-major across the tus: rodata, data, love_nifs, .love.image, then
        ;;    the named sections grouped by name, then every bss. a lane the ELF linker brackets
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
@@ -580,6 +581,10 @@
                      t))
        refs (keys ({} @ t (map (fn \ (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
        owed0 (filter (x \ !(peep defd x 0) && atom? (syms x)) refs)   ; a bracket is the link's
+       ;; a name the drop took while what it kept still names it is the drop's own error, never a null
+       def0 ({} @ t (want = 'all ? 0 (map (fn \ (pin t <fn 1, w-labels-into t <>fn)) fns0), t))
+       lost (filter (x \ peep def0 x 0) owed0)
+       _ (two? lost ? (scare 'wasm-dropped lost) 0)
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
        wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with its own exports has no main
