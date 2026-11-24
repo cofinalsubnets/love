@@ -194,7 +194,9 @@
                  && r 19 0 <= 1 && r 19 1 <= 1 && r 19 2 <= 1 && 8 < r 19 3 && r 19 4 = 0 && all (f \ f <= gk) (r 20) && r 21 0 <= 1 && 8 < r 21 1))
    moon (drawn "moon") cc (drawn "cc")
    ; ..and where the driver blends with one colour alone, glass in two, rounded at each
-   _ (setenv "LOVE_GPU_DUAL" "0") one (drawn "moon") _ (setenv "LOVE_GPU_DUAL" "")
+   _ (setenv "LOVE_GPU_DUAL" "0") one (drawn "moon")
+   ; ..or in one draw by fetching the colour there, as mesa's software driver can
+   _ (setenv "LIBGL_ALWAYS_SOFTWARE" "1") ftc (drawn "moon") _ (setenv "LIBGL_ALWAYS_SOFTWARE" "") _ (setenv "LOVE_GPU_DUAL" "")
    ; ..a helper that dies lets go, its words kept, and the frame is the cpu's
    die (: g (gpu-open ()) (? (two? g) 'none
      (: s (gpu-state g) f (_ \ gpu-facets s W H -1 mat [verts] [tris] [(int (gem-tray [8 8] ckl))] (gem-tray [8] [40.0 60.0 80.0 0.3 0.9 64.0 1.5 0.0]) () () ())
@@ -207,7 +209,7 @@
         _ (each ^1200 (i \ (gpu-place g [[1 [(0.001 * i) 0.0 0.0]]]))) _ (gpu-place g [[1 [0.0 0.0 0.0]]])
         _ (each ^9 (i \ (gpu-tex g (10 + i) 512 512 (iota (512 * 512) * 0 + i)))) d (f ()) _ (gpu-close g)
         [(tray? a) (string? b) (tray? c && amax (a != c) = 0) (tray? d && amax (a != d) = 0)])))
-   (test (fine? moon) (fine? cc) (near? 60 one) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
+   (test (fine? moon) (fine? cc) (near? 60 one) (near? 60 ftc) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
 ; a frame's numbers laid as 4-byte floats, whatever the machine's word
 (: fw-n (cwd 0 + "/out/.gpu-frame-" + show (getpid 0)) _ (close (open fw-n "w")) fw-l (open (fw-n + ".l") "w")
    _ (gpu-send {'w (openfd fw-n 1) 'room 0 'to fw-l} 2 2 (1.5 * iota 16) [7 -9] [-1 0.5 0.0 0.0 0.0 0.0 0.0 0]) _ (close fw-l)
