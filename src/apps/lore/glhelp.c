@@ -13,8 +13,8 @@
 //                     texture: -1 none, -2 a glow, -3 - t a glass of t, a pane's class or a
 //                     lens as facets has them), drawn in their order
 //   drop ID           a buf forgotten
-//   place N OFF        N floats from OFF, ID X Y Z ..: each buf ID drawn moved by X Y Z, kept
-//                     until it is laid again
+//   place N OFF        N floats from OFF, ID X Y Z U V ..: each buf ID drawn moved by X Y Z, its
+//                     texels by U V, kept until it is laid again
 //   lamps ID NV OFF L0 .. L7
 //                     buf ID's lamps: NV vertices of 24 floats from OFF, 8 slots of r g b, slot k
 //                     the light lamp LK gives it at full strength
@@ -196,7 +196,7 @@ static void *(*map64) (void *, size_t, int, int, int, long long);
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
-struct buf { int id, nv, S, glow; GLuint vao, vb, ib, lb, sb; int nrun; struct run *runs; int li[8]; float off[3]; };   // glow: its runs all glow; lb its lamps', sb its sun's; off where it is moved
+struct buf { int id, nv, S, glow; GLuint vao, vb, ib, lb, sb; int nrun; struct run *runs; int li[8]; float off[5]; };   // glow: its runs all glow; lb its lamps', sb its sun's; off where it is moved
 struct seen { float w, k; int id; };
 struct helper {
  int fd; size_t sz; unsigned char *map;
@@ -208,7 +208,7 @@ struct helper {
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
  GLuint zf, zt; GLint u_bb, u_br, u_bu, u_gz; float eye[10]; int epend;   // the glows' eye, and the depths they fade by
  GLuint sm; GLint u_lm, u_sun, u_bias, u_ss; float lm[16], bias; int sw, sh;   // the sun's view
- GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp, u_off, u_li, u_ks;
+ GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp, u_off, u_uvo, u_li, u_ks;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
  GLint uu_cs, uu_fs, uu_base;
  EGLDisplay d; EGLConfig cf; EGLContext c; EGLSurface ws; void *xd;   // ws: the window shown on, by xd's display
@@ -257,7 +257,7 @@ static char const vsrc[] =
  "layout(location=4) in vec3 l0; layout(location=5) in vec3 l1; layout(location=6) in vec3 l2; layout(location=7) in vec3 l3;\n"
  "layout(location=8) in vec3 l4; layout(location=9) in vec3 l5; layout(location=10) in vec3 l6; layout(location=11) in vec3 l7; layout(location=12) in vec3 sd;\n"
  "uniform int li[8]; uniform float ks[128]; uniform float sh;\n"
- "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; uniform int bb; uniform vec3 br; uniform vec3 bu; uniform vec3 off;\n"
+ "uniform mat4 m; uniform mat4 lm; uniform vec2 vp; uniform int bb; uniform vec3 br; uniform vec3 bu; uniform vec3 off; uniform vec2 uvo;\n"
  "uniform highp sampler2D cm; uniform highp float kp[51]; uniform float csh;\n"
  "float cl(vec2 x) { vec2 i = floor(x), u = x - i; ivec2 a = ivec2(mod(i, 128.0)), b = ivec2(mod(i + 1.0, 128.0));\n"
  "  float q0 = texelFetch(cm, a, 0).r, q1 = texelFetch(cm, ivec2(b.x, a.y), 0).r, q2 = texelFetch(cm, ivec2(a.x, b.y), 0).r, q3 = texelFetch(cm, b, 0).r;\n"
@@ -270,7 +270,7 @@ static char const vsrc[] =
  "  return (1.0 - 0.75 * g - 0.2 * g * g * g * g) * csh; }\n"
  "invariant gl_Position; out vec2 uv; out vec3 col; out vec3 scol; out vec3 lp; out float w;\n"
  "void main(){ vec3 P = (bb != 0 ? p + t.x * br + t.y * bu : p) + off;\n"
- " vec4 q = m * vec4(P, 1.0); uv = t; scol = sc;\n"
+ " vec4 q = m * vec4(P, 1.0); uv = t + uvo; scol = sc;\n"
  " col = sh * (c + ks[li[0]] * l0 + ks[li[1]] * l1 + ks[li[2]] * l2 + ks[li[3]] * l3 + ks[li[4]] * l4 + ks[li[5]] * l5 + ks[li[6]] * l6 + ks[li[7]] * l7);\n"
  " if (csh > 0.0 && sd.r + sd.g + sd.b > 0.0) col = max(vec3(0.0), col + sh * sd * (shade(P.xz) - 1.0));\n"
  " lp = (lm * vec4(P, 1.0)).xyz; w = q.w; q.y = -q.y;\n"
@@ -486,7 +486,7 @@ static int setup(struct helper *H, int x) {
  H->u_ts = glGetUniformLocation(H->prog, "ts"); H->u_has = glGetUniformLocation(H->prog, "has");
  H->u_fog = glGetUniformLocation(H->prog, "fog"); H->u_fz = glGetUniformLocation(H->prog, "fz");
  H->u_tone = glGetUniformLocation(H->prog, "tone"); H->u_mode = glGetUniformLocation(H->prog, "mode"); H->u_vp = glGetUniformLocation(H->prog, "vp");
- H->u_off = glGetUniformLocation(H->prog, "off");
+ H->u_off = glGetUniformLocation(H->prog, "off"); H->u_uvo = glGetUniformLocation(H->prog, "uvo");
  H->u_li = glGetUniformLocation(H->prog, "li"); H->u_ks = glGetUniformLocation(H->prog, "ks");
  H->u_sh = glGetUniformLocation(H->prog, "sh"); glUniform1f(H->u_sh, 1);
  char const *ex = (char const *) glGetString(0x1F03);   // GL_EXTENSIONS
@@ -979,11 +979,11 @@ static void cmd_scene(struct helper *H, int n, size_t off) {
  H->scn = q; memcpy(q, p, 36 * (size_t) n); H->nscn = n;
  dprintf(H->out, "ok\n"); }
 static void cmd_place(struct helper *H, int n, size_t off) {
- float const *v = n >= 0 && n % 4 == 0 ? (float const*) bytes(H, off, 4 * (size_t) n) : NULL;
+ float const *v = n >= 0 && n % 6 == 0 ? (float const*) bytes(H, off, 4 * (size_t) n) : NULL;
  if (!v) { dprintf(H->out, "err place args\n"); return; }
- for (int i = 0; i < n; i += 4) {
+ for (int i = 0; i < n; i += 6) {
   struct buf *b = buf_of(H, (int) v[i]);
-  if (b) for (int k = 0; k < 3; k++) b->off[k] = v[i + 1 + k]; }
+  if (b) for (int k = 0; k < 5; k++) b->off[k] = v[i + 1 + k]; }
  dprintf(H->out, "ok\n"); }
 static void cmd_vis(struct helper *H, int n, int k, size_t off) {
  float const *p = n >= 0 && k >= 0 && k <= 1024 ? (float const*) bytes(H, off, 4 * ((size_t) n + k)) : NULL;
@@ -1109,7 +1109,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    struct buf *b = buf_of(H, ids[k]);
    if (!b) continue;
    glBindVertexArray(b->vao);
-   glUniform1i(H->u_bb, ey && b->glow); glUniform1iv(H->u_li, 8, b->li); glUniform1f(H->u_sh, mul[k]); glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]);
+   glUniform1i(H->u_bb, ey && b->glow); glUniform1iv(H->u_li, 8, b->li); glUniform1f(H->u_sh, mul[k]); glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]); glUniform2f(H->u_uvo, b->off[3], b->off[4]);
    for (int r = 0; r < b->nrun; r++) {
     int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
     if ((m != 0) != pass) continue;
@@ -1129,7 +1129,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
  for (int k = 0; glassy && k < ni; k++) {
   struct buf *b = buf_of(H, ids[k]);
   if (!b) continue;
-  glBindVertexArray(b->vao); glUniform1iv(H->u_li, 8, b->li); glUniform1f(H->u_sh, mul[k]); glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]);
+  glBindVertexArray(b->vao); glUniform1iv(H->u_li, 8, b->li); glUniform1f(H->u_sh, mul[k]); glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]); glUniform2f(H->u_uvo, b->off[3], b->off[4]);
   for (int r = 0; r < b->nrun; r++) {
    int const tx = code(b->runs[r].tex);
    if (tx > -3) continue;
@@ -1138,7 +1138,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    if (t) glBindTexture(GL_TEXTURE_2D, t->gl), glUniform2f(H->u_ts, (float) t->w, (float) t->h);
    mode(H, 4);
    glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) b->runs[r].at)); } }
- glBindVertexArray(0); mode(H, 0); glUniform1f(H->u_sh, 1); glUniform3f(H->u_off, 0, 0, 0);
+ glBindVertexArray(0); mode(H, 0); glUniform1f(H->u_sh, 1); glUniform3f(H->u_off, 0, 0, 0); glUniform2f(H->u_uvo, 0, 0);
  // ..and the sky, under what is bare, onto what the frame keeps there
  struct buf *sb = H->spend && H->sky >= 0 ? buf_of(H, H->sky) : NULL;
  int const ps = H->spend && H->sky < 0 && H->cmt && H->amt && H->nkp >= 50;
@@ -1163,12 +1163,12 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    for (int r = 0; r < sb->nrun; r++) glDrawElements(GL_TRIANGLES, sb->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) sb->runs[r].at)); }
   else {
    static float const id4[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
-   glUniformMatrix4fv(H->u_m, 1, 1, id4); glUniform3f(H->u_off, 0, 0, 0);
+   glUniformMatrix4fv(H->u_m, 1, 1, id4); glUniform3f(H->u_off, 0, 0, 0); glUniform2f(H->u_uvo, 0, 0);
    glUniform1fv(H->u_kp, 51, H->kp); glUniform1i(H->u_skm, 1);
    glActiveTexture(GL_TEXTURE8); glBindTexture(GL_TEXTURE_2D, H->cmt); glActiveTexture(GL_TEXTURE9); glBindTexture(GL_TEXTURE_2D, H->amt); glActiveTexture(GL_TEXTURE0);
    glBindVertexArray(H->fva); glDrawArrays(GL_TRIANGLES, 0, 3);
    glUniform1i(H->u_skm, 0); glUniformMatrix4fv(H->u_m, 1, 1, m); }
-  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); }
+  glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); glUniform2f(H->u_uvo, 0, 0); }
  H->opend = 0;
  // ..with keep, left unread where no pixel is the cpu's to finish: none where the sky was
  // asked a pixel at a time, which finishes every bare one, else one asked of the gpu
