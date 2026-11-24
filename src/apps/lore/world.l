@@ -7,7 +7,7 @@
 ; world-read, -new, -at, -step, -move and -frame are pure; world-watch reads the disk, and only
 ; world-walk and world-run touch the tty. a walk may leave for another level's entry, a herald
 ; met or a bed slept in, and world-run walks on there in the same window.
-(module (world scene-key scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
+(module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
          world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
@@ -1292,7 +1292,7 @@
    (dir? n && map (s \ mkdir s 493) [(n + "/cache") d], dir? d && d))
  ; ..written beside, then renamed onto, so no reader meets a torn one
  (scene-put f bs) (: t "\(f).\(getpid ())" q (open t "w")
-   (hot? q ? (say q bs, close q), hot? q && !(rename t f) ? () (unlink t), ()))
+   (hot? q ? (say q bs, close q), hot? q && (stat t @ s (two? s && s 0 = #bs)) && !(rename t f) ? () (unlink t), ()))
  ; ..what makes a scene, by its source as the binary carries it, so another build of the same
  ; makers finds the scenes the last one kept; one with no source, its own bytes
  scene-by (map (n \ "src/apps/lore/\(n).l") ['bough 'brush 'grove 'mesh 'neon 'sky 'starmap 'swatch 'toys 'vec 'view 'world]
@@ -1311,11 +1311,14 @@
  (scene-key d lv dir) (scene-id d @ id
    (string? id && sha256 (cats (["lore-scene 3\n" id "\n" (stow-canon (scene-of lv) @ b (string? b ? b (show lv))) "\n"]
                                 + map (f \ uread f @ r "\(f)\n\(two? r ? <>r "")\n") (scene-files lv dir)))))
- ; ..bounded by count, ordered by use, the touch on a hit
- (scene-sweep d) (: (old e most) (: es (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) f] . a) a))) () (readdir d))
-                                    (go l k) (two? l ? (most <= k && unlink (d + <>(<l)), go >l (k + 1)) 0)
-                                  (go (sortby (a \ b \ <b <= <a) es) 0))
-   (old ".scene" 4, old ".cid" 8))
+ ; ..bounded by bytes, 1 GB or a tenth of what would be free with them gone, ordered by use,
+ ; the touch on a hit; the newest stays whatever its size. fr the bytes free, () unknown
+ (scene-bound fr used) (fr = () ? 1073741824 (min 1073741824 ((fr + used) // 10)))
+ (scene-free d) (statfs d @ s (two? s ? (s 0 * s 3) ()))
+ (scene-sweep d fr) (: (kept e) (sortby (a \ b \ <b <= <a) (foldl (\ a f (stat (d + f) @ st (dotted f e && two? st ? ([(st 1) (st 0) f] . a) a))) () (readdir d)))
+   (old es most cost) (: (go l k) (two? l ? (: n (k + cost (<l 1)) _ (k > 0 && most < n && unlink (d + <l 2)) (go >l n)) 0) (go es 0))
+   es (kept ".scene")
+   (old es (scene-bound fr (foldl (+) 0 (map (e \ e 1) es))) (n \ n), old (kept ".cid") 64 (_ \ 1)))
  ; ..read back, its light made again of what it keeps and its memo spent, so the next scene
  ; begins one
  (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
@@ -1337,7 +1340,7 @@
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
           (string? k && (stow (foldl (\ t q (q @ 'memo t 'lit t 'surf t (pin t q (sc q)))) {} (keys sc)) @ b
-                          (string? b && (scene-put f (zstd-pack b 3), scene-sweep d))),
+                          (string? b && (scene-put f (zstd-pack b 3), scene-sweep d (scene-free d)))),
            sc)))))
  ; --- a surface: the level's own x y z laid round a shape, x and z along it wrapping at lx
  ;     and lz, y up off it. 'at its place in the world, scalars or trays; 'axes its right,
@@ -1564,7 +1567,8 @@
    ; the gpu adds as strong as they are, once relit so it knows them
    ; ..and the sun's own of it, which the gpu shades by its clouds
    (sunof c) (gk && st 'gpu 'g != () && two? (peep (c 'lit) 'sun ()) ? (mesh-sun-slots (c 'pk) (c 'lit 'sun) 1.0) ())
-   (hall-of c) (: pk (c 'pk) su (sunof c) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
+   (hall-of c) (slotted c (sunof c))
+   (slotted c su) (: pk (c 'pk) sl (gk && st 'gpu 'g != () && #dk <= 128 && tablet? (peep pk 'live ()) ? (mesh-lamp-slots pk) ())
      (two? sl ? [(sl 0) (pk 'tris) [(gpu-name st pk) 'slots] [(sl 2) (sl 1) su]] (: b (lit-named pk (relit pk (c 'lit))) (tray? su && two? (b 2) ? [(b 0) (b 1) (b 2) [() () su]] b))))
    ; ..and on a gpu that keeps a scene, each laid in it once the cells first let it be seen,
    ; marked down while they do not; but one lit here frame by frame, which it sees and lays
@@ -1626,12 +1630,14 @@
    ; ..what shines and glows, at each light's brightness; none where it is out
    (by key) (catmap (i \ catmap (q \ ((q 1 * ks i) @ 0.0 () b [(named (q 0) (shine-at (q 0) b key) [key b])])) (sc 'lights i key)) ^#ks)
    ; ..the cars and doors first, as near as anything is, so less behind them is lit for nothing
-   glass (map (i \ lit-named (sc 'panes i 'pk) (relit (sc 'panes i 'pk) (sc 'panes i 'lit))) ^#(sc 'panes))
-   ; ..the sheets apart from the chunks, their texels drifting as they flow
+   glass (map (c \ slotted c ()) (sc 'panes))
+   ; ..the sheets apart from the chunks, their texels drifting as they flow, on a gpu by it
    (drift x w) (x - w * floor (x / w))
-   sheets (map (c \ (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
-                       (foldl (\ b j (c 'flow j @ 0.0 b [(pin (b 0) (ix + 3 + j) (pk 'cols (3 + j) + drift (c 'flow j * st 'mt) (c 'wh j))) (b 1)]))
-                              b ^2)))
+   (sheet c) (: d (map (j \ drift (c 'flow j * st 'mt) (c 'wh j)) ^2)
+     (? (gk && st 'gpu 'g != ()) (slotted c () @ b (b + (#b < 4 ? [()] ()) + [([0.0 0.0 0.0] + d)]))
+        (: b (relit (c 'pk) (c 'lit)) pk (c 'pk) ix (iota (pk 'n) * 8)
+           (foldl (\ b j (c 'flow j @ 0.0 b [(pin (b 0) (ix + 3 + j) (pk 'cols (3 + j) + d j)) (b 1)])) b ^2))))
+   sheets (map sheet
                (sc 'sheets))
    ; ..each ball where it is, made again only once it has moved
    balls (map (b \ (: d (tablet? (b 'pk) ? (b 'pk) (: d (ball-pk sc b) (pin b 'pk d, d))) (b 'kind = 'wisp ? (mesh-shine (d 'pk) (wisp-k st b)) (relit (d 'pk) (d 'lit)))))

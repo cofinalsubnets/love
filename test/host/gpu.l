@@ -136,7 +136,11 @@
            (shove x y) (foldl (\ a j (: ix (iota 7 * 8 + j) (pin a ix (verts ix + [x y 0.0] j)))) verts ^2)
            (budge x y) (apart (facets W H -1 mat [(shove x y)] [tris] X nf)
                             (gpu-facets s W H -1 mat [verts] [tris] X nf ['mv] () [{'offs [[x y 0.0]]}]))
-           mv [(budge 0.1 0.0) (budge -0.2 0.15)]
+           ; ..and its texels by its drift
+           (slid u w) (foldl (\ a j (: ix (iota 7 * 8 + 3 + j) (pin a ix (verts ix + [u w] j)))) verts ^2)
+           (flows u w) (apart (facets W H -1 mat [(slid u w)] [tris] X nf)
+                              (gpu-facets s W H -1 mat [verts] [tris] X nf ['mv] () [{'offs [[0.0 0.0 0.0 u w]]}]))
+           mv [(budge 0.1 0.0) (budge -0.2 0.15) (flows 3.0 0.0) (flows 1.5 6.25)]
            ; ..the sky asked a pixel at a time, as the cpu asks it at each: partly cloudy from an
            ; eye off the middle, overcast under smog low down, and mostly cloudy dyed
            (q8 x) (int (min 1.0 (max 0.0 x) * 255.0 + 0.5))
