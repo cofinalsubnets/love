@@ -1195,5 +1195,24 @@
  (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
        (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
        (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
+; a scene's key: the same for the same level whatever the order its tablets keep or where it is
+; come to, but on a surface; another level's, another file's and another maker's are others
+(: kd (cwd 0 + "/out/.world-key-" + show (getpid 0) + "/") _ (mkdir kd 448)
+   (kl r t) (world-read "(level \"t\" (room [0 0 0] [6 3 \(r)]) (poster [1 1 0] 0.6 0.9 \"pp.ppm\") (start [\(t) 0 1] 0 0))")
+   (sf t) (world-read "(level \"t\" (surface 'plane 10 10) (void [-2 -1 -2] [12 3 12]) (solid (box [0 -1 0] [10 0 10])) (start [\(t) 0 5] 90 0))")
+   (put t) (: p (open (kd + "pp.ppm") "w") (say p t, close p, 0))
+   _ (put "P6\n1 1\n255\nabc") ka (scene-key kd (kl 6 1) kd) kb (scene-key kd (kl 6 2) kd) kc (scene-key kd (kl 7 1) kd)
+   _ (put "P6\n1 1\n255\nabd") kx (scene-key kd (kl 6 1) kd) s1 (scene-key kd (sf 3) kd) s2 (scene-key kd (sf 4) kd)
+   rl (kl 6 1) rk (foldl (\ t k (pin t k (rl k))) {} (rev (keys rl)))
+   _ (put "P6\n1 1\n255\nabc") kr (scene-key kd rk kd) _ (hark ["rm" "-rf" kd])
+   (src f) (uread f)
+   m0 (scene-made src) m1 (scene-made (f \ f = "src/apps/lore/brush.l" ? [0 "x"] (src f))) m2 (scene-made (_ \ ()))
+   ; ..and no level's maker borrows a library of lore's that is neither listed nor known not to make
+   exempt ['lore 'rove 'console 'gpu 'walk 'mixer 'gesture 'decay 'flicker]
+   (names l) (: (go i w a) ((i = #l || l i = 41) ? (w = "" ? a (w . a)) (: c (l i) ((96 < c && c < 123) || c = 45 ? (go (i + 1) (w + snip l i (i + 1)) a) (go (i + 1) "" (w = "" ? a (w . a)))))) (go 0 "" ()))
+   (bors f) (catmap (l \ (#l > 9 && snip l 0 8 = "(borrow " ? (names (snip l 8 #l)) ())) (lines <>(src f)))
+   bad (catmap (f \ filter (n \ two? (src "src/apps/lore/\(n).l") && !(elem n (map string exempt)) && !(elem "src/apps/lore/\(n).l" scene-by)) (bors f)) (filter (f \ snip f 0 13 = "src/apps/lore") scene-by))
+ (test (elem "neon" (bors "src/apps/lore/world.l")) (string? ka) (ka = kb) (ka != kc) (ka != kx) (kr = ka) (s1 != s2) (string? m0) (m0 != m1) (m2 = 0 || m2 = ())
+       (bad = ())))
 (test_fin ())
 (puts "world: ok\n")
