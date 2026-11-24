@@ -15,7 +15,7 @@ include ../../../src/inle/port.mk
 
 rp_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -D RP2350 -I.
 
-objs = $(R)/$(o)/rp2350.o $(R)/$(o)/main.o $(R)/$(o)/usb.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+objs = $(R)/$(o)/rp2350.o $(R)/$(o)/main.o $(R)/$(o)/usb.o $(R)/$(o)/lm.o $(R)/$(o)/lmf.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 pobjs = $(R)/$(o)/rp2350.o $(R)/$(o)/probe.o $(R)/$(o)/pusb.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 
 .PHONY: rp2350

@@ -22,6 +22,17 @@ struct inf_rd {
  uintptr_t n, ip, op, cap, nd;
  uint64_t bb;
  unsigned bc; };
+static inline int inf_whole(struct inf_code const *c) {
+ unsigned int l, left = 1;
+ for (l = 1; l < 16; l++) {
+  left += left;
+  if (left < c->cnt[l]) return 3;
+  left = left - c->cnt[l]; }
+ if (!left) return 0;
+ if (1u << 15 <= left) return 2;
+ if (left < 1u << 14) return 3;
+ if (!c->cnt[1]) return 3;
+ return 1; }
 static inline void inf_fill(struct inf_rd *r) {
  if (r->ip + 8 <= r->n) {
   r->bb |= LD64(r->in + r->ip) << r->bc;
@@ -100,6 +111,8 @@ static inline int inf_dyn(struct inf_rd *r) {
  x = inf_take(r, 5);
  if (x < 0) return x;
  hdist = x + 1;
+ if (286 < hlit) return -1;
+ if (30 < hdist) return -1;
  x = inf_take(r, 4);
  if (x < 0) return x;
  hclen = x + 4;
@@ -109,6 +122,8 @@ static inline int inf_dyn(struct inf_rd *r) {
   if (x < 0) return x;
   cl[gz_clord[i]] = x; }
  inf_build(&r->t->cl, cl, 19, r->t->csym, r->t->ctab, CROOT);
+ x = inf_whole(&r->t->cl);
+ if (0 < x) return -1;
  memset(lens, 0, sizeof(lens));
  tot = hlit + hdist;
  i = 0;
@@ -121,6 +136,7 @@ static inline int inf_dyn(struct inf_rd *r) {
   else {
    if (18 < sy) return -1;
    if (sy <= 16) {
+    if (!i) return -1;
     x = inf_take(r, 2);
     if (x < 0) return x;
     rr = x + 3;
@@ -135,11 +151,17 @@ static inline int inf_dyn(struct inf_rd *r) {
      if (x < 0) return x;
      rr = x + 11; }
     v = 0; } }
-  for (k = 0; k < rr; k++) if (i + k < 320) lens[i + k] = v;
+  if (tot < i + rr) return -1;
+  for (k = 0; k < rr; k++) lens[i + k] = v;
   i += rr;
   prev = v; }
+ if (!lens[256]) return -1;
  inf_build(&r->t->lit, lens, hlit, r->t->lsym, r->t->ltab, LROOT);
  inf_build(&r->t->dst, lens + hlit, hdist, r->t->dsym, r->t->dtab, DROOT);
+ x = inf_whole(&r->t->lit);
+ if (1 < x) return -1;
+ x = inf_whole(&r->t->dst);
+ if (2 < x) return -1;
  return 0; }
 static inline void inf_copy(struct inf_rd *r, uintptr_t l, uintptr_t d) {
  uintptr_t k = 0, m;

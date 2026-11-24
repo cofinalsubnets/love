@@ -7,7 +7,7 @@
 include ../../../src/inle/port.mk
 
 c6_src = test/boards/esp32c6/c6.c test/boards/esp32c6/main.c test/boards/esp32c6/gauge.c \
-  src/apps/moon/lib/rt.c src/apps/moon/lib/moonlibc/math/lm.c
+  src/apps/moon/lib/rt.c src/apps/moon/lib/moonlibc/math/lm.c src/apps/moon/lib/moonlibc/math/lmf.c
 
 .PHONY: esp32c6
 default: esp32c6
@@ -20,7 +20,7 @@ $(R)/$(o)/gauge.h: mkgauge.l $(S)/tools/xbell.l $(lv)
 	@cd $(R) && out/love test/boards/esp32c6/mkgauge.l src/tools/xbell.l $(o)/gauge.h 250
 
 # one load inside the 512 KB of hp sram, below the rom's own at its top, the entry inside it
-$(R)/$(o)/firm.elf: c6.c main.c gauge.c $(R)/$(o)/gauge.h ../battery.h $(S)/inle/bput.h $(S)/apps/moon/lib/rt.c $(S)/apps/moon/lib/moonlibc/math/lm.c $(lv)
+$(R)/$(o)/firm.elf: c6.c main.c gauge.c $(R)/$(o)/gauge.h ../battery.h $(S)/inle/bput.h $(S)/apps/moon/lib/rt.c $(S)/apps/moon/lib/moonlibc/math/lm.c $(S)/apps/moon/lib/moonlibc/math/lmf.c $(lv)
 	@echo MOON	$@
 	@mkdir -p $(R)/$(o)
 	@cd $(R) && $(MOONCC) -t rv32 -os none -nostdlib -D __STDC_HOSTED__=0 -Ttext 0x40800000 \

@@ -263,6 +263,38 @@
   (pi z nat (inf-lt (Sy z) u)) (lam z (inf-lttrans (Sy z) q u (e3 z) (inf-letrans q (inf-by16 q) u (inf-leby16 q) gu)))
   (inf-le (inf-sum (inf-upd Cn 0 0) 15 1) nsym) (hb 15)
  )
+ (defcx inf-whole (Cn (pi i nat nat)) (w nat) (gw (inf-le 32 w)) )
+ (defvcs inf-vc-whole-w1e 1 inf-whole ()
+  (inf-le 1 (inf-pow 1)) (idpath false)
+ )
+ (defcx inf-whole-w1 inf-whole (l nat) (left nat) (k1 (inf-le left (inf-pow l))) )
+ (defvcs inf-vc-whole-s1 1 inf-whole-w1 (w1 (inf-lt l 16))
+  (inf-lt (add left left) (inf-pow w)) ((inf-lelt ((add left left)) (inf-pow (succ l)) (inf-pow w) ((inf-add2 left (inf-pow l) left (inf-pow l) k1 k1)) ((inf-powlt (succ l) w (inf-lttrans (succ l) 32 w (inf-lelt (succ l) 16 32 (inf-ltsu l 16 w1) (idpath true)) gw)))))
+ )
+ (defvcs inf-vc-whole-i1 1 inf-whole-w1 (w1 (inf-lt l 16))
+  (inf-lt l 16) w1
+ )
+ (defvcs inf-vc-whole-s2 1 inf-whole-w1 (w1 (inf-lt l 16) g1 (inf-le (Cn l) (add left left)))
+  (inf-lt l 16) w1
+  (inf-le (Cn l) (add left left)) g1
+  (inf-lt (natminus (add left left) (Cn l)) (inf-pow w)) (inf-lelt (natminus ((add left left)) (Cn l)) ((add left left)) (inf-pow w) (inf-suble ((add left left)) (Cn l)) ((inf-lelt ((add left left)) (inf-pow (succ l)) (inf-pow w) ((inf-add2 left (inf-pow l) left (inf-pow l) k1 k1)) ((inf-powlt (succ l) w (inf-lttrans (succ l) 32 w (inf-lelt (succ l) 16 32 (inf-ltsu l 16 w1) (idpath true)) gw))))))
+ )
+ (defvcs inf-vc-whole-w1b 1 inf-whole-w1 (w1 (inf-lt l 16) g1 (inf-le (Cn l) (add left left)))
+  (inf-lt (succ l) (inf-pow w)) (inf-wlit (succ l) w gw (inf-letrans (succ l) 16 63 (inf-ltsu l 16 w1) (idpath false)))
+  (inf-le (natminus (add left left) (Cn l)) (inf-pow (succ l))) (inf-letrans (natminus ((add left left)) (Cn l)) ((add left left)) (inf-pow (succ l)) (inf-suble ((add left left)) (Cn l)) ((inf-add2 left (inf-pow l) left (inf-pow l) k1 k1)))
+  (inf-lt (natminus 16 (succ l)) (natminus 16 l)) (inf-subfall 16 l w1)
+ )
+ (defvcs inf-vc-whole-i3 1 inf-whole-w1 (w1 (inf-le 16 l) g2 (inf-lt 0 left))
+  (inf-lt 15 32) (idpath true)
+  (inf-lt (inf-pow 15) (inf-pow w)) (inf-wpow w 15 gw (idpath true))
+ )
+ (defvcs inf-vc-whole-i4 1 inf-whole-w1 (w1 (inf-le 16 l) g2 (inf-lt 0 left) g3 (inf-lt left (inf-pow 15)))
+  (inf-lt 14 32) (idpath true)
+  (inf-lt (inf-pow 14) (inf-pow w)) (inf-wpow w 14 gw (idpath true))
+ )
+ (defvcs inf-vc-whole-i5 1 inf-whole-w1 (w1 (inf-le 16 l) g2 (inf-lt 0 left) g3 (inf-lt left (inf-pow 15)) g4 (inf-le (inf-pow 14) left))
+  (inf-lt 1 16) (idpath true)
+ )
  (defcx inf-fill (In (pi k nat nat)) (n nat) (w nat) (carry nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 nat) (gw (inf-le 32 w)) (gn (inf-lt (add n 8) (inf-pow w))) (gi (inf-le ip0 n)) (gs (inf-le bc0 63)) (ga (inf-bits-inv carry ip0 cons0 bc0)) )
  (defvcs inf-vc-fill-i1 1 inf-fill ()
   (inf-lt (add ip0 8) (inf-pow w)) (inf-lelt (add ip0 8) (add n 8) (inf-pow w) (inf-addr ip0 n 8 gi) gn)
@@ -666,7 +698,7 @@
  (defvcs inf-vc-dyn-s2 1 inf-dyn-c2 ()
   (inf-lt (add xt2 1) (inf-pow w)) (inf-wlit ((add xt2 1)) w gw (inf-letrans ((add xt2 1)) 32 63 ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))) (idpath false)))
  )
- (defvcs inf-vc-dyn-t3 1 inf-dyn-c2 ()
+ (defvcs inf-vc-dyn-t3 1 inf-dyn-c2 (g6 (inf-le (add xt1 257) 286) g7 (inf-le (add xt2 1) 30))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ipt2 n) t2e1
@@ -674,7 +706,7 @@
   (inf-bits-inv carry ipt2 const2 bct2) t2e4
   (inf-le 4 13) (idpath false)
  )
- (defcx inf-dyn-c3 inf-dyn-c2 (ipt3 nat) (bct3 nat) (bbt3 nat) (const3 nat) (xt3 nat) (t3e1 (inf-le ipt3 n)) (t3e3 (inf-le bct3 63)) (t3e4 (inf-bits-inv carry ipt3 const3 bct3)) (t3e5 (inf-le const2 const3)) (t3e6 (inf-le (add const2 4) const3)) (t3e7 (inf-lt xt3 (inf-pow 4))) )
+ (defcx inf-dyn-c3 inf-dyn-c2 (g6 (inf-le (add xt1 257) 286)) (g7 (inf-le (add xt2 1) 30)) (ipt3 nat) (bct3 nat) (bbt3 nat) (const3 nat) (xt3 nat) (t3e1 (inf-le ipt3 n)) (t3e3 (inf-le bct3 63)) (t3e4 (inf-bits-inv carry ipt3 const3 bct3)) (t3e5 (inf-le const2 const3)) (t3e6 (inf-le (add const2 4) const3)) (t3e7 (inf-lt xt3 (inf-pow 4))) )
  (defvcs inf-vc-dyn-s3 1 inf-dyn-c3 ()
   (inf-lt (add xt3 4) (inf-pow w)) (inf-wlit ((add xt3 4)) w gw (inf-letrans ((add xt3 4)) 19 63 ((inf-addr xt3 15 4 (inf-ltsle xt3 15 t3e7))) (idpath false)))
  )
@@ -696,13 +728,13 @@
   (inf-bits-inv carry ip cons bc) r4
   (inf-le 3 13) (idpath false)
  )
- (defcx inf-dyn-c14 inf-dyn-c3-w1 (w1 (inf-lt i (add xt3 4))) (ipt4 nat) (bct4 nat) (bbt4 nat) (const4 nat) (xt4 nat) (t4e1 (inf-le ipt4 n)) (t4e3 (inf-le bct4 63)) (t4e4 (inf-bits-inv carry ipt4 const4 bct4)) (t4e5 (inf-le cons const4)) (t4e6 (inf-le (add cons 3) const4)) (t4e7 (inf-lt xt4 (inf-pow 3))) )
- (defvcs inf-vc-dyn-s4 1 inf-dyn-c14 ()
+ (defcx inf-dyn-c17 inf-dyn-c3-w1 (w1 (inf-lt i (add xt3 4))) (ipt4 nat) (bct4 nat) (bbt4 nat) (const4 nat) (xt4 nat) (t4e1 (inf-le ipt4 n)) (t4e3 (inf-le bct4 63)) (t4e4 (inf-bits-inv carry ipt4 const4 bct4)) (t4e5 (inf-le cons const4)) (t4e6 (inf-le (add cons 3) const4)) (t4e7 (inf-lt xt4 (inf-pow 3))) )
+ (defvcs inf-vc-dyn-s4 1 inf-dyn-c17 ()
   (inf-lt i 19) (inf-lttrans i ((add xt3 4)) 19 w1 a3)
   (inf-lt (Ob i) 19) (hord i (inf-lttrans i ((add xt3 4)) 19 w1 a3))
   (inf-lt xt4 (inf-pow w)) (inf-lttrans xt4 8 (inf-pow w) t4e7 (inf-powle 3 w (inf-letrans 3 32 w (idpath false) gw)))
  )
- (defvcs inf-vc-dyn-w1b 1 inf-dyn-c14 ()
+ (defvcs inf-vc-dyn-w1b 1 inf-dyn-c17 ()
   (inf-lt (succ i) (inf-pow w)) (inf-wlit (succ i) w gw (inf-letrans (succ i) 19 63 (inf-ltsu i 19 (inf-lttrans i ((add xt3 4)) 19 w1 a3)) (idpath false)))
   (inf-le (succ i) (add xt3 4)) (inf-ltsu i ((add xt3 4)) w1)
   (pi k nat (inf-le ((inf-upd Cl (Ob i) xt4) k) 15)) (inf-updle Cl (Ob i) xt4 15 a2 (inf-letrans xt4 8 15 (inf-ltle xt4 8 t4e7) (idpath false)))
@@ -723,13 +755,17 @@
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
  (defcx inf-dyn-c4 inf-dyn-c3-w1 (w1 (inf-le (add xt3 4) i)) (Ccc2 (pi j nat nat)) (Csc2 (pi j nat nat)) (Ctc2 (pi j nat nat)) (c2e1 (pi z nat (inf-lt (Ccc2 z) (inf-pow h)))) (c2e2 (pi z nat (inf-lt (Csc2 z) (inf-pow h)))) (c2e3 (inf-le (inf-sum Ccc2 15 1) 19)) )
- (defvcs inf-vc-dyn-s5 1 inf-dyn-c4 ()
+ (defvcs inf-vc-dyn-k1 1 inf-dyn-c4 ()
+  (inf-le 32 w) gw
+ )
+ (defcx inf-dyn-c5 inf-dyn-c4 (xk1 nat) )
+ (defvcs inf-vc-dyn-s5 1 inf-dyn-c5 (g8 (inf-le xk1 0))
   (inf-lt (add (add xt1 257) (add xt2 1)) (inf-pow w)) (inf-lelt (add ((add xt1 257)) ((add xt2 1))) 320 (inf-pow w) ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))))) ((inf-lelt 320 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
  )
- (defvcs inf-vc-dyn-s5b 1 inf-dyn-c4 ()
+ (defvcs inf-vc-dyn-s5b 1 inf-dyn-c5 (g8 (inf-le xk1 0))
   (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
  )
- (defvcs inf-vc-dyn-w2e 1 inf-dyn-c4 ()
+ (defvcs inf-vc-dyn-w2e 1 inf-dyn-c5 (g8 (inf-le xk1 0))
   (inf-le 0 15) (idpath false)
   (pi j nat (inf-le (inf-zero j) 15)) (lam j (idpath false))
   (inf-le ip n) r1
@@ -737,8 +773,8 @@
   (inf-bits-inv carry ip cons bc) r4
   (inf-le cons0 cons) r5
  )
- (defcx inf-dyn-c4-w2 inf-dyn-c4 (i nat) (Lz (pi j nat nat)) (x nat) (ip nat) (bc nat) (bb nat) (cons nat) (prev nat) (b1 (inf-le prev 15)) (b2 (pi j nat (inf-le (Lz j) 15))) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)) )
- (defvcs inf-vc-dyn-t5 1 inf-dyn-c4-w2 (w2 (inf-lt i (add (add xt1 257) (add xt2 1))))
+ (defcx inf-dyn-c5-w2 inf-dyn-c5 (g8 (inf-le xk1 0)) (i nat) (Lz (pi j nat nat)) (x nat) (ip nat) (bc nat) (bb nat) (cons nat) (prev nat) (b1 (inf-le prev 15)) (b2 (pi j nat (inf-le (Lz j) 15))) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)) )
+ (defvcs inf-vc-dyn-t5 1 inf-dyn-c5-w2 (w2 (inf-lt i (add (add xt1 257) (add xt2 1))))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ip n) r1
@@ -751,14 +787,14 @@
   (inf-le (inf-sum Ccc2 15 1) 19) c2e3
   (inf-le CROOT 15) gc
  )
- (defcx inf-dyn-c5 inf-dyn-c4-w2 (w2 (inf-lt i (add (add xt1 257) (add xt2 1)))) (ipt5 nat) (bct5 nat) (bbt5 nat) (const5 nat) (syt5 nat) (t5e1 (inf-le ipt5 n)) (t5e3 (inf-le bct5 63)) (t5e4 (inf-bits-inv carry ipt5 const5 bct5)) (t5e5 (inf-le cons const5)) )
- (defvcs inf-vc-dyn-s6 1 inf-dyn-c5 (g1 (inf-lt syt5 16))
+ (defcx inf-dyn-c6 inf-dyn-c5-w2 (w2 (inf-lt i (add (add xt1 257) (add xt2 1)))) (ipt5 nat) (bct5 nat) (bbt5 nat) (const5 nat) (syt5 nat) (t5e1 (inf-le ipt5 n)) (t5e3 (inf-le bct5 63)) (t5e4 (inf-bits-inv carry ipt5 const5 bct5)) (t5e5 (inf-le cons const5)) )
+ (defvcs inf-vc-dyn-s6 1 inf-dyn-c6 (g1 (inf-lt syt5 16))
   (inf-lt 1 (inf-pow w)) (inf-wlit 1 w gw (idpath false))
  )
- (defvcs inf-vc-dyn-s7 1 inf-dyn-c5 (g1 (inf-lt syt5 16))
+ (defvcs inf-vc-dyn-s7 1 inf-dyn-c6 (g1 (inf-lt syt5 16))
   (inf-lt syt5 (inf-pow w)) (inf-wlit syt5 w gw (inf-letrans syt5 16 63 (inf-ltle syt5 16 g1) (idpath false)))
  )
- (defvcs inf-vc-dyn-j1j 1 inf-dyn-c5 (g1 (inf-lt syt5 16))
+ (defvcs inf-vc-dyn-j1j 1 inf-dyn-c6 (g1 (inf-lt syt5 16))
   (inf-lt 0 1) (idpath true)
   (inf-le 1 138) (idpath false)
   (inf-le syt5 15) (inf-ltsle syt5 15 g1)
@@ -767,7 +803,7 @@
   (inf-bits-inv carry ipt5 const5 bct5) t5e4
   (inf-le cons0 const5) (inf-letrans cons0 cons const5 r5 t5e5)
  )
- (defvcs inf-vc-dyn-t6 1 inf-dyn-c5 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-le syt5 16))
+ (defvcs inf-vc-dyn-t6 1 inf-dyn-c6 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-le syt5 16) g9 (inf-lt 0 i))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ipt5 n) t5e1
@@ -775,14 +811,14 @@
   (inf-bits-inv carry ipt5 const5 bct5) t5e4
   (inf-le 2 13) (idpath false)
  )
- (defcx inf-dyn-c11 inf-dyn-c5 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-le syt5 16)) (ipt6 nat) (bct6 nat) (bbt6 nat) (const6 nat) (xt6 nat) (t6e1 (inf-le ipt6 n)) (t6e3 (inf-le bct6 63)) (t6e4 (inf-bits-inv carry ipt6 const6 bct6)) (t6e5 (inf-le const5 const6)) (t6e6 (inf-le (add const5 2) const6)) (t6e7 (inf-lt xt6 (inf-pow 2))) )
- (defvcs inf-vc-dyn-s8 1 inf-dyn-c11 ()
+ (defcx inf-dyn-c12 inf-dyn-c6 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-le syt5 16)) (g9 (inf-lt 0 i)) (ipt6 nat) (bct6 nat) (bbt6 nat) (const6 nat) (xt6 nat) (t6e1 (inf-le ipt6 n)) (t6e3 (inf-le bct6 63)) (t6e4 (inf-bits-inv carry ipt6 const6 bct6)) (t6e5 (inf-le const5 const6)) (t6e6 (inf-le (add const5 2) const6)) (t6e7 (inf-lt xt6 (inf-pow 2))) )
+ (defvcs inf-vc-dyn-s8 1 inf-dyn-c12 ()
   (inf-lt (add xt6 3) (inf-pow w)) (inf-wlit (add xt6 3) w gw (inf-letrans (add xt6 3) 6 63 ((inf-addr xt6 3 3 (inf-ltsle xt6 3 t6e7))) (idpath false)))
  )
- (defvcs inf-vc-dyn-s9 1 inf-dyn-c11 ()
+ (defvcs inf-vc-dyn-s9 1 inf-dyn-c12 ()
   (inf-lt prev (inf-pow w)) (inf-wlit prev w gw (inf-letrans prev 15 63 b1 (idpath false)))
  )
- (defvcs inf-vc-dyn-j2j 1 inf-dyn-c11 ()
+ (defvcs inf-vc-dyn-j2j 1 inf-dyn-c12 ()
   (inf-lt 0 (add xt6 3)) (inf-pos3 xt6 3 (idpath true))
   (inf-le (add xt6 3) 138) (inf-letrans (add xt6 3) 6 138 ((inf-addr xt6 3 3 (inf-ltsle xt6 3 t6e7))) (idpath false))
   (inf-le prev 15) b1
@@ -791,7 +827,7 @@
   (inf-bits-inv carry ipt6 const6 bct6) t6e4
   (inf-le cons0 const6) (inf-letrans cons0 const5 const6 (inf-letrans cons0 cons const5 r5 t5e5) t6e5)
  )
- (defvcs inf-vc-dyn-t7 1 inf-dyn-c5 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-lt 16 syt5) g4 (inf-le syt5 17))
+ (defvcs inf-vc-dyn-t7 1 inf-dyn-c6 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-lt 16 syt5) g4 (inf-le syt5 17))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ipt5 n) t5e1
@@ -799,11 +835,11 @@
   (inf-bits-inv carry ipt5 const5 bct5) t5e4
   (inf-le 3 13) (idpath false)
  )
- (defcx inf-dyn-c10 inf-dyn-c5 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (g4 (inf-le syt5 17)) (ipt7 nat) (bct7 nat) (bbt7 nat) (const7 nat) (xt7 nat) (t7e1 (inf-le ipt7 n)) (t7e3 (inf-le bct7 63)) (t7e4 (inf-bits-inv carry ipt7 const7 bct7)) (t7e5 (inf-le const5 const7)) (t7e6 (inf-le (add const5 3) const7)) (t7e7 (inf-lt xt7 (inf-pow 3))) )
- (defvcs inf-vc-dyn-s10 1 inf-dyn-c10 ()
+ (defcx inf-dyn-c11 inf-dyn-c6 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (g4 (inf-le syt5 17)) (ipt7 nat) (bct7 nat) (bbt7 nat) (const7 nat) (xt7 nat) (t7e1 (inf-le ipt7 n)) (t7e3 (inf-le bct7 63)) (t7e4 (inf-bits-inv carry ipt7 const7 bct7)) (t7e5 (inf-le const5 const7)) (t7e6 (inf-le (add const5 3) const7)) (t7e7 (inf-lt xt7 (inf-pow 3))) )
+ (defvcs inf-vc-dyn-s10 1 inf-dyn-c11 ()
   (inf-lt (add xt7 3) (inf-pow w)) (inf-wlit (add xt7 3) w gw (inf-letrans (add xt7 3) 10 63 ((inf-addr xt7 7 3 (inf-ltsle xt7 7 t7e7))) (idpath false)))
  )
- (defvcs inf-vc-dyn-j3j 1 inf-dyn-c10 ()
+ (defvcs inf-vc-dyn-j3j 1 inf-dyn-c11 ()
   (inf-lt 0 (add xt7 3)) (inf-pos3 xt7 3 (idpath true))
   (inf-le (add xt7 3) 138) (inf-letrans (add xt7 3) 10 138 ((inf-addr xt7 7 3 (inf-ltsle xt7 7 t7e7))) (idpath false))
   (inf-le ipt7 n) t7e1
@@ -811,7 +847,7 @@
   (inf-bits-inv carry ipt7 const7 bct7) t7e4
   (inf-le cons0 const7) (inf-letrans cons0 const5 const7 (inf-letrans cons0 cons const5 r5 t5e5) t7e5)
  )
- (defvcs inf-vc-dyn-t8 1 inf-dyn-c5 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-lt 16 syt5) g4 (inf-lt 17 syt5))
+ (defvcs inf-vc-dyn-t8 1 inf-dyn-c6 (g1 (inf-le 16 syt5) g2 (inf-le syt5 18) g3 (inf-lt 16 syt5) g4 (inf-lt 17 syt5))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ipt5 n) t5e1
@@ -819,11 +855,11 @@
   (inf-bits-inv carry ipt5 const5 bct5) t5e4
   (inf-le 7 13) (idpath false)
  )
- (defcx inf-dyn-c9 inf-dyn-c5 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (g4 (inf-lt 17 syt5)) (ipt8 nat) (bct8 nat) (bbt8 nat) (const8 nat) (xt8 nat) (t8e1 (inf-le ipt8 n)) (t8e3 (inf-le bct8 63)) (t8e4 (inf-bits-inv carry ipt8 const8 bct8)) (t8e5 (inf-le const5 const8)) (t8e6 (inf-le (add const5 7) const8)) (t8e7 (inf-lt xt8 (inf-pow 7))) )
- (defvcs inf-vc-dyn-s11 1 inf-dyn-c9 ()
+ (defcx inf-dyn-c10 inf-dyn-c6 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (g4 (inf-lt 17 syt5)) (ipt8 nat) (bct8 nat) (bbt8 nat) (const8 nat) (xt8 nat) (t8e1 (inf-le ipt8 n)) (t8e3 (inf-le bct8 63)) (t8e4 (inf-bits-inv carry ipt8 const8 bct8)) (t8e5 (inf-le const5 const8)) (t8e6 (inf-le (add const5 7) const8)) (t8e7 (inf-lt xt8 (inf-pow 7))) )
+ (defvcs inf-vc-dyn-s11 1 inf-dyn-c10 ()
   (inf-lt (add xt8 11) (inf-pow w)) (inf-lelt (add xt8 11) 512 (inf-pow w) (inf-letrans (add xt8 11) 138 512 ((inf-addr xt8 127 11 (inf-ltsle xt8 127 t8e7))) (idpath false)) (inf-lttrans 512 1024 (inf-pow w) (idpath true) (inf-powle 10 w (inf-letrans 10 32 w (idpath false) gw))))
  )
- (defvcs inf-vc-dyn-j3j 7 inf-dyn-c9 ()
+ (defvcs inf-vc-dyn-j3j 7 inf-dyn-c10 ()
   (inf-lt 0 (add xt8 11)) (inf-pos3 xt8 11 (idpath true))
   (inf-le (add xt8 11) 138) ((inf-addr xt8 127 11 (inf-ltsle xt8 127 t8e7)))
   (inf-le ipt8 n) t8e1
@@ -831,11 +867,11 @@
   (inf-bits-inv carry ipt8 const8 bct8) t8e4
   (inf-le cons0 const8) (inf-letrans cons0 const5 const8 (inf-letrans cons0 cons const5 r5 t5e5) t8e5)
  )
- (defcx inf-dyn-c8 inf-dyn-c5 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (xj3 nat) (ipj3 nat) (bcj3 nat) (bbj3 nat) (consj3 nat) (rrj3 nat) (f1 (inf-lt 0 rrj3)) (f2 (inf-le rrj3 138)) (r1 (inf-le ipj3 n)) (r3 (inf-le bcj3 63)) (r4 (inf-bits-inv carry ipj3 consj3 bcj3)) (r5 (inf-le cons0 consj3)) )
- (defvcs inf-vc-dyn-s12 1 inf-dyn-c8 ()
+ (defcx inf-dyn-c9 inf-dyn-c6 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (g3 (inf-lt 16 syt5)) (xj3 nat) (ipj3 nat) (bcj3 nat) (bbj3 nat) (consj3 nat) (rrj3 nat) (f1 (inf-lt 0 rrj3)) (f2 (inf-le rrj3 138)) (r1 (inf-le ipj3 n)) (r3 (inf-le bcj3 63)) (r4 (inf-bits-inv carry ipj3 consj3 bcj3)) (r5 (inf-le cons0 consj3)) )
+ (defvcs inf-vc-dyn-s12 1 inf-dyn-c9 ()
   (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
  )
- (defvcs inf-vc-dyn-j2j 8 inf-dyn-c8 ()
+ (defvcs inf-vc-dyn-j2j 8 inf-dyn-c9 ()
   (inf-lt 0 rrj3) f1
   (inf-le rrj3 138) f2
   (inf-le 0 15) (idpath false)
@@ -844,8 +880,8 @@
   (inf-bits-inv carry ipj3 consj3 bcj3) r4
   (inf-le cons0 consj3) r5
  )
- (defcx inf-dyn-c7 inf-dyn-c5 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (xj2 nat) (ipj2 nat) (bcj2 nat) (bbj2 nat) (consj2 nat) (rrj2 nat) (vj2 nat) (f3 (inf-lt 0 rrj2)) (f4 (inf-le rrj2 138)) (f5 (inf-le vj2 15)) (r1 (inf-le ipj2 n)) (r3 (inf-le bcj2 63)) (r4 (inf-bits-inv carry ipj2 consj2 bcj2)) (r5 (inf-le cons0 consj2)) )
- (defvcs inf-vc-dyn-j1j 8 inf-dyn-c7 ()
+ (defcx inf-dyn-c8 inf-dyn-c6 (g1 (inf-le 16 syt5)) (g2 (inf-le syt5 18)) (xj2 nat) (ipj2 nat) (bcj2 nat) (bbj2 nat) (consj2 nat) (rrj2 nat) (vj2 nat) (f3 (inf-lt 0 rrj2)) (f4 (inf-le rrj2 138)) (f5 (inf-le vj2 15)) (r1 (inf-le ipj2 n)) (r3 (inf-le bcj2 63)) (r4 (inf-bits-inv carry ipj2 consj2 bcj2)) (r5 (inf-le cons0 consj2)) )
+ (defvcs inf-vc-dyn-j1j 8 inf-dyn-c8 ()
   (inf-lt 0 rrj2) f3
   (inf-le rrj2 138) f4
   (inf-le vj2 15) f5
@@ -854,39 +890,33 @@
   (inf-bits-inv carry ipj2 consj2 bcj2) r4
   (inf-le cons0 consj2) r5
  )
- (defcx inf-dyn-c6 inf-dyn-c5 (rrj1 nat) (vj1 nat) (xj1 nat) (ipj1 nat) (bcj1 nat) (bbj1 nat) (consj1 nat) (f6 (inf-lt 0 rrj1)) (f7 (inf-le rrj1 138)) (f8 (inf-le vj1 15)) (r1 (inf-le ipj1 n)) (r3 (inf-le bcj1 63)) (r4 (inf-bits-inv carry ipj1 consj1 bcj1)) (r5 (inf-le cons0 consj1)) )
- (defvcs inf-vc-dyn-w3e 1 inf-dyn-c6 ()
+ (defcx inf-dyn-c7 inf-dyn-c6 (rrj1 nat) (vj1 nat) (xj1 nat) (ipj1 nat) (bcj1 nat) (bbj1 nat) (consj1 nat) (f6 (inf-lt 0 rrj1)) (f7 (inf-le rrj1 138)) (f8 (inf-le vj1 15)) (r1 (inf-le ipj1 n)) (r3 (inf-le bcj1 63)) (r4 (inf-bits-inv carry ipj1 consj1 bcj1)) (r5 (inf-le cons0 consj1)) )
+ (defvcs inf-vc-dyn-i2 1 inf-dyn-c7 ()
+  (inf-lt (add i rrj1) (inf-pow w)) (inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 ((inf-letrans i (add ((add xt1 257)) ((add xt2 1))) 320 (inf-ltle i (add ((add xt1 257)) ((add xt2 1))) w2) ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))))))) f7) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
+ )
+ (defvcs inf-vc-dyn-w3e 1 inf-dyn-c7 (g5 (inf-le (add i rrj1) (add (add xt1 257) (add xt2 1))))
   (inf-le 0 rrj1) (idpath false)
   (pi j nat (inf-le (Lz j) 15)) b2
  )
- (defcx inf-dyn-c6-w3 inf-dyn-c6 (k nat) (Lz (pi j nat nat)) (c1 (inf-le k rrj1)) (c2 (pi j nat (inf-le (Lz j) 15))) )
- (defvcs inf-vc-dyn-i2 1 inf-dyn-c6-w3 (w3 (inf-lt k rrj1))
+ (defcx inf-dyn-c7-w3 inf-dyn-c7 (g5 (inf-le (add i rrj1) (add (add xt1 257) (add xt2 1)))) (k nat) (Lz (pi j nat nat)) (c1 (inf-le k rrj1)) (c2 (pi j nat (inf-le (Lz j) 15))) )
+ (defvcs inf-vc-dyn-s13 1 inf-dyn-c7-w3 (w3 (inf-lt k rrj1))
   (inf-lt (add i k) (inf-pow w)) (inf-lelt (add i k) 458 (inf-pow w) ((inf-add2 i 320 k 138 ((inf-letrans i (add ((add xt1 257)) ((add xt2 1))) 320 (inf-ltle i (add ((add xt1 257)) ((add xt2 1))) w2) ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))))))) (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7))) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
- )
- (defvcs inf-vc-dyn-s13 1 inf-dyn-c6-w3 (w3 (inf-lt k rrj1) g5 (inf-lt (add i k) 320))
-  (inf-lt (add i k) (inf-pow w)) (inf-lelt (add i k) 458 (inf-pow w) ((inf-add2 i 320 k 138 ((inf-letrans i (add ((add xt1 257)) ((add xt2 1))) 320 (inf-ltle i (add ((add xt1 257)) ((add xt2 1))) w2) ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))))))) (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7))) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
-  (inf-lt (add i k) 320) g5
+  (inf-lt (add i k) 320) (inf-lttrans (add i k) (add i rrj1) 320 (inf-ltaddl i k rrj1 w3) (inf-letrans (add i rrj1) (add ((add xt1 257)) ((add xt2 1))) 320 g5 ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7)))))))
   (inf-lt vj1 (inf-pow w)) (inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
  )
- (defvcs inf-vc-dyn-w3b 1 inf-dyn-c6-w3 (w3 (inf-lt k rrj1) g5 (inf-lt (add i k) 320))
+ (defvcs inf-vc-dyn-w3b 1 inf-dyn-c7-w3 (w3 (inf-lt k rrj1))
   (inf-lt (succ k) (inf-pow w)) (inf-lelt (succ k) 138 (inf-pow w) ((inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7)) ((inf-lelt 138 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
   (inf-le (succ k) rrj1) (inf-ltsu k rrj1 w3)
   (pi j nat (inf-le ((inf-upd Lz (add i k) vj1) j) 15)) (inf-updle Lz (add i k) vj1 15 c2 f8)
   (inf-lt (natminus rrj1 (succ k)) (natminus rrj1 k)) (inf-subfall rrj1 k w3)
  )
- (defvcs inf-vc-dyn-w3b 5 inf-dyn-c6-w3 (w3 (inf-lt k rrj1) g5 (inf-le 320 (add i k)))
-  (inf-lt (succ k) (inf-pow w)) (inf-lelt (succ k) 138 (inf-pow w) ((inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7)) ((inf-lelt 138 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
-  (inf-le (succ k) rrj1) (inf-ltsu k rrj1 w3)
-  (pi j nat (inf-le (Lz j) 15)) c2
-  (inf-lt (natminus rrj1 (succ k)) (natminus rrj1 k)) (inf-subfall rrj1 k w3)
- )
- (defvcs inf-vc-dyn-s14 1 inf-dyn-c6-w3 (w3 (inf-le rrj1 k))
+ (defvcs inf-vc-dyn-s14 1 inf-dyn-c7-w3 (w3 (inf-le rrj1 k))
   (inf-lt (add i rrj1) (inf-pow w)) (inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 ((inf-letrans i (add ((add xt1 257)) ((add xt2 1))) 320 (inf-ltle i (add ((add xt1 257)) ((add xt2 1))) w2) ((inf-add2 ((add xt1 257)) 288 ((add xt2 1)) 32 ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))))))) f7) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
  )
- (defvcs inf-vc-dyn-s15 1 inf-dyn-c6-w3 (w3 (inf-le rrj1 k))
+ (defvcs inf-vc-dyn-s15 1 inf-dyn-c7-w3 (w3 (inf-le rrj1 k))
   (inf-lt vj1 (inf-pow w)) (inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
  )
- (defvcs inf-vc-dyn-w2b 1 inf-dyn-c6-w3 (w3 (inf-le rrj1 k))
+ (defvcs inf-vc-dyn-w2b 1 inf-dyn-c7-w3 (w3 (inf-le rrj1 k))
   (inf-le vj1 15) f8
   (pi j nat (inf-le (Lz j) 15)) c2
   (inf-le ipj1 n) r1
@@ -895,7 +925,10 @@
   (inf-le cons0 consj1) r5
   (inf-lt (natminus (add (add xt1 257) (add xt2 1)) (add i rrj1)) (natminus (add (add xt1 257) (add xt2 1)) i)) (inf-subby i (add ((add xt1 257)) ((add xt2 1))) rrj1 w2 f6)
  )
- (defvcs inf-vc-dyn-c4 1 inf-dyn-c4-w2 (w2 (inf-le (add (add xt1 257) (add xt2 1)) i))
+ (defvcs inf-vc-dyn-i7 1 inf-dyn-c5-w2 (w2 (inf-le (add (add xt1 257) (add xt2 1)) i))
+  (inf-lt 256 320) (idpath true)
+ )
+ (defvcs inf-vc-dyn-c4 1 inf-dyn-c5-w2 (w2 (inf-le (add (add xt1 257) (add xt2 1)) i) g10 (inf-lt 0 (Lz 256)))
   (pi k nat g (inf-lt k (add xt1 257)) (inf-le (Lz k) 15)) (lam k g (b2 k))
   (inf-lt (add xt1 257) q) (inf-lelt ((add xt1 257)) 288 q ((inf-addr xt1 31 257 (inf-ltsle xt1 31 t1e7))) (inf-lttrans 288 320 q (idpath true) ((inf-ltle 320 q gq2))))
   (inf-le (inf-by16 q) (inf-pow h)) gq
@@ -904,8 +937,8 @@
   (inf-le 32 w) gw
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
- (defcx inf-dyn-c12 inf-dyn-c4-w2 (w2 (inf-le (add (add xt1 257) (add xt2 1)) i)) (Lcc4 (pi j nat nat)) (Lsc4 (pi j nat nat)) (Ltc4 (pi j nat nat)) (c4e1 (pi z nat (inf-lt (Lcc4 z) (inf-pow h)))) (c4e2 (pi z nat (inf-lt (Lsc4 z) (inf-pow h)))) (c4e3 (inf-le (inf-sum Lcc4 15 1) (add xt1 257))) )
- (defvcs inf-vc-dyn-c5 1 inf-dyn-c12 ()
+ (defcx inf-dyn-c13 inf-dyn-c5-w2 (w2 (inf-le (add (add xt1 257) (add xt2 1)) i)) (g10 (inf-lt 0 (Lz 256))) (Lcc4 (pi j nat nat)) (Lsc4 (pi j nat nat)) (Ltc4 (pi j nat nat)) (c4e1 (pi z nat (inf-lt (Lcc4 z) (inf-pow h)))) (c4e2 (pi z nat (inf-lt (Lsc4 z) (inf-pow h)))) (c4e3 (inf-le (inf-sum Lcc4 15 1) (add xt1 257))) )
+ (defvcs inf-vc-dyn-c5 1 inf-dyn-c13 ()
   (pi k nat g (inf-lt k (add xt2 1)) (inf-le ((inf-shift Lz (add xt1 257)) k) 15)) (lam k g (b2 (add ((add xt1 257)) k)))
   (inf-lt (add xt2 1) q) (inf-lelt ((add xt2 1)) 32 q ((inf-addr xt2 31 1 (inf-ltsle xt2 31 t2e7))) (inf-lttrans 32 320 q (idpath true) ((inf-ltle 320 q gq2))))
   (inf-le (inf-by16 q) (inf-pow h)) gq
@@ -914,8 +947,16 @@
   (inf-le 32 w) gw
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
- (defcx inf-dyn-c13 inf-dyn-c12 (Dcc5 (pi j nat nat)) (Dsc5 (pi j nat nat)) (Dtc5 (pi j nat nat)) (c5e1 (pi z nat (inf-lt (Dcc5 z) (inf-pow h)))) (c5e2 (pi z nat (inf-lt (Dsc5 z) (inf-pow h)))) (c5e3 (inf-le (inf-sum Dcc5 15 1) (add xt2 1))) )
- (defvcs inf-vc-dyn-r2 1 inf-dyn-c13 ()
+ (defcx inf-dyn-c14 inf-dyn-c13 (Dcc5 (pi j nat nat)) (Dsc5 (pi j nat nat)) (Dtc5 (pi j nat nat)) (c5e1 (pi z nat (inf-lt (Dcc5 z) (inf-pow h)))) (c5e2 (pi z nat (inf-lt (Dsc5 z) (inf-pow h)))) (c5e3 (inf-le (inf-sum Dcc5 15 1) (add xt2 1))) )
+ (defvcs inf-vc-dyn-k2 1 inf-dyn-c14 ()
+  (inf-le 32 w) gw
+ )
+ (defcx inf-dyn-c15 inf-dyn-c14 (xk2 nat) )
+ (defvcs inf-vc-dyn-k3 1 inf-dyn-c15 (g11 (inf-le xk2 1))
+  (inf-le 32 w) gw
+ )
+ (defcx inf-dyn-c16 inf-dyn-c15 (g11 (inf-le xk2 1)) (xk3 nat) )
+ (defvcs inf-vc-dyn-r2 1 inf-dyn-c16 (g12 (inf-le xk3 2))
   (inf-le ip n) r1
   (inf-le bc 63) r3
   (inf-bits-inv carry ip cons bc) r4
@@ -1944,10 +1985,26 @@
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
  (defcx inf-stcl-c2 inf-stcl-w1 (w1 (inf-le hclen i)) (Ccc1 (pi j nat nat)) (Csc1 (pi j nat nat)) (Ctc1 (pi j nat nat)) (c1e1 (pi z nat (inf-lt (Ccc1 z) (inf-pow h)))) (c1e2 (pi z nat (inf-lt (Csc1 z) (inf-pow h)))) (c1e3 (inf-le (inf-sum Ccc1 15 1) 19)) )
- (defvcs inf-vc-stcl-d2 1 inf-stcl-c2 (id1 nat)
+ (defvcs inf-vc-stcl-k1 1 inf-stcl-c2 ()
+  (inf-le 32 w) gw
+ )
+ (defcx inf-stcl-c3 inf-stcl-c2 (xk1 nat) )
+ (defvcs inf-vc-stcl-r1 1 inf-stcl-c3 (g1 (inf-lt 0 xk1))
+  (inf-le ip n) r1
+  (inf-le bc 63) r3
+  (inf-bits-inv carry ip cons bc) r4
+  (inf-le cons0 cons) r5
+  (pi k nat (inf-lt (Ccc1 k) (inf-pow h))) c1e1
+  (pi k nat (inf-lt (Csc1 k) (inf-pow h))) c1e2
+  (inf-le (inf-sum Ccc1 15 1) 19) c1e3
+  (inf-le prev0 15) b1
+  (pi j nat (inf-le (Lz0 j) 15)) b2
+  (pi k nat (inf-le (Cl k) 15)) a2
+ )
+ (defvcs inf-vc-stcl-d2 1 inf-stcl-c3 (g1 (inf-le xk1 0) id1 nat)
   (inf-lt 0 (inf-pow w)) (inf-wlit 0 w gw (idpath false))
  )
- (defvcs inf-vc-stcl-r2 1 inf-stcl-c2 (id1 nat staged3 nat moded4 nat)
+ (defvcs inf-vc-stcl-r2 1 inf-stcl-c3 (g1 (inf-le xk1 0) id1 nat staged3 nat moded4 nat)
   (inf-le ip n) r1
   (inf-le bc 63) r3
   (inf-bits-inv carry ip cons bc) r4
@@ -1960,7 +2017,7 @@
   (pi k nat (inf-le (Cl k) 15)) a2
  )
  (defcx inf-stln (In (pi k nat nat)) (n nat) (w nat) (carry nat) (cons0 nat) (ip0 nat) (bc0 nat) (bb0 nat) (gw (inf-le 32 w)) (gn (inf-lt (add n 8) (inf-pow w))) (gi (inf-le ip0 n)) (gs (inf-le bc0 63)) (ga (inf-bits-inv carry ip0 cons0 bc0)) (Lc0 (pi k nat nat)) (Ls0 (pi k nat nat)) (Lt0 (pi k nat nat)) (Dc0 (pi k nat nat)) (Ds0 (pi k nat nat)) (Dt0 (pi k nat nat)) (lm0 nat) (dm0 nat) (q nat) (h nat) (LROOT nat) (DROOT nat) (CROOT nat) (gh (inf-le h 16)) (gq (inf-le (inf-by16 q) (inf-pow h))) (gq2 (inf-lt 320 q)) (gk (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w)))) (gl (inf-le LROOT 15)) (gd (inf-le DROOT 15)) (gc (inf-le CROOT 15)) (Cc (pi k nat nat)) (Cs (pi k nat nat)) (Ct (pi k nat nat)) (d1 (pi k nat (inf-lt (Cc k) (inf-pow h)))) (d2 (pi k nat (inf-lt (Cs k) (inf-pow h)))) (d3 (inf-le (inf-sum Cc 15 1) 19)) (Lz0 (pi k nat nat)) (hlit nat) (hdist nat) (b2 (pi j nat (inf-le (Lz0 j) 15))) (i0 nat) (prev0 nat) (stage0 nat) (sy0 nat) (mode0 nat) (b1 (inf-le prev0 15)) (c1 (pi k nat (inf-lt (Lc0 k) (inf-pow h)))) (c2 (pi k nat (inf-lt (Ls0 k) (inf-pow h)))) (c3 (inf-le (inf-sum Lc0 15 1) lm0)) (c4 (inf-le lm0 288)) (c5 (pi k nat (inf-lt (Dc0 k) (inf-pow h)))) (c6 (pi k nat (inf-lt (Ds0 k) (inf-pow h)))) (c7 (inf-le (inf-sum Dc0 15 1) dm0)) (c8 (inf-le dm0 32)) )
- (defvcs inf-vc-stln-r0 1 inf-stln (g0 (inf-lt 288 hlit))
+ (defvcs inf-vc-stln-r0 1 inf-stln (g0 (inf-lt 286 hlit))
   (inf-le ip0 n) gi
   (inf-le bc0 63) gs
   (inf-bits-inv carry ip0 cons0 bc0) ga
@@ -1976,7 +2033,7 @@
   (inf-le prev0 15) b1
   (pi j nat (inf-le (Lz0 j) 15)) b2
  )
- (defvcs inf-vc-stln-r00 1 inf-stln (g0 (inf-le hlit 288) g00 (inf-lt 32 hdist))
+ (defvcs inf-vc-stln-r00 1 inf-stln (g0 (inf-le hlit 286) g00 (inf-lt 30 hdist))
   (inf-le ip0 n) gi
   (inf-le bc0 63) gs
   (inf-bits-inv carry ip0 cons0 bc0) ga
@@ -1992,10 +2049,10 @@
   (inf-le prev0 15) b1
   (pi j nat (inf-le (Lz0 j) 15)) b2
  )
- (defvcs inf-vc-stln-s0 1 inf-stln (g0 (inf-le hlit 288) g00 (inf-le hdist 32))
-  (inf-lt (add hlit hdist) (inf-pow w)) (inf-lelt (add hlit hdist) 320 (inf-pow w) ((inf-add2 hlit 288 hdist 32 g0 g00)) ((inf-lelt 320 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
+ (defvcs inf-vc-stln-s0 1 inf-stln (g0 (inf-le hlit 286) g00 (inf-le hdist 30))
+  (inf-lt (add hlit hdist) (inf-pow w)) (inf-lelt (add hlit hdist) 320 (inf-pow w) ((inf-letrans (add hlit hdist) 316 320 ((inf-add2 hlit 286 hdist 30 g0 g00)) (idpath false))) ((inf-lelt 320 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
  )
- (defvcs inf-vc-stln-w1e 1 inf-stln (g0 (inf-le hlit 288) g00 (inf-le hdist 32))
+ (defvcs inf-vc-stln-w1e 1 inf-stln (g0 (inf-le hlit 286) g00 (inf-le hdist 30))
   (inf-le prev0 15) b1
   (pi j nat (inf-le (Lz0 j) 15)) b2
   (inf-le ip0 n) gi
@@ -2003,7 +2060,7 @@
   (inf-bits-inv carry ip0 cons0 bc0) ga
   (inf-le cons0 cons0) (inf-refl cons0)
  )
- (defcx inf-stln-w1 inf-stln (g0 (inf-le hlit 288)) (g00 (inf-le hdist 32)) (ip nat) (bc nat) (bb nat) (cons nat) (Lz (pi j nat nat)) (i nat) (prev nat) (stage nat) (sy nat) (b1 (inf-le prev 15)) (b2 (pi j nat (inf-le (Lz j) 15))) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)) )
+ (defcx inf-stln-w1 inf-stln (g0 (inf-le hlit 286)) (g00 (inf-le hdist 30)) (ip nat) (bc nat) (bb nat) (cons nat) (Lz (pi j nat nat)) (i nat) (prev nat) (stage nat) (sy nat) (b1 (inf-le prev 15)) (b2 (pi j nat (inf-le (Lz j) 15))) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)) )
  (defvcs inf-vc-stln-t1 1 inf-stln-w1 (w1 (inf-lt i (add hlit hdist)) g2 (paths nat stage 0))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
@@ -2078,7 +2135,23 @@
   (inf-le prev 15) b1
   (pi j nat (inf-le (Lz j) 15)) b2
  )
- (defvcs inf-vc-stln-t2 1 inf-stln-c1 (g3 (inf-le 16 syj0) g4 (inf-le syj0 18) g5 (inf-le syj0 16))
+ (defvcs inf-vc-stln-r3 1 inf-stln-c1 (g3 (inf-le 16 syj0) g4 (inf-le syj0 18) g5 (inf-le syj0 16) g8 (paths nat i 0))
+  (inf-le ipj0 n) r1
+  (inf-le bcj0 63) r3
+  (inf-bits-inv carry ipj0 consj0 bcj0) r4
+  (inf-le cons0 consj0) r5
+  (pi k nat (inf-lt (Lc0 k) (inf-pow h))) c1
+  (pi k nat (inf-lt (Ls0 k) (inf-pow h))) c2
+  (inf-le (inf-sum Lc0 15 1) lm0) c3
+  (inf-le lm0 288) c4
+  (pi k nat (inf-lt (Dc0 k) (inf-pow h))) c5
+  (pi k nat (inf-lt (Ds0 k) (inf-pow h))) c6
+  (inf-le (inf-sum Dc0 15 1) dm0) c7
+  (inf-le dm0 32) c8
+  (inf-le prev 15) b1
+  (pi j nat (inf-le (Lz j) 15)) b2
+ )
+ (defvcs inf-vc-stln-t2 1 inf-stln-c1 (g3 (inf-le 16 syj0) g4 (inf-le syj0 18) g5 (inf-le syj0 16) g8 (inf-lt 0 i))
   (inf-le 32 w) gw
   (inf-lt (add n 8) (inf-pow w)) gn
   (inf-le ipj0 n) r1
@@ -2086,7 +2159,7 @@
   (inf-bits-inv carry ipj0 consj0 bcj0) r4
   (inf-le 2 13) (idpath false)
  )
- (defvcs inf-vc-stln-t2s 1 inf-stln-c1 (g3 (inf-le 16 syj0) g4 (inf-le syj0 18) g5 (inf-le syj0 16) ipt2 nat bct2 nat bbt2 nat const2 nat xt2 nat t2e1 (inf-le ipt2 n) t2e3 (inf-le bct2 63) t2e4 (inf-bits-inv carry ipt2 const2 bct2) t2e5 (inf-le consj0 const2))
+ (defvcs inf-vc-stln-t2s 1 inf-stln-c1 (g3 (inf-le 16 syj0) g4 (inf-le syj0 18) g5 (inf-le syj0 16) g8 (inf-lt 0 i) ipt2 nat bct2 nat bbt2 nat const2 nat xt2 nat t2e1 (inf-le ipt2 n) t2e3 (inf-le bct2 63) t2e4 (inf-bits-inv carry ipt2 const2 bct2) t2e5 (inf-le consj0 const2))
   (inf-le ipt2 n) t2e1
   (inf-le bct2 63) t2e3
   (inf-bits-inv carry ipt2 const2 bct2) t2e4
@@ -2102,7 +2175,7 @@
   (inf-le prev 15) b1
   (pi j nat (inf-le (Lz j) 15)) b2
  )
- (defcx inf-stln-c7 inf-stln-c1 (g3 (inf-le 16 syj0)) (g4 (inf-le syj0 18)) (g5 (inf-le syj0 16)) (ipt2 nat) (bct2 nat) (bbt2 nat) (const2 nat) (xt2 nat) (t2e1 (inf-le ipt2 n)) (t2e3 (inf-le bct2 63)) (t2e4 (inf-bits-inv carry ipt2 const2 bct2)) (t2e5 (inf-le consj0 const2)) (t2e6 (inf-le (add consj0 2) const2)) (t2e7 (inf-lt xt2 (inf-pow 2))) )
+ (defcx inf-stln-c7 inf-stln-c1 (g3 (inf-le 16 syj0)) (g4 (inf-le syj0 18)) (g5 (inf-le syj0 16)) (g8 (inf-lt 0 i)) (ipt2 nat) (bct2 nat) (bbt2 nat) (const2 nat) (xt2 nat) (t2e1 (inf-le ipt2 n)) (t2e3 (inf-le bct2 63)) (t2e4 (inf-bits-inv carry ipt2 const2 bct2)) (t2e5 (inf-le consj0 const2)) (t2e6 (inf-le (add consj0 2) const2)) (t2e7 (inf-lt xt2 (inf-pow 2))) )
  (defvcs inf-vc-stln-s3 1 inf-stln-c7 ()
   (inf-lt (add xt2 3) (inf-pow w)) (inf-wlit (add xt2 3) w gw (inf-letrans (add xt2 3) 6 63 ((inf-addr xt2 3 3 (inf-ltsle xt2 3 t2e7))) (idpath false)))
  )
@@ -2214,33 +2287,43 @@
   (inf-le cons0 consj2) r5
  )
  (defcx inf-stln-c2 inf-stln-c1 (rrj1 nat) (vj1 nat) (ipj1 nat) (bcj1 nat) (bbj1 nat) (consj1 nat) (f6 (inf-lt 0 rrj1)) (f7 (inf-le rrj1 138)) (f8 (inf-le vj1 15)) (r1 (inf-le ipj1 n)) (r3 (inf-le bcj1 63)) (r4 (inf-bits-inv carry ipj1 consj1 bcj1)) (r5 (inf-le cons0 consj1)) )
- (defvcs inf-vc-stln-w3e 1 inf-stln-c2 ()
+ (defvcs inf-vc-stln-i2 1 inf-stln-c2 ()
+  (inf-lt (add i rrj1) (inf-pow w)) (inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-letrans (add hlit hdist) 316 320 ((inf-add2 hlit 286 hdist 30 g0 g00)) (idpath false))))) f7) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
+ )
+ (defvcs inf-vc-stln-r4 1 inf-stln-c2 (g7 (inf-lt (add hlit hdist) (add i rrj1)))
+  (inf-le ipj1 n) r1
+  (inf-le bcj1 63) r3
+  (inf-bits-inv carry ipj1 consj1 bcj1) r4
+  (inf-le cons0 consj1) r5
+  (pi k nat (inf-lt (Lc0 k) (inf-pow h))) c1
+  (pi k nat (inf-lt (Ls0 k) (inf-pow h))) c2
+  (inf-le (inf-sum Lc0 15 1) lm0) c3
+  (inf-le lm0 288) c4
+  (pi k nat (inf-lt (Dc0 k) (inf-pow h))) c5
+  (pi k nat (inf-lt (Ds0 k) (inf-pow h))) c6
+  (inf-le (inf-sum Dc0 15 1) dm0) c7
+  (inf-le dm0 32) c8
+  (inf-le prev 15) b1
+  (pi j nat (inf-le (Lz j) 15)) b2
+ )
+ (defvcs inf-vc-stln-w3e 1 inf-stln-c2 (g7 (inf-le (add i rrj1) (add hlit hdist)))
   (inf-le 0 rrj1) (idpath false)
   (pi j nat (inf-le (Lz j) 15)) b2
  )
- (defcx inf-stln-c2-w3 inf-stln-c2 (k nat) (Lz (pi j nat nat)) (c1 (inf-le k rrj1)) (c2 (pi j nat (inf-le (Lz j) 15))) )
- (defvcs inf-vc-stln-i2 1 inf-stln-c2-w3 (w3 (inf-lt k rrj1))
-  (inf-lt (add i k) (inf-pow w)) (inf-lelt (add i k) 458 (inf-pow w) ((inf-add2 i 320 k 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-add2 hlit 288 hdist 32 g0 g00)))) (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7))) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
- )
- (defvcs inf-vc-stln-s8 1 inf-stln-c2-w3 (w3 (inf-lt k rrj1) g7 (inf-lt (add i k) 320))
-  (inf-lt (add i k) (inf-pow w)) (inf-lelt (add i k) 458 (inf-pow w) ((inf-add2 i 320 k 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-add2 hlit 288 hdist 32 g0 g00)))) (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7))) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
-  (inf-lt (add i k) 320) g7
+ (defcx inf-stln-c2-w3 inf-stln-c2 (g7 (inf-le (add i rrj1) (add hlit hdist))) (k nat) (Lz (pi j nat nat)) (c1 (inf-le k rrj1)) (c2 (pi j nat (inf-le (Lz j) 15))) )
+ (defvcs inf-vc-stln-s8 1 inf-stln-c2-w3 (w3 (inf-lt k rrj1))
+  (inf-lt (add i k) (inf-pow w)) (inf-lelt (add i k) 458 (inf-pow w) ((inf-add2 i 320 k 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-letrans (add hlit hdist) 316 320 ((inf-add2 hlit 286 hdist 30 g0 g00)) (idpath false))))) (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7))) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
+  (inf-lt (add i k) 320) (inf-lttrans (add i k) (add i rrj1) 320 (inf-ltaddl i k rrj1 w3) (inf-letrans (add i rrj1) (add hlit hdist) 320 g7 ((inf-letrans (add hlit hdist) 316 320 ((inf-add2 hlit 286 hdist 30 g0 g00)) (idpath false)))))
   (inf-lt vj1 (inf-pow w)) (inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
  )
- (defvcs inf-vc-stln-w3b 1 inf-stln-c2-w3 (w3 (inf-lt k rrj1) g7 (inf-lt (add i k) 320))
+ (defvcs inf-vc-stln-w3b 1 inf-stln-c2-w3 (w3 (inf-lt k rrj1))
   (inf-lt (succ k) (inf-pow w)) (inf-lelt (succ k) 138 (inf-pow w) ((inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7)) ((inf-lelt 138 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
   (inf-le (succ k) rrj1) (inf-ltsu k rrj1 w3)
   (pi j nat (inf-le ((inf-upd Lz (add i k) vj1) j) 15)) (inf-updle Lz (add i k) vj1 15 c2 f8)
   (inf-lt (natminus rrj1 (succ k)) (natminus rrj1 k)) (inf-subfall rrj1 k w3)
  )
- (defvcs inf-vc-stln-w3b 5 inf-stln-c2-w3 (w3 (inf-lt k rrj1) g7 (inf-le 320 (add i k)))
-  (inf-lt (succ k) (inf-pow w)) (inf-lelt (succ k) 138 (inf-pow w) ((inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7)) ((inf-lelt 138 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
-  (inf-le (succ k) rrj1) (inf-ltsu k rrj1 w3)
-  (pi j nat (inf-le (Lz j) 15)) c2
-  (inf-lt (natminus rrj1 (succ k)) (natminus rrj1 k)) (inf-subfall rrj1 k w3)
- )
  (defvcs inf-vc-stln-s9 1 inf-stln-c2-w3 (w3 (inf-le rrj1 k))
-  (inf-lt (add i rrj1) (inf-pow w)) (inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-add2 hlit 288 hdist 32 g0 g00)))) f7) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
+  (inf-lt (add i rrj1) (inf-pow w)) (inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 ((inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) ((inf-letrans (add hlit hdist) 316 320 ((inf-add2 hlit 286 hdist 30 g0 g00)) (idpath false))))) f7) ((inf-lelt 458 512 (inf-pow w) (idpath false) ((inf-wnine w gw)))))
  )
  (defvcs inf-vc-stln-s10 1 inf-stln-c2-w3 (w3 (inf-le rrj1 k))
   (inf-lt vj1 (inf-pow w)) (inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
@@ -2254,19 +2337,38 @@
   (inf-le cons0 consj1) r5
   (inf-lt (natminus (add hlit hdist) (add i rrj1)) (natminus (add hlit hdist) i)) (inf-subby i (add hlit hdist) rrj1 w1 f6)
  )
- (defvcs inf-vc-stln-c4 1 inf-stln-w1 (w1 (inf-le (add hlit hdist) i))
+ (defvcs inf-vc-stln-i5 1 inf-stln-w1 (w1 (inf-le (add hlit hdist) i))
+  (inf-lt 256 320) (idpath true)
+ )
+ (defvcs inf-vc-stln-r5 1 inf-stln-w1 (w1 (inf-le (add hlit hdist) i) g9 (paths nat (Lz 256) 0))
+  (inf-le ip n) r1
+  (inf-le bc 63) r3
+  (inf-bits-inv carry ip cons bc) r4
+  (inf-le cons0 cons) r5
+  (pi k nat (inf-lt (Lc0 k) (inf-pow h))) c1
+  (pi k nat (inf-lt (Ls0 k) (inf-pow h))) c2
+  (inf-le (inf-sum Lc0 15 1) lm0) c3
+  (inf-le lm0 288) c4
+  (pi k nat (inf-lt (Dc0 k) (inf-pow h))) c5
+  (pi k nat (inf-lt (Ds0 k) (inf-pow h))) c6
+  (inf-le (inf-sum Dc0 15 1) dm0) c7
+  (inf-le dm0 32) c8
+  (inf-le prev 15) b1
+  (pi j nat (inf-le (Lz j) 15)) b2
+ )
+ (defvcs inf-vc-stln-c4 1 inf-stln-w1 (w1 (inf-le (add hlit hdist) i) g9 (inf-lt 0 (Lz 256)))
   (pi k nat g (inf-lt k hlit) (inf-le (Lz k) 15)) (lam k g (b2 k))
-  (inf-lt hlit q) (inf-lelt hlit 288 q g0 (inf-lttrans 288 320 q (idpath true) ((inf-ltle 320 q gq2))))
+  (inf-lt hlit q) (inf-lelt hlit 286 q g0 (inf-lttrans 286 320 q (idpath true) ((inf-ltle 320 q gq2))))
   (inf-le (inf-by16 q) (inf-pow h)) gq
   (inf-le (inf-pow h) (inf-pow w)) ((inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw))))
   (inf-le LROOT 15) gl
   (inf-le 32 w) gw
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
- (defcx inf-stln-c9 inf-stln-w1 (w1 (inf-le (add hlit hdist) i)) (Lcc4 (pi j nat nat)) (Lsc4 (pi j nat nat)) (Ltc4 (pi j nat nat)) (c4e1 (pi z nat (inf-lt (Lcc4 z) (inf-pow h)))) (c4e2 (pi z nat (inf-lt (Lsc4 z) (inf-pow h)))) (c4e3 (inf-le (inf-sum Lcc4 15 1) hlit)) )
+ (defcx inf-stln-c9 inf-stln-w1 (w1 (inf-le (add hlit hdist) i)) (g9 (inf-lt 0 (Lz 256))) (Lcc4 (pi j nat nat)) (Lsc4 (pi j nat nat)) (Ltc4 (pi j nat nat)) (c4e1 (pi z nat (inf-lt (Lcc4 z) (inf-pow h)))) (c4e2 (pi z nat (inf-lt (Lsc4 z) (inf-pow h)))) (c4e3 (inf-le (inf-sum Lcc4 15 1) hlit)) )
  (defvcs inf-vc-stln-c5 1 inf-stln-c9 ()
   (pi k nat g (inf-lt k hdist) (inf-le ((inf-shift Lz hlit) k) 15)) (lam k g (b2 (add hlit k)))
-  (inf-lt hdist q) (inf-lelt hdist 32 q g00 (inf-lttrans 32 320 q (idpath true) ((inf-ltle 320 q gq2))))
+  (inf-lt hdist q) (inf-lelt hdist 30 q g00 (inf-lttrans 30 320 q (idpath true) ((inf-ltle 320 q gq2))))
   (inf-le (inf-by16 q) (inf-pow h)) gq
   (inf-le (inf-pow h) (inf-pow w)) ((inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw))))
   (inf-le DROOT 15) gd
@@ -2274,7 +2376,11 @@
   (pi k nat g (inf-le k 15) (inf-lt (inf-dk q k) (inf-pow w))) gk
  )
  (defcx inf-stln-c10 inf-stln-c9 (Dcc5 (pi j nat nat)) (Dsc5 (pi j nat nat)) (Dtc5 (pi j nat nat)) (c5e1 (pi z nat (inf-lt (Dcc5 z) (inf-pow h)))) (c5e2 (pi z nat (inf-lt (Dsc5 z) (inf-pow h)))) (c5e3 (inf-le (inf-sum Dcc5 15 1) hdist)) )
- (defvcs inf-vc-stln-r2 1 inf-stln-c10 (moded6 nat staged7 nat)
+ (defvcs inf-vc-stln-k1 1 inf-stln-c10 ()
+  (inf-le 32 w) gw
+ )
+ (defcx inf-stln-c11 inf-stln-c10 (xk1 nat) )
+ (defvcs inf-vc-stln-r6 1 inf-stln-c11 (g10 (inf-lt 1 xk1))
   (inf-le ip n) r1
   (inf-le bc 63) r3
   (inf-bits-inv carry ip cons bc) r4
@@ -2282,11 +2388,47 @@
   (pi k nat (inf-lt (Lcc4 k) (inf-pow h))) c4e1
   (pi k nat (inf-lt (Lsc4 k) (inf-pow h))) c4e2
   (inf-le (inf-sum Lcc4 15 1) hlit) c4e3
-  (inf-le hlit 288) g0
+  (inf-le hlit 288) (inf-letrans hlit 286 288 g0 (idpath false))
   (pi k nat (inf-lt (Dcc5 k) (inf-pow h))) c5e1
   (pi k nat (inf-lt (Dsc5 k) (inf-pow h))) c5e2
   (inf-le (inf-sum Dcc5 15 1) hdist) c5e3
-  (inf-le hdist 32) g00
+  (inf-le hdist 32) (inf-letrans hdist 30 32 g00 (idpath false))
+  (inf-le prev 15) b1
+  (pi j nat (inf-le (Lz j) 15)) b2
+ )
+ (defvcs inf-vc-stln-k2 1 inf-stln-c11 (g10 (inf-le xk1 1))
+  (inf-le 32 w) gw
+ )
+ (defcx inf-stln-c12 inf-stln-c11 (g10 (inf-le xk1 1)) (xk2 nat) )
+ (defvcs inf-vc-stln-r7 1 inf-stln-c12 (g11 (inf-lt 2 xk2))
+  (inf-le ip n) r1
+  (inf-le bc 63) r3
+  (inf-bits-inv carry ip cons bc) r4
+  (inf-le cons0 cons) r5
+  (pi k nat (inf-lt (Lcc4 k) (inf-pow h))) c4e1
+  (pi k nat (inf-lt (Lsc4 k) (inf-pow h))) c4e2
+  (inf-le (inf-sum Lcc4 15 1) hlit) c4e3
+  (inf-le hlit 288) (inf-letrans hlit 286 288 g0 (idpath false))
+  (pi k nat (inf-lt (Dcc5 k) (inf-pow h))) c5e1
+  (pi k nat (inf-lt (Dsc5 k) (inf-pow h))) c5e2
+  (inf-le (inf-sum Dcc5 15 1) hdist) c5e3
+  (inf-le hdist 32) (inf-letrans hdist 30 32 g00 (idpath false))
+  (inf-le prev 15) b1
+  (pi j nat (inf-le (Lz j) 15)) b2
+ )
+ (defvcs inf-vc-stln-r2 1 inf-stln-c12 (g11 (inf-le xk2 2) moded6 nat staged7 nat)
+  (inf-le ip n) r1
+  (inf-le bc 63) r3
+  (inf-bits-inv carry ip cons bc) r4
+  (inf-le cons0 cons) r5
+  (pi k nat (inf-lt (Lcc4 k) (inf-pow h))) c4e1
+  (pi k nat (inf-lt (Lsc4 k) (inf-pow h))) c4e2
+  (inf-le (inf-sum Lcc4 15 1) hlit) c4e3
+  (inf-le hlit 288) (inf-letrans hlit 286 288 g0 (idpath false))
+  (pi k nat (inf-lt (Dcc5 k) (inf-pow h))) c5e1
+  (pi k nat (inf-lt (Dsc5 k) (inf-pow h))) c5e2
+  (inf-le (inf-sum Dcc5 15 1) hdist) c5e3
+  (inf-le hdist 32) (inf-letrans hdist 30 32 g00 (idpath false))
   (inf-le prev 15) b1
   (pi j nat (inf-le (Lz j) 15)) b2
  )
