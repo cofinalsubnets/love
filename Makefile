@@ -237,15 +237,15 @@ moonc = $(moon0) -os linux
 # THE MOONCC OBJECT LANE: love's own C compiled by mooncc into one odir, worn twice -- at
 # the host's arch, and at the cross arch $(xa) names. $(call moonlane,NAME,DIRVAR,CCVAR,
 # ARCHVAR), every argument but the first a variable NAME so the body stays deferred; the
-# kart shape below is the same idiom. Answers $(1)_love_o, _host_o, _math_o and $(1)_o.
+# kart shape below is the same idiom. Answers $(1)_love_o, _host_o and $(1)_o; the math is
+# moonlibc's, and the link pulls what it reaches.
 # EVERY OBJECT SITS AT ITS SOURCE'S PATH under the odir, as out/0 and $(k_odir) already
 # lay theirs. The sets take different flags, so each rule names its own list and the odir
 # needs no prefix to keep src/love/ev.o and inle/ev.o apart -- the tree does that.
 define moonlane
 $(1)_love_o = $$(love_tu_c:$$(S)/%.c=$$($(2))/%.o)
 $(1)_host_o = $$(host_c:$$(S)/%.c=$$($(2))/%.o)
-$(1)_math_o = $$(patsubst src/apps/moon/lib/moonlibc/%.c,$$($(2))/moonlibc/%.o,$$(wildcard src/apps/moon/lib/moonlibc/math/*.c))
-$(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(1)_math_o) $$($(2))/sys.o
+$(1)_o = $$($(1)_love_o) $$($(1)_host_o) $$($(2))/sys.o
 # ..and the one this lane's own LINK owes: the fixpoint gates relink these objects without
 # out/src.o, so they carry src/love/noblob.c's empty archives instead. deliberately NOT in $(1)_o
 # -- the artifact link takes the laid object and would collide.
@@ -262,10 +262,6 @@ $$($(1)_host_o) $$($(1)_seat_o): $$($(2))/%.o: $$(S)/%.c $$(love_h) $$(moon0_dep
 $$($(2))/love/main.o: out/lib/distlist.h out/lib/tasks.h
 $$($(2))/love/cats.o: out/lib/baked.h
 $$($(2))/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
-$$($(1)_math_o): $$($(2))/moonlibc/%.o: src/apps/moon/lib/moonlibc/%.c $$(moon0_dep)
-	@echo 'MOON	'$$@
-	@mkdir -p $$(dir $$@)
-	@$$($(3)) -Isrc/apps/moon/include -c $$< $$@
 # the machine tail rides the host's own cat, one cut for every consumer; only the entry
 # names the arch.
 $$($(2))/sys.o: $$(holocat_dep) $$(love0)
