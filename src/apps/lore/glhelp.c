@@ -53,7 +53,7 @@
 //                     the eye, each vertex u along R and v along U; a glow seen as much as what is
 //                     behind it lies past it less LEAD, over SOFT, ZN ZF the view's near and far
 //   frame W H OFF N AT
-//                     N doubles from AT: CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..;
+//                     N floats from AT: CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..;
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
 //                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
 //                     facets's 8 and 128 (cull: anticlockwise in gl's y-up faces the eye; seen,
@@ -1019,8 +1019,9 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
  enum { lead = 27 };   // w h off clear fr fg fb near far tone flags, then the 16 of m
  double v[lead + 4096];
  int n = fn < 4096 + lead - 3 ? fn + 3 : lead + 4096;
- unsigned char const *pv = fn >= lead - 3 ? bytes(H, at, 8 * (size_t) (n - 3)) : NULL;
- if (pv) v[0] = fw, v[1] = fh, v[2] = (double) foff, memcpy(v + 3, pv, 8 * (size_t) (n - 3));
+ float const *pv = fn >= lead - 3 ? (float const*) bytes(H, at, 4 * (size_t) (n - 3)) : NULL;
+ if (pv) v[0] = fw, v[1] = fh, v[2] = (double) foff;
+ for (int i = 3; pv && i < n; i++) v[i] = pv[i - 3];
  if (!pv) { dprintf(H->out, "err frame args\n"); return; }
  int w = (int) v[0], h = (int) v[1];
  unsigned char *out = w > 0 && h > 0 ? bytes(H, (size_t) v[2], 8 * (size_t) w * h) : NULL;

@@ -208,5 +208,11 @@
         _ (each ^9 (i \ (gpu-tex g (10 + i) 512 512 (iota (512 * 512) * 0 + i)))) d (f ()) _ (gpu-close g)
         [(tray? a) (string? b) (tray? c && amax (a != c) = 0) (tray? d && amax (a != d) = 0)])))
    (test (fine? moon) (fine? cc) (near? 60 one) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
+; a frame's numbers laid as 4-byte floats, whatever the machine's word
+(: fw-n (cwd 0 + "/out/.gpu-frame-" + show (getpid 0)) _ (close (open fw-n "w")) fw-l (open (fw-n + ".l") "w")
+   _ (gpu-send {'w (openfd fw-n 1) 'room 0 'to fw-l} 2 2 (1.5 * iota 16) [7 -9] [-1 0.5 0.0 0.0 0.0 0.0 0.0 0]) _ (close fw-l)
+   (all n) (: q (open n "r") t (slurp q) (close q, unlink n, t))
+   fw-b (all fw-n) fw-s (all (fw-n + ".l")) (wd i) (map (k \ fw-b (4 * i + k)) ^4))
+(test (fw-s = "frame 2 2 0 26 0\n") (104 <= #fw-b) (wd 1 = [0 0 0 63]) (wd 23 = [0 0 180 65]) (wd 24 = [0 0 224 64]) (wd 25 = [0 0 16 193]))
 (test_fin ())
 (puts "gpu: ok\n")
