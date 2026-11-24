@@ -383,15 +383,27 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    ; bool/true/false bare, as C23; an iso -std keeps them plain names
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
+   (cc-pre {'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
+    (un ? (stddefs tgt sw + booldefs dia) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
                  ; our libc carries its whole surface on every kernel: a source asks it, not the kernel
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
+                 (elem tgt '(x64 a64 rv64 wasm) ? '("__SIZEOF_INT128__=16") ())))      ; the wide pair (gen's d128 lane), as gcc's
+   ; a define's name and body, a bare name's body 1
+   (dparts d) (d @ (n + "=" + b) [n b] _ [d "1"])
+   ; under -Werror a -D that gives a predefine another body is an error, as gcc's and clang's
+   ; redefinition warning is; a -U ahead of it says the change is meant
+   (redef pre ds us)
+    (? (atom? ds) 0
+       (string? <ds)
+        (: nb (dparts <ds) n (nb 0)
+           hit (filter (p \ dparts p @ q (q 0 = n && q 1 != nb 1)) pre)
+           (two? hit && !(elem n us) ? (udie 1 "cc: \(n) redefined on the command line (-Werror)") (redef pre >ds us)))
+       (redef pre >ds (<ds 1 . us)))
+   (cc-defs t) (: pre (cc-pre t) ds (t 'ds) _ (t 'werr ? (redef pre ds ()) 0) (pre + ds))
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
@@ -516,9 +528,10 @@
    ; thumb2 (sp too) and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
    ; where it reaches, else lays movw/movt. thumb2's (fli f g k) becomes (flal f g k P) alike, and
-   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one
+   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one. thumb2sp's la is (lalp Rd L
+   ; P), whose far form loads P from the pc: its loader moves abs32 words, never a movw/movt pair
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) fs
+    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) (tgt = 'thumb2sp ? (t16la fs) fs)
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -533,9 +546,10 @@
                              (go >l (pin ix (f 3) q) ((q . f 3) . ps) (n + 1) (['flal (f 1) (f 2) (f 3) q] . a)))))
                     (two? f && (<f = 'la && #f = 3 || big? f))
                     (peep ix (f 2) 0 @ p
-                       (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
-                          (name ".lp\(n)" @ q
-                             (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
+                       (: k (tgt = 'thumb2sp && <f = 'la ? 'lalp 'lal)
+                          (p != 0 ? (go >l ix ps n ([k (f 1) (f 2) p] . a))
+                             (name ".lp\(n)" @ q
+                                (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) ([k (f 1) (f 2) q] . a))))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
                     (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
@@ -638,10 +652,99 @@
        (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
        (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
+   ; -- -S: the object -c lays, said as GNU assembly. a section's bytes are .byte rows, a symbol a
+   ; label with its .globl, .type and .size, a relocation a .reloc at its place (one on a
+   ; section through the label at its head); an inline asm
+   ; blob that bears no fix is the text it was written in. it assembles to the object again --
+   (obj-asm s tx)
+    (: w (s 4 = 2)                                   ; elf64
+       mach (rle16 s 18)
+       at (mach = 40 ? "%" "@")
+       shoff (w ? (rle64 s 40) (rle32 s 32))
+       shes (rle16 s (w ? 58 46)) shn (rle16 s (w ? 60 48)) shx (rle16 s (w ? 62 50))
+       ; a section: name type flags offset size link info align entsize
+       (sh k) (shoff + k * shes @ b
+                (w ? [(rle32 s b) (rle32 s (b + 4)) (rle64 s (b + 8)) (rle64 s (b + 24)) (rle64 s (b + 32))
+                      (rle32 s (b + 40)) (rle32 s (b + 44)) (rle64 s (b + 48)) (rle64 s (b + 56))]
+                     [(rle32 s b) (rle32 s (b + 4)) (rle32 s (b + 8)) (rle32 s (b + 16)) (rle32 s (b + 20))
+                      (rle32 s (b + 24)) (rle32 s (b + 28)) (rle32 s (b + 32)) (rle32 s (b + 36))]))
+       secs (map sh ^shn)
+       (cstr o) (: (e i) (s i = 0 ? i (e (i + 1))) (snip s o (e o)))
+       (sname h) (cstr ((secs shx) 3 + h 0))
+       symh (filter (h \ h 1 = 2) secs @ l (two? l ? <l ()))
+       strh (two? symh ? (secs (symh 5)) ())
+       sz (w ? 24 16)
+       ; a symbol: name info section value size
+       (sym k) (symh 3 + k * sz @ b
+                 (w ? [(cstr (strh 3 + rle32 s b)) (s (b + 4)) (rle16 s (b + 6)) (rle64 s (b + 8)) (rle64 s (b + 16))]
+                      [(cstr (strh 3 + rle32 s b)) (s (b + 12)) (rle16 s (b + 14)) (rle32 s (b + 4)) (rle32 s (b + 8))]))
+       syms (two? symh ? (map sym ^(symh 4 // sz)) ())
+       (symnm k) (syms k @ y (((y 1) & 15) = 3 ? ".Lsec\(y 2)" (y 0)))
+       (s64 v) (9223372036854775807 < v ? (v - 18446744073709551616) v)
+       (s32 v) (2147483647 < v ? (v - 4294967296) v)
+       ; a section's relocations: offset type symbol addend, the addend () where the field holds it
+       (rels i)
+        (catmap (h \ (? ((h 1 = 4 || h 1 = 9) && h 6 = i)
+                       (: rela (h 1 = 4) es (w ? (rela ? 24 16) (rela ? 12 8))
+                          (map (k \ h 3 + k * es @ b
+                                 (w ? (rle64 s (b + 8) @ inf [(rle64 s b) (inf & 4294967295) (symnm (inf >> 32)) (rela ? (s64 (rle64 s (b + 16))) ())])
+                                      (rle32 s (b + 4) @ inf [(rle32 s b) (inf & 255) (symnm (inf >> 8)) (rela ? (s32 (rle32 s (b + 8))) ())])))
+                               ^(h 4 // es)))
+                       ()))
+                secs)
+       (rname t) (peep (peep gf-relnames mach {}) t () @ n (string? n ? n (show t)))
+       (rline r) ("\t.reloc ., " + rname (r 1) + ", " + r 2
+                  + (r 3 @ a (? !(charm? a) "" (a = 0) "" (0 < a) ("+" + show a) (show a))) + "\n")
+       (sline y) (: n (y 0) b ((y 1) >> 4) t ((y 1) & 15)
+                    ((? (b = 1) "\t.globl \(n)\n" (b = 2) "\t.weak \(n)\n" "")
+                     + (? (t = 2) "\t.type \(n),\(at)function\n" (t = 1) "\t.type \(n),\(at)object\n" "")
+                     + (0 < y 4 ? "\t.size \(n),\(show (y 4))\n" "")
+                     + n + ":\n"))
+       (rows bs) (atom? bs ? "" ("\t.byte " + join "," (map show (take 16 bs)) + "\n" + rows (drop 16 bs)))
+       (log2 n) (n <= 1 ? 0 (1 + log2 (n >> 1)))
+       ; the blobs that may stand as text, by their first byte
+       blobs (foldl (t \ p \ (p 0 @ bs (all (x \ charm? x || string? x) bs ?
+                                       (elf-flat bs @ z (0 < #z ? (pin t (z 0) ([z (p 1)] . peep t (z 0) ())) t)) t)))
+                    {} tx)
+       (sect i)
+        (: h (secs i) nm (sname h) base (h 3) n (h 4) bits (h 1 != 8)
+           f (h 2)
+           (fb m c) (0 < (f & m) ? c "")
+           fl (fb 2 "a" + fb 1 "w" + fb 4 "x" + fb 16 "M" + fb 32 "S" + fb 1024 "T")
+           ty (h 1 @ 1 "progbits" 8 "nobits" 7 "note" 14 "init_array" 15 "fini_array" t (show t))
+           labs (foldl (t \ y \ (y 2 = i && ((y 1) & 15) != 3 && 0 < #(y 0) ? (pin t (y 3) (y . peep t (y 3) ())) t)) {} syms)
+           rs (foldl (t \ r \ pin t (r 0) r) {} (rels i))
+           (ev? o) (two? (peep labs o ()) || two? (peep rs o ()))
+           (nextev o) (? (n <= o) n (ev? o) o (nextev (o + 1)))
+           (clear? a b) (a = b ? 1 (ev? a ? 0 (clear? (a + 1) b)))
+           ; the longest blob standing at o, no symbol or relocation inside it
+           (blob o) (bits && o < n ? (filter (p \ o + #(p 0) <= n && snip s (base + o) (base + o + #(p 0)) = p 0
+                                                 && !(two? (peep rs o ())) && clear? (o + 1) (o + #(p 0)))
+                                            (peep blobs (s (base + o)) ()) @ l (two? l ? (foldl (a \ p \ (#(a 0) < #(p 0) ? p a)) <l >l) ()))
+                                     ())
+           (flush run) (? (two? run) (rows (rev run)) "")
+           (go o run acc)
+            (: here (map sline (rev (peep labs o ()))) rl (peep rs o () @ r (two? r ? [(rline r)] ()))
+               pre (two? here || two? rl ? (rev (here + rl) + [(flush run)] + acc) acc)
+               run1 (two? here || two? rl ? () run)
+               (? (n <= o) (rev ([(flush run1)] + pre))
+                  !bits (nextev (o + 1) @ e (go e () (["\t.zero \(show (e - o))\n"] + pre)))
+                  (blob o @ p (two? p ? (go (o + #(p 0)) () ([(p 1 + "\n") (flush run1)] + pre))
+                                         (go (o + 1) (s (base + o) . run1) pre)))))
+           ("\t.section \(nm),\"\(fl)\",\(at)\(ty)" + (0 < (f & 16) ? ",\(show (h 8))" "") + "\n"
+            + "\t.p2align \(show (log2 (h 7)))\n.Lsec\(i):\n" + join "" (go 0 () ())))
+       keep (filter (i \ (secs i) 1 @ t (!(elem t [0 2 3 4 9 17]) && sname (secs i) != ".shstrtab")) ^shn)
+       ; a weak name defined nowhere here is still weak
+       weak (catmap (y \ y 2 = 0 && ((y 1) >> 4) = 2 ? ["\t.weak \(y 0)\n"] ()) syms)
+       (join "" (weak + map sect keep)))
    (cc-obj src dst (t @ {'tgt tgt}))
-    (pin cppdeps 'l (),
+    (pin cppdeps 'l (), pin asmtx 'on (t 'S), pin asmtx 'l (),
      cc-objbytes src t @ b
-       (tgt != 'wasm ? (write-bytes dst b)
+       (? (t 'S && tgt != 'wasm) (open dst "w" @ q
+                                   (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
+                                    say q (obj-asm (elf-flat b) (rev (asmtx 'l))),
+                                    close q))
+          (tgt != 'wasm) (write-bytes dst b)
         (open dst "w" @ q
            (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
             say q b,
@@ -1165,6 +1268,10 @@
        <(sound txt))
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
    ; ledger alone: the link's live set is one copy of the program, not three
+   ; what a program's module shows when nothing is asked: its entry both ways (the loader's
+   ; _start, a process's __love_start), the heap door the loader marshals strings through, and
+   ; the wake it calls where a module has one
+   wasm-face '("_start" "__love_start" "malloc" "free" "wake")
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
@@ -1186,7 +1293,13 @@
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
        home (!nostd && mhome ())
-       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
+       ; a module with no main shows every function, as --export-all asks: its exports are its
+       ; face. else the named exports, which the runtime owes like any reference
+       wx (map nom (rev (t 'wx)))
+       whole? (t 'wxall || !entry?)
+       bdefs (catmap cap bsyms)
+       owed0 (ledger bsyms @ l0 (l0 + filter (x \ nelem x l0 && nelem x bdefs) wx) @ l
+                (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
@@ -1197,9 +1310,13 @@
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
        ; a name nothing answers is the program's refusal, not an internal one
-       m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
+       m (trap (a \ wasm-link a (whole? ? {'imports '("__love_sys") 'exports 'all}
+                                           {'imports '("__love_sys") 'exports (map show wx) 'exports? wasm-face}))
+               all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")
+                          'wasm-unresolved
+                          (udie 1 "cc: nothing defines \(show b), wanted by the wasm link of \(join " " ins)")
                           (scare a b)))
        q (open dst "w")
        (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
@@ -1278,7 +1395,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1346,6 +1463,7 @@
            "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
            "-fno-tree-vectorize" "-fno-unroll-loops" "-fno-reorder-blocks" "-fno-gcse"
            "-fno-var-tracking" "-fno-var-tracking-assignments" "-fcolor-diagnostics"
+           "-fverbose-asm" "-fno-verbose-asm"                    ; -S's comments, of which it lays none
            "-fno-color-diagnostics" "-fno-caret-diagnostics" "-fno-diagnostics-show-caret")
    (fok? a) (elem a fsound || elem a fhint || starts? a "-fstrict-flex-arrays=" ||
              starts? a "-falign-loops" || starts? a "-falign-jumps" || starts? a "-falign-labels" ||
@@ -1383,6 +1501,8 @@
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws))))
           ("-c" . r) (flags r (pin t 'c 1))
+          ; -S: -c's object, said as assembly
+          ("-S" . r) (flags r (pin (pin t 'c 1) 'S 1))
           ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
           ; -g form rides through tol?
           ("-g0" . r) (flags r (pin t 'dbg ()))
@@ -1405,6 +1525,10 @@
           ("-Wl,--fatal-warnings" . r) (flags r t)
           ; the exports and run path only a loader reads: nothing to a static link, refused
           ; at the end of the line on a dynamic one
+          ; the wasm link's face: a named export is a root of its drop, --export-all lays and
+          ; exports every function. nothing to an elf
+          ("-Wl,--export-all" . r) (flags r (pin t 'wxall 1))
+          (("-Wl,--export=" + n) . r) (flags r (fpush t 'wx n))
           ((a . r) && elem a '("-rdynamic" "-Wl,-E" "-Wl,--export-dynamic")) (flags r (fpush t 'dl a))
           ((a . d . r) && elem a '("-Wl,-rpath" "-Wl,--rpath") && starts? d "-Wl,") (flags r (fpush t 'dl a))
           ((a . r) && any (starts? a) '("-Wl,-rpath," "-Wl,-rpath=" "-Wl,--rpath," "-Wl,--rpath=")) (flags r (fpush t 'dl a))
@@ -1540,6 +1664,10 @@
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
           ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ; its older spelling: non-leaf is pac-ret, all would sign a leaf
+          (("-msign-return-address=" + w) . r)
+           (flags r (pin t 'bp (w @ "non-leaf" (bpof "pac-ret") "none" ()
+                                   _ (udie 2 "cc: -msign-return-address=\(w) -- mooncc lays: none non-leaf"))))
           ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
@@ -1595,6 +1723,7 @@
           ("-mindirect-branch-cs-prefix" . r) (flags r (fpush (xkon t 'cs) 'x6f "-mindirect-branch-cs-prefix"))
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
+          ("-Werror" . r) (flags r (pin t 'werr 1))
           ((a . r) && tol? a) (flags r t)
           ((a . r) && (fok? a || mok? a)) (flags r t)
           ; a bare `-` is an input, the source on stdin
@@ -1676,7 +1805,9 @@
                              ; stdin has no name to derive an .o from
                              (<l = "-") (udie 2 "cc: a source on stdin needs -o")
                              !(dotsrc? <l) (udie 2 "cc: not a .c or .s input: \(<l)")
-                             (cc-obj <l (obase <l) f, go >l))
+                             ; -S lays x.s, and never over its own source
+                             (f 'S && !(ends? <l ".c")) (udie 2 "cc: -S of \(<l) needs -o")
+                             (cc-obj <l (obase <l @ b (f 'S ? "\(snip b 0 (#b - 1))s" b)) f, go >l))
                    (go ins))
                 (cc-link ins "a.out" f, 0)))))
 

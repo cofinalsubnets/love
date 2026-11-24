@@ -1,6 +1,8 @@
 ; the screensavers (src/apps/lore/saver.l) headless, and love play saver
 ; run: cat test/00-init.l test/host/00-host.l test/host/saver.l | out/love
 (borrow 'saver)
+; a nest that is not there, so no scene is kept in the user's, here or in a child
+(setenv "LOVE_NEST" (cwd 0 + "/out/.saver-nest-" + show (getpid 0)))
 
 (: sv-love (: l <cmdline (l 0 = 47 ? l (cwd 0 + "/" + l)))
    (sv-num s) (: (go i a) (? (i < #s) (? (48 <= s i < 58) (go (i + 1) (a * 10 + s i - 48)) -1) a)

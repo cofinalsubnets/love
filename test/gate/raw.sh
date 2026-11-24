@@ -73,8 +73,10 @@ done
 
 moonc "$d"/*.o -o "$ho/$bin" || fail "our-linker bind $bin"
 
-# the fresh-egg boot under a 420 s ceiling. the corpus is a file, stdin closed: it tests stdin
+# the fresh-egg boot under a 420 s ceiling, 900 s for rv64 under qemu-user. the corpus is a file,
+# stdin closed: it tests stdin
 cat "$@" > "$ho/.corpus-$target.l"
+ceil=420; [ "$target" = rv64 ] && ceil=900
 if [ "$target" = a64 ]; then
   # the corpus reads the tree beside it, so the carried source goes over too
   a64_jobs "$ho/raw-a64-run"
@@ -85,7 +87,7 @@ if [ "$target" = a64 ]; then
   cp "$ho/raw-a64-run/res/corpus.out" "$ho/$out"
   s=$(cat "$ho/raw-a64-run/res/corpus.rc")
 else
-  LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus-$target.l" </dev/null > "$ho/$out" 2>&1
+  LOVE_NO_IMAGE=1 timeout $ceil $run "$ho/$bin" "$ho/.corpus-$target.l" </dev/null > "$ho/$out" 2>&1
   s=$?
 fi
 tail -1 "$ho/$out"

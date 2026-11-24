@@ -9,6 +9,8 @@
 ;                                      north toward east, looking pitch degrees up
 ;   (entry NAME [x y z] bearing pitch)  another way into the level, as the start but named,
 ;                                      for another level's way out to arrive by
+;   winded                             the player starts out of breath, as after a run; none
+;                                      said, rested
 ;   (shot seconds [x y z] bearing pitch)  before the start, the level seen from there for
 ;                                      seconds, the shots in their order; a key skips them
 ;   (shot seconds (sky hour COVER) bearing pitch)  ..or that sky alone, nothing under it
@@ -48,6 +50,14 @@
 ;   (sky hour COVER)                   the level's sky at that hour of the day, COVER 'clear
 ;                                      'partly 'mostly or 'overcast; none, and no street is lit
 ;   (smog k)                           the sky and its light browned toward orange, k 0 to 1
+;   (smog-hue (rgb r g b))             the smog's colour, as bright: none, a brown to an orange
+;   (dye (rgb r g b))                  the sky's own blue, its dark at night and its clouds
+;                                      that colour, as bright; under smog the smog a band low down
+;   (atmosphere [N ..])                the sky's air, its 14 numbers as src/love/air.c says them;
+;                                      none, the earth's
+;   (gradient [(rgb r g b) ..])        the sky painted, two colours or more evenly up from the
+;                                      horizon to overhead, as bright as the day and on
+;                                      into the dusk; a dye leaves it
 ;   (twinkle k)                        the air's stir under the stars: 1 earth's (none said),
 ;                                      0 an airless sky's still stars, more a shimmering night
 ;   (ambient (rgb r g b))              light everywhere under a roof at once, over the
@@ -57,13 +67,17 @@
 ;                                      fading out a little past them: 'fluorescent, the
 ;                                      tubes' buzz, louder under each strip light; 'wind and
 ;                                      'bells, a desert's, dulled under a roof or in glass;
-;                                      'throb, the garage's plant
+;                                      'throb, the garage's plant; 'traffic, cars going by
+;                                      a street or two off; 'musicbox, a few notes
+;                                      on a music box now and then, in a reverb
 ;   (deck [x y z] [x y z])             a box a tap starts the loop playing in, a phrase from a
 ;                                      die wearing away as it goes round (decay.l), and stops
 ;   (speaker [x y z])                  where the loop is heard from: whole near it, gone some
 ;                                      ten metres off
 ;   (heard [x y z] [x y z] PARTS)      the speakers among PARTS heard only inside the box,
 ;                                      fading out past it as a hum does
+;   (reach metres PARTS)               the speakers among PARTS heard that far off, not ten,
+;                                      whole as much further in
 ;   (air SHAPE) (solid SHAPE)          a brush: space starts solid, air carves it and solid
 ;                                      fills it again, the later winning; a room is an air box
 ;     (box [x y z] [x y z])            ..a box between two corners
@@ -133,6 +147,17 @@
 ;                                      stands in it is carried 'up to the upper floor or 'down
 ;                                      to the lower
 ;   (ball [x y z])                     a basketball standing at x y z, kicked by walking into it
+;   (wisp [x y z])                     a light orb resting at x y z, taken and thrown as a ball
+;                                      is; let fall on a brazier it rests in its bowl
+;   (brazier [x y z] SKIN)             a stone goblet, the middle of its foot at x y z, its bowl
+;                                      a metre up: solid, a wisp let fall on it kept in its bowl
+;   (resonance [x y z] steps)          a string round the ring along x, y up over z, tied at x
+;                                      and steps steps round: a wisp in a brazier n steps on from
+;                                      x, by it or across the tube from there, rings it still
+;                                      every n steps, whole where n parts steps evenly, torn
+;                                      where not. one to a level on a surface
+;   (sealed LIFT)                      a lift's gates held shut at its foot until the resonance
+;                                      rings whole at every prime of its steps
 ;   (tree [x y z] seed TEXTURE)        a tree of heaven grown from seed, its foot at x y z: its
 ;                                      wood in the bark TEXTURE, its trunk in the way and
 ;                                      climbed as a ladder, facing it; fitting a 2 m well
@@ -169,8 +194,8 @@
 ;                                      times as thick
 ;   (shadow-hole TREE)                 the tree's shadow under the level's sun a hole in the
 ;                                      ground it stands on, black down past where one falls
-;   (plush [x y z] bearing FILE)       a stuffed toy lying at x y z, facing bearing: a .glb
-;                                      beside the level, its origin the floor under it
+;   (plush [x y z] bearing TOY)        a stuffed toy lying at x y z, facing bearing: a name
+;                                      toys.l makes, or a .glb beside the level
 ;   (window [x y z] [x y z] TEXTURE)   an opening carved between two corners, a pane of glass
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
@@ -190,6 +215,8 @@
 ;                                      where no lens is between: what the window shows, and
 ;                                      what is really there
 ;   (flow [du dv] DRAPE)               the drape's texture drifting du dv metres a second
+;   (clear DRAPE)                      the drape seen through as glass: what is under it
+;                                      tinted by its texture, the light on it a sheen
 ;   (along s DRAPE)                    the drape's texture laid along its rows as they go,
 ;                                      from s metres, not from above: a flow keeps to its bends
 ;   (strip-light [x y z])              a light strip along z, its face at y
@@ -211,6 +238,29 @@
 ;                                      decal is, bright as its own light and lighting what
 ;                                      is before it in its colours
 ;   (playing AD)                       an advertisement lit only while the level's loop plays
+;   (switched AD)                      ..or a screen lit only while it is on, a tap turning it
+;                                      on or off; off, its feed shot no more
+;   (feed [TEXTURE ..] AD)             an advertisement showing what the eye saw the frame
+;                                      before, as a security camera's monitor: its gain its
+;                                      own, scanned, framed by the textures a second each in turn,
+;                                      seen through their holes. its texture, one no other
+;                                      surface wears, until the first frame, and the colour it
+;                                      lights in
+;   (camera [x y z] bearing pitch FEED)  the feed seen from x y z, not by the eye: a camera
+;                                      standing there, its picture shot a few times a second
+;                                      while the feed is in view
+;   (missing [x y z] bearing pitch FEED)  a camera's feed, seen from there instead while a
+;                                      plush lies down a tree's shadow's hole
+;   (watch [x y z] radius [near far] cone FEED)  ..or from somewhere near to far from x y
+;                                      z, within cone degrees of straight up or down through
+;                                      it, looking at it, a ball of radius there a sixth to a
+;                                      half of the picture high; somewhere else after each card
+;   (cards [TEXTURE ..] every hold FEED)  every seconds or so a burst of snow, then a card
+;                                      held hold seconds, the cards in turn, snow, and back
+;   (stamp [x y] size FONT (rgb r g b) FEED)  the local time on a feed's picture as hh:mm:ss,
+;                                      its top left at texel x y: FONT a tablet of each character's
+;                                      code to its dots three by five, "1" lit, rows top
+;                                      first, each dot size texels square
 ;   (fence [[x y z] ..] height TEXTURE)  a wrought iron fence through the points, each the
 ;                                      foot of a post, two rails between and pickets on them,
 ;                                      spiked; in a body's way below its top
@@ -246,6 +296,10 @@
 ;                                      standing for theirs
 ;   (stammer LIGHT) (buzz LIGHT) (breathe LIGHT) (blink LIGHT)  a light failing, buzzing,
 ;                                      breathing, or flashing as a mast's beacon does
+;   (given WHEN change LIGHT)          the light as change makes it while WHEN holds, else as
+;                                      it is: (given 'loop-gone (dim 0) l). WHEN is 'loop,
+;                                      the loop playing, or 'loop-gone, it playing on all
+;                                      worn away; change sets how the light behaves
 ;   (beacon period on LIGHT)           a light flashing on for on seconds of every period
 ;   (dim k LIGHT)                      a light burning steady at k of its strength
 ;   (ripple period on delay LIGHT)     a beacon flashing delay seconds into its period, so a
@@ -269,12 +323,14 @@
 ;   (furnish KIND [x y z] bearing {PARAM v ..})  a piece of furniture, the middle of its foot
 ;                                      at x y z, its user facing the bearing: 'table 'desk
 ;                                      'chair 'stool 'bench 'bed 'shelf 'cabinet 'counter
-;                                      'crate 'carton 'stand 'sofa; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
+;                                      'crate 'carton 'stand 'sofa 'armchair 'sideboard 'tv
+;                                      'coatrack 'painting 'rug; 'w 'd 'h, 'low 'lip, 'top, 'legs 'corners
 ;                                      'panels 'trestle 'pedestal 'star or (), 'leg 'inset
 ;                                      'apron 'modesty 'seat 'back 'arms 'shelves 'drawers
 ;                                      'doors 'over 'slats, 'fill 'books or a MAKE given each
-;                                      'fill-w slot as line-up does, 'seed, and 'skin of
-;                                      'top 'frame 'body 'soft 'feet, each a texture, a skin
+;                                      'fill-w slot as line-up does, or a coatrack's 'coats,
+;                                      'seed, and 'skin of 'top 'frame 'body 'soft 'feet, a
+;                                      tv's 'screen and a painting's 'picture, each a texture, a skin
 ;                                      or a kind; 'feet a star's casters, the frame's unless said
 ;   (material KIND seed {PARAM v ..})  a texture of a kind, its parameters each a number,
 ;                                      [lo hi] thrown under seed, or a colour, and felt as
@@ -300,8 +356,8 @@
 ;   (mirror-x c PARTS) (mirror-z c PARTS)  the parts, and again reflected where x or z is c
 ;
 ; a word given what it does not take stops the level, saying what it takes.
-(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry shot room street void gravity surface pocket lift deck speaker heard sky ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape beyond hither flow along window lens mirage headstone grav ball plush smog twinkle ad spinner orb glow inward herald tether playing fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
-         across troffer unlit stammer buzz breathe blink beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
+(module (scenery level-of sourced dice pick seed-of ease smin smax fit lathe sweep scatter line-up material produce pile pile-skin wrapped rock hills ridges dunes terrace mound channel rise blend carve ground-of furnish plant start entry winded shot room street void gravity surface pocket lift deck speaker heard reach sky wisp brazier resonance sealed ambient skylight hum air solid box prism cut whole land door by-hand glazed dark tree vined burnt sheared sized shadow-hole train bin mattress wake-bed sleep-bed fall telescope book pencil rod decal drape clear beyond hither flow along window lens mirage headstone grav ball plush smog smog-hue dye atmosphere gradient twinkle ad feed camera missing watch cards stamp spinner orb glow inward herald tether playing switched fence wooden gate grave coarse neon strip-light bulb sconce flames poster sign
+         across troffer unlit stammer buzz breathe blink given beacon ripple dim texture feel laid skin textures repeat move turn mirror-x mirror-z rgb)
 (borrow '(view swatch))
 (:
  (num? v) (charm? v || gem? v)
@@ -328,6 +384,7 @@
  (start at deg pitch) (: u "(start [x y z] bearing pitch)" (part 'start [['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]))
  (entry nm at deg pitch) (: u "(entry NAME [x y z] bearing pitch)"
    (nom? nm ? (part 'entry [['name nm] ['at (P at u)] ['deg (N deg u)] ['pitch (N pitch u)]]) (no u nm)))
+ winded (part 'winded ())
  ; ..where another level is, and the way into it: a file beside this one, a name or ()
  (way-to u file nm) (? (!(string? file)) (no u file) (!(nom? nm || nm = ())) (no u nm) [['file file] ['entry nm]])
  (shot s w deg pitch) (: u "(shot seconds [x y z] bearing pitch), or (shot seconds (sky hour COVER) bearing pitch)"
@@ -353,14 +410,21 @@
  (speaker at) (part 'speaker [['at (P at "(speaker [x y z])")]])
  (heard lo hi ps) (: u "(heard [x y z] [x y z] PARTS)" a (P lo u) b (P hi u)
    (map (p \ kind? p ['speaker] ? (with (with p 'lo (lo2 a b)) 'hi (hi2 a b)) p) (flat ps)))
+ (reach m ps) (: u "(reach metres PARTS)"
+   (? (!(charm? m || gem? m) || m <= 0) (no u m) (map (p \ kind? p ['speaker] ? (with p 'far (1.0 * m)) p) (flat ps))))
  (sky hr cv) (: u "(sky hour COVER)" (? (!(charm? hr || gem? hr)) (no u hr) (!(elem cv ['clear 'partly 'mostly 'overcast])) (no u cv)
                                        (part 'sky [['hour (1.0 * hr)] ['cover cv]])))
  (smog k) (: u "(smog k)" ((charm? k || gem? k) && 0 <= k && k <= 1 ? (part 'smog [['k (1.0 * k)]]) (no u k)))
+ (smog-hue c) (: u "(smog-hue (rgb r g b))" (colour? c && any (x \ x > 0.0) c ? (part 'smog-hue [['c c]]) (no u c)))
+ (dye c) (: u "(dye (rgb r g b))" (colour? c && any (x \ x > 0.0) c ? (part 'dye [['c c]]) (no u c)))
+ (atmosphere a) (: u "(atmosphere [14 numbers])"
+   (two? a && #a = 14 && all (x \ (charm? x || gem? x) && 0 <= x) a && all (k \ 0 < a k) [0 1 2 3 5 6 11] && a 12 < 1 ? (part 'atmosphere [['a (map (x \ 1.0 * x) a)]]) (no u a)))
+ (gradient cs) (: u "(gradient [(rgb r g b) (rgb r g b) ..])" (two? cs && 1 < #cs && all colour? cs ? (part 'gradient [['cs cs]]) (no u cs)))
  (twinkle k) (: u "(twinkle k)" ((charm? k || gem? k) && 0 <= k ? (part 'twinkle [['k (1.0 * k)]]) (no u k)))
  (ambient c) (: u "(ambient (rgb r g b))" (colour? c ? (part 'ambient [['c c]]) (no u c)))
  (skylight c) (: u "(skylight (rgb r g b))" (colour? c ? (part 'skylight [['c c]]) (no u c)))
  (hum nm lo hi) (: u "(hum SOUND [x y z] [x y z])"
-   (elem nm ['fluorescent 'wind 'bells 'throb] ? (part 'hum [['sound nm] ['lo (P lo u)] ['hi (P hi u)]]) (no u nm)))
+   (elem nm ['fluorescent 'wind 'bells 'throb 'traffic 'musicbox] ? (part 'hum [['sound nm] ['lo (P lo u)] ['hi (P hi u)]]) (no u nm)))
  ; a brush's shape; air and solid make it a brush
  (box lo hi) (: u "(box [x y z] [x y z])" (part 'box [['lo (P lo u)] ['hi (P hi u)]]))
  (prism h ps) (: u "(prism height [[x y z] ..])"
@@ -379,6 +443,13 @@
  (grav lo hi dir) (: u "(grav [x y z] [x y z] DIR)" a (lo2 (P lo u) (P hi u)) b (hi2 (P lo u) (P hi u))
    (elem dir ['up 'down] ? [(room a [(b 0) (b 1 + grav-head) (b 2)]) (part 'grav [['lo a] ['hi b] ['dir dir]])] (no u dir)))
  (ball at) (: u "(ball [x y z])" (part 'ball [['at (P at u)]]))
+ (wisp at) (: u "(wisp [x y z])" (part 'wisp [['at (P at u)]]))
+ ; ..a brazier: a goblet turned, foot, stem and bowl
+ (brazier at t) (: u "(brazier [x y z] SKIN)" p (P at u)
+   [(lathe p [[0.34 0.0] [0.3 0.1] [0.13 0.2] [0.1 0.62] [0.18 0.72] [0.42 0.9] [0.46 1.0]] 12 t) (part 'brazier [['at p]])])
+ (resonance at n) (: u "(resonance [x y z] steps)"
+   (? (!(charm? n) || n < 2) (no u n) (part 'resonance [['at (P at u)] ['steps (int n)]])))
+ (sealed l) (kind? l ['lift] ? (with l 'seal 1) (no "(sealed LIFT)" l))
  (by-hand d) (kind? d ['door] ? (with d 'hand 1) (no "(by-hand (door ..))" d))
  (glazed t d) (: u "(glazed TEXTURE (door ..)) or (glazed TEXTURE (train ..))" (? (!(texture? t)) (no u t) (kind? d ['door 'car]) (with d 'glass t) (no u d)))
  (dark r) (kind? r ['room] && !(peep r 'open 0) ? (with r 'dark 1) (no "(dark (room ..))" r))
@@ -393,11 +464,13 @@
    (? (!(kind? t ['tree])) (no u t) (!(num? k && k > 0)) (no u k) (!(num? g && g > 0)) (no u g)
       (with t 'size [(f k) (f g)])))
  (shadow-hole t) (kind? t ['tree] ? (with t 'hole 1) (no "(shadow-hole (tree ..))" t))
- (plush at deg file) (: u "(plush [x y z] bearing FILE)"
-   (string? file ? (part 'plush [['at (P at u)] ['deg (N deg u)] ['file file]]) (no u file)))
+ (plush at deg toy) (: u "(plush [x y z] bearing TOY)"
+   (? (nom? toy) (part 'plush [['at (P at u)] ['deg (N deg u)] ['toy toy]])
+      (string? toy) (part 'plush [['at (P at u)] ['deg (N deg u)] ['file toy]])
+      (no u toy)))
  ; ..a window: its opening, and its pane
  (window lo hi t) (: u "(window [x y z] [x y z] TEXTURE)" a (P lo u) b (P hi u)
-   (texture? t ? [(air (box a b)) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
+   (texture? t ? [(with (air (box a b)) 'opening 1) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
  (mirage w) (: u "(mirage (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
    (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'mirage 1) p) (flat [w])) (no u w)))
  (lens at w) (: u "(lens [x y z] (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
@@ -406,14 +479,18 @@
  (decal at n up w h t) (: u "(decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)" a (P at u) nn (P n u) uu (P up u)
    (texture? t ? (part 'decal [['at a] ['np (map (k \ a k + nn k) ^3)] ['up (map (k \ a k + uu k) ^3)] ['w (N w u)] ['h (N h u)] ['tex t]])
       (no u t)))
- (drape t rs) (: u "(drape TEXTURE [[[x y z] ..] ..])" (pg q) (q @ () () (P q u))
+ ; ..a point of a sheet [x y z], or [x y z s] its texture's colour s times over there
+ (shaded? q) (two? q && #q = 4 && num? (q 3) && pt? (take 3 q))
+ (shade-of rs) (any (r \ any shaded? r) rs ? [['shade (map (map (q \ shaded? q ? 1.0 * q 3 1.0)) rs)]] ())
+ (drape t rs) (: u "(drape TEXTURE [[[x y z] ..] ..])" (pg q) (q @ () () (P (shaded? q ? (take 3 q) q) u))
    (? (!(texture? t)) (no u t) (!(two? rs && all two? rs && all (r \ #r = #<rs) rs)) (no u rs)
-      (part 'drape [['tex t] ['rows (map (map pg) rs)]])))
+      (part 'drape ([['tex t] ['rows (map (map pg) rs)]] + shade-of rs))))
  (land t rs) (: u "(land TEXTURE [[[x y z] ..] ..])"
-   (? (!(texture? t)) (no u t) (!(two? rs && #rs > 1 && all two? rs && all (r \ #r = #<rs && all pt? r) rs && #<rs > 1)) (no u rs)
-      (part 'land [['air 0] ['tex t] ['skin {'floor t}] ['rows (map (map (map f)) rs)]])))
+   (? (!(texture? t)) (no u t) (!(two? rs && #rs > 1 && all two? rs && all (r \ #r = #<rs && all (q \ pt? q || shaded? q) r) rs && #<rs > 1)) (no u rs)
+      (part 'land ([['air 0] ['tex t] ['skin {'floor t}] ['rows (map (map (q \ map f (take 3 q))) rs)]] + shade-of rs))))
  (beyond d) (kind? d ['drape] ? (with d 'seen 1) (no "(beyond DRAPE)" d))
  (hither d) (kind? d ['drape] ? (with d 'seen 2) (no "(hither DRAPE)" d))
+ (clear d) (kind? d ['drape] ? (with d 'clear 1) (no "(clear DRAPE)" d))
  (flow v d) (: u "(flow [du dv] DRAPE)"
    (two? v && #v = 2 && all num? v && kind? d ['drape] ? (with d 'flow (map f v)) (no u (kind? d ['drape] ? v d))))
  (along s d) (: u "(along s DRAPE)" (num? s && kind? d ['drape] ? (with d 'along (f s)) (no u (num? s ? d s))))
@@ -653,6 +730,24 @@
       (part 'orb [['at (P at u)] ['r (N r u)] ['tex t] ['turns (N turns u)]])))
  (tether h l) (? (!(num? h) || h <= 0) (no "(tether h LIFT)" h) (kind? l ['lift]) (with l 'tether (1.0 * h)) (no "(tether h LIFT)" l))
  (playing d) (kind? d ['ad] ? (with d 'music 1) (no "(playing AD)" d))
+ (switched d) (kind? d ['ad] ? (with d 'switch 1) (no "(switched AD)" d))
+ (feed ts d) (: u "(feed [TEXTURE ..] AD)"
+   (? (!(two? ts) || !(all texture? ts)) (no u ts) (kind? d ['ad]) (with d 'feed ts) (no u d)))
+ (camera at deg pitch d) (: u "(camera [x y z] bearing pitch FEED)"
+   (? (kind? d ['ad] && two? (peep d 'feed ())) (with d 'cam [(P at u) (N deg u) (N pitch u)]) (no u d)))
+ (missing at deg pitch d) (: u "(missing [x y z] bearing pitch FEED)"
+   (? (kind? d ['ad] && two? (peep d 'cam ())) (with d 'missing [(P at u) (N deg u) (N pitch u)]) (no u d)))
+ (watch at r nf cone d) (: u "(watch [x y z] radius [near far] cone FEED)"
+   (? (!(num? r) || r <= 0) (no u r) (!(two? nf) || #nf != 2 || !(all num? nf) || nf 0 <= r || nf 1 < nf 0) (no u nf)
+      (!(num? cone) || cone <= 0 || cone > 90) (no u cone)
+      (kind? d ['ad] && two? (peep d 'feed ())) (with d 'watch [(P at u) (f r) (f (nf 0)) (f (nf 1)) (f cone)]) (no u d)))
+ (cards ts every hold d) (: u "(cards [TEXTURE ..] every hold FEED)"
+   (? (!(two? ts) || !(all texture? ts)) (no u ts) (!(num? every) || every <= 0) (no u every) (!(num? hold) || hold <= 0) (no u hold)
+      (kind? d ['ad] && two? (peep d 'feed ())) (with d 'cards [ts (f every) (f hold)]) (no u d)))
+ (stamp at s font c d) (: u "(stamp [x y] size FONT (rgb r g b) FEED)"
+   (? (!(two? at) || #at != 2 || !(all charm? at)) (no u at) (!(charm? s) || s < 1) (no u s)
+      (!(tablet? font)) (no u font) (!(colour? c)) (no u c)
+      (kind? d ['ad] && two? (peep d 'feed ())) (with d 'stamp [at s font c]) (no u d)))
  (fence ps h t) (: u "(fence [[x y z] ..] height TEXTURE)"
    (? (!(two? ps) || #ps < 2 || !(all pt? ps)) (no u ps) (!(num? h) || h <= 0) (no u h) (!(texture? t)) (no u t)
       (part 'fence [['pts (map (map f) ps)] ['h (f h)] ['tex t]])))
@@ -689,6 +784,10 @@
  (buzz l) (how 'buzz l)
  (breathe l) (how 'breathe l)
  (blink l) (how 'blink l)
+ (how-of l) (: p (lit? l ? l <(filter lit? l)) (p 'how))
+ (given c g l) (: u "(given WHEN change LIGHT)"
+   (? (!(elem c ['loop 'loop-gone])) (no u c) (!(lit? l) && (tablet? l || atom? l || !(any lit? l))) (no u l)
+      (how-is ['given c (how-of (g l)) (how-of l)] l)))
  (dim k l) (: u "(dim k LIGHT)" (? (!(num? k) || k < 0) (no u k) (how-is ['dim (f k)] l)))
  (ripple per on d l) (: u "(ripple period seconds-on delay LIGHT)"
    (? (!(num? per) || per <= 0) (no u per) (!(num? on) || on <= 0 || per <= on) (no u on) (!(num? d)) (no u d)
@@ -761,6 +860,10 @@
                                     ['patches 3 0.2 (sh 0.8)]] 'soft])]
    'card [{'colour (rgb 0.62 0.47 0.3) 'tape (rgb 0.7 0.58 0.4) 'metres 0.5}
           (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 2 0.06) ['patches 4 0.15 (sh 0.9)] ['rows 14 18 (g 'tape)]] 'soft])]
+   'screen [{'colour (rgb 0.025 0.03 0.035) 'metres 1.0}
+            (g \ [16 16 (g 'metres) [['fill (g 'colour)] '(noise 2 0.03)] 'hard])]
+   'canvas [{'colour (rgb 0.86 0.83 0.76) 'metres 0.5}
+            (g \ [32 32 (g 'metres) [['fill (g 'colour)] '(noise 1 0.05) '(noise 6 1 0.04)] 'soft])]
    'bark [{'colour (rgb 0.3 0.29 0.27) 'streak 0.3 'marks 0.0 'metres 1.0}
           (g \ [32 64 (g 'metres) [['fill (g 'colour)] ['noise 1 8 (g 'streak)] '(noise 3 0.1) ['patches 4 0.25 (sh 0.85)] ['noise 6 1 (g 'marks)]] 'wood])]}
  (material k s o) (: u "(material KIND seed {PARAM v ..})"
@@ -861,7 +964,13 @@
    'crate {'w 0.5 'd 0.35 'h 0.3 'top 0.015 'slats 0 'skin {'frame 'wood}}
    'carton {'w 0.5 'd 0.4 'h 0.35 'skin {'body 'card}}
    'stand {'w 1.2 'd 0.9 'h 1.02 'low 0.72 'lip 0.05 'skin {'frame 'wood 'body 'slats}}
-   'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}}
+   'sofa {'w 1.9 'd 0.9 'h 0.85 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}
+   'armchair {'w 0.95 'd 0.9 'h 0.95 'seat 0.42 'arms 1 'skin {'soft 'cloth 'frame 'wood}}
+   'sideboard {'w 1.6 'd 0.45 'h 0.8 'top 0.03 'low 0.14 'leg 0.025 'drawers 0 'doors 3 'skin {'body 'wood 'top 'plank 'frame 'wood}}
+   'tv {'w 1.1 'd 0.06 'h 0.74 'low 0.08 'skin {'body 'metal 'screen 'screen}}
+   'coatrack {'w 0.5 'd 0.5 'h 1.8 'leg 0.022 'fill () 'skin {'frame 'wood 'soft 'cloth}}
+   'painting {'w 1.0 'd 0.03 'h 0.75 'low 1.2 'skin {'frame 'wood 'picture 'canvas}}
+   'rug {'w 2.0 'd 3.0 'skin {'soft 'carpet}}}
  furnish-keys ['w 'd 'h 'top 'legs 'leg 'inset 'apron 'modesty 'seat 'back 'arms 'shelves 'fill 'fill-w 'drawers 'doors 'over 'slats 'low 'lip 'seed 'skin]
  book-colours [(rgb 0.36 0.09 0.07) (rgb 0.1 0.2 0.36) (rgb 0.14 0.3 0.16) (rgb 0.55 0.45 0.2) (rgb 0.2 0.2 0.22) (rgb 0.6 0.3 0.12)]
  (furnish k at deg st) (: u "(furnish KIND [x y z] bearing {PARAM v ..})" o (P at u) dd (N deg u)
@@ -901,8 +1010,18 @@
          ; ..books under a gap gp: each its own height, depth and cover
          (books gp bk) (\ a dg e w (: bh (gp * pick e 'h [0.6 0.9]) bd (2.0 * D * pick e 'd [0.6 0.85]) c (bk (int (#bk * dice e 'c)))
                                      (fit c (box [(a 0 - 0.5 * w) (a 1) (o 2 + D - bd)] [(a 0 + 0.5 * w - 0.002) (a 1 + bh) (o 2 + D)]))))
+         ; ..a picture laid on a face toward the user, its middle at x y, the role r's texture
+         (tex-of r) (tex-by (peep sks r (peep sks 'frame 'wood)))
+         ; ..a box bevelled e round its top and its upright corners, as a cushion is
+         (pillow x0 y0 z0 x1 y1 z1 e r) (: (at x y z) (v+ o [x y z])
+           cs [[(at x0 (y1 - e) z0) (at x1 (y1 - e) z0) (at x0 y1 (z0 + e))] [(at x0 (y1 - e) z1) (at x1 (y1 - e) z1) (at x0 y1 (z1 - e))]
+               [(at x0 (y1 - e) z0) (at x0 (y1 - e) z1) (at (x0 + e) y1 z0)] [(at x1 (y1 - e) z0) (at x1 (y1 - e) z1) (at (x1 - e) y1 z0)]
+               [(at (x0 + e) y0 z0) (at (x0 + e) y1 z0) (at x0 y0 (z0 + e))] [(at (x1 - e) y0 z0) (at (x1 - e) y1 z0) (at x1 y0 (z0 + e))]
+               [(at (x0 + e) y0 z1) (at (x0 + e) y1 z1) (at x0 y0 (z1 - e))] [(at (x1 - e) y0 z1) (at (x1 - e) y1 z1) (at x1 y0 (z1 - e))]]
+           (whole (foldl (\ b c (cut (c 0) (c 1) (c 2) b)) (skin (role r) (solid (box (at x0 y0 z0) (at x1 y1 z1)))) cs)))
+         (face x y w h r) (decal [(o 0 + x) (o 1 + y) (o 2 - D - 0.003)] [0.0 0.0 -1.0] [0.0 1.0 0.0] w h (tex-by (peep sks r 'canvas)))
          parts
-          (k @
+          ((k = 'armchair ? 'sofa k) @
            'chair (: S (g 'seat) [(bx (0.0 - W) (S - T) (0.0 - D) W S D 'soft) (legs (S - T))
                                   (g 'back > 0.0 ? [(bx (0.0 - W) S (0.0 - D) W H (0.06 - D) 'soft)] ())
                                   (g 'arms > 0.0 ? (map (sx \ bx (sx * W - 0.03) (S + 0.2) (0.0 - D) (sx * W + 0.03) (S + 0.24) (0.6 * D) 'frame) [-1 1]) ())])
@@ -935,13 +1054,47 @@
                      (rim (0.0 - W - e) (e - W)) (rim (W - e) (W + e))
                      (bx (0.0 - W - e) (lo - 0.09) (0.0 - D - e) (W + e) (lo + lp) (e - D) 'frame)
                      (bx (0.0 - W - e) (H - 0.09) (D - e) (W + e) (H + lp) (D + e) 'frame)])
-           'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.18 0.0)
+           ; ..a sofa: short feet, a body, cushions side by side on it and against its back, each
+           ; bevelled round its top and corners, and its arms rolled
+           'sofa (: S (g 'seat) aw (g 'arms > 0.0 ? 0.17 0.0) sw (2.0 * (W - aw)) n (max 1 (int (sw / 0.72 + 0.5))) cw (sw / n)
+                   (rx i) (aw - W + cw * i)
                    [(map (c \ bx (c 0 * (W - 0.06) - 0.03) 0.0 (c 1 * (D - 0.06) - 0.03) (c 0 * (W - 0.06) + 0.03) 0.1 (c 1 * (D - 0.06) + 0.03) 'frame)
                          [[-1 -1] [1 -1] [-1 1] [1 1]])
-                    (bx (0.0 - W) 0.1 (0.0 - D) W (S - 0.12) D 'soft) (bx (aw - W) (S - 0.12) (0.22 - D) (W - aw) S D 'soft)
-                    (bx (0.0 - W) (S - 0.12) (0.0 - D) W H (0.22 - D) 'soft)
-                    (aw > 0.0 ? [(bx (0.0 - W) (S - 0.12) (0.22 - D) (aw - W) (S + 0.2) D 'soft)
-                                 (bx (W - aw) (S - 0.12) (0.22 - D) W (S + 0.2) D 'soft)] ())])
+                    (pillow (0.0 - W) 0.1 (0.0 - D) W (S - 0.12) D 0.03 'soft)
+                    (pillow (0.0 - W) (S - 0.13) (0.0 - D) W (H - 0.1) (0.14 - D) 0.06 'soft)
+                    (map (i \ pillow (rx i + 0.008) (S - 0.13) (0.16 - D) (rx (i + 1) - 0.008) (S + 0.03) (D - 0.01) 0.05 'soft) ^n)
+                    (map (i \ pillow (rx i + 0.01) (S + 0.02) (0.1 - D) (rx (i + 1) - 0.01) (H - 0.02) (0.3 - D) 0.07 'soft) ^n)
+                    (aw > 0.0 ? (map (sx \ (: x0 (sx < 0 ? (0.0 - W) (W - aw)) x1 (x0 + aw) xm (0.5 * (x0 + x1))
+                                            [(pillow x0 0.1 (0.0 - D) x1 (S + 0.08) D 0.03 'soft)
+                                             (rod (v+ o [xm (S + 0.1) (0.02 - D)]) (v+ o [xm (S + 0.1) D]) (0.5 * aw + 0.015) 10 (tex-of 'soft))]))
+                                     [-1 1]) ())])
+           ; ..a rug laid on the floor, a hair over it
+           'rug [(drape (tex-of 'soft) [[(v+ o [(0.0 - W) 0.008 (0.0 - D)]) (v+ o [W 0.008 (0.0 - D)])] [(v+ o [(0.0 - W) 0.008 D]) (v+ o [W 0.008 D])]])]
+           ; ..a sideboard: short legs under a body of doors or drawers, its top over them
+           'sideboard (: lo (g 'low) y (H - T)
+                        [(map (c \ post (c 0 * (W - 0.05)) (c 1 * (D - 0.05)) lo) [[-1 -1] [1 -1] [-1 1] [1 1]])
+                         (bx (0.0 - W) lo (0.0 - D) W y D 'body) (fronts lo y)
+                         (bx (-0.01 - W) y (-0.01 - D) (W + 0.01) H D 'top)])
+           ; ..a television: a foot, a neck up to its panel low over it, the screen across the panel's front
+           'tv (: lo (g 'low) ph (H - lo)
+                 [(bx -0.2 0.0 -0.1 0.2 0.015 0.1 'body) (bx -0.03 0.015 -0.015 0.03 (lo + 0.1) 0.015 'body)
+                  (bx (0.0 - W) lo (0.0 - D) W H D 'body) (face 0.0 (lo + 0.5 * ph) (2.0 * W - 0.05) (ph - 0.05) 'screen)])
+           ; ..a coat rack: crossed feet, a pole, pegs four ways at the top and four between lower
+           ; down, and with 'fill 'coats a coat hung from one
+           'coatrack (: L2 (2.0 * L) (peg dx dz y) (bx (min 0.0 (dx * 0.16) - 0.012) (y - 0.012) (min 0.0 (dz * 0.16) - 0.012)
+                                                     (max 0.0 (dx * 0.16) + 0.012) (y + 0.012) (max 0.0 (dz * 0.16) + 0.012) 'frame)
+                       [(bx (0.0 - W) 0.0 -0.025 W 0.04 0.025 'frame) (bx -0.025 0.0 (0.0 - D) 0.025 0.04 D 'frame)
+                        (bx (0.0 - L2) 0.0 (0.0 - L2) L2 H L2 'frame) (bx (-1.5 * L2) (H - 0.03) (-1.5 * L2) (1.5 * L2) (H + 0.03) (1.5 * L2) 'frame)
+                        (map (q \ peg (q 0) (q 1) (H - 0.12)) [[1 0] [-1 0] [0 1] [0 -1]])
+                        (map (q \ peg (q 0) (q 1) (H - 0.4)) [[0.7 0.7] [-0.7 0.7] [0.7 -0.7] [-0.7 -0.7]])
+                        (g 'fill = 'coats ? [(lathe (v+ o [0.21 (H - 1.12) 0.0]) [[0.17 0.0] [0.16 0.3] [0.13 0.62] [0.15 0.86] [0.11 0.95] [0.035 1.0]] 12 (role 'soft))] ())])
+           ; ..a painting hung low up its wall, the back of it at +z against it: a frame round the
+           ; picture on its front
+           'painting (: lo (g 'low) f 0.045
+                       [(bx (0.0 - W) lo (0.0 - D) W (lo + H) D 'frame)
+                        (bx (-0.01 - W) lo (-0.012 - D) W (lo + f) (0.0 - D) 'frame) (bx (0.0 - W) (lo + H - f) (-0.012 - D) (W + 0.01) (lo + H) (0.0 - D) 'frame)
+                        (bx (-0.01 - W) lo (-0.012 - D) (f - W) (lo + H) (0.0 - D) 'frame) (bx (W - f) lo (-0.012 - D) (W + 0.01) (lo + H) (0.0 - D) 'frame)
+                        (face 0.0 (lo + 0.5 * H) (2.0 * (W - f)) (H - 2.0 * f) 'picture)])
            ; ..a table, desk, stool or bench: a top on legs, an apron under it, a panel m high at the back
            (: y (H - T) a (g 'apron) m (g 'modesty)
              [(bx (0.0 - W) y (0.0 - D) W H D 'top) (legs y)
@@ -1191,12 +1344,12 @@
  (shape-of b) (? (b 'kind = 'prism) (: y0 (b 'pts 0 1) {'prism [y0 (y0 + b 'h) (map (p \ [(p 0) (p 2)]) (b 'pts))]})
                  {'box [(lo2 (b 'lo) (b 'hi)) (hi2 (b 'lo) (b 'hi))]})
  ; textures named: the defaults by their place, every other by its number
- (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'plush 'tree 'sky 'smog 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'sleep 'fall 'herald])) l)
+ (level-of name ps) (: l (flat ps) bad (filter (p \ !(tablet? p) || !(brush? p || elem (p 'kind) ['start 'shot 'door 'car 'strip 'bulb 'sconce 'flame 'poster 'sign 'decal 'drape 'pane 'grav 'ball 'wisp 'brazier 'resonance 'plush 'tree 'sky 'smog 'smog-hue 'dye 'atmosphere 'gradient 'twinkle 'gravity 'surface 'pocket 'lift 'deck 'speaker 'ambient 'skylight 'hum 'ad 'spin 'orb 'fence 'gate 'grave 'textures 'entry 'winded 'sleep 'fall 'herald])) l)
    (of k) (filter (p \ p 'kind = k) l)
    bs (filter brush? l)
    dflt (foldl (\ t p (foldl (\ t k (pin t k (p 'set k))) t (keys (p 'set)))) {} (of 'textures))
    used (foldl (\ a t (elem t a ? a (a + [t]))) () (catmap (b \ map (bare * b 'skin) (sort (keys (b 'skin)))) bs
-                                                     + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad + of 'tree)
+                                                     + map (d \ d 'tex) (of 'decal + of 'drape + of 'pane + of 'ad + of 'tree) + catmap (d \ peep d 'feed () + (peep d 'cards () @ () () c (c 0))) (of 'ad)
                                                      + map (d \ d 'glass) (filter (d \ peep d 'glass () != ()) (of 'door + of 'car))
                                                      + catmap (s \ [(s 't1) (s 't2)]) (of 'spin) + map (o \ o 'tex) (of 'orb + of 'lift + of 'gate + of 'fence + of 'herald)))
    (tname t) (foldl (\ a i (used i = t ? i a)) () ^#used)
@@ -1206,11 +1359,13 @@
    (? (!(string? name)) (no "(level NAME PART ..)" name)
       (two? bad) (scare 'level ("not a part: " + show <bad))
       (#(of 'pocket) > 1 || (two? (of 'pocket) && atom? (of 'surface))) (scare 'level "one pocket to a level, and that on a surface")
+      (#(of 'resonance) > 1 || (two? (of 'resonance) && atom? (of 'surface))) (scare 'level "one resonance to a level, and that on a surface")
       {'kind 'level 'name name
        'start (of 'start @ () {'at [0.0 0.0] 'y 0.0 'deg 0.0 'pitch 0.0}
                           s (: a (<s 'at) {'at [(a 0) (a 2)] 'y (a 1) 'deg (<s 'deg) 'pitch (<s 'pitch)}))
        'entries (map (e \ (: a (e 'at) {'name (e 'name) 'at [(a 0) (a 2)] 'y (a 1) 'deg (e 'deg) 'pitch (e 'pitch) 'bed (peep e 'bed 0) 'foot a}))
                      (of 'entry))
+       'winded (two? (of 'winded) ? 1 0)
        'sleeps (map (q \ {'at (q 'at) 'deg (q 'deg) 'file (q 'file) 'entry (q 'entry)}) (of 'sleep))
        'falls (map (q \ {'y (q 'y) 'file (q 'file) 'entry (q 'entry)}) (of 'fall))
        'heralds (map (h \ {'at (h 'at) 'size (h 'size) 'reach (h 'reach) 'tex (tname (h 'tex)) 'file (h 'file) 'entry (h 'entry)}) (of 'herald))
@@ -1220,7 +1375,7 @@
                    (of 'shot))
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
        'brushes (map (b \ b 'kind = 'land ? {'air 0 'land (b 'rows) 'skin (skin-of b) 'src (b 'src)}
-                         {'air (b 'kind @ 'room 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'src (b 'src) 'xf (peep b 'xf xf-id)}) bs)
+                         {'air (b 'kind @ 'room 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'opening (peep b 'opening 0) 'src (b 'src) 'xf (peep b 'xf xf-id)}) bs)
        'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0) (d 'glass @ () () g (tname g))])) (of 'door))
        'darks (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'dark 0) (of 'room)))
        'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id) 'size (m 'size)
@@ -1237,24 +1392,28 @@
        'posters (map (p \ (: a (p 'at) {'at [(a 0) (a 2) (a 1) (p 'w) (p 'h)] 'file (p 'file)})) (of 'poster))
        'gravs (map (g \ {'lo (g 'lo) 'hi (g 'hi) 'dir (g 'dir)}) (of 'grav))
        'balls (map (b \ b 'at) (of 'ball))
-       'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'file (p 'file) 'src (p 'src) 'xf (peep p 'xf xf-id)}) (of 'plush))
+       'wisps (map (b \ b 'at) (of 'wisp))
+       'braziers (map (b \ b 'at) (of 'brazier))
+       'resonance (of 'resonance @ () () r {'at (<r 'at) 'steps (<r 'steps)})
+       'plushes (map (p \ {'at (p 'at) 'deg (p 'deg) 'toy (p 'toy) 'file (p 'file) 'src (p 'src) 'xf (peep p 'xf xf-id)}) (of 'plush))
        'voids (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'sheer 0) (of 'room)))
        'gravity (of 'gravity @ () () g (<g 'by))
        'surface (of 'surface @ () () s {'shape (<s 'shape) 'lx (<s 'lx) 'lz (<s 'lz)})
        'pocket (of 'pocket @ () () p {'at (<p 'at) 'd (<p 'd)})
-       'lifts (map (c \ {'at (c 'at) 'w (c 'w) 'rise (c 'rise) 'tether (peep c 'tether 0.0) 'tex (tname (c 'tex))}) (of 'lift))
+       'lifts (map (c \ {'at (c 'at) 'w (c 'w) 'rise (c 'rise) 'tether (peep c 'tether 0.0) 'seal (peep c 'seal 0) 'tex (tname (c 'tex))}) (of 'lift))
        'decks (map (d \ [(lo2 (d 'lo) (d 'hi)) (hi2 (d 'lo) (d 'hi))]) (of 'deck))
        'fences (map (q \ {'pts (q 'pts) 'h (q 'h) 'tex (tname (q 'tex)) 'wood (peep q 'wood 0)}) (of 'fence))
        'gates (map (g \ {'a (g 'at) 'b (g 'np) 'h (g 'h) 'swing (g 'swing) 'tex (tname (g 'tex))}) (of 'gate))
        'graves (map (g \ {'at (g 'at) 'deg (g 'deg) 'name (g 'name)}) (of 'grave))
-       'speakers (map (q \ {'at (q 'at) 'lo (q 'lo) 'hi (q 'hi)}) (of 'speaker))
+       'speakers (map (q \ {'at (q 'at) 'lo (q 'lo) 'hi (q 'hi) 'far (peep q 'far ())}) (of 'speaker))
        'ambient (of 'ambient @ () [0.0 0.0 0.0] a (<a 'c))
        'skylight (of 'skylight @ () [0.0 0.0 0.0] a (<a 'c))
-       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
+       'sky (of 'sky @ () () s {'hour (<s 'hour) 'cover (<s 'cover) 'smog (of 'smog @ () 0.0 m (<m 'k)) 'smog-hue (of 'smog-hue @ () () m (<m 'c)) 'dye (of 'dye @ () () m (<m 'c)) 'air (of 'atmosphere @ () () m (<m 'a)) 'sky (of 'gradient @ () () m (<m 'cs)) 'twinkle (of 'twinkle @ () 1.0 m (<m 'k))})
        'panes (map (p \ {'lo (p 'lo) 'hi (p 'hi) 'tex (tname (p 'tex)) 'mirage (peep p 'mirage 0) 'lens (p 'lens)}) (of 'pane))
        'decals (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex))}) (of 'decal))
-       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'land (d 'kind @ 'land 1 0)}) (of 'drape + of 'land))
-       'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0)}) (of 'ad))
+       'drapes (map (d \ {'rows (d 'rows) 'tex (tname (d 'tex)) 'seen (peep d 'seen 0) 'flow (peep d 'flow [0.0 0.0]) 'along (d 'along) 'wrap (peep d 'wrap 0) 'clear (peep d 'clear 0) 'land (d 'kind @ 'land 1 0) 'shade (peep d 'shade ())}) (of 'drape + of 'land))
+       'ads (map (d \ {'at (d 'at) 'np (d 'np) 'up (d 'up) 'w (d 'w) 'h (d 'h) 'tex (tname (d 'tex)) 'music (peep d 'music 0) 'switch (peep d 'switch 0) 'feed (map tname (peep d 'feed ())) 'stamp (peep d 'stamp ())
+                       'cam (peep d 'cam ()) 'missing (peep d 'missing ()) 'watch (peep d 'watch ()) 'cards (peep d 'cards () @ () () c [(map tname (c 0)) (c 1) (c 2)])}) (of 'ad))
        'spins (map (s \ {'at (s 'at) 'w (s 'w) 'h (s 'h) 't1 (tname (s 't1)) 't2 (tname (s 't2))}) (of 'spin))
        'orbs (map (o \ {'at (o 'at) 'r (o 'r) 'tex (tname (o 'tex)) 'turns (o 'turns) 'coarse (peep o 'coarse 1) 'glow (peep o 'glow 0) 'in (peep o 'in 0) 'src (o 'src) 'xf (peep o 'xf xf-id)}) (of 'orb))
        'signs (map (s \ (: a (s 'at) {'at [(a 0) (a 2) (a 1) (s 'h)] 'n (s 'n) 'text (s 'text) 'c (s 'c) 'how (s 'how) 'unlit (peep s 'unlit 0)})) (of 'sign))

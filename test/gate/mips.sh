@@ -137,4 +137,32 @@ awk -F'\t' 'NR == FNR { if ($2 ~ /^rdhwr/) skip[$1] = 1; next } !($1 in skip)' "
 n=$(wc -l < "$d/ours.cmp" | tr -d ' ')
 [ "$n" -gt 2000 ] || fail "only $n rows read back"
 cmp -s "$d/llvm.cmp" "$d/ours.cmp" || { diff "$d/llvm.cmp" "$d/ours.cmp" | head -20; fail "decode.l reads the corpus otherwise than llvm-objdump"; }
-echo "$name: $(sed -n 's/^mipsrun: //p' "$d/law.log"), every answer as love's own on qemu-mips; two objects linked and run$lld$kr$rl; $(sed -n 's/^test\/holo\/mipscodec: //p' "$d/codec.log"), $n as llvm-objdump writes them"
+
+# linux's o32 syscall clobbers $1 $3 $8-$15 $24 $25 hi lo, which qemu-user keeps: past each syscall
+# in a hosted link (the door, the thread code), no read of one before a write, to the next branch's
+# delay slot. and main's thread pointer is set to 0 at start, since exec keeps the parent's
+clob() { awk -F'\t' '
+  function regs(s, a,   n, i, m) { n = 0; while (match(s, /\$[a-z0-9]+/)) { a[++n] = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH) } return n }
+  /^[0-9a-f]+ <.*>:$/ { arm = 0; next }
+  !/^ *[0-9a-f]+:/ { next }
+  { m = $2; o = $3; ra = ""; wa = ""
+    if (m == "syscall") { delete c; split("$1 $3 $8 $9 $10 $11 $12 $13 $14 $15 $24 $25 hi lo", t, " "); for (i in t) c[t[i]] = 1; arm = 1; ds = 0; syscalls++; next }
+    if (!arm) next
+    n = regs(o, r)
+    if (m ~ /^(sb|sh|sw|swl|swr|sc|b|beq|bne|beqz|bnez|blez|bgtz|bltz|bgez|j|jr|jalr|teq|tne|tge|tlt)$/ || m ~ /^(mult|multu|div|divu|madd|maddu|msub|msubu|mthi|mtlo)$/) first = 1
+    else first = 2
+    for (i = first; i <= n; i++) if (r[i] in c) { print $1 " " m " " o " reads " r[i] " the syscall clobbered"; bad++ }
+    if (m ~ /^(mfhi|mflo)$/ && ((m == "mfhi" ? "hi" : "lo") in c)) { print $1 " " m " reads the clobbered " (m == "mfhi" ? "hi" : "lo"); bad++ }
+    if (m ~ /^(mult|multu|div|divu)$/) { delete c["hi"]; delete c["lo"] }
+    if (first == 2 && n >= 1) delete c[r[1]]
+    if (ds) arm = 0
+    if (m ~ /^(b|beq|bne|beqz|bnez|blez|bgtz|bltz|bgez|j|jal|jr|jalr|bal)$/) ds = 1 }
+  END { print "syscalls " syscalls + 0; exit (bad > 0) }'; }
+printf '00400000 <a>:\n  400000:\tsyscall\n  400004:\tlw\t$16, 0x8($8)\n' | clob > "$d/clob.plant" && fail "the clobber law missed a planted read of t0 past a syscall"
+printf '00400000 <a>:\n  400000:\tsyscall\n  400004:\taddiu\t$8, $zero, 0x1\n  400008:\tlw\t$16, 0x0($8)\n' | clob > "$d/clob.plant" || fail "the clobber law refused a write before a read"
+$love mooncc -t mips -os linux -o "$d/tp.elf" test/holo/mipstp.c > "$d/tp.log" 2>&1 || { cat "$d/tp.log"; fail "mooncc could not link mipstp.c"; }
+llvm-objdump -d --no-show-raw-insn "$d/tp.elf" > "$d/tp.dis" || fail "llvm-objdump could not read mipstp's link"
+clob < "$d/tp.dis" > "$d/clob.txt" || { head -10 "$d/clob.txt"; fail "a register the o32 syscall clobbers is read past it"; }
+grep -q "	addiu	\$4, \$zero, 0x10bb\$" "$d/tp.dis" || fail "nothing in a hosted link sets the thread pointer (set_thread_area, 4283)"
+cs=$(sed -n 's/^syscalls //p' "$d/clob.txt")
+echo "$name: $(sed -n 's/^mipsrun: //p' "$d/law.log"), every answer as love's own on qemu-mips; two objects linked and run$lld$kr$rl; $(sed -n 's/^test\/holo\/mipscodec: //p' "$d/codec.log"), $n as llvm-objdump writes them; $cs syscalls in a hosted link read nothing they clobber"

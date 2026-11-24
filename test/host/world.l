@@ -3,6 +3,8 @@
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
 (borrow '(world mesh neon posix bough gesture))
+; a nest that is not there, so no scene is kept in the user's or read from it
+(setenv "LOVE_NEST" (cwd 0 + "/out/.world-nest-" + show (getpid 0)))
 (borrow 'view)     ; pi
 (borrow 'brush)
 (borrow 'vec)      ; mag
@@ -74,9 +76,9 @@
 ; the light: a failing strip mostly on; the door's lamps red while shut, green once open
 (: st (at 80 48) f (world-pens st) sc (st 'sc)
    up (world-pens (pins (at 80 48) 'ph 1.2 'pz 5.0))
-   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0) ^600)
+   ks (map (t \ world-ks sc (t / 10.0) [0.0] 0.0 {}) ^600)
    bad (map (k \ k 2) ks)
-   open (world-ks sc 0.0 [1.0] 0.0)
+   open (world-ks sc 0.0 [1.0] 0.0 {})
    east (world-pens (pins (at 80 48) 'th (pi / 2.0) 'pz 7.0 'px -0.6))
    (pink? c) ((c >> 16 & 255) > (c >> 8 & 255) + 40 && (c & 255) > (c >> 8 & 255))
    n #(sc 'lights)
@@ -175,7 +177,7 @@
    _ ((cite 'vi) 'vload edv ["(level \"t\"" "  (room [0 0 0] [4 3 4])" "  (start [2 0 2] 0 0))"] "t.l")
    edw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} ed (edit-new edw edv "")
    _ (edit-events ed [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17]])
-   edf (ed 'focus)
+   edf (ed 'lay 'ps 'focus)
    _ (edit-events ed [['press 1 80 80] ['release 1 80 80]])
    _ (edit-paint ed) edp (edw 'paper)
    (lit? x0 x1 y0 y1) (any (y \ any (x \ peep edp (4 * (y * 320 + x) + 1) 0 != 0) (drop x0 ^x1)) (drop y0 ^y1))
@@ -191,7 +193,7 @@
    tye (ty 'lay 'es)
    _ (edit-events ty [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 13] ['text "+"] ['up 13]])
  (test (tyt = 1) (tyt2 = 0) !(lit? 0 150 0 150) (tyv 'row = 1) (tye = 2) (ty 'lay 'es = 1)
-       (ty 'lay 'pw = 160) (ty 'st 'w = 160)))
+       (ty 'lay 'pw = 152) (ty 'st 'w = 152)))
 ; a drag on the scene, shift held so it runs across the wall faced: the form it took outlined,
 ; its own numbers moved as far, and the scene read again with it there; dragged back, as it was
 (: dgv ((cite 'vi) 'vi-open "")
@@ -243,12 +245,12 @@
  (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
        (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
        (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
-; a plush lies where it is put facing its bearing, a turn swinging that on, its model read
-; from its file and set on the floor, the ball it is taken for half its height; one whose file
+; a plush lies where it is put facing its bearing, a turn swinging that on, its model made
+; by name and set on the floor, the ball it is taken for half its height; one whose file
 ; will not read is a ball. a click takes it like a ball, held it looks back at the player,
 ; and thrown it lands upright and stops
 (: (pud t) (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) " + t + " (start [5 0 1.5] 0 0))"))
-   pua (pud "(plush [5 0 3] 180 \"mouse.glb\")") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 \"mouse.glb\"))")
+   pua (pud "(plush [5 0 3] 180 'mouse)") pub (pud "(turn 90 [5 3] (plush [5 0 3] 180 'mouse))")
    pus (world-new 80 50 pua "src/apps/lore/levels/") pm (pus 'sc 'plushes 0) pk (pm 'pk) pt (pk 'tris) pb (pus 'balls 0) py0 (pb 'p 1)
    pno (world-new 80 50 (pud "(plush [5 0 3] 0 \"none.glb\")") "test/lore/")
    plo (map (k \ amin (pk 'cols k)) ^3) phi (map (k \ amax (pk 'cols k)) ^3) r (pm 'r)
@@ -256,7 +258,7 @@
    _ (pgo 2) _ (pin pus 'ph (-38.0 * pi / 180.0)) _ (world-mouse pus 'press 1) _ (world-mouse pus 'release 1)
    _ (pgo 2) ph1 (pb 'held) phq (pb 'q) _ (pin pus 'ph 0.4) _ (world-mouse pus 'press 1) _ (pgo 4) _ (world-mouse pus 'release 1)
    _ (pgo 80) pq (pb 'q) pp (pb 'p)
- (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'file = "mouse.glb")
+ (test (pua 'plushes 0 'at = [5.0 0.0 3.0]) (pua 'plushes 0 'deg = 180.0) (pub 'plushes 0 'deg = 270.0) (pua 'plushes 0 'toy = 'mouse)
        (pb 'kind = 'plush) (0.05 < r) (r < 0.3) (py0 = r) (pb 'r = r) (1000 < pk 'n) (amax pt = pk 'n - 1) (amin pt = -1)
        (mag (plo 1 + r) < 1e-6) (mag (phi 1 - r) < 1e-6) (foldl max 0.0 (map abs [(plo 0) (phi 0) (plo 2) (phi 2)]) = pm 'w)
        (pno 'balls 0 'r = 0.12) (pno 'sc 'plushes 0 'r = 0.12)
@@ -342,13 +344,13 @@
    plw {'w 320 'h 160 'paper (cask (320 * 160 * 4))} pl (edit-new plw plv "")
    _ (edit-events pl [['down 29] ['down 17] ['text "w"] ['up 17] ['up 29] ['down 17] ['text "w"] ['up 17] ['down 15] ['up 15]])
    pp (pl 'plan) _ (pin pp 'k 8.0)
-   _ (edit-events pl [['down 42] ['press 1 96 96] ['move 144 64] ['release 1 144 64] ['up 42]])
+   _ (edit-events pl [['down 42] ['press 1 92 96] ['move 140 64] ['release 1 140 64] ['up 42]])
    pl1 (plv 'lines 3) ps (pl 'sel)
-   _ (edit-events pl [['press 1 144 80] ['move 152 80] ['release 1 152 80]])
+   _ (edit-events pl [['press 1 140 80] ['move 148 80] ['release 1 148 80]])
    pl2 (plv 'lines 3)
-   _ (edit-events pl [['press 1 120 80] ['move 136 80] ['release 1 136 80]])
+   _ (edit-events pl [['press 1 116 80] ['move 132 80] ['release 1 132 80]])
    pl3 (plv 'lines 3)
-   _ (edit-events pl [['press 1 112 80] ['move 120 80] ['release 1 120 80]])
+   _ (edit-events pl [['press 1 108 80] ['move 116 80] ['release 1 116 80]])
    pl4 (plv 'lines 3) _ (edit-paint pl) plp (plw 'paper)
    (pix x y) (peep plp (4 * (y * 320 + x) + 2) 0)
    _ (edit-events pl [['down 15] ['up 15]])
@@ -453,7 +455,9 @@
        (lids 12.0 = 0) (lids 3.0 > 0) (sky-up > 200) (roof-up = 0) (east > west)
        ; ..the air's stir under its stars: earth's unless said, 0 an airless sky's
        (sl 'sky 'twinkle = 1.0) (lv "(room [0 0 0] [1 1 1]) (sky 2 'clear) (twinkle 0)" 'sky 'twinkle = 0.0)
-       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")))
+       (has? (lv "(room [0 0 0] [1 1 1]) (twinkle -1)") "(twinkle k)")
+       ; ..rested at the start unless the level says winded
+       (sl 'winded = 0) (lv "(room [0 0 0] [1 1 1]) winded" 'winded = 1)))
 ; a car: its door opens at the start and stays open while any of the player is in; walls and the shut
 ; door stop a walk; out, it shuts, reopening for a step back; then it leaves, and the edge stops
 ; a walk; each change cried, the car drawn only while it stands, its sounds in range
@@ -594,6 +598,25 @@
        (tx sb >= 16777216) (tx sb < 2 * 16777216) (tx (world-new 8 8 dh "" 'sc) >= 2 * 16777216)
        (has? (world-read "(level \"t\" (room [0 0 0] [1 2 1]) (beyond 3))") "(beyond DRAPE)")
        (has? (world-read (sl + "(flow 1 " + sd + "))")) "(flow [du dv] DRAPE)")))
+;; ..with shift, back and to either side a sprint too, and a turn or a look the same as without
+(: gs (world-read "(: t (feel 'wood (texture 8 8 1 '((fill (rgb 1 1 1)))))) (level \"t\" (textures {'wall t 'floor t 'ceiling t 'door t}) (room [0 0 0] [6 3 400]) (start [3 0 200] 0 0))")
+   (went a) (: st (world-new 8 8 gs "") x0 (st 'px) z0 (st 'pz)
+     _ (each ^10 (_ \ (world-step st a, pin st 'dt (1.0 / 30.0), world-move st))) (sqrt (2 (st 'px - x0) + 2 (st 'pz - z0))))
+ (test (world-kb 65 = 'sprint-left) (world-kb 68 = 'sprint-right) (world-kb 83 = 'sprint-back) (world-kb 74 = 'sprint-back)
+       (world-kb 72 = world-kb 104) (world-kb 76 = world-kb 108) (world-kb 85 = world-kb 117) (world-kb 78 = world-kb 110)
+       (1.5 * went 'back < went 'sprint-back) (1.5 * went 'strafe-left < went 'sprint-left) (1.5 * went 'strafe-right < went 'sprint-right)))
+;; the sun's disc seen through glass whole, as bare it is: every pixel of it the one tinted
+;; colour, drawn here and on a gpu where there is one
+(: sg "(: t (texture 8 8 1 '((fill (grey 0.5))))) (level \"t\" (sky 12 'clear) (street [-60 0 -60] [60 40 60]) (start [0 0 0] 0 0) "
+   (sun-at x) (: st (world-new 320 200 (world-read (sg + x + ")")) "") s (st 'sc 'sky 'lt 'sun)
+     (pins st 'th (atan2 (s 0) (s 2)) 'ph (asin (s 1)), world-pens st))
+   ; ..bare, then behind a pane 3 m out toward -z, where the noon sun lies
+   (spread _) (: sb (sun-at "") sp (sun-at "(window [-6 0 -3] [6 30 -2.96] t)")
+                 dk (iota ((sb >> 16 & 255 >= 250) * (sb >> 8 & 255 >= 250))) gd (sp dk >> 8 & 255)
+                 [#dk (amax gd - amin gd) (amax gd)])
+   g0 (getenv "LORE_GPU") cp (: _ (setenv "LORE_GPU" "0") (spread ())) gp (: _ (setenv "LORE_GPU" "1") (spread ()))
+   _ (setenv "LORE_GPU" g0)
+ (test (20 < cp 0) (cp 1 <= 2) (cp 2 < 200) (20 < gp 0) (gp 1 <= 2) (gp 2 < 200)))
 ;; ..laid along: u how far down its rows from s, v across a row from its middle, in texels
 (: sl "(: t (texture 8 8 1 '((fill (rgb 1 0 0))))) (level \"t\" (room [0 0 0] [4 3 4]) (start [2 0 1] 0 0) "
    sd " (drape t [[[1 0.1 1] [2 0.1 1]] [[1 0.1 2] [2 0.1 2]]])"
@@ -646,6 +669,15 @@
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
+;; ..an opening with no skin takes the skin of what it cuts, so shows no plain texture; seams
+;; finds one with nothing to take
+(borrow "src/apps/lore/seams.l")
+(: ow "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (start [2 0 1] 0 0) "
+   (op w) (: st (world-new 8 8 (world-read (ow + w + ")")) "") [st (filter (b \ peep b 'opening 0 = 1) (st 'sc 'brushes))])
+   a (op "(skin {'all t} (room [0 0 0] [4 3 4])) (window [1 0 1.9] [3 2.5 2] t)")
+   b (op "(room [0 0 0] [4 3 4]) (window [1 0 1.9] [3 2.5 2] t)")
+ (test (#(a 1) = 1) (two? (a 1 0 'skin)) (seams (a 0) = ())
+       (#(b 1) = 1) (b 1 0 'skin = ()) (#(seams (b 0)) = 1) (seams (b 0) 0 'classes = ['floor])))
 ;; ..a land: solid under its sheet and open over it, stood on where its rows put it, drawn
 ;; as a drape
 (: ld "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) "
@@ -653,6 +685,25 @@
    _ (each ^60 (_ \ world-move st)) (md p) (brush-medium (st 'sc 'brushes) p)
  (test (md [0 0.5 0] = 0) (md [0 1.5 0] = 1) (md [0 -0.5 4.9] = 0) (abs (st 'py - 2.6) < 0.01) (#(lv 'drapes) = 1)
        (has? (world-read (ld + "(land t 3))")) "(land TEXTURE [[[x y z] ..] ..])")))
+;; ..a shaft up through it from a room under it, walled to its lip past the sheet
+(: sh (world-new 8 8 (world-read "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) (land t [[[-5 2 -5] [5 2 -5]] [[-5 2 5] [5 2 5]]]) (room [-3 0 -3] [3 1.5 3]) (street [-0.5 1.45 -0.5] [0.5 2.05 0.5]))") "")
+   sbs (sh 'sc 'brushes) si <(filter (i \ sbs i 'lo 1 = 1.45) ^#sbs)
+ (test (#(filter (f \ f 2 = si && mag (f 1 1) < 0.5) (brush-faces sbs)) = 4)))
+;; ..and round a ring's tube with posts standing in it, one by the tube's seam: its sheet cut
+;; round their feet meets itself edge to edge, no corner of one piece mid-edge of the next, so
+;; bent round the tube no crack opens. an edge one triangle alone has, by place, is such a crack
+(: (bk l) (atom? l ? (show l) ("[" + join " " (map bk l) + "]"))
+   tst (world-new 8 8 (world-read ("(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (surface 'torus 40 20) (void [-2 -2 -2] [42 4 22]) (start [5 1 10] 0 0) (land t "
+                                   + bk (map (z \ map (x \ [x (0.1 * sin (pi * x / 10.0 + pi * z / 5.0)) z]) (map (i \ 2 * i) ^21)) (map (i \ 2 * i) ^11)) + ")"
+                                   + " (solid (box [9.8 -0.5 9.8] [10.2 1.8 10.2])) (solid (box [19.8 -0.5 0.2] [20.2 1.8 0.6])))")) "")
+   tsf (tst 'sc 'surf) (q x) (int (floor (x * 1000.0 + 0.5)))
+   (lone c) (: C (c 'pk 'cols) T (c 'pk 'tris) (key i) [(q (C 0 i)) (q (C 1 i)) (q (C 2 i))]
+              (ek a b) (: ka (key a) kb (key b) (show ka < show kb ? [ka kb] [kb ka]))
+              es (foldl (\ t j (foldl (\ t e (pin t e (peep t e 0 + 1))) t [(ek (T (4 * j)) (T (4 * j + 1))) (ek (T (4 * j + 1)) (T (4 * j + 2))) (ek (T (4 * j + 2)) (T (4 * j)))])) {} ^(#T // 4))
+              (crack? e) (: A (e 0) B (e 1) m (tsf 'chart (map (i \ (A i + B i) / 2000.0) ^3))
+                           (es e = 1 && mag (m 1) < 0.2 && 5 < net (map (i \ abs (A i - B i)) ^3)))
+              (filter crack? (keys es)))
+ (test (catmap lone (tst 'sc 'chunks) = ())))
 ;; ..a seat smaller than a body come down on by its edge, the middle just past it: stood on,
 ;; and one clear of it fallen past to the floor
 (: sd "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (void [-10 -2 -10] [10 10 10]) (start [0 3 0] 180 0) (solid (box [-5 -1 -5] [5 0 5])) (solid (box [-0.2 1 -0.2] [0.2 1.1 0.2])))"
@@ -684,6 +735,14 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; the street's traffic and a music box: each heard, under the clip, keeping its memory from
+; one chunk to the next; the box's reverb left from right
+(: (sw nm) (: st (world-new 8 8 (lv ("(room [0 0 0] [8 3 8]) (hum '" + nm + " [0 0 0] [8 3 8])")) "") _ (pins st 'px 4 'py 1.6 'pz 4)
+              bs (map (_ \ hum-bus st 1600) ^900) (pk f) (foldl (\ a b (max a (f b))) 0.0 bs)
+              (top x) (max (amax x) -(amin x))
+              [(pk (b \ top <b)) (pk (b \ top (<b - >b))) (keys (st 'hum 'mem))])
+   tr (sw "traffic") mb (sw "musicbox")
+ (test (0.05 < tr 0) (tr 0 < 1.0) (tr 2 = ['traffic]) (0.05 < mb 0) (mb 0 < 1.0) (0.0 < mb 1) (mb 2 = ['musicbox])))
 ; deep chunks: a room under the land far from its one opening is left out from above the
 ; ground, one near the opening is not, and nothing is from in the opening or under the ground
 (: (dpb l) (atom? l ? (show l) ("[" + join " " (map dpb l) + "]"))
@@ -795,6 +854,22 @@
    _ (pin tst 'th (0.5 * pi)) _ (tgo 'forward 30) t5 (tfl 0))
  (test (#(twl 'trees) = 1) (0.59 < t0 < 0.61) (t1 > 4.6) (t2 = t1) (t3 < t2 - 0.5) (t4 > 4.6) (4.45 < t5 < 4.55) (tst 'px > 1.0)
        (has? (lv "(tree [0 0 0] 'x (texture 8 8 1 '((fill (grey 0.4)))))") "(tree [x y z] seed TEXTURE)"))
+; a feed: its ad its placeholder till a frame is seen, then that frame, the placeholder's green
+; in it, and the overlay's own colour where it is not a hole; a stamp's time hh:mm:ss
+(: fq "(: m (texture 8 4 1 '((fill (rgb 0 1 0))))) (: o (texture 8 4 1 '((fill hole) (rect 0 0 4 4 (rgb 1 0 0))))) "
+   fl (world-read (fq + "(level \"t\" (room [0 0 0] [4 3 4]) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m)) (start [2 0 1] 0 0))"))
+   (lq s) (world-read (fq + "(level \"t\" " + s + ")"))
+   fst (world-new 16 16 fl "") f1 (world-pens fst) f2 (world-pens fst)
+   sl (lq "(room [0 0 0] [4 3 4]) (stamp [0 0] 1 {48 \"111101101101111\"} (rgb 1 1 1) (feed [o] (ad [2 1.6 3.99] [0 0 -1] [0 1 0] 3.6 1.8 m))) (start [2 0 1] 0 0)")
+   sst (world-new 16 16 sl "") _ (world-pens sst) _ (world-pens sst) ss (sst 'sc 'feeds 0 'st)
+   (ch c k) (c >> k & 255)
+   row (map (x \ peep f2 (8 * 16 + x) 0) ^16)
+ (test (#(fst 'sc 'feeds) = 1) (ch (peep f1 (8 * 16 + 8) 0) 8 > ch (peep f1 (8 * 16 + 8) 0) 16)
+       (any (c \ ch c 8 > ch c 16 + 40) row) (any (c \ ch c 16 > ch c 8 + 40) row)
+       (#ss = 8 && ss 2 = 58 && ss 5 = 58 && all (c \ 48 <= c && c <= 57) (map ss [0 1 3 4 6 7]))
+       (has? (lq "(room [0 0 0] [1 1 1]) (stamp [0 0] 1 {} (rgb 1 1 1) (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(stamp [x y] size FONT (rgb r g b) FEED)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [] (ad [0 1 0] [0 0 1] [0 1 0] 1 1 m))") "(feed [TEXTURE ..] AD)")
+       (has? (lq "(room [0 0 0] [1 1 1]) (feed [m] (room [0 0 0] [1 1 1]))") "(feed [TEXTURE ..] AD)")))
 ; a vined tree: not climbed till the loop first plays, a tap on the deck, and then not till
 ; its vines have grown to the fork, drawn as they go
 (: vwl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (vined (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4)))))) (deck [5 0 -1] [6 1 1]) (start [6 0 0] 0 0)")
@@ -827,6 +902,58 @@
    dks (world-new 8 8 dkl "") _ (world-step dks 'tap) d0 (peep dks 'music ())
    _ (world-step dks 'tap) d1 (peep dks 'music ()) _ (pin dks 'th pi) _ (world-step dks 'tap) d2 (peep dks 'music ()))
  (test (tablet? d0) (d1 = ()) (d2 = ()) (#(dkl 'speakers) = 1))
+; a light given the loop gone: lit with the deck still and as the loop plays, out once it has
+; all worn away, lit again begun afresh; one given the loop playing is dimmed then
+(: owl (lv "(room [0 0 0] [10 4 10]) (given 'loop-gone (dim 0) (strip-light [5 4 5])) (given 'loop (dim 0.5) (bulb [2 2 2] (rgb 1 1 1))) (deck [4 0 6] [6 1 6.5]) (start [5 0 5.3] 0 -30)")
+   ows (world-new 8 8 owl "") (lit _) (world-ks (ows 'sc) 0.0 [] (world-loop ows) {}) go (_ \ world-step ows 'tap)
+   o0 (lit ()) _ (go ()) o1 (lit ()) m (ows 'music) _ (pin m 'n (int (1e6 * m 'd 'gone))) o2 (lit ()) _ (go ()) _ (go ()) o3 (lit ()))
+ (test ([o0 o1 o2 o3] = [[1.0 1.0] [1.0 0.5] [0.0 0.5] [1.0 0.5]]) (has? (lv "(given 'dusk (dim 0) (strip-light [5 4 5]))") "(given WHEN change LIGHT)"))
+; the console: a line of love on the walk's state, its answer short, a fault said
+(: cst (world-new 8 8 (lv "(room [0 0 0] [10 4 10]) (deck [4 0 6] [6 1 6.5]) (start [5 0 5.3] 0 -30)") "") c (world-console cst))
+ (test (c "st 'px" = "5.0") (has? (c "tp 2 0 3") "[2.0 0.0 3.0]") (cst 'px = 2.0) (has? (c "(1 +") "unfinished") (has? (c "nosuch 3") ";; missing nosuch")
+       (c "{'b 2 'a [1 (2 . 3) {}]}" = "{a (1 (2 . 3) {}) b 2}") (#(c "st") < 4100) (c "iota 100" = show (iota 100)) (has? (c "iota 100000") " ..") (c "loop-end ()" = "2.0") (tablet? (cst 'music)) (has? (c "help") "loop-end")
+       (has? (world-console (world-new 8 8 (lv "(room [0 0 0] [10 4 10]) (start [5 0 5.3] 0 0)") "") "loop-end ()") ";; missing loop-end"))
+; a speaker's reach: the loop gone fifteen metres off a plain one, still heard there off one
+; reaching twenty
+(: (rch sp x) (: l (lv ("(room [0 0 0] [40 4 4]) (deck [1 0 1] [2 1 2]) " + sp + " (start [1.5 0 2.5] 180 -30)"))
+                 st (world-new 8 8 l "") _ (world-step st 'tap) _ (pins st 'px x 'py 0.0 'pz 2.0)
+                 _ (each ^4 (_ \ hum-bus st 480)) b (hum-bus st 480) (atom? b ? 0.0 (max (amax <b) -(amin <b))))
+   far0 (rch "(speaker [2 1 2])" 17.0) far1 (rch "(reach 20 (speaker [2 1 2]))" 17.0)
+ (test (far0 = 0.0) (0.0 < far1)
+       (has? (lv "(reach 0 (speaker [0 0 0]))") "(reach metres PARTS)")))
+; a resonance: a wisp let fall over a brazier kept in its bowl; the string whole at every
+; prime of its steps with 6 and 7 rung, not with 6 and a torn 4, and with 14 across the tube
+; and 6; a sealed lift's gates shut till then, and open once it is
+(: rsl (lv ("(surface 'torus 42 20) (void [-1 -1 -1] [43 6 21]) (solid (box [-1 -1 -1] [43 0 21])) (resonance [0 3 0] 42) "
+            + "(brazier [6 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [7 0 2] (texture 8 8 1 '((fill 0.5)))) (brazier [4 0 2] (texture 8 8 1 '((fill 0.5)))) "
+            + "(brazier [14 0 10] (texture 8 8 1 '((fill 0.5)))) (wisp [20 0 3]) (wisp [21 0 3]) "
+            + "(sealed (lift [30 0.16 4] 1.6 3 (texture 8 8 1 '((fill 0.5))))) (start [25 0 4] 0 0)"))
+   rst (world-new 8 8 rsl "") ws (filter (b \ b 'kind = 'wisp) (rst 'balls)) bs (rsl 'braziers)
+   (rgo n) (each ^n (_ \ (pin rst 'dt (1.0 / 30.0), world-move rst)))
+   (rset is) (: _ (each ws (b \ pins b 'in () 'p [(b 'p 0) 0.13 (b 'p 2 + 5.0)])) _ (each ^#is (k \ (: c (bs (is k)) (pins (ws k) 'in (is k) 'p [(c 0) (c 1 + 1.13) (c 2)]))))
+                (rgo 60, [(world-whole? rst) (rst 'lifts 0 'g)]))
+   _ (pins <ws 'p [7.0 2.0 2.0] 'v [0.0 0.0 0.0] 'rest 0) _ (rgo 30) kept (peep <ws 'in ())
+   r0 (rset []) r67 (rset [0 1]) r64 (rset [0 2]) r146 (rset [3 0])
+ (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
+       (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
+       (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
+; a camera's feed: shot from where the camera stands while its monitor is in view; with
+; cards, now and then snow, a card held, snow, and the camera again
+(: cl (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (cards [(texture 8 8 1 '((fill 0.3)))] 2 1 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   cs (world-new 32 20 cl "") cq (cs 'sc 'feeds 0) _ (world-pens cs) c0 (peep cq 'shot-t ())
+   phs (map (_ \ (pin cs 'mt (cs 'mt + 0.1), world-pens cs, cq 'ph)) ^50)
+ (test (cl 'ads 0 'cam 1 = 0.0) (#(cl 'ads 0 'cards 0) = 1) (c0 != ()) (elem 'in phs) (elem 'card phs) (elem 'out phs) (phs 49 = 'cam)
+       (has? (lv "(camera [0 0 0] 0 0 (ball [0 0 0]))") "(camera [x y z] bearing pitch FEED)")
+       (has? (lv "(cards [] 1 1 (ball [0 0 0]))") "(cards [TEXTURE ..] every hold FEED)")
+       (has? (lv "(watch [0 0 0] 1 [3 2] 30 (ball [0 0 0]))") "(watch [x y z] radius [near far] cone FEED)")))
+; ..and one that moves while a plush lies down a hole, not held over it nor on the ground by it
+(: ml (lv ("(void [-1 -1 -1] [11 5 11]) (solid (box [-1 -1 -1] [11 0 11])) (plush [2 0 3] 90 'mouse) (missing [8 2 4] 90 -20 (camera [5 1 1] 0 0 "
+           + "(feed [(texture 8 8 1 '((fill hole)))] (ad [5 1.5 9] [0 0 -1] [0 1 0] 2 1 (texture 16 8 1 '((fill 0.5))))))) (start [5 0 3] 0 0)"))
+   ms (world-new 32 20 ml "") mb (ms 'balls 0) mq (ms 'sc 'feeds 0) _ (pin (ms 'lvl) 'pits [[[1.0 -50.0 2.0] [3.0 0.0 4.0]]])
+   (seen p held) (pins mb 'p p 'held held, pin ms 'mt (ms 'mt + 1.0), world-pens ms, mq 'cam 0 0)
+ (test (seen [2.0 0.1 3.0] 0 = 5.0) (seen [2.0 -20.0 3.0] 0 = 8.0) (seen [2.0 -20.0 3.0] 1 = 5.0) (seen [6.0 -20.0 3.0] 0 = 5.0)
+       (has? (lv "(missing [0 0 0] 0 0 (ball [0 0 0]))") "(missing [x y z] bearing pitch FEED)")))
 ; an iron gate: shut, in a body's way, and the fence beside it too; tapped, it swings open
 ; and lets the body by. a headstone tapped kneels the body before it, its name and
 ; the choices shown; weeping keeps it down, its tears falling, and brings them back, leaving
@@ -850,7 +977,8 @@
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
    (dce k) (: y (decay-at dc0 (dct + k * dcl)) (sqrt (net (y * y) / 4000.0))))
- (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0))
+ (test (dcl > 5.0) (decay-at (decay-new 0.25) (dct + 0.0) = decay-at dc0 dct) (dce 0 > 0.05) (dce 150 < 0.3 * dce 0)
+       (dce (int (dc0 'gone / dcl + 0.5) + 1) = 0.0) (0.0 < dce (int (dc0 'gone / dcl + 0.5) - 2)) (0.0 < dc0 'gone <= 902 * dcl))
 ; the way between levels: a herald within its reach makes for the eye and meeting it leaves
 ; for its file, by the level's own folder; a bed tapped is lain on, then left for its entry;
 ; and one come to by a bed's entry wakes on it and stands beside it, on its left
@@ -989,6 +1117,13 @@
        (has? (pl "(plant [0 0 0] 3 'kudzu)") "a SPECIES") (has? (pl "(plant [0 0 0] 3 {'like 'oak 'hue 1})") "a plant takes")
        (has? (pl "(plant [0 0 0] 3 {'levels [{'n 2 'hue 1}]})") "a level takes")
        (has? (pl "(plant [0 0 0] 3 {'leaf {'kind 'scale}})") "a leaf's 'kind") (has? (pl "(plant [0 0 0] 'x 'oak)") "(plant [x y z]")))
+;; a tree cut through its trunk and its crotch: each cut's face, charred at its middle, wound
+;; as the wood round it is, so it closes the cut seen from outside
+(: bt (bough-grow [7 1.0 1.0]) m (bough-burnt bt 0 1.0 [[0.0 1.0 0.0] 4.2]) v (m 0)
+   (way t) (: p (i \ take 3 (v (t i))) N (drop 5 (take 8 (v (t 0)))) (dot (cross (c- (p 1) (p 0)) (c- (p 2) (p 0))) N > 0.0 ? 1 -1))
+   (cap? t) (drop 8 (v (t 0)) = [0.05 0.035 0.03])
+   cs (filter cap? (m 1)) ws (filter (t \ !(cap? t)) (m 1))
+ (test (#cs > 0) (all (t \ way t = -1) cs) (2 * #(filter (t \ way t = -1) ws) > #ws)))
 ; produce: every kind a closed thing, its rows its profile's, each row's last point its first,
 ; resting where it was put; a seed the same one and another not; a 'like changing one; a pile a
 ; painted sheet and whole ones gapped apart, thrown by its seed; the sheet and things swung by a
@@ -1034,4 +1169,25 @@
 (: n {'n 0} l (world-reading "(: a 1) (level \"t\" (room [0 0 0] [2 2 2]))" (_ \ _ \ pin n 'n (n 'n + 1)))
    (test (tablet? l) (n 'n = 2)))
 
+; a scene kept: where a nest is, the first scene is stowed in its cache and the next read back
+; from there, the same but for its memo, spent
+(: kd (cwd 0 + "/out/.world-kept-" + show (getpid 0)) n0 (getenv "LOVE_NEST")
+   _ (hark ["rm" "-rf" kd], mkdir kd 448, setenv "LOVE_NEST" kd)
+   ; ..each read afresh, as a run reads its file: a scene pins what it grows into its level
+   (klv _) (world-read "(level \"t\" (room [0 0 0] [6 3 6]) (lamp [3 2.5 3]) (start [3 0 1] 0 0))")
+   ka (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   kf (filter (f \ #f > 6 && snip f (#f - 6) #f = ".scene") (readdir (kd + "/cache/lore/")))
+   kb (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
+   (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
+   ks (filter (k \ k != 'memo) (sort (keys ka)))
+   ; ..and a tree's trunk grown into its level on a hit as on a miss
+   (tlv _) (world-read "(level \"t\" (room [-9 0 -9] [9 4 9]) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (start [6 0 0] 0 0))")
+   _ (mkdir kd 448, setenv "LOVE_NEST" kd) ta (world-new 40 25 (tlv ()) "test/lore/") tb (world-new 40 25 (tlv ()) "test/lore/")
+   _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
+   (trunk st) (<(st 'lvl 'trees) 'trunk)
+ (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
+       (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
+       (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
+(test_fin ())
 (puts "world: ok\n")

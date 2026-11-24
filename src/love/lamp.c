@@ -42,10 +42,12 @@ static void lp_share(void *c, intptr_t s) {
     for (uintptr_t q = 0; q < l->np; q++) {
      flo_t const *p = l->ps + 3 * q,
                  lx = p[0] - X, ly = p[1] - Y, lz = p[2] - Z, d2 = lx * lx + ly * ly + lz * lz,
-                 d = love_sqrt(d2 + (flo_t) 1e-9),
-                 lam = lp_sat(((nx * lx + ny * ly + nz * lz) / d + l->wr) / ((flo_t) 1.0 + l->wr)),
-                 em = l->fn ? lp_sat((flo_t) 0.25 - (l->n[0] * lx + l->n[1] * ly + l->n[2] * lz) / d) : (flo_t) 1.0,
                  f = lp_sat((flo_t) 1.0 - (d2 / (l->r * l->r)) * (d2 / (l->r * l->r)));
+     // ..a point out of reach adds +0, lam and em lying in [0, 1], and moves no light
+     if (f == (flo_t) 0.0 && (flo_t) 0.0 < d2 + l->s2) continue;
+     flo_t const d = love_sqrt(d2 + (flo_t) 1e-9),
+                 lam = lp_sat(((nx * lx + ny * ly + nz * lz) / d + l->wr) / ((flo_t) 1.0 + l->wr)),
+                 em = l->fn ? lp_sat((flo_t) 0.25 - (l->n[0] * lx + l->n[1] * ly + l->n[2] * lz) / d) : (flo_t) 1.0;
      k = k + lam * em * (f * f) / (d2 + l->s2); }
     k = k / (flo_t) l->np;
     if (l->keep) k = k * (flo_t) ((l->box[0] < X) * (X < l->box[2]) * (l->box[1] < Z) * (Z < l->box[3])

@@ -192,7 +192,7 @@ static void major_run_finalizers(struct g *g, struct gcx *X) {
 
 // LvGcStress: an even poison, so a stale read faults at a nameable address; every Nth collection a major
 #define gc_poison ((word) 0xd0d0d0d0d0d0d0d0ULL)
-#define gc_stress_major 32
+#define gc_stress_major 1024
 
 // the minor's roots: the machine's own, and an intern map still young
 static void minor_roots(struct g *g, struct gcx *X) {

@@ -106,6 +106,7 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_budget
 # define love_budget 0
 #endif
+extern uintptr_t love_budget_boot;
 // the C stack bytes c0 may take where the seat says no more: inle's boot stack is a MiB over
 // the page tables; a host takes three quarters of its rlimit
 #ifndef love_cstack

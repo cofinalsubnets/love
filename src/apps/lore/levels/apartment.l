@@ -5,7 +5,7 @@
 ; the station
 (borrow 'scenery)
 
-; the textures: what is there, sand and the bed's mud, cracked as it dried
+; the textures: what is there, sand, and mud for the yard's banked sides
 (: sand (feel 'sand (texture 64 64 3
          '((fill (rgb 0.8 0.68 0.48)) (noise 1 0.07) (fbm 16 4 0.12) (stain 16 3 0.42 0.35 (shade 0.9))
            (stain 8 3 0.38 0.35 (mix (rgb 0.88 0.78 0.6) 0.6)) (relief 1.5 2 0.08)))))
@@ -35,8 +35,21 @@
 (: boards (feel 'wood (texture 64 64 1.2 '((fill (rgb 0.5 0.34 0.2)) (noise 1 12 0.1) (fbm 16 3 0.1) (stripes 8 1 0 (shade 0.6))))))
 (: rug (feel 'soft (texture 32 32 0.8 '((fill (rgb 0.55 0.2 0.18)) (checker 8 8 (shade 0.85)) (noise 1 0.05) (fbm 8 3 0.08)))))
 (: cloth (feel 'soft (texture 32 32 0.5 '((fill (rgb 0.35 0.42 0.5)) (noise 1 0.08) (fbm 8 3 0.06)))))
+(: walnut (material 'wood 6 {'colour (rgb 0.3 0.16 0.08) 'grain 0.05 'knots 0.0 'rings 9 'warp 1.5}))
+(: lacquer (feel 'wood (texture 16 16 0.5 '((fill (grey 0.07)) (noise 2 0.06) (rows 0 1 (grey 0.12))))))
 (: oak (feel 'wood (texture 32 64 1.0 '((fill (rgb 0.45 0.3 0.18)) (noise 1 10 0.1) (fbm 16 3 0.08)))))
 (: clear (texture 64 64 2 '((fill (rgb 0.82 0.88 0.88)) (fbm 32 3 0.05))))
+; ..the kitchen's: a sink's brushed steel and a hob's black
+(: steel (feel 'hard (texture 16 16 0.5 '((fill (rgb 0.66 0.68 0.7)) (noise 1 0.03) (rows 0 1 (shade 0.96))))))
+(: hob (feel 'hard (texture 16 16 0.5 '((fill (grey 0.05)) (noise 1 0.04)))))
+; ..the tv's: the yard's picture, seen through a glass with nothing on it; dark grey static
+; till the first frame
+(: clean [(texture 192 112 7 '((fill hole)))])
+(: static (texture 192 112 7 '((fill (rgb 0.16 0.18 0.2)) (noise 1 0.3))))
+
+; ..and the paintings, each thrown anew every game from the templates, the tall one's bands of colour
+(: wide-art (texture 96 64 1.0 '((art any 1))))
+(: tall-art (texture 64 96 1.0 '((art fields 2))))
 
 ; the river: wandering across the plain along x, more the further from the cube. by the cube
 ; it parts in two channels sep x either side of its line, the island between
@@ -52,11 +65,14 @@
 ; the cube, on the river's line in the middle of the island
 (: home [0.0 (meander 0.0)])
 (: spots [home])
-; the house far west and its yard, the floors' top, and how far a point is from them in plan
-(: sx0 -132.2 sx1 -104.0 sz0 14.0 sz1 30.0 hy 0.06)
+; the house far west and its yard, the yard's glass's east side over the house's back, the
+; floors' top, and how far a point is from them in plan
+(: sx0 -133.6 sx1 -104.0 sz0 12.6 sz1 31.4 se -114.6 hy 0.06)
 (: (off-site x z) (: a (max 0.0 (max (sx0 - x) (x - sx1))) b (max 0.0 (max (sz0 - z) (z - sz1))) (sqrt (2 a + 2 b))))
-; ..and the land sunk well under their floors inside, below the shadow's slots
-(: (sink x z) (0.5 * ease (min (min (x - sx0) (sx1 - x)) (min (z - sz0) (sz1 - z))) 1.0 3.0))
+; ..and the land sunk well under the yard's floor and the house's, below the shadow's slots,
+; and not at all past their walls
+(: (sink x z) (: (in a0 a1 b0 b1) (min (min (x - a0) (a1 - x)) (min (z - b0) (b1 - z)))
+   (0.5 * ease (max (in sx0 se sz0 sz1) (in -116.2 sx1 16.0 28.0)) 1.0 3.0)))
 
 ; the dunes: two long swells crossing and a short one on them, none near the river, on the
 ; island or under the cube
@@ -91,6 +107,8 @@
 (: shore-y (river-y - lift))
 (: (bed-y w) (w > 0.0 ? (shore-y * (1.0 - ease w 0.0 bank-w)) (shore-y - (bed-d + shore-y) * ease (0.0 - w) 0.0 1.0)))
 (: (ground x z) (: d (z - meander x) (bed-y (off-shore x z) + dune x z * ease (abs d - sep x) 4.5 14.0 * flat x z - sink x z)))
+; ..the sand a shade darker over the bed, easing back to the plain's across its banks
+(: (shaded rs) (map (map (p \ p + [(1.0 - 0.25 * (1.0 - ease (off-shore (p 0) (p 2)) -0.5 (bank-w + 1.0)))])) rs))
 (: (rows-by xs fs dy) (map (f \ map (x \ (: z (meander x + f x) [x (ground x z + dy) z])) xs) fs))
 (: (rows-on xs ts dy) (rows-by xs (flats ts) dy))
 (: (far-at o x) (o + sep x * (1.0 - ease o 8.0 40.0)))
@@ -121,62 +139,96 @@
     (glass [(x - a) (h - t) (z - a)] [(x + a) h (z + a)])
     (mattress [x 0.02 (z - 0.6)] 0)]))
 
-; the yard: glass bays between iron posts round a grass floor and a glass roof, the house
-; against its east side; a wooden fence round the outside of it from the house's two sides,
+; the yard: glass bays between iron posts round a grass floor and a glass roof, its east side
+; over the house's back; a wooden fence round it inside the glass from the house's two sides,
 ; and a headstone in the corner far from the house, on the left coming out, facing the tree
-(: yx0 sx0 yx1 -116.2 yz0 sz0 yz1 sz1 yh 5.0)
-(: yxs (map (i \ yx0 + 4.0 * i) ^5) yzs (map (i \ yz0 + 4.0 * i) ^5) yard-mid [-124.2 2.5 22.0])
+(: yx0 sx0 yx1 -116.2 ye se yz0 sz0 yz1 sz1 yh 5.0)
+(: yxs (map (i \ yx0 + 3.8 * i) ^6) yzs (map (i \ yz0 + 4.7 * i) ^5) yard-mid [-124.1 2.5 22.0])
 (: (yard-pane lo hi) (lens yard-mid (window lo hi pane)))
+; ..the east side's glass alone, cutting nothing: beside the house its sheet 5 mm in from the
+; yard's edge, a centimetre on into the house's walls, its foot down into the yard's floor;
+; over the house 1 cm past that edge, down into the house's top and on past the sides' glass.
+; so it meets the house with no gap, and on no plane another face is
+(: (yard-glass lo hi) (yard-pane lo hi @ q (q 1)))
 (: (post x z) (skin {'all iron} (solid (box [(x - 0.07) 0 (z - 0.07)] [(x + 0.07) (yh + 0.1) (z + 0.07)]))))
 (: (bays bs f) (map (i \ f (bs i) (bs (i + 1))) ^(#bs - 1)))
 (: yard
-   [(skin {'floor grass 'walls mud} (solid (box [yx0 -0.6 yz0] [yx1 hy yz1])))
-    (skin {'floor grass 'walls siding} (street [yx0 hy yz0] [yx1 yh yz1]))
+   [(map (b \ skin {'floor grass 'walls mud} (solid (box (b 0) (b 1))))
+         [[[yx0 -0.6 yz0] [yx1 hy yz1]] [[yx1 -0.6 yz0] [ye hy 16.0]] [[yx1 -0.6 28.0] [ye hy yz1]]])
+    (map (b \ skin {'floor grass 'walls siding} (street (b 0) (b 1)))
+         [[[yx0 hy yz0] [yx1 yh yz1]] [[yx1 hy yz0] [ye yh 16.0]] [[yx1 hy 28.0] [ye yh yz1]]])
     (bays yxs (\ a b (yard-pane [a hy yz0] [b yh (yz0 + 0.06)])))
     (bays yxs (\ a b (yard-pane [a hy (yz1 - 0.06)] [b yh yz1])))
     (bays yzs (\ a b (yard-pane [yx0 hy a] [(yx0 + 0.06) yh b])))
-    (yard-pane [(yx1 - 0.06) hy yz0] [yx1 yh 16.0]) (yard-pane [(yx1 - 0.06) hy 28.0] [yx1 yh yz1])
-    (yard-pane [(yx1 - 0.06) 3.2 16.0] [yx1 yh 28.0])
-    (yard-pane [yx0 (yh - 0.06) yz0] [yx1 yh yz1])
+    (yard-glass [(ye - 0.035) (hy - 0.1) yz0] [(ye + 0.025) yh 16.01]) (yard-glass [(ye - 0.035) (hy - 0.1) 27.99] [(ye + 0.025) yh yz1])
+    (yard-glass [(ye - 0.02) 3.19 15.98] [(ye + 0.04) yh 28.02])
+    (yard-pane [yx0 (yh - 0.06) yz0] [(ye + 0.03) yh yz1])
     (map (x \ [(post x (yz0 - 0.07)) (post x (yz1 + 0.07))]) yxs)
-    (map (z \ [(post (yx0 - 0.07) z) (post (yx1 + 0.07) z)]) [yz0 yz1])
+    (map (z \ [(post (yx0 - 0.07) z) (post (ye + 0.07) z)]) [yz0 yz1])
     (headstone [-131.0 hy 15.2] 45 granite)
     (wooden (fence [[-115.2 -0.2 16.0] [-115.2 0.0 13.0] [-133.2 0.0 13.0] [-133.2 0.0 31.0] [-115.2 0.0 31.0] [-115.2 -0.2 28.0]] 1.3 palings))])
 
 ; the house: one room, open to the plain on the east, a sliding glass door in its back wall
-; onto the yard; a sofa, a table with a red plush mouse on it, shelves and a rug, a bulb overhead
-(: (piece t lo hi) (skin {'all t} (solid (box lo hi))))
+; onto the yard; a bulb overhead. by the door a tv on a sideboard, a sofa and an easy chair
+; turned to it, a table with a red plush mouse on it between them on a rug; a painting on the
+; far wall, bookshelves along it further on, and a coat rack; across the room a dining table
+; and its six chairs, a larger painting over them; in the corner by the back wall a kitchen,
+; a fridge, a counter, a sink under a window onto the yard and a hob
+; ..the kitchen along the back wall from the south corner, its user facing the wall: a fridge,
+; a counter, the sink, a cabinet under a steel basin with a tap, under a window onto the yard,
+; and a counter with a hob's four rings; the window's reveal plastered
+(: kitchen (: y (hy + 0.72) t (hy + 0.9) (steel-box lo hi) (skin {'all steel} (solid (box lo hi)))
+   [(furnish 'cabinet [-115.65 hy 16.6] 270 {'w 0.8 'd 0.7 'h 1.9 'doors 2 'drawers 0})
+    (furnish 'counter [-115.7 hy 17.5] 270 {'w 1.0 'over 0.0 'doors 2})
+    (furnish 'cabinet [-115.7 hy 18.5] 270 {'w 1.0 'h 0.72 'doors 2 'drawers 0 'skin {'body oak 'frame steel}})
+    (steel-box [-116.0 y 18.0] [-115.9 t 19.0]) (steel-box [-115.5 y 18.0] [-115.4 t 19.0])
+    (steel-box [-115.9 y 18.0] [-115.5 t 18.15]) (steel-box [-115.9 y 18.85] [-115.5 t 19.0])
+    (steel-box [-115.9 y 18.15] [-115.5 (y + 0.02) 18.85])
+    (steel-box [-115.97 t 18.48] [-115.93 (t + 0.3) 18.52]) (steel-box [-115.93 (t + 0.26) 18.48] [-115.74 (t + 0.3) 18.52])
+    (furnish 'counter [-115.7 hy 19.6] 270 {'w 1.2 'over 0.0 'doors 2})
+    (map (q \ skin {'all hob} (solid (box [(q 0 - 0.1) t (q 1 - 0.1)] [(q 0 + 0.1) (t + 0.01) (q 1 + 0.1)]))) [[-115.84 19.3] [-115.56 19.3] [-115.84 19.9] [-115.56 19.9]])
+    (window [-116.22 (hy + 1.05) 17.9] [-115.98 (hy + 2.1) 19.1] clear @ (a p) [(skin {'all plaster} a) p])]))
 (: house
    [(skin {'walls siding 'floor tar 'ceiling plaster} (solid (box [-116.2 -0.6 16.0] [-104.0 3.2 28.0])))
     (skin {'floor boards 'walls plaster 'ceiling plaster} (room [-116.0 hy 16.2] [-103.8 3.0 27.8]))
     (glazed clear (door [-116.1 hy 22.0] 1.8 2.2))
-    (drape rug [[[-114.0 0.07 20.0] [-108.0 0.07 20.0]] [[-114.0 0.07 26.4] [-108.0 0.07 26.4]]])
-    (piece cloth [-113.0 hy 26.9] [-109.4 0.48 27.75]) (piece cloth [-113.0 hy 27.52] [-109.4 0.95 27.8])
-    (piece cloth [-113.25 hy 26.9] [-113.0 0.68 27.8]) (piece cloth [-109.4 hy 26.9] [-109.15 0.68 27.8])
-    (piece oak [-112.0 hy 24.6] [-110.4 0.42 25.6])
-    (plush [-111.2 0.42 25.1] 270 "mouse.glb")
-    (piece oak [-113.5 hy 16.2] [-110.5 2.0 16.6])
+    (furnish 'rug [-112.8 hy 25.1] 0 {'w 4.4 'd 4.6 'skin {'soft rug}})
+    (furnish 'sideboard [-115.76 hy 25.3] 270 {'skin {'body oak 'top oak 'frame oak}})
+    (furnish 'tv [-115.7 (hy + 0.8) 25.3] 270 {})
+    ; ..its screen, a tap turning it on: the yard seen from high in its far corner, on the tree;
+    ; once the mouse is down the tree's shadow, the table it lay on
+    (switched (missing [-114.7 1.5 25.3] 90 -36 (camera [-130.6 3.6 27.6] 144 -17 (feed clean (ad [-115.663 (hy + 1.21) 25.3] [1 0 0] [0 1 0] 1.05 0.61 static)))))
+    (furnish 'sofa [-111.6 hy 25.3] 270 {'w 2.6 'skin {'soft cloth}})
+    (furnish 'table [-113.2 hy 25.3] 90 {'w 1.6 'd 0.8 'h 0.42 'apron 0.05 'skin {'top oak 'frame oak}})
+    (plush [-113.2 0.42 25.3] 270 'mouse)
+    (furnish 'painting [-111.2 hy 27.78] 0 {'w 1.8 'h 1.2 'low 1.0 'skin {'picture wide-art 'frame (material 'wood 2 {'colour (rgb 0.12 0.1 0.09)})}})
+    (furnish 'armchair [-113.2 hy 27.0] 236 {'skin {'soft (material 'cloth 3 {'colour (rgb 0.45 0.32 0.2)})}})
+    (map (q \ furnish 'shelf [(q 0) hy 27.64] 0 {'h 2.0 'shelves 5 'fill 'books 'seed (q 1) 'skin {'frame oak}}) [[-108.0 17] [-107.05 18]])
+    kitchen
+    (furnish 'table [-110.0 hy 19.4] 0 {'w 1.8 'd 0.95 'skin {'top walnut 'frame walnut}})
+    (map (q \ furnish 'chair [(q 0) hy (q 1)] (q 2) {'seed (q 3) 'skin {'frame lacquer 'soft lacquer}})
+         [[-110.5 18.55 0 1] [-109.5 18.55 0 2] [-110.5 20.25 180 3] [-109.5 20.25 180 4] [-111.2 19.4 90 5] [-108.8 19.4 270 6]])
+    (furnish 'painting [-110.0 hy 16.22] 180 {'w 1.6 'h 2.3 'low 0.55 'skin {'picture tall-art 'frame (material 'wood 4 {'colour (rgb 0.16 0.12 0.1)})}})
+    (furnish 'coatrack [-115.5 hy 23.5] 0 {'fill 'coats 'skin {'soft (material 'cloth 5 {'colour (rgb 0.3 0.28 0.25)})}})
     (bulb [-110.0 2.8 22.0] (rgb 1.0 0.85 0.62))])
 
 (level "the apartment"
   (textures {'wall sand 'floor sand 'ceiling sand 'door oak})
-  (start [(home 0) 0 (home 1 - 1.2)] 280 -4)
+  (start [(home 0) 0 (home 1 - 1.2)] 280 -4) winded
   (sky 15.5 'clear) (skylight (rgb 0.12 0.11 0.09))
   (ambient (rgb 0.32 0.32 0.3))
   ; the plain, open to the sky, walled by nothing to see; the land on it, dunes and the river's
-  ; dry bed in its two channels about the island, its mud cracked
+  ; dry bed in its two channels about the island, a shade darker
   (void [-146 -2 -60] [60 40 60])
-  (land sand (rows-by xs lts 0.0))
-  (map (fs \ drape mud (rows-by xs fs 0.02)) [lo-bed hi-bed])
+  (land sand (shaded (rows-by xs lts 0.0)))
   ; ..heard out on it, the wind and now and then a bell; in the burnt tree's yard, a throb
   (hum 'wind [-146 -2 -60] [60 40 60]) (hum 'bells [-146 -2 -60] [60 40 60])
-  (hum 'throb [yx0 -1 yz0] [yx1 yh yz1])
+  (hum 'throb [yx0 -1 yz0] [ye yh yz1])
   ; ..and what the glass shows over it all: grass, and the river running
   (beyond (drape grass (rows-by xs lts lift)))
   (beyond (flow [0.7 0] (drape water (level-on xs [-1.0 -0.5 0.0 0.5 1.0] river-y))))
   ; the land going on past the walls, its river and what the glass shows of them
-  (map (drape sand) (around (\ xs fs (rows-by xs fs 0.0))))
-  (map (q \ drape mud (rows-by q (lo-bed + hi-bed) 0.02)) sides)
+  (map (drape sand) (around (\ xs fs (shaded (rows-by xs fs 0.0)))))
   (map (beyond * drape grass) (around (\ xs fs (rows-by xs fs lift))))
   (map (q \ beyond (flow [0.7 0] (drape water (level-on q [-1.0 -0.5 0.0 0.5 1.0] river-y)))) sides)
   ; the cube woken in

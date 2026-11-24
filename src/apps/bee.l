@@ -576,12 +576,19 @@
             (0 < #(git-sha "HEAD") && #(git-sha head) = 0) [0 "no commit \(head) here"]
             (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
                bk (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
-               [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk (lm 'lanes-covers (string? mk ? mk "")))))])))
+               cv (lm 'lanes-covers (string? mk ? mk ""))
+               [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk cv)
+                            + map (\ [l why] (l + " by name, unrun: " + join " " (take 3 why))) (lm 'lanes-held ps bk cv)))])))
      ; the plan itself, [[lane heavy? cost why] ..], for base..head in this tree
      (lanes-plan-of b head)
       (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
          ((cite 'lanemap 'lanes-plan) ps (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
                                       ((cite 'lanemap 'lanes-covers) (string? mk ? mk ""))))
+     ; the by-name lanes base..head would owe, which no plan runs
+     (lanes-held-of b head)
+      (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
+         (map cap ((cite 'lanemap 'lanes-held) ps (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
+                                               ((cite 'lanemap 'lanes-covers) (string? mk ? mk "")))))
 
      ; --- queue_gate: the row written gating at dir's HEAD, then `love bee --gate` detached there runs every
      ; lane the union owes from its gated-on, slow last, under the heavy lock; green, or waiting with its reds,
@@ -664,10 +671,14 @@
                n (? (two? ln) (q-note <ln) "")
                ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
                ls (? (two? only) (filter (!= "test_slow") only) all)
-               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow"))
+               ; a by-name lane never stands on an old pass: it shows only where this run's list ran it
+               byname (cite 'lanemap 'lanes-byname)
+               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow" && !(elem l byname)))
                                             (map cap (filter (\ y (y 1 = "0")) (gate-was n)))) ())
+               held (filter (\ l !(elem l ls)) (lanes-held-of b h))
                _ (gate-say ("row \(r) at \(h) from \(b): " + join " " (ls + ["test_slow"])
-                            + (two? stood ? (", standing: " + join " " stood) "")))
+                            + (two? stood ? (", standing: " + join " " stood) "")
+                            + (two? held ? ("; by name, unrun: " + join " " held) "")))
                ; the lanes write to this log as they run
                p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
                             "-d" "out/lanes-gate" "--slow" "--remote"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
@@ -701,7 +712,8 @@
                      + (two? backs ? (" | back here: " + join " " (map (\ y (<y + "<" + y 3)) backs)) "")
                      + ((ok || two? reds) ? "" (" lanes.sh=" + show rc))
                      + (two? stood ? (" | stood: " + join " " stood) "")
-                     + (two? reds ? (" | red: " + said) ""))
+                     + (two? reds ? (" | red: " + said) "")
+                     + (two? held ? (" | by name, unrun: " + join " " held) ""))
                w (queue-row1 {"queue" q "state" (ok ? "green" "waiting") "row" r "note" note})
                _ (gate-say (w 1))
                _ (? ok 0 (gate-tell q r owe dir))
@@ -1178,7 +1190,9 @@
      (lk nm) (cite 'locks nm)
      (locks? _) (lit? (lk 'locks-acquire))
      bee-locks {}                                          ; name -> [kind note], still queued
-     bee-floor (: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+     ; the heavy pool's gate: the memory floor, and a ceiling on the one-minute load, the processors unless set
+     bee-floor [(: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+                (: v (peep bee-salt 'heavy-load ()) (? (two? v && numeric? <v) <v (sysconf () @ (_ . c . _) (charm? c && 0 < c ? c ()) ())))]
      bee-hmax (: v (peep bee-salt 'heavy-max ()) (? (two? v && charm? <v) <v 2))
      ; the holder's pid: this bee's own, read off its card when a child speaks as it
      (lock-pid _) (: c (card-of (me 0)) p (tablet? c ? (card-pid c) 0) (? (alive? p) p (getpid 0)))
@@ -1192,6 +1206,7 @@
                 "?")
           ("queued for \(nm): position " + show (peep r "position" "?") + ", held by \(by)"
            + (r "mem_gb" @ () "" g (", \(g) GB available"))
+           + (r "load" @ () "" l (", load \(l)"))
            + "; a message from lock-\(nm) comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]

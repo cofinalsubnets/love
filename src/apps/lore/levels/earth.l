@@ -178,13 +178,25 @@
                    (neon [x 15.75 21.35] [s 0 0] 0.85 "食" (rgb 1 0.2 0.55))
                    (neon [x 14.65 21.35] [s 0 0] 0.85 "品" (rgb 1 0.2 0.55))
                    (neon [x 13.75 21.35] [s 0 0] 0.55 "中心" (rgb 0.3 0.85 1))])
-; ..the boards, bright as their own light: red and blue, a disc and a pointer and lines of
-; type; the spinner's magenta and its yellow
-(: adredblue (texture 128 64 13
-              '((fill (rgb 0.95 0.08 0.12)) (poly 50 0 128 0 128 64 78 64 (rgb 0.08 0.22 1))
-                (disc 28 32 20 (grey 0.97)) (disc 28 32 14 (rgb 0.08 0.22 1)) (poly 23 23 38 32 23 41 (grey 0.97))
-                (rect 74 10 122 19 (grey 0.97)) (rect 80 25 118 30 (grey 0.97)) (rect 84 35 120 40 (grey 0.97))
-                (rect 88 47 122 56 (rgb 1 0.85 0.2)))))
+; ..the board a security monitor: what the eye saw a frame before, framed as a camera's
+; picture is, its brackets and the hour stamped on it in a pixel font three by
+; five, s texels a dot. before the first frame, no signal
+(: dots {48 "111101101101111" 49 "010110010010111" 50 "111001111100111" 51 "111001111001111" 52 "101101111001001"
+         53 "111100111001111" 54 "111100111101111" 55 "111001001001001" 56 "111101111101111" 57 "111101111001111"
+         65 "010101111101101" 67 "111100100100111" 69 "111100111100111" 71 "111100101101111" 73 "111010010010111"
+         76 "100100100100111" 77 "101111111101101" 78 "110101101101101" 79 "111101101101111" 82 "110101110101101"
+         83 "111100111001111" 58 "000010000010000" 45 "000000111000000"})
+(: (type x y s text c) (catmap (k \ (: g (peep dots (text k) "")
+                                    (catmap (i \ (g i = 49 ? [['rect (x + (4 * k + i % 3) * s) (y + (i // 3) * s) (x + (4 * k + i % 3 + 1) * s) (y + (i // 3 + 1) * s) c]] ()))
+                                            ^#g)))
+                         ^#text))
+(: camwhite '(grey 0.92))
+(: (corner x y dx dy) [['rect (min x (x + 18 * dx)) (min y (y + 2 * dy)) (max x (x + 18 * dx)) (max y (y + 2 * dy)) camwhite]
+                       ['rect (min x (x + 2 * dx)) (min y (y + 12 * dy)) (max x (x + 2 * dx)) (max y (y + 12 * dy)) camwhite]])
+(: camover (texture 192 104 13
+                  ([['fill 'hole]] + corner 6 6 1 1 + corner 186 6 -1 1 + corner 6 98 1 -1 + corner 186 98 -1 -1)))
+(: camfeed [camover])
+(: nosignal (texture 192 104 13 ([['fill '(rgb 0.2 0.23 0.26)] ['noise 2 0.25]] + type 60 46 2 "NO SIGNAL" '(grey 0.75))))
 ; ..a black board, a radio mast on it in neon green: two legs braced across and crossed, a
 ; mast and its tip
 (: admast (texture 128 128 9
@@ -460,6 +472,10 @@
                                 (rows 32 33 (shade 0.6)) (rows 48 49 (shade 0.6)) (rect 12 7 20 9 (grey 0.2)) (rect 12 23 20 25 (grey 0.2))
                                 (rect 12 39 20 41 (grey 0.2)) (rect 12 55 20 57 (grey 0.2))))))
 (: screen (texture 16 16 0.5 '((fill (rgb 0.04 0.04 0.05)) (noise 4 0.2))))
+;; ..the mast the tower was built round: galvanised steel, and red and white high up
+(: mastgrey (feel 'metal (texture 32 32 1 '((fill (rgb 0.6 0.62 0.62)) (noise 2 0.1) (patches 4 0.25 (rgb 0.52 0.55 0.5)) (rows 0 1 (shade 0.8))))))
+(: mastred (feel 'metal (texture 32 32 1 '((fill (rgb 0.78 0.16 0.1)) (noise 2 0.08) (patches 4 0.2 (shade 0.85))))))
+(: mastwhite (feel 'metal (texture 32 32 1 '((fill (grey 0.88)) (noise 2 0.06) (patches 4 0.2 (shade 0.9))))))
 (: cloth (feel 'soft (texture 16 16 0.5 '((fill (rgb 0.16 0.17 0.22)) (noise 1 0.3)))))
 ; ..inside the tower's orb, darker, and at its middle a smiling face that makes for whoever comes in
 (: pinkin (texture 128 64 8 '((fill (rgb 0.72 0.24 0.5)) (patches 8 0.35 (shade 0.75)) (patches 5 0.25 (rgb 0.9 0.42 0.68))
@@ -475,8 +491,8 @@
 (: (officedoor x y z) (fit {'all wood} (box [(x - 0.45) (y - 0.05) (z - 1.0)] [(x + 0.45) y (z + 1.0)])))
 (: (copier x y z) [(fit {'all greysteel} (box [(x - 0.5) (y - 1.0) (z - 0.35)] [(x + 0.5) (y - 0.06) (z + 0.35)]))
                    (fit {'all screen} (box [(x - 0.45) (y - 0.06) (z - 0.3)] [(x + 0.45) y (z + 0.3)]))])
-; ..a swivel chair, its back to the desk
-(: (chair x y z) (furnish 'chair [x (y - 0.45) z] 180 {'w 0.5 'd 0.5 'h 0.95 'top 0.08 'leg 0.03 'legs 'star
+; ..a swivel chair facing deg
+(: (chair x y z deg) (furnish 'chair [x (y - 0.45) z] deg {'w 0.5 'd 0.5 'h 0.95 'top 0.08 'leg 0.03 'legs 'star
                                                        'skin {'soft cloth 'frame greysteel 'feet screen}}))
 (: (tile x y z) (fit {'all ceiltile} (box [(x - 0.3) (y - 0.02) (z - 0.3)] [(x + 0.3) y (z + 0.3)])))
 (: (monitor x y z) [(fit {'all screen} (box [(x - 0.26) y (z - 0.03)] [(x + 0.26) (y + 0.34) (z + 0.03)]))
@@ -484,8 +500,10 @@
 ; ..a piece by its name, turned deg about its middle
 (: (piece p) (: k (p 0) x (p 1) y (p 2) z (p 3)
    (turn (p 4) [x z] [(k @ 'slab (slab x y z 3.2 3.2) 'desk (desk x y z) 'cabinet (cabinet x y z) 'door (officedoor x y z)
-                          'copier (copier x y z) 'chair (chair x y z) 'tile (tile x y z) (monitor x y z))])))
+                          'copier (copier x y z) 'chair (chair x y z 180) 'tile (tile x y z) (monitor x y z))])))
 
+; ..a chair at the desk at x z on the floor at y, turned to it as one was left, a little askew and pulled out
+(: (sat x y z) (: k (sin (1.7 * x + 0.91 * y + 0.3 * z)) (chair (x + 0.12 * k) (y + 0.453) (z - 0.9 - 0.1 * k * k) (24.0 * k))))
 ; the tower's floors, four metres each, the offices between [-9.7 -9.7] and [9.7 9.7], the
 ; ground floor's south window parted for the door; the furniture a hair over the carpet, so
 ; it does not cut the floor
@@ -495,18 +513,96 @@
              (window [-8 (y + 0.9) -10] [8 (y + 2.9) -9.7] glass))
     (window [-8 (y + 0.9) 9.7] [8 (y + 2.9) 10] glass)
     (window [-10 (y + 0.9) -8] [-9.7 (y + 2.9) 8] glass) (window [9.7 (y + 0.9) -8] [10 (y + 2.9) 8] glass)
-    (strip-light [-4 (y + 3.7) 0]) (strip-light [3 (y + 3.7) -5])
-    (desk -6 (y + 0.753) 7.5) (chair -6 (y + 0.453) 6.6) (monitor -6 (y + 0.756) 7.7)
-    (desk -2 (y + 0.753) 7.5) (chair -2 (y + 0.453) 6.6)
-    (desk -6 (y + 0.753) -7.5) (cabinet -9.2 (y + 1.303) -4) (cabinet -9.2 (y + 1.303) -3.4)]))
+    (strip-light [-7.5 (y + 3.7) 0]) (strip-light [3 (y + 3.7) -7.5])
+    (desk -6 (y + 0.753) 7.5) (sat -6 y 7.5) (monitor -6 (y + 0.756) 7.7)
+    (desk -2 (y + 0.753) 7.5) (sat -2 y 7.5)
+    (desk -6 (y + 0.753) -7.5) (sat -6 y -7.5) (cabinet -9.2 (y + 1.303) -4) (cabinet -9.2 (y + 1.303) -3.4)]))
 ; ..the stairs up from floor k: twenty-two treads of 4/22 m up and a quarter along, by turns
-; north up the east side and south up the middle, through a hole in the floor over them; skip
+; north up against the east wall and south beside it, clear of the mast, through a hole in the floor over them; skip
 ; the steps left out
-(: (stair k skip) (: y (4 * k) up (k % 2 = 0) x0 (up ? 6.5 3.5) x1 (up ? 9.3 6.3) rise (4.0 / 22.0)
+(: (stair k skip) (: y (4 * k) up (k % 2 = 0) x0 (up ? 7.7 5.6) x1 (up ? 9.6 7.5) rise (4.0 / 22.0)
    (z i) (up ? (-3 + 0.25 * i) (2.5 - 0.25 * i - 0.25))
    [(skin {'floor carpet 'walls paint 'ceiling ceiltile} (air (box [x0 (y + 3.6) -3] [x1 (y + 4.05) 2.5])))
     (map (i \ (skin {'floor carpet 'walls cast} (solid (box [x0 (y + rise * i) (z i)] [x1 (y + rise * (i + 1)) (z i + 0.25)]))))
          (filter (i \ !(elem i skip)) ^22))]))
+
+;; the mast the tower was built round, as the sign has it, GTX's: four legs from the ground
+;; floor's carpet to a walk under the orb, nearer as they rise, the floors pierced where they
+;; pass; a cross of bars on each face of each storey. over the roof a level each a jump apart
+;; at the pull there, a beam set in from each face by turns, so they wind up the mast and one
+;; is climbed from the next where they cross, and girders round the faces by turns;
+;; braces there seen and never in the way. over the walk a mast into the orb, steps round it
+(: orb-at [0 112 0])
+(: tower-pull [[33 9.8] [53 5.0] [79 2.6] [109 1.4]])
+(: mast-top 88.0)
+; ..the legs' half width at height y
+(: (mast-w y) (5.0 - 4.1 * y / mast-top))
+; ..the pull at height y in the tower, held past the table's ends
+(: (pull-at y) (: w (y + 9.0) g tower-pull n #g
+   (seg p q) (w < p 0 ? [] (w >= q 0 ? [] [(p 1 + (q 1 - p 1) * (w - p 0) / (q 0 - p 0))]))
+   hit (catmap (i \ seg (g i) (g (i + 1))) ^(n - 1))
+   (two? hit ? <hit (w < (g 0 0) ? (g 0 1) (g (n - 1) 1)))))
+; ..from level to level: under what a jump and a pull up reach there, jump-v 4.4 a second, and
+; never so far apart that a jump runs under the next before it is high enough
+(: (rung y) (min 2.4 (0.8 * (9.68 / pull-at y + 0.6))))
+(: (rungs y top) (y > top ? [] ([y] + rungs (y + rung y) top)))
+; ..the levels on the mast, and over its top the steps on to under the orb
+(: mast-ys (rungs (24.0 + rung 24.0) (mast-top - 0.5)))
+(: step-ys (rungs (mast-ys (#mast-ys - 1) + rung (mast-ys (#mast-ys - 1))) (orb-at 1 - 6.5)))
+; ..a level's steel: grey low, red and white by turns over 60
+(: (mast-skin i y) (y < 60.0 ? mastgrey (i % 2 = 0 ? mastred mastwhite)))
+; ..level i at y: a beam 0.8 m wide set in from a face, north, east, south, west by turns, face
+; to face, so they wind up the mast crossing one another, one over another only four levels
+; up; and its girders, 0.6 m wide, along two opposite faces between the legs, short of them, so
+; neither cuts the other
+(: (level-at i y) (: w (mast-w y) t (mast-skin i y) a (max 0.35 (min (0.6 * w) (w - 0.75))) b (w + 0.3) f (i % 4) s (f < 2 ? 1 -1)
+   [(whole (skin {'all t} (solid (f % 2 = 0 ? (box [(0.0 - b) (y - 0.3) (s * a - 0.4)] [b y (s * a + 0.4)])
+                                              (box [(s * a - 0.4) (y - 0.3) (0.0 - b)] [(s * a + 0.4) y b])))))
+    (map (s \ whole (skin {'all t} (solid (i % 2 = 0
+                                            ? (box [(0.4 - w) (y - 0.25) (s * w - 0.3)] [(w - 0.4) y (s * w + 0.3)])
+                                            (box [(s * w - 0.3) (y - 0.25) (0.4 - w)] [(s * w + 0.3) y (w - 0.4)])))))
+         [-1 1])]))
+; ..a face's corners at height y, the face on side s of x (e 1) or of z (e 0), going across it
+(: (face-at e s y a) (: w (mast-w y) (e = 1 ? [(s * w) y (a * w)] [(a * w) y (s * w)])))
+; ..a bar's square of points about c, crossways to the face e
+(: (bar-ring c e d r) (: n (e = 1 ? [1.0 0.0 0.0] [0.0 0.0 1.0]) l (sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2))
+   u [(d 0 / l) (d 1 / l) (d 2 / l)] m [(u 1 * n 2 - u 2 * n 1) (u 2 * n 0 - u 0 * n 2) (u 0 * n 1 - u 1 * n 0)]
+   (at a b) [(c 0 + r * (a * n 0 + b * m 0)) (c 1 + r * (a * n 1 + b * m 1)) (c 2 + r * (a * n 2 + b * m 2))]
+   [(at 1 1) (at -1 1) (at -1 -1) (at 1 -1) (at 1 1)]))
+; ..the two bars crossing face e side s between heights y0 and y1, as a drape's rows
+(: (cross-rows e s y0 y1) (: (bar a b) (: p (face-at e s y0 a) q (face-at e s y1 b) d [(q 0 - p 0) (q 1 - p 1) (q 2 - p 2)]
+                                         [(bar-ring p e d 0.07) (bar-ring q e d 0.07) [() () () () ()]])
+   (bar -1 1 + bar 1 -1)))
+; ..or solid, where the offices are walked round them: short of the legs, and the two a hair
+; apart across the face, so none cuts another
+(: (cross-rods e s y0 y1) (map (a \ (: p (face-at e s y0 a) q (face-at e s y1 (0 - a)) d (map (k \ q k - p k) ^3)
+                                     t (0.35 / sqrt (d 0 * d 0 + d 1 * d 1 + d 2 * d 2)) o (0.09 * a) n (e = 1 ? [o 0.0 0.0] [0.0 0.0 o])
+                                     (at u) (map (k \ p k + u * d k + n k) ^3)
+                                     (rod (at t) (at (1.0 - t)) 0.08 6 mastgrey)))
+                               [-1 1]))
+; ..the legs in pieces from level to level, each piece's box close about it, so a girder by a leg
+; cuts none of it
+(: leg-ys ([0.05] + map (k \ 4.0 * k + 4.0) ^6 + mast-ys + [mast-top]))
+(: mast [(map (c \ map (i \ (: y0 (leg-ys i) y1 (leg-ys (i + 1))
+                                (rod [(c 0 * mast-w y0) y0 (c 1 * mast-w y0)] [(c 0 * mast-w y1) y1 (c 1 * mast-w y1)] 0.22 6 mastgrey)))
+                    ^(#leg-ys - 1))
+              [[-1 -1] [1 -1] [1 1] [-1 1]])
+         ; ..the storeys' crosses, from floor to ceiling
+         (catmap (k \ catmap (e \ catmap (s \ cross-rods e s (4.0 * k + 0.05) (4.0 * k + 3.65)) [-1 1]) [0 1]) ^6)
+         (map (i \ level-at i (mast-ys i)) ^#mast-ys)
+         ; ..each face's bars from girder to the next on it
+         (wrapped 2 (drape mastgrey (catmap (i \ catmap (s \ cross-rows (i % 2) s (mast-ys i) (mast-ys (i + 2))) [-1 1]) ^(#mast-ys - 2))))
+         ; ..the walk round the top outside the legs, its beacons at the corners
+         (: a (mast-w mast-top + 0.35) b (mast-w mast-top + 1.5) y mast-top
+            [(map (s \ whole (skin {'all mastgrey} (solid (box [(0.0 - b) (y - 0.25) (s > 0 ? a (0.0 - b))] [b y (s > 0 ? b (0.0 - a))])))) [-1 1])
+             (map (s \ whole (skin {'all mastgrey} (solid (box [(s > 0 ? a (0.0 - b)) (y - 0.25) (0.0 - a)] [(s > 0 ? b (0.0 - a)) y a])))) [-1 1])
+             (map (c \ blink (bulb [(c 0 * (b - 0.1)) (y + 0.15) (c 1 * (b - 0.1))] (rgb 1 0.06 0.03))) [[-1 -1] [1 -1] [1 1] [-1 1]])])
+         (rod [0 mast-top 0] [0 (orb-at 1 + 2.0) 0] 0.3 8 mastwhite)
+         ; ..the steps round it, a quarter turn each
+         (map (i \ (: a (1.5708 * i) y (step-ys i)
+                     (whole (skin {'all (i % 2 = 0 ? mastred mastwhite)} (solid (box [(1.1 * cos a - 0.45) (y - 0.15) (1.1 * sin a - 0.45)]
+                                                                                     [(1.1 * cos a + 0.45) y (1.1 * sin a + 0.45)]))))))
+              ^#step-ys)])
 
 (: route [['slab 1.84 36.75 8.81 13.58]
           ['slab -3.27 37.52 9.35 6.52]
@@ -570,7 +666,6 @@
           ['door 7.71 40.82 -20.81 236.62]])
 
 ; where the orb hangs, and the platform with the telescope trained on it
-(: orb-at [0 112 0])
 (: scope-at [19 97.6 6])
 (: (aim a) (: dx (orb-at 0 - scope-at 0) dz (orb-at 2 - scope-at 2) dy (orb-at 1 - scope-at 1 - 1.3)
    (a @ 'deg (atan2 dx dz * 180 / 3.14159265) (atan2 dy (sqrt (2 dx + 2 dz)) * 180 / 3.14159265))))
@@ -703,11 +798,17 @@
   (mattress [0.9 -9 -6.3] 90)
   ; a telescope in the west wing's north corner, looking out across it
   (telescope [-17.2 -9 8.9] 150 25 (rgb 0.9 0.9 0.87))
-  ; the street over the hall, under a smoggy dusk's broken cloud: a narrow pavement on the
+  ; the street over the hall, under a smoggy purple dusk's broken cloud: a narrow pavement on the
   ; station's side, a narrow steel road, and off it north by the shop a short street that
   ; ends at a blank wall, painted a half court with its hoop on the wall
   (sky 18.35 'mostly)
   (smog 0.9)
+  (dye (rgb 0.5 0.22 0.72))
+  ; ..pink where it breaks
+  (gradient [(rgb 0.88 0.4 0.24) (rgb 0.75 0.34 0.38) (rgb 0.61 0.3 0.4)])
+  ; ..and all through it far traffic, and a music box now and then
+  (hum 'traffic [-1000 -1000 -1000] [1000 1000 1000])
+  (hum 'musicbox [-1000 -1000 -1000] [1000 1000 1000])
   (skin {'floor roadmetal 'walls facade} (street [-45 8.85 8.2] [45 45 47]))
   (skin {'all paving} (solid (box [-45 8.85 8.2] [45 9 22])))
   (skin {'all paving} (solid (box [-45 8.85 32.2] [-31 9 33])))
@@ -799,8 +900,6 @@
   (buzz (sign [-0.0 12.2 19] 0.5 "STATION" (rgb 0.3 0.75 1)))
   (bin [-7.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
   (bin [8.5 9 20.4] 0.55 0.55 0.95 binmetal binsign)
-  ; ..and a stuffed Mitty someone left out on top of the arch, looking out over the street
-  (plush [7 13.2 17.65] 20 "mitty.glb")
   ; the way out north: two grav shafts behind the hall's north wall; facing them, up on the
   ; right and down on the left, each a doorway at its foot and one at its head out of the
   ; wing, three windows up over each doorway into its glow
@@ -895,8 +994,8 @@
   (shopsign -34.41 -1 1)
   (skin {'all darkmetal} (solid (box [-39.2 22.5 16.8] [-38.8 25 17.2])))
   (spinner [-39 25 17] 5 3.5 spin1 spin2)
-  ; ..the advertisements: red and blue across that block's face
-  (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 adredblue)
+  ; ..across that block's face a security monitor showing the street what the eye sees
+  (stamp [120 12] 2 dots (rgb 0.92 0.92 0.92) (feed camfeed (ad [-26.5 19 11.83] [0 0 1] [0 1 0] 13 7 nosignal)))
   ; ..and high on the east wall over the road a square black board, a green radio mast on it sending three
   ; rings of magenta waves out each side in turn, GTX in orange neon under it
   (ad [44.97 28 25] [-1 0 0] [0 1 0] 9 9 admast)
@@ -1018,24 +1117,25 @@
   ; ..and the city round about it
   city
   ; ..the pull, a whole one through the offices, easing above them to a seventh at the top
-  (gravity [[33 9.8] [53 5.0] [79 2.6] [109 1.4]])
+  (gravity tower-pull)
   (move [32.5 9 43]
    [; ..six whole floors and the stairs through them
     (skin {'walls cladding 'floor carpet 'ceiling cast} (solid (box [-10 0 -10] [10 24 10])))
     (map storey ^6)
     (air (box [-1.5 0 -10.05] [1.5 3 -9.65]))
     (map (k \ stair k ()) ^6)
+    mast
     ; ..its roof the first floor come apart: the stairs on up, columns, stubs of wall
     (stair 6 ())
     (map (c \ (skin {'all cast} (solid (box [(c 0 - 0.25) 24 (c 1 - 0.25)] [(c 0 + 0.25) (c 2) (c 1 + 0.25)]))))
          [[7.5 7.5 27.7] [-7.5 7.5 27.7] [-7.5 -7.5 27.7] [2.5 -7.5 25.5] [-2.5 2.5 26.2]])
     (map (w \ (skin {'all cladding} (solid (box (w 0) (w 1)))))
          [[[-10 24 -10] [-4 26.2 -9.7]] [[-10 24 9.7] [-2 25.4 10]] [[9.7 24 -10] [10 27.7 -6]] [[-10 24 1] [-9.7 25 6]]])
-    (desk -5 24.75 -6) (chair -4.4 24.45 -5.2) (cabinet 1 25.3 8.5)
+    (desk -5 24.75 -6) (chair -4.4 24.45 -5.2 160) (cabinet 1 25.3 8.5)
     ; ..the next floor in three plates, its stairs with steps gone
     (slab 6.5 28 6.25 7 7.5) (slab -5.5 28 6 9 8) (slab -5.75 28 -5.25 7.5 8.5)
     (stair 7 [7 8 15])
-    (desk 6 28.95 7) (chair -6 28.6 5) (tile 4 28.4 4)
+    (desk 6 28.95 7) (chair -6 28.6 5 180) (tile 4 28.4 4)
     ; ..the next drifted apart, and rubble up from it
     (slab 5.8 32 -6.3 7.2 6.6) (slab -5.4 32.2 -7.35 8.8 5.7) (slab -4.75 31.8 6.6 6.5 7.2)
     (map (b \ (skin {'all cast} (solid (box [(b 0 - 0.6) (b 2 - 0.8) (b 1 - 0.6)] [(b 0 + 0.6) (b 2) (b 1 + 0.6)]))))

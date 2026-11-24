@@ -6,7 +6,11 @@
 uintptr_t te_ms(void);
 #define UCDC_VID 0x16C0
 #define UCDC_PID 0x0483
+#ifdef TE_LOADER
+#define UCDC_PRODUCT "love loader"
+#else
 #define UCDC_PRODUCT "inle teensy41"
+#endif
 #include "../usbcdc.h"
 
 #define USB1(o)  REG(0x402E0000u + (o))
@@ -142,6 +146,12 @@ static void usbhw_reboot(void) {
   REG(0xE000EDFCu) &= ~(1u << 16);
   arm_halt251(); }
 
+// off the bus, its interrupt masked and none pending: what the loader leaves an image
+void usb_off(void) {
+  USB1(USBINTR) = 0;
+  USB1(USBCMD) &= ~CMD_RS;
+  for (uint32_t k = 0; k < 8; k++) REG(0xE000E180u + 4u * k) = 0xFFFFFFFFu, REG(0xE000E280u + 4u * k) = 0xFFFFFFFFu; }
+
 void usb_isr(void) {
   uint32_t s = USB1(USBSTS);
   USB1(USBSTS) = s;
@@ -172,6 +182,7 @@ static void usb_stray(void) {
   if (n < 160) REG(0xE000E180u + 4u * (n / 32)) = 1u << (n % 32); }
 
 #define SCB_DCCIMVAC 0xE000EF70u
+#define SCB_DCCMVAC 0xE000EF68u
 #define MPU_CTRL 0xE000ED94u
 #define MPU_RBAR 0xE000ED9Cu
 #define MPU_RASR 0xE000EDA0u
@@ -225,6 +236,9 @@ void usb_init(void) {
   for (uint32_t i = 0; i < 16; i++) REG(vt + 4 * i) = (uint32_t) (uintptr_t) vectors[i];
   for (uint32_t i = 16; i < 176; i++) REG(vt + 4 * i) = (uint32_t) (uintptr_t) usb_stray;
   REG(vt + 4 * (16 + irq_usb1)) = (uint32_t) (uintptr_t) usb_isr;
+  // the table's lines out of the cache to the ram, where an exception finds its vector
+  arm_dsb();
+  for (uint32_t i = 0; i < 4u * 176; i += 32) REG(SCB_DCCMVAC) = (uint32_t) (vt + i);
   arm_dsb();
   REG(SCB_VTOR) = (uint32_t) vt;
   arm_dsb_isb();

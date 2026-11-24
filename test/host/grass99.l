@@ -40,7 +40,8 @@
    _ (pins g 'covers '(0.3 0.3 0.3 0.3 0.3 0.3 0.3) 'cal 0.0 'moon0 0.25)
    _ (grass99-frame g)
    td (int (24.0 / dh + 0.5)) f0 (g 'fr)
-   (pic h fr) (pins g 'h h 'fr fr, meadow-pens (g 'mv) g (pins (meadow-sky g) 'per (2.0 * td) 'tper td))
+   ; ..its clouds laid whole, none kept from another hour's sun
+   (pic h fr) (pins g 'h h 'fr fr, pin (g 'mv) 'thick (), meadow-pens (g 'mv) g (pins (meadow-sky g) 'per (2.0 * td) 'tper td))
    (moon h) (pin g 'h h, meadow-bodies (g 'mv) g 1)
    a (pic 19.0 f0) b (pic 43.0 (f0 + td)) c (pic 19.0 (f0 + td // 3))
    (near x y) (all (k \ (x k - y k @ d (amax d < 0.002 && -0.002 < amin d))) ^3)

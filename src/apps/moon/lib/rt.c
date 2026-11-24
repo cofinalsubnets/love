@@ -55,9 +55,15 @@ int32_t __ctzsi2(uint32_t x) {
  if (!(x & 0x00000001u)) { n += 1; }
  return n; }
 
+/* v7-M has the instruction; v is never 0 */
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)
+#define CLZ32(x) __builtin_clz(x)
+#else
+#define CLZ32(x) __clzsi2(x)
+#endif
 static int32_t clz64(uint64_t v) {
  uint32_t hi = (uint32_t) (v >> 32);
- return hi ? __clzsi2(hi) : 32 + __clzsi2((uint32_t) v); }
+ return hi ? CLZ32(hi) : 32 + CLZ32((uint32_t) v); }
 
 /* 32x32 -> 64 out of four 16x16 products: v6-M's MULS is 32x32 -> 32 and nothing wider */
 static uint64_t mul32(uint32_t a, uint32_t b) {
@@ -88,6 +94,26 @@ static uint64_t udivmod64(uint64_t n, uint64_t d, uint64_t *rem) {
  int32_t sh;
  if (d == 0) { if (rem) *rem = 0; return ~(uint64_t) 0; }
  if (n < d) { if (rem) *rem = n; return 0; }
+#if defined(__arm__) && !defined(__ARM_ARCH_6M__)   /* n holds in a word, so d does: udiv */
+ if (!(uint32_t) (n >> 32)) {
+  uint32_t nl = (uint32_t) n, dl = (uint32_t) d, ql = nl / dl;
+  if (rem) *rem = nl - ql * dl;
+  return ql; }
+/* d holds in a word: the high word's udiv, then knuth's two 16-bit digits */
+ if (!(uint32_t) (d >> 32)) {
+  uint32_t dl = (uint32_t) d, nh = (uint32_t) (n >> 32), nl = (uint32_t) n, qh = nh / dl;
+  int32_t s = CLZ32(dl);
+  nh -= qh * dl;
+  dl <<= s;
+  if (s) nh = nh << s | nl >> (32 - s), nl <<= s;
+  uint32_t d1 = dl >> 16, d0 = dl & 0xffff, q1 = nh / d1, r = nh - q1 * d1, n1 = nl >> 16, n0 = nl & 0xffff;
+  while (q1 >> 16 || q1 * d0 > (r << 16 | n1)) { q1--; r += d1; if (r >> 16) break; }
+  uint32_t u = (nh << 16 | n1) - q1 * dl, q0 = u / d1;
+  r = u - q0 * d1;
+  while (q0 >> 16 || q0 * d0 > (r << 16 | n0)) { q0--; r += d1; if (r >> 16) break; }
+  if (rem) *rem = ((u << 16 | n0) - q0 * dl) >> s;
+  return (uint64_t) qh << 32 | (q1 << 16 | q0); }
+#endif
  sh = clz64(d) - clz64(n);
  dd = sl64(d, sh);
  for (; sh >= 0; sh--) {

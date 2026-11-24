@@ -1109,6 +1109,12 @@
       (refused? (cgn "int main() { double d; asm(\"syscall\" : : \"r\"(d)); return 0; }"))
       (refused? (cgn "int main() { asm(\"syscall\" ::: \"rsp\"); return 0; }"))
       (refused? (cgn "int main() { register long v asm(\"rsp\") = 1; asm(\"\" : \"+r\"(v)); return v; }"))
+      ; a switch on a constant ends at a block's break: the dead arm's asm, wrong for an int, never lays
+      !(refused? (cgn "int f(int *p, int n) { switch (4) { case 4: { asm(\"xaddl %0, %1\" : \"+r\"(n), \"+m\"(*p)); break; } case 8: { asm(\"xaddq %0, %1\" : \"+r\"(n), \"+m\"(*p)); break; } } return n; } int main() { return 0; }"))
+      ; x86's immediate letters hold their ranges: past them a register where one is offered, else refused
+      !(refused? (cgn "int main() { unsigned long a[8]; asm(\"btsq %1, %0\" : \"+m\"(*a) : \"Ir\"(300UL)); return 0; }"))
+      !(refused? (cgn "int main() { asm(\"addq %0, %%rax\" : : \"K\"(100) : \"rax\"); return 0; }"))
+      (refused? (cgn "int main() { asm(\"addq %0, %%rax\" : : \"K\"(200) : \"rax\"); return 0; }"))
       ; the jump leaves its fix open for the function's own label, which the blob never binds
       (two? g6) (hasfix <>g6 'main.out)
       ; outputs ride a trampoline per label that stores them and jumps on; %l a label's, %N an operand's

@@ -51,7 +51,7 @@ While it is open, the hud holds the *user's card*, at the login's name (**USER**
 
 The hud is drawn by **src/apps/mitty/hud.l**. It reaches the hive through bee's *core*, a tablet of doors (**bee-core** in **src/apps/bee.l**): the user's card and its mail, the sessions, and the queues' lines.
 
-The settings are read from the nest's **etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
+The settings are read from the nest's **etc/bee.l**, one form per line: **(heavy-max** *n***)**, **(mem-floor** *gb***)**, **(heavy-load** *n***)**, **(queue-watch** *n***)**, **(gone-minutes** *n***)** and **(stall-minutes** *n***)**. A tree's own **./.bee.l** travels with a clone, so it may set only **queue-watch**, **gone-minutes** and **stall-minutes** over them.
 
 # SESSIONS AND MESSAGES
 
@@ -146,7 +146,7 @@ It prints the stamps it saw and what it took, and exits 0, 1 when a pull failed,
 
 # LOCKS
 
-The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)**. A lock is held by a pid, so it lives as long as its holder. A session's locks are held under its server's pid, the one on its card.
+The machine is shared, and **src/apps/locks.l** keeps its locks: an exclusive lock per resource, such as one make per **out/**, and a pool of heavy tickets, at most **(heavy-max** *n***)** at once (2 unless set) and none granted while available memory is below **(mem-floor** *gb***)** or the one-minute load is at or above **(heavy-load** *n***)**, the machine's processors unless set. A lock is held by a pid, so it lives as long as its holder. A session's locks are held under its server's pid, the one on its card.
 
 A session has **lock_acquire** (*name*, *kind* exclusive or heavy, *note*, *no_row*), **lock_release** and **lock_list**. An acquire answers at once: granted, or queued with its position, who holds it and how much memory is available. A queued lock is asked for again every 5 seconds, which keeps its place, and when it is granted a message from **lock-***name* says so. So a turn never waits on a lock. From a shell, **love bee --lock** waits for an exclusive lock on the command's **out/** (**./out** when there is one, or **--out** *dir*) and, with **--heavy**, for a heavy ticket. It then runs the command, releases both however the command ends, and exits with its status. A binary built without **src/apps/locks.l** says so.
 
