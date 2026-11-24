@@ -29,6 +29,7 @@ void hci_irq(void);                    // hci.c
 #define MU_CNTL     0x60               // 3: receive and transmit on
 #define LSR_RX      (1u << 0)          // a byte waits
 #define LSR_TXE     (1u << 5)          // room for one
+#define LSR_IDLE    (1u << 6)          // the fifo empty, the last bit out
 
 #define IRQ_PEND1   0x04               // gpu interrupts 0-31, pending
 #define IRQ_PEND2   0x08               // ..32-63
@@ -182,6 +183,8 @@ void k_tryboot(void) { uint32_t f = 1; k_mbox(0x00038064, &f, 1); }
 #define PM_WDOG 0x24
 #define PM_PW   0x5a000000u
 void k_reset(void) {
+  // the last line out first; bounded, as serial_putc is
+  for (int i = 0; i < 1000000 && !(mmio_rd(AUX, MU_LSR) & LSR_IDLE); i++) {}
   mmio_wr(PM, PM_WDOG, PM_PW | 10);
   mmio_wr(PM, PM_RSTC, PM_PW | (mmio_rd(PM, PM_RSTC) & ~0x30u) | 0x20);
   for (;;) k_wait(); }
