@@ -111,7 +111,7 @@ lane j test/thumb2/libj.c test/thumb2/harnessj.c "-Isrc/apps/moon/include" 2 30 
 moonc -t "$tgt" -Isrc/apps/moon/include -c src/apps/moon/lib/rt.c "$d/rt.o" || fail "mooncc rt.c"
 lx=$d/rt.o
 lane q test/thumb2/lib64.c test/thumb2/harnessq.c "" 9 120 "$tgt rt.c's divides" \
-  " = 101 udiv, 102 umod, 103 div, 104 mod, 105 clz, 106 __udivdi3, 107 __umoddi3 differs from gcc's"
+  " = 101 udiv, 102 umod, 103 div, 104 mod, 105 clz, 106 __udivdi3, 107 __umoddi3, 108 and 109 theirs at a digit two over, differs from gcc's"
 lx=
 
 case $tgt in

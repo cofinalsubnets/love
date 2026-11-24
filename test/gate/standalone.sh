@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
  if (want < 0) return 3;
  uint8_t *o = malloc(want ? (size_t) want : 1);
  struct lz_model *m = lz_new(4);
- if (!m || l2_dec(s, o, (uintptr_t) want, m, 0)) return 4;
+ if (!m || l2_dec(s, n, o, (uintptr_t) want, m, 0)) return 4;
  fwrite(o, 1, (size_t) want, stdout); return 0; }
 EOF
 # love's side of a raw LZMA2 stream: the container verb takes only .xz and .lzma

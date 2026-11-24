@@ -99,6 +99,20 @@ static uint64_t udivmod64(uint64_t n, uint64_t d, uint64_t *rem) {
   uint32_t nl = (uint32_t) n, dl = (uint32_t) d, ql = nl / dl;
   if (rem) *rem = nl - ql * dl;
   return ql; }
+/* d holds in a word: the high word's udiv, then knuth's two 16-bit digits */
+ if (!(uint32_t) (d >> 32)) {
+  uint32_t dl = (uint32_t) d, nh = (uint32_t) (n >> 32), nl = (uint32_t) n, qh = nh / dl;
+  int32_t s = CLZ32(dl);
+  nh -= qh * dl;
+  dl <<= s;
+  if (s) nh = nh << s | nl >> (32 - s), nl <<= s;
+  uint32_t d1 = dl >> 16, d0 = dl & 0xffff, q1 = nh / d1, r = nh - q1 * d1, n1 = nl >> 16, n0 = nl & 0xffff;
+  while (q1 >> 16 || q1 * d0 > (r << 16 | n1)) { q1--; r += d1; if (r >> 16) break; }
+  uint32_t u = (nh << 16 | n1) - q1 * dl, q0 = u / d1;
+  r = u - q0 * d1;
+  while (q0 >> 16 || q0 * d0 > (r << 16 | n0)) { q0--; r += d1; if (r >> 16) break; }
+  if (rem) *rem = ((u << 16 | n0) - q0 * dl) >> s;
+  return (uint64_t) qh << 32 | (q1 << 16 | q0); }
 #endif
  sh = clz64(d) - clz64(n);
  dd = sl64(d, sh);

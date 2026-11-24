@@ -1,7 +1,7 @@
 # test/test.mk -- the test_* gates, included by ./Makefile; paths resolve from the root
 
 # every gate is phony: one missing here stops running once a file of its name appears
-.PHONY: \
+.PHONY: test_psnap \
   moon-bzip2 moon-bzip2-a64 moon-bzip2-rv64 moon-gzip moon-gzip-a64 moon-gzip-rv64 \
   moon-bison moon-flex moon-perl moon-lua moon-lua-a64 moon-lua-rv64 moon-m4 moon-m4-a64 moon-m4-rv64 moon-sqlite \
   moon-sqlite-a64 moon-sqlite-rv64 moon-tar moon-tar-a64 moon-tar-rv64 mx nettest test \
@@ -180,6 +180,7 @@ hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
 hostnif_tests += test/host/grap.l test/host/chem.l   # grap and chem without plan 9 or groff
 # test/host/sh.l drives out/lush via out/love, not PATH's love
+hostnif_tests += test/host/deflate.l   # deflate streams off the format's description, through every decoder
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
@@ -393,8 +394,22 @@ test_vi: host
 # mooncc: the pipeline's goldens, then compile-and-run against a gcc -O0 differential
 moonrun = $m mooncc
 # love0 for the inline-asm checks: the bootstrap lane binds its own `post`
-test_moon: host $(love0) $(ho)/mooncc0.image
+test_moon: host $(love0) $(ho)/mooncc0.image test_psnap
 	@$(gsh) test/gate/moon.sh $(ho) $m $(love0)
+# the parser's prefix memo: its laws, then its oracle -- each runtime group of an isa compiled
+# with every unit parsed whole is the archive the build laid. psnap_isas="$(rt_isas)" runs them all
+psnap_isas ?= x64
+psnap_legs = $(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),psnap-$i-$g))
+define psnapleg
+.PHONY: psnap-$(1)-$(2)
+psnap-$(1)-$(2): out/rt/$(1)/$(2).a
+	@MOON_NOSNAP=1 $$(rtlove) src/tools/mkrt.l -m $$(ho)/.psnap-$(1)-$(2).a $(1) $$(patsubst %/mksys.l,$(if $(filter $(rt_nosys),$(1)),,mksys),$$(call rt_src,$(2))) && cmp $$(ho)/.psnap-$(1)-$(2).a $$< && rm -f $$(ho)/.psnap-$(1)-$(2).a || { echo "  psnap: FAIL -- $$< is not its whole parse"; exit 1; }
+endef
+$(foreach i,$(psnap_isas),$(foreach g,$(call rt_gs,$i),$(eval $(call psnapleg,$i,$g))))
+test_psnap: $(love0) $(ho)/mooncc0.image $(psnap_legs)
+	@echo 'TEST test/gate/psnap.sh (the prefix memo against the whole parse)'
+	@$(gsh) test/gate/psnap.sh $(love0) wake $(ho)/mooncc0.image
+	@echo '  psnap: ok -- $(words $(psnap_legs)) runtime groups ($(psnap_isas)) are their whole parse'
 # the generated headers, dest:source:value:check, written by `make mx` and diffed by test_clay;
 # a refresh is gated by `make test`
 mx_gen = src/love/mx.h:src/love/mx.l:mx-h:mx-ok src/love/kinds.h:src/love/mx.l:kinds-h:mx-ok src/love/nifs.h:src/love/nifs.l:nifs-h:nifs-ok \
@@ -425,6 +440,7 @@ endef
 $(foreach s,$(mx_gen),$(eval $(call mx_dep,$(s))))
 src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l src/love/compress/bz_gen.h test/uuzbvc.l src/love/compress/lz_gen.h test/uuzxvc.l src/love/mag_gen.h test/uumagvc.l: src/love/compress/vc.l
 src/love/mag_gen.h test/uumagvc.l: src/love/compress/ring.l
+src/love/compress/inf_gen.h src/love/compress/inf_run_gen.h src/love/compress/inf_st_gen.h test/uuinfvc.l: src/love/compress/deflate.l
 src/love/gpark_gen.h: src/love/boot/glaze.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/rv64.l
 # test_clay -- (cparse (clay-show ast)) == ast over test/cc, the headers regenerate, and mooncc parses
 # their includers to the clay vc.l laid (test/gate/clayeq.l)
@@ -809,8 +825,9 @@ test_holo: host
 	@echo TEST test/holo/golden.l
 	@cat src/love/holo/holo.l src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l \
 	    src/love/holo/rv64.l src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/text.l src/love/holo/dialect.l src/love/holo/gas.l src/love/holo/elf.l \
-	    src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
+	    src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/golden.l | $(gsh) test/gate/run.sh holo "$m" ", 0 failed"
 	@cat test/00-init.l test/law/lds.l | $(gsh) test/gate/run.sh lds "$m" "test/law/lds:"
+	@cat test/00-init.l src/love/holo/reach.l test/law/reach.l | $(gsh) test/gate/run.sh reach "$m" "test/law/reach:"
 	@cat test/00-init.l test/law/ld.l | $(gsh) test/gate/run.sh ld "$m" "test/law/ld:"
 	@$(gsh) test/gate/machobind.sh "$m"
 	@$(gsh) test/gate/beorder.sh $m $(ho)
@@ -1227,7 +1244,7 @@ test_kernel_rv64 test_kernel_uproc_rv64:
 else
 test_kernel_rv64: host $(S)/tools/ktest.l
 	@$(MAKE) -s a=rv64 $(ko)/love-rv64.elf
-	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1200s)"
+	@echo TEST $(ko)/love-rv64.elf "(the WARM lane: serial, headless, TCG, -kernel; ceiling 1800s)"
 	@$m $(S)/tools/ktest.l $(ko)/love-rv64.elf - rv64
 
 # test_kernel_uproc's laws on rv64: its own mooncc-built C program, U-mode, address spaces of their own.
@@ -1423,12 +1440,14 @@ test_nestwasm:
 # holo's wasm writer: three modules, wasm-opt if present, run by node, and the fuzz vs its model
 test_holowasm: host
 	@echo TEST test/holo/wasm.l
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/wasm.l | $m
 	@$(if $(WASMOPT),for w in $(holo_wasm); do $(WASMOPT) $(wasmopt_flags) $$w -o /dev/null 2>/dev/null || exit 1; done && echo "  wasm-opt: all valid",echo "  wasm-opt: absent, node alone validates")
 	@$(NODE) test/holo/wasm.mjs out/.holo.wasm out/.holo2.wasm
 	@$(NODE) test/holo/loader.mjs out/.holo3.wasm
+	@echo TEST test/gate/wasmdrop.sh "(the wasm link's drop)"
+	@$(gsh) test/gate/wasmdrop.sh $(ho) $m $(NODE)
 	@echo TEST test/holo/fuzz/wasm.l "(the wasm lane's second opinion: v8 against the model)"
-	@cat src/love/holo/holo.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
+	@cat src/love/holo/holo.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l test/holo/fuzz/wasm.l | $m
 	@$(NODE) test/holo/fuzz/wasm.mjs out/.wasmfuzz.wasm out/.wasmfuzz.json
 endif
 

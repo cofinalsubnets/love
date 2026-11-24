@@ -1,4 +1,50 @@
 // lz_gen.h -- laid by src/love/compress/lz.l, `make mx`. edit that file.
+static void lz_reset(struct lz_model *m) {
+ lzp *P = (lzp *) m, *L = m->lit;
+ uintptr_t j, litn = (uintptr_t) 768 << (m->lc + m->lp);
+ for (j = 0; j < 1846; j++) P[j] = 1024;
+ for (j = 0; j < litn; j++) L[j] = 1024;
+ m->state = 0;
+ m->reps[0] = 0;
+ m->reps[1] = 0;
+ m->reps[2] = 0;
+ m->reps[3] = 0; }
+static int lz_props(struct lz_model *m, unsigned int b, unsigned int maxlclp) {
+ unsigned int lc = 0, lp = 0, pb = 0, q;
+ if (224 < b) return 0;
+ lc = b % 9;
+ q = b / 9;
+ lp = q % 5;
+ pb = q / 5;
+ if (maxlclp < lc + lp) return 0;
+ m->lc = lc;
+ m->lp = lp;
+ m->pb = pb;
+ return 1; }
+static int rd_init(struct lz_rd *r, uint8_t const *p, uintptr_t n) {
+ uint32_t cd;
+ if (n < 5) return 0;
+ cd = p[0];
+ if (cd != 0) return 0;
+ cd = (uint32_t) p[1] << 24 | (uint32_t) p[2] << 16 | (uint32_t) p[3] << 8 | p[4];
+ r->p = p;
+ r->i = 5;
+ r->n = n;
+ r->range = (uint32_t) -1;
+ r->code = cd;
+ r->bad = 0;
+ return 1; }
+static void rd_norm(struct lz_rd *r) {
+ unsigned int x;
+ if (r->range < 16777216) {
+  r->range = r->range << 8;
+  if (r->i < r->n) {
+   x = r->p[r->i];
+   r->i++;
+   r->code = r->code << 8 | x; }
+  else {
+   r->code = r->code << 8;
+   r->bad = 1; } } }
 static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr_t lim, int eopm) {
  uint8_t const *inb = r->p;
  uint8_t *ob = o->b;
@@ -597,3 +643,264 @@ static int lz_run(struct lz_model *m, struct lz_rd *r, struct lz_out *o, uintptr
  m->reps[0] = (uint32_t) r0;
  o->n = on;
  return rc; }
+static int64_t l2_walk(uint8_t const *s, uintptr_t n, uintptr_t *end) {
+ uintptr_t si = 0, k, h, u;
+ int64_t tot = 0;
+ unsigned int c;
+ while (1) {
+  if (n <= si) return -1;
+  c = s[si];
+  if (!c) {
+   *end = si + 1;
+   return tot; }
+  if (c < 128) {
+   if (2 < c) return -1;
+   if (n - si < 3) return -1;
+   k = ((uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   if (n - si - 3 < k) return -1;
+   tot = tot + k;
+   si += 3 + k; }
+  else {
+   if (c < 192) h = 5;
+   else h = 6;
+   if (n - si < h) return -1;
+   u = ((c & 31) << 16 | (uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   k = ((uint32_t) s[si + 3] << 8 | s[si + 4]) + 1;
+   if (n - si - h < k) return -1;
+   tot = tot + u;
+   si += h + k; } } }
+static int l2_dec(uint8_t const *s, uintptr_t n, uint8_t *out, uintptr_t cap, struct lz_model *m, uintptr_t pre) {
+ struct lz_out o;
+ struct lz_rd r;
+ uintptr_t si = 0, on = pre, base = 0, k, h, u, i, st, litn;
+ unsigned int c, b, x, nd, np = 1;
+ o.b = out;
+ o.cap = cap;
+ o.pause = 0;
+ nd = !pre;
+ while (1) {
+  if (n <= si) return -1;
+  c = s[si];
+  if (!c) {
+   if (on == cap) return 0;
+   return -1; }
+  x = 224 <= c || c == 1;
+  if (x) {
+   np = 1;
+   nd = 0;
+   base = on; }
+  else if (nd) return -1;
+  if (c < 128) {
+   if (2 < c) return -1;
+   if (n - si < 3) return -1;
+   k = ((uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   if (n - si - 3 < k) return -1;
+   if (cap - on < k) return -1;
+   memcpy(out + on, s + (si + 3), k);
+   on += k;
+   si += 3 + k; }
+  else {
+   if (c < 192) {
+    if (np) return -1;
+    if (n - si < 5) return -1;
+    h = 5; }
+   else {
+    if (n - si < 6) return -1;
+    b = s[si + 5];
+    x = lz_props(m, b, 4);
+    if (!x) return -1;
+    np = 0;
+    h = 6; }
+   u = ((c & 31) << 16 | (uint32_t) s[si + 1] << 8 | s[si + 2]) + 1;
+   k = ((uint32_t) s[si + 3] << 8 | s[si + 4]) + 1;
+   if (n - si - h < k) return -1;
+   litn = (uintptr_t) 768 << (m->lc + m->lp);
+   if (litn < 768) return -1;
+   if (159 < c) lz_reset(m);
+   if (cap - on < u) return -1;
+   x = rd_init(&r, s + si + h, k);
+   if (!x) return -1;
+   st = m->state;
+   if (11 < st) return -1;
+   o.n = on;
+   o.base = base;
+   x = lz_run(m, &r, &o, on + u, 0);
+   if (x != 1) return -1;
+   on = o.n;
+   if (cap < on) return -1;
+   if (on < base) return -1;
+   i = r.i;
+   if (k < i) return -1;
+   rd_norm(&r);
+   x = r.bad || r.i != r.n || r.code;
+   if (x) return -1;
+   si += h + k; } } }
+static uintptr_t lz_slide(uint8_t *win, uintptr_t on, uintptr_t dict) {
+ uintptr_t x;
+ if (on <= dict) return 0;
+ x = (on - dict) & ~15;
+ if (on < x) return 0;
+ memmove(win + 0, win + x, on - x);
+ return x; }
+static intptr_t l2_step(struct l2_st *S, uint8_t *win, uint8_t const *s, uintptr_t n, uintptr_t *o0) {
+ struct lz_model *m = &S->m;
+ struct lz_out o;
+ struct lz_rd r;
+ uintptr_t cap = S->cap, dict = S->dict, on, base, sx, k, h, u, i, st, litn;
+ unsigned int c, b, x, nd, np;
+ if (!n) return -1;
+ c = s[0];
+ if (!c) return -1;
+ on = S->n;
+ base = S->base;
+ nd = S->needdict;
+ np = S->needprops;
+ if (cap < on) return -1;
+ if (on < base) return -1;
+ x = 224 <= c || c == 1;
+ if (x) {
+  np = 1;
+  nd = 0;
+  base = on; }
+ else if (nd) return -1;
+ S->needdict = nd;
+ if (c < 128) {
+  if (2 < c) return -1;
+  if (n < 3) return -1;
+  k = ((uint32_t) s[1] << 8 | s[2]) + 1;
+  if (n - 3 != k) return -1;
+  if (cap - on < k) {
+   sx = lz_slide(win, on, dict);
+   on = on - sx;
+   if (base < sx) base = 0;
+   else base = base - sx; }
+  if (cap - on < k) return -1;
+  memcpy(win + on, s + 3, k);
+  *o0 = on;
+  S->n = on + k;
+  S->base = base;
+  S->needprops = np;
+  return k; }
+ if (c < 192) {
+  if (np) return -1;
+  if (n < 5) return -1;
+  h = 5; }
+ else {
+  if (n < 6) return -1;
+  b = s[5];
+  x = lz_props(m, b, 4);
+  if (!x) return -1;
+  np = 0;
+  h = 6; }
+ u = ((c & 31) << 16 | (uint32_t) s[1] << 8 | s[2]) + 1;
+ k = ((uint32_t) s[3] << 8 | s[4]) + 1;
+ if (n - h != k) return -1;
+ litn = (uintptr_t) 768 << (m->lc + m->lp);
+ if (litn < 768) return -1;
+ if (159 < c) lz_reset(m);
+ if (cap - on < u) {
+  sx = lz_slide(win, on, dict);
+  on = on - sx;
+  if (base < sx) base = 0;
+  else base = base - sx; }
+ if (cap - on < u) return -1;
+ *o0 = on;
+ x = rd_init(&r, s + h, k);
+ if (!x) return -1;
+ st = m->state;
+ if (11 < st) return -1;
+ o.b = win;
+ o.n = on;
+ o.cap = cap;
+ o.base = base;
+ o.pause = 0;
+ x = lz_run(m, &r, &o, on + u, 0);
+ if (x != 1) return -1;
+ i = r.i;
+ if (k < i) return -1;
+ rd_norm(&r);
+ x = r.bad || r.i != r.n || r.code;
+ if (x) return -1;
+ S->n = o.n;
+ S->base = base;
+ S->needprops = np;
+ return u; }
+static int lm_step(struct lm_st *S, uint8_t *win, uint8_t const *s, uintptr_t n, unsigned int last, uintptr_t *o0, uintptr_t *used) {
+ struct lz_model *m = &S->m;
+ struct lz_out o;
+ struct lz_rd r;
+ uint8_t *pin = S->pin;
+ uintptr_t cap = S->cap, dict = S->dict, rm = LM_ROOM, on, sx, oc, oe, i, st, lim, litn;
+ unsigned int x, y;
+ on = S->n;
+ if (cap < on) return 0;
+ if (cap - on <= 273) {
+  sx = lz_slide(win, on, dict);
+  on = on - sx; }
+ S->n = on;
+ *o0 = on;
+ *used = 0;
+ y = S->started;
+ if (!y) {
+  if (n < 5) {
+   if (last) return 0;
+   memcpy(pin + 0, s + 0, n);
+   S->pend = (uint32_t) n;
+   return 3; }
+  x = rd_init(&r, s, n);
+  if (!x) return 0;
+  S->started = 1; }
+ else {
+  r.p = s;
+  r.i = 0;
+  r.n = n;
+  r.range = S->range;
+  r.code = S->code;
+  r.bad = 0; }
+ i = r.i;
+ if (n < i) return 0;
+ y = S->want != (uint64_t) -1 && S->tot == S->want;
+ if (y) {
+  S->range = r.range;
+  S->code = r.code;
+  *used = i;
+  S->done = 1;
+  return 2; }
+ if (cap - on < rm) oc = cap;
+ else oc = on + rm;
+ lim = S->want != (uint64_t) -1 ? on + (uintptr_t) (S->want - S->tot) : 0;
+ litn = (uintptr_t) 768 << (m->lc + m->lp);
+ if (litn < 768) return 0;
+ st = m->state;
+ if (11 < st) return 0;
+ o.b = win;
+ o.n = on;
+ o.cap = oc;
+ o.base = 0;
+ o.pause = last ? 2 : 1;
+ x = lz_run(m, &r, &o, lim, !(S->want != (uint64_t) -1));
+ if (!x) return 0;
+ y = r.bad;
+ if (y) return 0;
+ i = r.i;
+ if (n < i) return 0;
+ oe = o.n;
+ if (oc < oe) return 0;
+ if (oe < on) return 0;
+ S->tot += oe - on;
+ S->n = oe;
+ S->range = r.range;
+ S->code = r.code;
+ *used = i;
+ y = x == 2;
+ if (x == 1) y = S->want != (uint64_t) -1 && S->tot == S->want;
+ if (y) {
+  S->done = 1;
+  return 2; }
+ y = x == 1 && last && oe < oc - 273;
+ if (y) return 0;
+ if (x != 3) return 1;
+ if (24 < n - i) return 0;
+ memcpy(pin + 0, s + i, n - i);
+ S->pend = (uint32_t) (n - i);
+ return 3; }

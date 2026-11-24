@@ -1236,6 +1236,10 @@
        <(sound txt))
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
    ; ledger alone: the link's live set is one copy of the program, not three
+   ; what a program's module shows when nothing is asked: its entry both ways (the loader's
+   ; _start, a process's __love_start), the heap door the loader marshals strings through, and
+   ; the wake it calls where a module has one
+   wasm-face '("_start" "__love_start" "malloc" "free" "wake")
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
@@ -1257,7 +1261,13 @@
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
        home (!nostd && mhome ())
-       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
+       ; a module with no main shows every function, as --export-all asks: its exports are its
+       ; face. else the named exports, which the runtime owes like any reference
+       wx (map nom (rev (t 'wx)))
+       whole? (t 'wxall || !entry?)
+       bdefs (catmap cap bsyms)
+       owed0 (ledger bsyms @ l0 (l0 + filter (x \ nelem x l0 && nelem x bdefs) wx) @ l
+                (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
@@ -1268,9 +1278,13 @@
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
        ; a name nothing answers is the program's refusal, not an internal one
-       m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
+       m (trap (a \ wasm-link a (whole? ? {'imports '("__love_sys") 'exports 'all}
+                                           {'imports '("__love_sys") 'exports (map show wx) 'exports? wasm-face}))
+               all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")
+                          'wasm-unresolved
+                          (udie 1 "cc: nothing defines \(show b), wanted by the wasm link of \(join " " ins)")
                           (scare a b)))
        q (open dst "w")
        (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
@@ -1349,7 +1363,7 @@
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1479,6 +1493,10 @@
           ("-Wl,--fatal-warnings" . r) (flags r t)
           ; the exports and run path only a loader reads: nothing to a static link, refused
           ; at the end of the line on a dynamic one
+          ; the wasm link's face: a named export is a root of its drop, --export-all lays and
+          ; exports every function. nothing to an elf
+          ("-Wl,--export-all" . r) (flags r (pin t 'wxall 1))
+          (("-Wl,--export=" + n) . r) (flags r (fpush t 'wx n))
           ((a . r) && elem a '("-rdynamic" "-Wl,-E" "-Wl,--export-dynamic")) (flags r (fpush t 'dl a))
           ((a . d . r) && elem a '("-Wl,-rpath" "-Wl,--rpath") && starts? d "-Wl,") (flags r (fpush t 'dl a))
           ((a . r) && any (starts? a) '("-Wl,-rpath," "-Wl,-rpath=" "-Wl,--rpath," "-Wl,--rpath=")) (flags r (fpush t 'dl a))
