@@ -187,11 +187,11 @@
     (steel-box [-115.97 t 18.48] [-115.93 (t + 0.3) 18.52]) (steel-box [-115.93 (t + 0.26) 18.48] [-115.74 (t + 0.3) 18.52])
     (furnish 'counter [-115.7 hy 19.6] 270 {'w 1.2 'over 0.0 'doors 2})
     (map (q \ skin {'all hob} (solid (box [(q 0 - 0.1) t (q 1 - 0.1)] [(q 0 + 0.1) (t + 0.01) (q 1 + 0.1)]))) [[-115.84 19.3] [-115.56 19.3] [-115.84 19.9] [-115.56 19.9]])
-    (window [-116.22 (hy + 1.05) 17.9] [-115.98 (hy + 2.1) 19.1] clear @ (a p) [(skin {'all plaster} a) p])]))
+    (window [-116.22 (hy + 1.05) 17.9] [-115.98 (hy + 2.1) 19.1] clear @ (a p) [(skin {'all plaster} a) (lens yard-mid p)])]))
 (: house
    [(skin {'walls siding 'floor tar 'ceiling plaster} (solid (box [-116.2 -0.6 16.0] [-104.0 3.2 28.0])))
     (skin {'floor boards 'walls plaster 'ceiling plaster} (room [-116.0 hy 16.2] [-103.8 3.0 27.8]))
-    (glazed clear (door [-116.1 hy 22.0] 1.8 2.2))
+    (lens yard-mid (glazed clear (door [-116.1 hy 22.0] 1.8 2.2)))
     (furnish 'rug [-112.8 hy 25.1] 0 {'w 4.4 'd 4.6 'skin {'soft rug}})
     (furnish 'sideboard [-115.76 hy 25.3] 270 {'skin {'body oak 'top oak 'frame oak}})
     (furnish 'tv [-115.7 (hy + 0.8) 25.3] 270 {})

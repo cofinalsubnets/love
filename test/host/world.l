@@ -685,6 +685,16 @@
    (gm s) (amax (peep (ts s) (iota (#(ts s) // 4) * 4 + 3) 0))
  (test (bl 'panes 0 'lens = [2.0 1.0 2.0]) (bn 'panes 0 'lens = ()) (gt gl < -3 - 16777216 + 1) (gm gl > -16777216) (gt (world-new 8 8 bn "") > -16777216)
        (has? (world-read (lw + "(lens [0 0 0] 3))")) "(lens [x y z] (window ..))")))
+;; ..a glazed door's glass the same, its other face plain; a door with no glass no lens
+(: dw "(: t (texture 8 8 1 '((fill (rgb 1 1 1))))) (level \"t\" (room [0 0 0] [4 3 4]) (room [0 0 4] [4 3 8]) (start [2 0 1] 180 0) "
+   dd "(glazed t (door [2 0 4] 1.8 2.2))" dl (world-read (dw + "(lens [2 1 2] " + dd + "))")) dn (world-read (dw + dd + ")"))
+   df (world-read (dw + "(lens [2 1 6] " + dd + "))"))
+   (tx lv) (: pk ((world-new 8 8 lv "") 'sc 'doors 0) t (pk 'tris) I (iota (#t // 4) * 4) v (pk 'cols)
+              cs (map (i \ [(t (i + 3)) (v 7 (t i))]) (map (j \ I j) ^#I)) (filter (q \ q 0 <= -3) cs))
+   (lensed q) (q 0 <= -3 - 16777216) (near s l) (all (q \ lensed q = (s * q 1 > 0.5)) l)
+   a (tx dl) b (tx df) c (tx dn)
+ (test (two? a && two? b && two? c) (near -1.0 a) (near 1.0 b) (!(any lensed c)) (any lensed a && any (! * lensed) a)
+       (has? (world-read (dw + "(lens [2 1 2] (door [2 0 4] 1.8 2.2)))")) "(lens [x y z] (window ..))")))
 ;; ..an opening with no skin takes the skin of what it cuts, so shows no plain texture; seams
 ;; finds one with nothing to take
 (borrow "src/apps/lore/seams.l")
