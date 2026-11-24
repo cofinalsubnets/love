@@ -65,5 +65,12 @@
        ; ..and what is not as it says, refused
        (see (D 2) V (z [0]) = ()) (see (D 1) V (z [2]) = ()) (see (D 1) (f [1]) (z [0]) = ()) (see () V (z [0]) = ())
        (see (swap (D 1) 7 (z [0 1 2 12])) V (z [0]) = ()) (see (swap (D 1) 3 (z [0 9 4])) V (z [0]) = ())))
+; a box stood a hair off a wall, as a 4-byte number lays one: the wall is cut at its edges and
+; kept around it
+(: room (brush-box 1 [0.0 0.0 0.0] [4.0 3.0 4.0])
+   (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (c+ <l (c* -1.0 a)) (c+ <>l (c* -1.0 a)))))) (: v (go >ps [0.0 0.0 0.0]) (0.5 * sqrt (dot v v))))
+   (west e) (foldl (\ a f (a + area (f 0))) 0.0
+                   (filter (f \ f 1 0 > 0.9 && all (p \ p 0 < 0.001) (f 0)) (brush-faces [room (brush-box 0 [e 0.0 1.5] [0.7 2.0 2.5])])))
+ (test (all (e \ mag (west e - 10.0) < 1e-3) [0.0 3e-5 -3e-5 8e-5 -8e-5])))
 (test_fin ())
 (puts "brush: ok\n")
