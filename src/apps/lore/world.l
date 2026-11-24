@@ -1323,10 +1323,14 @@
    es (kept ".scene")
    (old es (scene-bound fr (foldl (+) 0 (map (e \ e 1) es))) (n \ n), old (kept ".cid") 64 (_ \ 1)))
  ; ..read back, its light made again of what it keeps and its memo spent, so the next scene
- ; begins one
+ ; begins one; else the stage it failed at, a string
  (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
-   (tablet? sc ? (: sf (surf-of lv) (utime f (clock ()),
-                    pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+   (? (!(two? r)) "none kept" (!(two? u)) "unpacking" (!(tablet? sc)) "unstowing"
+      (: sf (surf-of lv) (utime f (clock ()),
+         pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+ ; ..which level came, kept or made, and why not kept: under android's bridge its stderr is the log
+ (scene-said lv k got hit) (string? (getenv "LOVE_GPU_FACE")
+   ? (say err "lore: the scene of \(lv 'name): \(hit ? "kept" "made, \(!(string? k) ? "no nest" (string? got) ? got "no burnt")")\n", flush err) ())
  ; ..and what growing the trees pinned into the level, kept beside it and pinned back on a hit:
  ; the brushes it added, the pits and embers, each tree's plane, trunk and shade
  (burnt lv n0) {'bs (drop n0 (lv 'brushes)) 'pits (lv 'pits) 'embers (lv 'embers)
@@ -1338,7 +1342,7 @@
  (arted lv sc) (: txs (textures lv) ts (sc 'texs) (art? t) (any (q \ two? q && <q = 'art) (t 'layers))
    (pin sc 'texs (map (i \ i < #txs && art? (txs i) ? (swatch (txs i 'w) (txs i 'h) (txs i 'layers)) (ts i)) ^#ts)))
  (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" got (string? k && scene-got f lv)
-   n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got)
+   n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got) _ (scene-said lv k got (tablet? hit))
    (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) (arted lv hit))
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
