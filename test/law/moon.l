@@ -282,6 +282,23 @@
        (elem '(li r0 128) fs &&
         (0 = splds fs) &&
         atom? (filter (f9 \ two? f9 && elem <f9 '(si st ld imul add)) fs)))
+      ; a small array a constant memcpy fills is its elements: no frame opens; one it
+      ; may not take whole stays in memory
+      (fnf 'f <>(cgn "void *memcpy(void *, void const *, unsigned long); unsigned f(unsigned const *p) { unsigned x[4]; memcpy(x, p, sizeof x); x[0] += x[3]; return x[0] ^ x[1] ^ x[2]; } int main() { unsigned a[4]; return (int)f(a); }") @ fs
+       (0 = splds fs && !(elem '(sub sp sp 40) fs) && atom? (filter (f9 \ two? f9 && elem <f9 '(si si4 st st4 call)) fs)))
+      (all (b \ (: src "void *memcpy(void *, void const *, unsigned long); void use(void *); unsigned f(unsigned const *p) { \(b) } int main() { return 0; }"
+                   (fnf 'f <>(cgn src) @ fs
+                    (two? (filter (f9 \ two? f9 && elem <f9 '(st st4 st2 st1 si si4 call)) fs)))))
+           ["unsigned x[4]; memcpy(x, p, sizeof x); use(x); return x[0];"
+            "unsigned x[4]; memcpy(x, p, sizeof x); unsigned *q = &x[1]; use(q); return x[0];"
+            "volatile unsigned x[4]; memcpy((void *) x, p, sizeof x); return x[0];"
+            "unsigned x[4]; x[0] = p[0]; memcpy(x, x, sizeof x); return x[0];"
+            "unsigned x[4]; memcpy(x, p, 6); return x[0];"
+            "unsigned x[4]; memcpy(x, p, sizeof x); return ((char *) x)[5] + x[0];"
+            "unsigned x[4]; memcpy(x + 1, p, 8); return x[1];"
+            "unsigned char x[8]; memcpy(x, p, sizeof x); return x[0] + x[5];"
+            "union { unsigned w[2]; unsigned short h[4]; } u; memcpy(u.w, p, sizeof u.w); return u.h[1] + u.w[0];"
+            "unsigned x[4]; memcpy(x, p, p[0]); return x[0];"])
       ; a statement attribute run skips, except musttail: sibs spells the jump or the compile refuses
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }"))
       (two? (cgn "int main(int c, char **v) { switch (c) { case 1: c++; __attribute__((fallthrough)); default: c++; } return c; }"))
