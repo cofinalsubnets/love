@@ -199,6 +199,25 @@ for t in x64 a64 rv64; do
   fi
 done
 
+# the 32-bit targets: addresses of 4 bytes in the target's order, a unit whose range is its code
+for t in rv32 mips; do
+  mc -t $t -os linux -g "$d/y.c" -o "$d/y.$t"
+  mc -t $t -os linux -g "$d/l.c" -o "$d/l.$t"
+  if [ -n "$dd" ]; then
+    for f in y l; do
+      "$dd" --verify "$d/$f.$t" > "$d/v$f.$t" 2>&1 || { cat "$d/v$f.$t"; echo "FAIL $name: $t $f --verify"; exit 1; }
+      "$dd" --debug-info "$d/$f.$t" > "$d/i$f.$t" 2>&1
+      grep -q 'addr_size = 0x04' "$d/i$f.$t" || { echo "FAIL $name: $t's addresses are not 4 bytes"; exit 1; }
+      m=`"$ho/love" nm "$d/$f.$t" | awk '$3 == "main" {print $1}' | sed 's/^0*//'`
+      r=`sed -n '/DW_AT_ranges/,/)$/ s/.*\[0x0*\([0-9a-f]*\), 0x0*\([0-9a-f]*\)).*/\1 \2/p' "$d/i$f.$t" | head -1`
+      lo=${r% *} hi=${r#* }
+      [ -n "$m" ] && [ -n "$lo" ] && [ `printf %d 0x$lo` -le `printf %d 0x$m` ] && [ `printf %d 0x$m` -lt `printf %d 0x$hi` ] \
+        || { cat "$d/i$f.$t" | head -30; echo "FAIL $name: $t's unit does not cover main ($m in $r)"; exit 1; }
+      "$dd" --debug-line "$d/$f.$t" | grep -q "^0x0*$m " || { echo "FAIL $name: $t has no line row at main"; exit 1; }
+    done
+  fi
+done
+
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
 mc -t x64 -os linux -c "$d/t.c" -o "$d/t0.o"
