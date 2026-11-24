@@ -121,9 +121,9 @@
                (? (r 1 <= z <= r 3) (filter (w \ mag (w - x) < 0.5) [(r 0) (r 2)]) ())]
  (doors-of lv) (: (place d) (: x (d 0) z (d 1) hs (map (r \ hits r x z) (lv 'rooms))
                                  zs (catmap cap hs) xs (catmap caup hs)
-                                 hd (#d > 5 ? (d 5) 0) gl (#d > 6 ? (d 6) ())
-                                 (? (#zs = 2) {'ax 'z 'c x 'a (min (zs 0) (zs 1)) 'b (max (zs 0) (zs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
-                                    (#xs = 2) {'ax 'x 'c z 'a (min (xs 0) (xs 1)) 'b (max (xs 0) (xs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
+                                 hd (#d > 5 ? (d 5) 0) gl (#d > 6 ? (d 6) ()) ln (#d > 7 ? (d 7) ())
+                                 (? (#zs = 2) {'ax 'z 'c x 'a (min (zs 0) (zs 1)) 'b (max (zs 0) (zs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl 'lens ln}
+                                    (#xs = 2) {'ax 'x 'c z 'a (min (xs 0) (xs 1)) 'b (max (xs 0) (xs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl 'lens ln}
                                     "a door must sit in the wall between two rooms: \(show ('door . d))"))
    ps (map (q \ string? q ? q (pin q 'out (outward lv q))) (map place (lv 'doors)))
    (any string? ps ? <(filter string? ps) ps))
@@ -246,7 +246,8 @@
    leaf (slab p q (s \ [(t 1 / w * ((s $ ax @ 'z 0 2) - l0)) (t 2 / h * (y0 + h - s 1))]) i white)
    (knob s) (nub (P ax (l0 + w - 0.07) (y0 + 0.95) (m + s * (door-t + 0.03))) 0.025 [0.78 0.62 0.3])
    (? (d 'glass != ()) (glazed-mesh d tt) (d 'hand = 1) (mesh-join [leaf (knob 1.0) (knob -1.0)]) leaf))
- ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle
+ ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle,
+ ; the one facing its lens's point a lens
  door-fr 0.05
  (glazed-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h) y0 (d 'y) e door-fr
    i (tix tt 'door) (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - door-t)) q (P ax a1 b1 (m + door-t))
@@ -254,9 +255,10 @@
    gi (tix tt (d 'glass)) t (tt gi) g0 (-3 - gi) o (P ax (l0 + e) (y0 + e) m) W (w - 2.0 * e) H (h - 2.0 * e)
    U (P ax W 0.0 0.0) V [0.0 H 0.0] n (P ax 0.0 0.0 1.0) al (ax @ 'z 0 2)
    (uv s) [(t 1 / W * (s al - (l0 + e))) (t 2 / H * (y0 + h - e - s 1))] g [0.14 0.15 0.15]
+   L (peep d 'lens ()) (face s) (two? L && s * (L (2 - al) - m) > 0.0 ? (g0 - 16777216) g0)
    (mesh-join [(bar l0 (l0 + w) y0 (y0 + e)) (bar l0 (l0 + w) (y0 + h - e) (y0 + h))
                (bar l0 (l0 + e) y0 (y0 + h)) (bar (l0 + w - e) (l0 + w) y0 (y0 + h))
-               (sheets o V U n uv g0 g) (sheets o V U (c* -1.0 n) uv g0 g)]))
+               (sheets o V U n uv (face 1.0) g) (sheets o V U (c* -1.0 n) uv (face -1.0) g)]))
  ; ..a car: a floor, a waist a little wider and longer a hand over it, a roof smaller than
  ; the floor, faces between them, so it is a hexagon along and across; glass above the
  ; waist on every side, the door set back in its long side as deep as the glass at its head
