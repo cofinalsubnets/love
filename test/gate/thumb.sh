@@ -107,6 +107,11 @@ rt=$(pwd)/out/rt/$tgt
 lx="$d/mksys.o $d/proc_longjmp.o"
 lane j test/thumb2/libj.c test/thumb2/harnessj.c "-Isrc/apps/moon/include" 2 30 "$tgt setjmp" \
   " = a jump out of a nest, longjmp 0 answering 1, the callee-saved ints and doubles back, and s16-s31 kept across a jump from a frame that wrote them; 100+n names the first miss -- see test/thumb2/libj.c"
+# the pair divide by rt.c's own, where the other lanes link libgcc's
+moonc -t "$tgt" -Isrc/apps/moon/include -c src/apps/moon/lib/rt.c "$d/rt.o" || fail "mooncc rt.c"
+lx=$d/rt.o
+lane q test/thumb2/lib64.c test/thumb2/harnessq.c "" 9 120 "$tgt rt.c's divides" \
+  " = 101 udiv, 102 umod, 103 div, 104 mod, 105 clz, 106 __udivdi3, 107 __umoddi3 differs from gcc's"
 lx=
 
 case $tgt in

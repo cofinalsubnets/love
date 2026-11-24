@@ -2879,21 +2879,24 @@
              (a @ 'no 'no
                   (: nm (nom? <a ? (show <a) <a) (<>a @ 0 nm (<>a < 0 ? "\(nm)\(<>a)" "\(nm)+\(<>a)")))))))
    ; an operand's byte width, off its type by static peek (a register spells by it on x64)
-   (asmw g env e) ((asmcty g e @ k (k ? k (peekty g env e))) @ ty
+   (asmw g env e) ((asmcty g env e @ k (k ? k (peekty g env e))) @ ty
                      (bad? ty ? 8 (tsz g ty @ n (elem n '(1 2 4 8) ? n 8))))
-   ; a constant operand's C type, so "a"(3 * 8) is %eax as in gcc: its literals' and casts'
-   ; types through the promotions and conversions. () for anything else
-   (asmcty g e)
+   ; an integer operand's C type, so "a"(3 * 8) is %eax and "r"(~i) is i's width as in gcc (the
+   ; backend's own word for an int sum is a long's): through the promotions and conversions. ()
+   ; for anything else, a pointer's among them
+   (asmcty g env e)
     (knum g e @ k
        (? (two? k) (k 1)
-          (two? e && <e = 'bin)
-           (asmcty g (e 2) @ ta
+          (!(two? e)) ()
+          (<e = 'bin)
+           (asmcty g env (e 2) @ ta
               (? !ta ()
                  (elem (e 1) '(== != < > <= >= && ||)) 'int
                  (elem (e 1) '(<< >>)) (pprom ta)
-                 (asmcty g (e 3) @ tb (tb ? (puac !(ilp32? g) ta tb)))))
-          (two? e && <e = 'un) (asmcty g (e 2) @ ta (ta ? (pprom ta)))
-          ()))
+                 (asmcty g env (e 3) @ tb (tb ? (puac !(ilp32? g) ta tb)))))
+          (<e = 'un) (e 1 = 'not ? 'int (asmcty g env (e 2) @ ta (ta ? (pprom ta))))
+          (elem <e '(land lor)) 'int
+          (peekty g env e @ ty (nom? ty && elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong) || bitf? ty ? ty))))
    asmho holo-bytes-open                            ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
    ; a template's bytes: one opaque raw, unless it carries a directive or a label beside an
    ; instruction -- then gas-top reads it in place: raw runs split at its labels (numbered per
