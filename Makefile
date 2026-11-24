@@ -797,8 +797,8 @@ $(k_odir)/transpose.l: $(transpose_l) $(k_odir)/transpose.list
 # at the host's own arch the elf is the shipped love transposed, with $(kart_o) laid
 # past its data and bound to its doors, and it WAKES the image the binary carries. an arch
 # whose processes run love (a src/inle/<arch>/proc.c) transposes the cross lane's love the
-# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh). a
-# board (kb=) has metal files of its own, so it takes the pie.
+# same way, its hosted bodies the processes' own, baked on its arch (src/tools/xbake.sh); a
+# board (kb=) too, with its own metal files (xbkart, below).
 # $(k_pie) is the other lane -- a machine this one cannot run, built from source in one
 # link, the kernel's bodies bound in. test_disk rides the transpose, test_kernel_rv64 the pie.
 k_pie_in = $(k_pie)
@@ -809,10 +809,10 @@ k_pie_in = $(ho)/love
 k_pie_dep = $(mooncc_dep)
 k_pie_o = $(kart_ko)
 else
-ifneq ($(and $(if $(kb),,1),$(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
+ifneq ($(and $(filter $a,$(xa)),$(wildcard $S/inle/$a/proc.c)),)
 # rv64 has no host to bake on: its raw love goes in, and the boot bakes (seat.l's k-image)
 k_pie_in = $(if $(filter rv64,$a),$(xd)/love,$(xd)/love.baked)
-k_pie_o = $(xkart_o)
+k_pie_o = $(if $(kb),$(xbkart_o),$(xkart_o))
 endif
 endif
 $(k_elf): $(k_odir)/transpose.l $(k_pie_in) $(k_pie_dep) $(k_boot_o) $(mdep)
@@ -860,9 +860,9 @@ kmain_o: $(k_free_o)
 
 # THE SEAT: the metal objects a transpose lays beside the one binary; `love seed kernel` compiles
 # them from the source it carries and transposes itself to a bootable elf. one shape,
-# worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
-# the first a variable NAME so the body stays deferred. an arch with no src/inle/<arch>/
-# carries no seat and its roster is empty.
+# worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR[,CVAR]), every argument but
+# the first a variable NAME so the body stays deferred; CVAR names the metal files, else the
+# arch's own. an arch with no src/inle/<arch>/ carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
   -I$S/love/quay -I$S/apps/moon/include
 # kmain.c's own bake is the two ROSTERS -- the kore cat's order, and the crew's, which it
@@ -870,8 +870,8 @@ kart_inc = -I$(ho) -I. -Isrc/love -Isrc/inle -Iout/lib -I$R \
 # and the module set are src/love/cats.c's, and that object rides the host lane above.
 kart_bake = out/lib/korelist.h out/lib/crewlist.h out/lib/seat.h out/lib/tasks.h
 define kart
-$(1)_h = $$(love_h) $$S/inle/k.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
-$(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(wildcard $$S/inle/$$($(4))/*.c))
+$(1)_h = $$(love_h) $$S/inle/k.h $$S/inle/kboot.h $$S/love/archive/ustar.h $$S/love/archive/srctree.h $$(wildcard $$S/inle/$$($(4))/*.h)
+$(1)_arch_o = $$(patsubst $$S/%.c,$$($(2))/%.o,$$(if $(5),$$($(5)),$$(wildcard $$S/inle/$$($(4))/*.c)))
 $(1)_kern_o = $$(k_free_c:$$S/%.c=$$($(2))/%.o)
 $(1)_o = $$(if $$($(1)_arch_o),$$($(1)_kern_o) \
   $$($(1)_arch_o) $$($(2))/kvec.o,)
@@ -896,6 +896,12 @@ $$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
 endef
 $(eval $(call kart,kart,moon_d,moonc,hosta))
 $(eval $(call kart,xkart,xod,moonx,xa))
+# a board: the cross lane's, its metal files the board's and k_$(kb) defined
+ifdef kb
+xbod = $(xod)/$(kb)
+moonxb = $(moonx) -Dk_$(kb)
+$(eval $(call kart,xbkart,xbod,moonxb,xa,k_arch_c))
+endif
 # the objects alone, for `love seed kernel`: it drives this from the carried tree
 kart_objs: $(kart_o)
 	@echo '$(kart_o)' > out/kart.list
