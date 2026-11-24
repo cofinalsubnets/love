@@ -34,11 +34,14 @@
    cheap (gr (map (_ \ [15 10 0]) ^40))
    dear (gr (map (_ \ [150 10 0]) ^40))
    low (gr (map (n \ [5 10 (n = 6)]) ^40))
+   ; ..a horn low all along, over the goal at every step, the pixels nothing in it
+   stuck (gr (map (_ \ [150 10 1]) ^60))
    spike (gr (map (n \ [(n = 15 ? 400 60) 10 0]) ^40))
  (test (cheap 29 = 1) (cheap 30 = 0) (cheap 39 = 0)    ; finer at 3 s, its 60 ms under 0.8 of 90
        (dear 9 = 1) (dear 10 = 2) (dear 19 = 2)        ; coarser after a second over, and back
        (dear 20 = 1) (dear 39 = 1)                     ; a second on: it bought nothing
        (low 5 = 1) (low 6 = 2) (low 35 = 2) (low 36 = 1) ; a low horn at once, finer 3 s on
+       (stuck 5 = 2) (stuck 20 = 1) (stuck 59 = 1)     ; ..coarser at once, and back, for it bought nothing
        (ch spike = 0)                                  ; one 400 ms frame among 60s moves nothing
        (ch (gc 0 0.6 200) = 0)                         ; 60 ms fits, 240 never would
        (gc 0 0.15 200 @ l (ch l = 1 && l 199 = 0))     ; 60 ms finer fits: one step, held

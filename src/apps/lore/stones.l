@@ -6,6 +6,7 @@
 (module (stones stones-run stones-walk stones-main stones-new stones-tap menu-top stones-size stones-detail stones-step stones-look stones-binds stones-move acts ghost-on? post-batch stones-light
          stones-frame stones-pens stones-steps stones-opts stones-field stones-ground stones-blocks slot-x
          fps eye-h zc floor-r row-w row-h rows rim-r exit-z lat)
+(borrow 'console)
 (borrow '(rove cli))
 (borrow 'view)                          ; the screen, the pens, the hash, the loop
 (borrow 'vec)                           ; triples, and the noise
@@ -26,7 +27,7 @@
  reach 2.2                                ; how near the altar a kneel goes to it
  dlg-pause 1.0                            ; seconds after an act before the choices come back
  help-t 12.0                              ; seconds the keys are named at the start
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap the altar or the bottom to kneel  ·  a top corner leaves"
+ thumb-text "left thumb walks  ·  right thumb looks  ·  tap the altar or the bottom to kneel  ·  a top corner leaves, the top's middle the console"
  help-text "h/j/k/l move  ·  u/n look up/down  ·  space kneels  ·  ? keys"
  ; the choices at the altar, and the keys that stand a kneeler up once they are put away
  acts ["Breathe" "Weep" "Bleed" "Beg" "Wait"]
@@ -428,8 +429,8 @@
    pen (view-pen deep)
    bg (pen [22 17 14 233]) hi (pen [244 234 216 230]) lo (pen [156 144 128 245]) fg (pen [196 184 166 250])
    (line j) (: i (j - 1) (0 < j && j < bh - 1 ? ((i = c ? " › " "   ") + show (i + 1) + "  " + acts i) ""))
-   (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (view-cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
-      (st 'mt < help-t) (help-of st @ t {(r - 1) [0 (view-cells (pad (pad "" (max 0 ((w - vlen t) // 2)) " " + t) w " ")) fg bg]})
+   (? (charm? c) (foldl (\ t j (pin t (r0 + j) [c0 (con-cells (pad (line j) bw " ")) (j - 1 = c ? hi lo) bg])) {} ^bh)
+      (st 'mt < help-t) (help-of st @ t {(r - 1) [0 (con-cells (pad (pad "" (max 0 ((w - vlen t) // 2)) " " + t) w " ")) fg bg]})
       {}))
  ; the keys named along the bottom row r, w wide, for the first help-t seconds and not over
  ; the choices; under kitty, blanked a while after

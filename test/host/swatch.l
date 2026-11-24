@@ -21,6 +21,13 @@
             (checker 3 2 (noise 2 3 0.4)) (stripes 6 2 1 (shade 1.2)) (dots 4 4 1.2 hole)
             (patches 3 0.4 (rgb 1 1 0)) (cracks 4 5 1 1.5 (rgb 0.3 0.2 0.1)) (within 1 1 11 9 (within 2 0 8 20 (bevel 5 4 1 (grey 0.95) (grey 0.05)) (noise 3 0.2)))
             (poly 1 1 10 2 6 9 (rgb 0 0 1)) (rows 0 1 hole))
+ ; finer: lengths k times as long, ratios and seeds as they were; the old texels' corners the same
+ (test (swatch-fine 2 '((rows 1 2 (noise 3 4 0.1)) (stripes 4 2 1 hole) (poly 0 0 1 0 1 1 1) (oval 1 2 3 4 5 0.5) (patches 5 0.1 hole) (seed 7) (fbm 4 3 0.2) (stain 2 3 0.4 0.5 (shade 0.9)) (within 1 2 3 4 (fill 1) (disc 1 1 1 0)))
+         = '((rows 2 4 (noise 6 8 0.1)) (stripes 8 4 1 hole) (poly 0 0 2 0 2 2 1) (oval 2 4 6 8 5 0.5) (patches 10 0.1 hole) (seed 7) (fbm 8 3 0.2) (stain 4 3 0.4 0.5 (shade 0.9)) (within 2 4 6 8 (fill 1) (disc 2 2 2 0))))
+       (: l '((fill (rgb 0.9 0.7 0.1)) (stripes 12 6 1 (grey 0.1)) (grid 8 8 1 0.5) (noise 4 0.3) (fbm 8 3 0.2) (patches 5 0.4 hole))
+          p (swatch 16 8 l 0) q (swatch 64 32 (swatch-fine 4 l) 0)
+          (all (i \ peep p [(i // 16) (i % 16)] 0 = peep q [(4 * (i // 16)) (4 * (i % 16))] 9) ^128))
+       (swatch-fine 2 '((art drip 1)) = ()))
  ; starts grey; the later layer wins; a number is a grey
  (test (at () 0 0 = g 0.5) (at '((fill 0.2) (rows 0 1 0.7)) 3 0 = g 0.7) (at '((fill 0.2) (rows 0 1 0.7)) 3 1 = g 0.2)
        (at '((grey 0.3)) 0 0 = g 0.3) (at '((rgb 1 0 0)) 5 5 = red)

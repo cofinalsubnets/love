@@ -4,7 +4,9 @@
  * is %eax, load_segments) and a word immediate (vmware's movw $port, %dx); noinstr's __no_profile
  * names its attribute only where __has_attribute says so; a call behind && and a hint on an inline
  * that folds to 0 is never laid (dm_zone_endio, undefined: the link is the check); cpuid's unused
- * rbx output still saves the caller's rbx. exit-code only (55) */
+ * rbx output still saves the caller's rbx; an arithmetic operand is named at its C width (~oparg,
+ * futex's andl), a constant past a byte's or word's range keeps its low bits (clear_bit's -129).
+ * exit-code only (55) */
 #if !__has_attribute(__no_profile_instrument_function__)
 #error no_profile_instrument_function
 #endif
@@ -54,6 +56,27 @@ int main(void)
 	asm volatile("mov $0x1234, %%ebx\n xor %%edi, %%edi\n call leaf_eax\n mov %%rbx, %0"
 	             : "=m"(kept) : : "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "memory", "cc");
 	bad |= kept != 0x1234;
+	volatile int vo = 0x1234;
+	int vi = vo;
+	long vl = 0x100000000l + vi;
+	int r1, r2, r3, r4;
+	asm("movl %1, %0" : "=r"(r1) : "r"(~vi));
+	asm("movl %1, %0" : "=r"(r2) : "r"(vi + 1));
+	asm("movl %1, %0" : "=r"(r3) : "r"(vi & 7));
+	asm("movl %1, %0" : "=r"(r4) : "r"(-vi));
+	bad |= r1 != ~0x1234 || r2 != 0x1235 || r3 != 4 || r4 != -0x1234;
+	long l1, l2, l3;
+	asm("movq %1, %0" : "=r"(l1) : "r"(~vl));
+	asm("movq %1, %0" : "=r"(l2) : "r"(vi + 0x100000000l));
+	asm("movq %1, %0" : "=r"(l3) : "r"(st + vi));
+	bad |= l1 != ~0x100001234l || l2 != 0x100001234l || l3 != (long)(st + 0x1234);
+	unsigned char mb = 0xff;
+	unsigned short mw = 0xffff;
+	unsigned int ml = 0xffffffff;
+	asm volatile("andb %b1, %0" : "+m"(mb) : "iq"(~(1 << 7)));
+	asm volatile("andw %w1, %0" : "+m"(mw) : "i"(~(1 << 15)));
+	asm volatile("andl %1, %0" : "+m"(ml) : "i"(-4278190081l));
+	bad |= mb != 0x7f || mw != 0x7fff || ml != 0xffffff;
 #endif
 	return bad ? 1 : 55;
 }

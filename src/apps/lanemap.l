@@ -62,6 +62,9 @@
       ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
+     ["what `-g` lays, `src/apps/moon/{gen,lo,nm,ra,moon}.l`, `src/love/holo/{obj,link}.l`, `test/gate/dwarf.sh`, `test/gate/dwarfcode.sh`"
+      ["src/apps/moon/gen.l" "src/apps/moon/lo.l" "src/apps/moon/nm.l" "src/apps/moon/ra.l" "src/apps/moon/moon.l"
+       "src/love/holo/obj.l" "src/love/holo/link.l" "test/gate/dwarf.sh" "test/gate/dwarfcode.sh"] ["test_dwarf" "test_dwarfcode"] ""]
      ["what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`"
       ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]

@@ -16,7 +16,7 @@
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32 test_esp32_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
-  test_doomwasm test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
+  test_doomwasm test_dwarf test_dwarfcode test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
   test_thumb2 test_thumb2sp test_xtensa test_mips test_mips_router test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
@@ -184,7 +184,7 @@ hostnif_tests += test/host/deflate.l   # deflate streams off the format's descri
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
 hostnif_tests += test/host/crypt.l   # the shadow hashes, against drepper's vectors and libxcrypt
 hostnif_tests += test/host/login.l   # love login over a fake root: accounts, groups, the utmp record
-hostnif_tests += test/host/greet.l   # love greet headless: its keys, its box, laid over a saver
+hostnif_tests += test/host/greet.l test/host/opens.l   # love greet headless: its keys, its box, laid over a saver
 hostnif_tests += test/host/sky.l    # lore's sky: the air's tables, the clouds and the light off them
 hostnif_tests += test/host/pool.l   # the thread pool: widths, LOVE_THREADS and love.l, a fork's child
 hostnif_tests += test/host/init.l   # init's mounts: () is ok, an error says its name
@@ -696,7 +696,7 @@ test_esp32: host
 	@echo "test_esp32: the esp32's and the s3's firmware (all-mooncc xtensa call0, soft float), linked by mooncc at iram and dram, images verified"
 test_esp32_board: test_esp32
 	@echo TEST test/holo/xtrun.l out/esp32/firm.elf "(on the esp32, from ram)"
-	@$(gsh) test/gate/esp32board.sh $(ho)/love out/esp32/firm.elf $(ho)
+	@MAKE="$(MAKE)" $(gsh) test/gate/esp32board.sh $(ho)/love out/esp32/firm.elf $(ho)
 test_esp32s3_board: test_esp32
 	@echo TEST test/holo/xtrun.l out/esp32/firm-s3.elf "(on the esp32-s3, from ram)"
 	@$(gsh) test/gate/esp32s3board.sh $(ho)/love out/esp32/firm-s3.elf $(ho)
@@ -851,6 +851,10 @@ test_as: host
 gate_ho += test_elf32
 # test_objcopy -- src/love/holo/copy.l byte-compared with objcopy, both formats; skips without
 gate_ho += test_objcopy
+# test_dwarf -- mooncc -g through the link, by llvm-dwarfdump --verify and gdb; a leg skips without its oracle
+gate_ho += test_dwarf
+# test_dwarfcode -- -g leaves the code of love's C alone
+gate_ho += test_dwarfcode
 # nc over real TCP on 127.0.0.1, both directions; `make nettest PORT=N`
 PORT ?= 7390
 nettest: host

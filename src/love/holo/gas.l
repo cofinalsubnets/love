@@ -342,13 +342,15 @@
                    (n > 1 && (c = 102 || c = 98) && xa-allof? (snip t 0 (n - 1)) digit? 0 ?
                       ((xa-num (snip t 0 (n - 1))) . c) ()))
        (ref s) (lref s @ r (!(two? r) ? s (glabel <r (>r = 102 ? (1 + peep lc <r 0) (peep lc <r 0)))))
-       (fix o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] 'ims ['ims (ref <>o)] o)
+       ; an immediate past its width's range, as the assembler wraps it
+       (wrap w o) (: f (1 << 8 * w) v <>o (atom? v && !(nom? v) && elem w [1 2 4] && (v < 0 - (f // 2) || f <= v) ? ['im (as-sx w v)] o))
+       (fix w o) (<o @ 'lbl ['lbl (ref <>o)] 'rip ['rip (ref <>o) <>>o] 'ims ['ims (ref <>o)] 'im (wrap w o) o)
        (rev (foldl (\ acc it
                       ((<it @ 'label (show <>it @ t
                                         (xa-allof? t digit? 0 ?
                                            (: n (xa-num t) k (1 + peep lc n 0) (pin lc n k, ['label (glabel n k)]))
                                            it))
-                            'op ['op (it 1) (it 2) (map fix (it 3))]
+                            'op ['op (it 1) (it 2) (map (fix (it 2)) (it 3))]
                             it) . acc))
                    () items)))
    (gx-item it) (<it @ 'label [['label <>it]]

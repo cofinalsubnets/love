@@ -10,7 +10,8 @@
    NP 1846
    ISREP 192 ISG0 204 ISG1 216 ISG2 228 REP0L 240 SLOT 432 SPEC 688 ALIGN 802 LEN 818 REPLEN 1332
 
-   ; --- labels and proofs: a site's statements, guards and invariants each take a fresh name ------
+   ; --- labels and proofs: a site's statements, guards and invariants each take a fresh name.
+   ; argument order is unspecified, so every draw is its own row
    nlab {}
    (lab p) (: k (1 + peep nlab p 0) _ (pin nlab p k) (intern "z\(p)\(k)"))
    pf {}
@@ -125,10 +126,11 @@
        _ (prove "\(J2)j" 2 ['inf-letrans x2 15 271 ['inf-ltsle x2 15 p2] '(idpath false)])
        _ (prove "\(J2)j" 4 ['inf-ltsle x3 271 p3])
        _ (pin tl 'lv (fr 'lv J1))
-     (bit base
+       c2 (bit (base + 1)) c1 (bit base)
+     (c1
       + [[J1 'join G1 '(z b)
           (lo 1 + t1 + [[L1 'set 'lv 'tv]])
-          (bit (base + 1)
+          (c2
            + [[J2 'join G2 '(z b)
                (mi 1 + t2 + [[L2 'set 'lv '(+ tv 8)]])
                (t3 + [[L3 'set 'lv '(+ tv 16)]])
@@ -144,8 +146,8 @@
    u32 '(named "uint32_t")
    ; the byte at the context, led by the byte at rep0 while the bits agree (st >= 7)
    matched
-    (: f (bitf 'Lt 'ix) t (fr 't (f 0)) tb ['inf-mod 2 t]
-     [['ri5 'if 'rg9 '(le (- on base) r0) (guard 0)]
+    (: f (bitf 'Lt 'ix) t (fr 't (f 0)) tb ['inf-mod 2 t] g5 (guard 0) g6 (guard 0)
+     [['ri5 'if 'rg9 '(le (- on base) r0) g5]
       '(rh6 havoc mb (at Ob (- (- on r0) 1)))
       '(rs5 set sy 1)
       '(rh7 havoc off 256)
@@ -153,70 +155,78 @@
        ('((rh8 havoc mb (wshl mb 1))
           (rh9 havoc mbit (and64 mb off))
           (rh10 havoc ix (wadd (wadd li (wadd off mbit)) sy)))
-        + [['ri6 'if 'rg10 '(le litn ix) (guard 0)]]
+        + [['ri6 'if 'rg10 '(le litn ix) g6]]
         + f 1
         + step 'rs6 'rw1 'sy 256 tb t 'rc1 0
         + '((rh11 havoc off (and64 off (bxor (wsub 0 b) (bnot mbit))))))]])
    plain (tree 'Lt 'litn 'li 'lirh5 '(natminus litn 768) 'rg7 '(lz-sub768 litn gl) 256 'sy)
+   g4 (guard 0)
+   g3 (guard 0)
    lit-arm
-    [['ri3 'if 'rg5 '(le cap on) (guard 0)]
+    [['ri3 'if 'rg5 '(le cap on) g3]
      '(rj2 join rg6 (lt base on) ((rh3 havoc pv (at Ob (- on 1)))) ((rh4 havoc pv 0)) ())
      '(rh5 havoc li (wmul 768 (wadd (wshl (and64 on lpm) lc) (wshr pv (wsub 8 lc)))))
-     ['ri4 'if 'rg7 '(lt (- litn 768) li) (guard 0)]
+     ['ri4 'if 'rg7 '(lt (- litn 768) li) g4]
      ['rj3 'join 'rg8 '(le 7 st) matched plain '((ra1 (inf-le i (add nin 1))))]
      '(rp1 poke Ob on (w8 sy))
      '(rs4 set on (+ on 1))
      '(re2 ife rg20 (lt st 4) ((rs12 set st 0)) ((re3 ife rg21 (lt st 10) ((rs13 set st (- st 3))) ((rs14 set st (- st 6))))))]
 
    ; a match: its length, then its distance's slot, middle bits and low bits, or the end marker
+   rta (rtree ALIGN 4)
+   nrm (norm 0)
+   rtb (rtree 'bx 'fb)
    dist
     [['rh17 'havw 'fb '(wsub (wshr slot 1) 1) 'rg19]
       '(rh18 havoc d (wshl (wor 2 (and64 slot 1)) fb))
       ['rj7 'join 'rg22 '(lt slot 14)
-       ('((rh19 havoc bx (wsub (wsub (wadd 688 d) slot) 1))) + rtree 'bx 'fb + '((rh20 havoc d (wadd d v))))
+       ('((rh19 havoc bx (wsub (wsub (wadd 688 d) slot) 1))) + rtb + '((rh20 havoc d (wadd d v))))
        ('((rh21 havw nd (wsub fb 4) rg23) (rh22 havoc v 0))
         + [['rf1 'for 'j 0 'nd '((ra7 (inf-le i (add nin 1))))
-            (norm 0 + '((rh23 havoc rg (wshr rg 1)) (rh24 havoc t (wge cd rg))
+            (nrm + '((rh23 havoc rg (wshr rg 1)) (rh24 havoc t (wge cd rg))
                         (rh25 havoc cd (wsub cd (and64 rg (wsub 0 t)))) (rh26 havoc v (wor (wshl v 1) t))))]]
         + '((rh27 havoc d (wadd d (wshl v 4))))
-        + rtree ALIGN 4
+        + rta
         + '((rh28 havoc d (wadd d v))))
        '((ra6 (inf-le i (add nin 1))))]]
    (len1 j l) (prove "\(j)j" 3 ['inf-letrans 1 2 ['add l 2] '(idpath false) ['inf-leaddl 2 l]])
    normal
-    (: x (lenf LEN) _ (len1 'rj4 (tl 'lv))
+    (: x (lenf LEN) _ (len1 'rj4 (tl 'lv)) g7 (guard 0) sl (tree 'Pr NP 'sb 'sbrh14 624 'rg13 '(idpath false) 64 'slot)
+       p3 (cput (repk 3) (repk 2)) p2 (cput (repk 2) (repk 1)) p1 (cput (repk 1) ['cast u32 ['var "r0"]])
      (x
      + '((rs7 set len (+ lv 2)) (rs8 set kind 0)
          (rj5 join rg12 (lt lv 3) ((rh12 havoc lx lv)) ((rh13 havoc lx 3)) ())
          (rh14 havoc sb (wadd 432 (wshl lx 6))))
-     + [['ri7 'if 'rg13 '(lt 624 sb) (guard 0)]]
-     + tree 'Pr NP 'sb 'sbrh14 624 'rg13 '(idpath false) 64 'slot
+     + [['ri7 'if 'rg13 '(lt 624 sb) g7]]
+     + sl
      + [['rj6 'join 'rg14 '(lt slot 4) '((rh15 havoc d slot)) dist '((ra5 (inf-le i (add nin 1))))]
         ['ri8 'if 'rg15 '(eq d 4294967295)
          '((re4 ife rg16 (nz em) ((re5 ife rg17 (le i nin) ((rs9 set rc 2)) ((rs10 set rc 0)))) ((rs11 set rc 0)))
            (rk2 brk))]
-        (cput (repk 3) (repk 2)) (cput (repk 2) (repk 1)) (cput (repk 1) ['cast u32 ['var "r0"]])
+        p3 p2 p1
         '(rh16 havw r0 d rg18)]))
    ; a rep: rep0 short (one byte) or long, or rep 1 to 3 moved to the front
    rep
-    (bit ['+ 'st ISG0]
+    (: x (lenf REPLEN) _ (len1 'rj12 (tl 'lv)) b2 (bit ['+ 'st ISG2]) b1 (bit ['+ 'st ISG1]) bl (bit ['+ 'sx REP0L]) b0 (bit ['+ 'st ISG0])
+       p3 (cput (repk 3) (repk 2)) p2 (cput (repk 2) (repk 1)) p1 (cput (repk 1) ['cast u32 ['var "r0"]])
+     (b0
      + [['rj8 'join 'rg24 '(z b)
-         (bit ['+ 'sx REP0L] + '((rj9 join rg25 (z b) ((rs15 set sh 1)) ((rs16 set sh 0)) ((ra8 (inf-le sh 1)) (ra9 (inf-le i (add nin 1)))))))
-         ('((rs17 set sh 0)) + bit ['+ 'st ISG1]
+         (bl + '((rj9 join rg25 (z b) ((rs15 set sh 1)) ((rs16 set sh 0)) ((ra8 (inf-le sh 1)) (ra9 (inf-le i (add nin 1)))))))
+         ('((rs17 set sh 0)) + b1
           + [['rj10 'join 'rg26 '(z b) [['rh29 'havoc 'd ['raw (repk 1)]]]
-              (bit ['+ 'st ISG2]
+              (b2
                + [['rj11 'join 'rg27 '(z b) [['rh30 'havoc 'd ['raw (repk 2)]]]
-                   [['rh31 'havoc 'd ['raw (repk 3)]] (cput (repk 3) (repk 2))]
+                   [['rh31 'havoc 'd ['raw (repk 3)]] p3]
                    '((ra10 (inf-le i (add nin 1))))]
-                  (cput (repk 2) (repk 1))])
+                  p2])
               '((ra11 (inf-le i (add nin 1))))]
-             (cput (repk 1) ['cast u32 ['var "r0"]])
+             p1
              '(rh32 havw r0 d rg28)])
          '((ra12 (inf-le i (add nin 1))) (ra13 (inf-le sh 1)))]
         ['rj12 'join 'rg29 '(z sh)
-         (: x (lenf REPLEN) _ (len1 'rj12 (tl 'lv)) (x + '((rs18 set len (+ lv 2)) (rs19 set kind 1))))
+         (x + '((rs18 set len (+ lv 2)) (rs19 set kind 1)))
          '((rs20 set len 1) (rs21 set kind 2))
-         '((ra14 (inf-le i (add nin 1))) (ra15 (inf-le kind 2)) (ra16 (inf-le 1 len)))]])
+         '((ra14 (inf-le i (add nin 1))) (ra15 (inf-le kind 2)) (ra16 (inf-le 1 len)))]]))
    ; the copy, len bytes from r0 + 1 back: whole words where they cannot overlap and room follows
    wide '((rs22 set ck 0)
           (rw2 while (lt ck len) (natminus len ck) ()
@@ -226,27 +236,34 @@
                     [L 'while '(lt ck len) '(natminus len ck) ()
                      [[P 'poke 'Ob '(+ on ck) '(at Ob (- (+ on ck) (+ r0 1)))]
                       [T 'set 'ck '(+ ck 1)]]]]
+   g12 (guard 0)
+   g11 (guard 0)
+   g10 (guard 0)
+   g9 (guard 0)
+   bmatch (bit ['+ 'st ISREP])
    match-arm
-    (bit ['+ 'st ISREP]
+    (bmatch
      + [['rj4 'join 'rg11 '(z b) normal rep
          '((ra2 (inf-le i (add nin 1))) (ra3 (inf-le kind 2)) (ra4 (inf-le 1 len)))]
-        ['ri9 'if 'rg30 '(le (- on base) r0) (guard 0)]
-        ['ri10 'if 'rg31 '(lt nin i) (guard 0)]
-        ['ri11 'if 'rg32 '(lt top on) (guard 0)]
-        ['ri12 'if 'rg33 '(lt (- top on) len) (guard 0)]
+        ['ri9 'if 'rg30 '(le (- on base) r0) g9]
+        ['ri10 'if 'rg31 '(lt nin i) g10]
+        ['ri11 'if 'rg32 '(lt top on) g11]
+        ['ri12 'if 'rg33 '(lt (- top on) len) g12]
         ['rj13 'join 'rg34 '(wide (+ r0 1))
          [['rj14 'join 'rg35 '(le (+ len 8) (- cap on)) wide (bytes 'rw3 'rs24 'rp3 'rs25) ()]]
          (bytes 'rw4 'rs26 'rp4 'rs27)
          ()]
         '(rs28 set on (+ on len))
         '(re6 ife rg36 (lt st 7) ((rs29 set st (+ 7 kind))) ((re7 ife rg37 (z kind) ((rs30 set st 10)) ((rs31 set st 11)))))])
+   bsx (bit 'sx)
+   g1 (guard 0)
    run-body
     ('((rh1 havoc t0 (and64 on pbm)) (rs1 set ps (low t0 15)))
-     + [['ri1 'if 'rg1 '(lt nin i) (guard 0)]
+     + [['ri1 'if 'rg1 '(lt nin i) g1]
         ['rj1 'join 'rg2 '(eq pz 1) [['ri2 'if 'rg3 '(lt (- nin i) 20) '((rs2 set rc 3) (rk1 brk))]] () ()]
         '(rs3 set sx (+ (shl st 4) ps))
         '(rh2 have rh2 (inf-le sx 191))]
-     + bit 'sx
+     + bsx
      + [['re1 'ife 'rg4 '(z b) lit-arm match-arm]])
    ; the hand proofs the walk's own statements owe, by label
    sxT '(add (inf-by16 st) (inf-mod 16 t0rh1))
@@ -334,15 +351,16 @@
          (rj25 join rg47 (lt hlim top) ((rs45 set top hlim)) () ((ra46 (inf-le top cap)))))
        + [['rw0 'while '(lt on lim) '(natminus lim on)
            '((rb1 (inf-le on cap)) (rb2 (inf-le base on)) (rb3 (inf-le i (add nin 1))) (rb4 (inf-le st 11)))
-           run-body]
-          (cput (cf "r" "range") ['cast u32 ['var "rg"]])
-          (cput (cf "r" "code") ['cast u32 ['var "cd"]])
-          (cput (cf "r" "bad") ['bin 'lt ['var "nin"] ['var "i"]])
-          (cput (cf "r" "i") ['cond ['bin 'lt ['var "nin"] ['var "i"]] ['var "nin"] ['var "i"]])
-          (cput (cf "m" "state") ['cast 'uint ['var "st"]])
-          (cput (repk 0) ['cast u32 ['var "r0"]])
-          (cput (cf "o" "n") ['var "on"])
-          '(rr1 ret rc)])
+           run-body]]
+       + map (p \ cput (p 0) (p 1))
+          [[(cf "r" "range") ['cast u32 ['var "rg"]]]
+           [(cf "r" "code") ['cast u32 ['var "cd"]]]
+           [(cf "r" "bad") ['bin 'lt ['var "nin"] ['var "i"]]]
+           [(cf "r" "i") ['cond ['bin 'lt ['var "nin"] ['var "i"]] ['var "nin"] ['var "i"]]]
+           [(cf "m" "state") ['cast 'uint ['var "st"]]]
+           [(repk 0) ['cast u32 ['var "r0"]]]
+           [(cf "o" "n") ['var "on"]]]
+       + '((rr1 ret rc)))
      'macros '()
      'proofs pf}
 
