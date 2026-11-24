@@ -1212,7 +1212,7 @@
    _ (each ^6 (i \ (hole "o\(i).scene" 300, utime "\(kc)o\(i).scene" (1000000 * (i + 1)))))
    _ (each ^7 (i \ (hole "s\(i).scene" 0, utime "\(kc)s\(i).scene" 100000000)))
    (held fr) (: _ (scene-sweep kc fr) (sort (filter (f \ #f = 8) (readdir kc)))) (os l) (filter (f \ f 0 = 111) l)
-   h1 (held ()) h2 (held 2300000000) _ (hole "z0.scene" 2000) h3 (held ())
+   h1 (held ()) h2 (held 2300000000) _ (hole "z0.scene" 2000) _ (utime "\(kc)z0.scene" (clock () + 5000)) h3 (held ())
    _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
    (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
    ks (filter (k \ k != 'memo) (sort (keys ka)))
