@@ -71,12 +71,12 @@ $(R)/$(o)/love.img: $(R)/$(o)/baker.elf
 	 else : > $@; echo "img: no qemu-system-arm -- empty image (device egg-boots)"; fi
 
 # the playdate's STONES image (love-pds.img): the lore libraries and the glue as one text,
-# and horn.c + raster.c + lamp.c + pool.c + mem.c beside the core (tones within it), rt.c under them, as the device links
+# and horn.c + raster.c + lamp.c + air.c + pool.c + mem.c beside the core (tones within it), rt.c under them, as the device links
 # them, so the land is drawn and lit at bake and the image's nif rows line up with the device's
 imgpds: $(R)/$(o)/love-pds.img
-pds_o = $(R)/$(o)/raster.o $(R)/$(o)/lamp.o $(R)/$(o)/pool.o $(R)/$(o)/mem.o
+pds_o = $(R)/$(o)/raster.o $(R)/$(o)/lamp.o $(R)/$(o)/air.o $(R)/$(o)/pool.o $(R)/$(o)/mem.o
 pds_skel = $(R)/$(o)/start.o $(filter-out %/nohorn.o,$(love_o)) $(R)/$(o)/horn.o $(pds_o) $(heap_o) $(R)/$(o)/lm.o $(libc_o) $(R)/$(o)/rt.o
-$(foreach u,raster lamp pool mem,$(eval $(call p_obj,$u,src/love/$u.c,$(S)/love/$u.c $(love_dep),$(mps2_cc))))
+$(foreach u,raster lamp air pool mem,$(eval $(call p_obj,$u,src/love/$u.c,$(S)/love/$u.c $(love_dep),$(mps2_cc))))
 $(eval $(call p_obj,horn,src/love/horn.c,$(S)/love/horn.c $(love_dep),$(mps2_cc) -D love_horn_seat=1 -D love_horn_rate=11025))
 FORCE:
 $(R)/out/playdate/stones.h: FORCE

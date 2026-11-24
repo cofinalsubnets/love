@@ -3,4 +3,5 @@
 (module 'posix 0)
 (module 'window 0)
 (module 'gpu 0)
+(module 'slip 0)                        ; mitty's, the console's panes
 (module 'quay 0)                        ; cb.c's, where a board links it
