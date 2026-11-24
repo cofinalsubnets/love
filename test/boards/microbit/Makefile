@@ -13,7 +13,7 @@ include ../../../src/inle/port.mk
 MICROBIT_DRIVE ?= /run/media/$(USER)/MICROBIT
 mb_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
 
-objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/song.o $(R)/$(o)/tonerun.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+objs = $(R)/$(o)/microbit.o $(R)/$(o)/main.o $(R)/$(o)/song.o $(R)/$(o)/tonerun.o $(R)/$(o)/lm.o $(R)/$(o)/lmf.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 
 .PHONY: microbit flash
 default: microbit

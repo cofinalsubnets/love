@@ -7,8 +7,8 @@
 include ../../../src/inle/port.mk
 
 x_src = test/boards/esp32/esp32.c test/boards/esp32/main.c \
-  src/apps/moon/lib/rt.c src/apps/moon/lib/moonlibc/math/lm.c
-x_dep = esp32.c main.c ../battery.h $(S)/inle/bput.h $(S)/apps/moon/lib/rt.c $(S)/apps/moon/lib/moonlibc/math/lm.c $(lv)
+  src/apps/moon/lib/rt.c src/apps/moon/lib/moonlibc/math/lm.c src/apps/moon/lib/moonlibc/math/lmf.c
+x_dep = esp32.c main.c ../battery.h $(S)/inle/bput.h $(S)/apps/moon/lib/rt.c $(S)/apps/moon/lib/moonlibc/math/lm.c $(S)/apps/moon/lib/moonlibc/math/lmf.c $(lv)
 x_cc = $(MOONCC) -t xtensa -nostdlib -D __STDC_HOSTED__=0 -Isrc/apps/moon/lib/moonlibc/math -Isrc/apps/moon/include
 
 .PHONY: esp32

@@ -14,7 +14,7 @@ include ../../../src/inle/port.mk
 UF2_DRIVE ?= /run/media/$(USER)/XIAO-SENSE
 nrf_cc = $(MOONCC) -t thumb2sp -D __STDC_HOSTED__=0 -I.
 
-objs  = $(R)/$(o)/nrf52840.o $(R)/$(o)/main.o $(R)/$(o)/usb.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
+objs  = $(R)/$(o)/nrf52840.o $(R)/$(o)/main.o $(R)/$(o)/usb.o $(R)/$(o)/lm.o $(R)/$(o)/lmf.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 lobjs = $(R)/$(o)/nrf52840.o $(R)/$(o)/loader.o $(R)/$(o)/usbl.o $(R)/$(o)/rt.o $(R)/$(o)/boot.o
 uc    = usb.c nrf52840.h $(S)/inle/usbcdc.h $(mc)
 
