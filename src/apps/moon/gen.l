@@ -65,14 +65,12 @@
    ; ahead of that very form once the tail is laid (dlin), so no pass from there on sees one. a
    ; form a pass remade hands its marks to the next form, in the order dlout saw, that survived
    (dlout g fs)
-    (: (end? f p) (two? p && starts? (show (f 1)) ".dlz")
-       (tail f p) (pin g 'dlq (g 'dlq @ ([q ms] . u) (q == p ? ([p (ms + [f])] . u) ([p [f]] . g 'dlq)) _ [[p [f]]]))
-       (go l ms p) (l @ (f . u) (? (dlab? f) (end? f p ? (tail f p, go u ms p) (go u (f . ms) p))
-                                          (two? ms) (: _ (pin g 'dlp ([f (rev ms)] . g 'dlp)) (f . go u () f))
-                                          (f . go u () f))
-                              _ ())
-       _ (pins g 'dlp () 'dlo () 'dlq ())
-       (any dlab? fs ? (pin g 'dlo (filter (f \ !(dlab? f)) fs), go fs () ()) fs))
+    (: (go l ms) (l @ (f . u) (? (dlab? f) (go u (f . ms))
+                                        (two? ms) (: _ (pin g 'dlp ([f (rev ms)] . g 'dlp)) (f . go u ()))
+                                        (f . go u ()))
+                            _ ())
+       _ (pins g 'dlp () 'dlo ())
+       (any dlab? fs ? (pin g 'dlo (filter (f \ !(dlab? f)) fs), go fs ()) fs))
    (dlin g fs)
     (g 'dlp @ () fs
        ps (: (book l key) (foldl (t \ x \ (show (key x) @ k (pin t k (x . peep t k ())))) {} l)
@@ -85,16 +83,8 @@
                                    (? (alive? f) ((two? m ? (show f @ k (pin t k ([f m] . peep t k ())))), ()) m)))
                       () (g 'dlo))
              (hit f) (filter (p \ <p == f) (peep t (show f) ()) @ (p . _) <>p _ ())
-             ; a block's end, after the form ahead of it, or the one ahead of that survived
-             qown (book (g 'dlq) cap)
-             qk (f \ filter (p \ <p == f) (peep qown (show f) ()) @ (p . _) <>p _ ())
-             qt {}
-             _ (foldl (\ pend f (: m (qk f + pend)
-                                   (? (alive? f) ((two? m ? (show f @ k (pin qt k ([f m] . peep qt k ())))), ()) m)))
-                      () (rev (g 'dlo)))
-             (aft f) (filter (p \ <p == f) (peep qt (show f) ()) @ (p . _) <>p _ ())
-             (go l) (l @ (f . u) (hit f + (f . (aft f + go u))) _ ())
-             _ (pins g 'dlp () 'dlo () 'dlq ())
+             (go l) (l @ (f . u) (hit f + (f . go u)) _ ())
+             _ (pins g 'dlp () 'dlo ())
              (go fs)))
    ; a laid function's scopes with each name's home: ('f o) at cfa+o, ('d o) at the address there,
    ; ('g label), ('v vreg) by the states, (k ((vreg home)..)) at the mark .dls.K. csframe's shift is in, and the link sits 16 or 32 under the cfa
@@ -103,7 +93,7 @@
        (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
        (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
                      [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
-       (pin g 'dlv ([nm (map ([k par bs in] \ [k par (map (b \ (<b . home b)) bs) in]) (g 'dlsc))
+       (pin g 'dlv ([nm (map ([k par bs in sp] \ [k par (map (b \ (<b . home b)) bs) in sp]) (g 'dlsc))
                   (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
    ; the frame base's distance under the cfa, () where no cfa is described
    (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())

@@ -23,6 +23,8 @@ done
 for f in src/love/*.c; do
   b=`basename $f .c`
   [ -f "$d/g/$b.bad" ] && { echo "FAIL $name: mooncc $f"; exit 1; }
+  # ..and -g laid its marks there, so the sameness says something
+  [ ! -s "$d/g/$b.o.text" ] || "$ho/love" readelf -S "$d/g/$b.g.o" | grep -q 'debug_line' || { echo "FAIL $name: -g lays no lines for $b.c"; exit 1; }
   cmp -s "$d/g/$b.o.text" "$d/g/$b.g.o.text" || { echo "FAIL $name: -g changes $b.c's code"; exit 1; }
 done
 echo "dwarfcode: -g leaves the code of love's C alone, `ls src/love/*.c | wc -l` files"

@@ -864,11 +864,12 @@
        (fns i l)
         (: lb (l 6) al (rws i) bl (filter (r \ r 1 = 0) al)
            (in l lo hi) (filter (r \ lo <= <r && <r < hi) l)
+           (lst l) (l @ (a . b . u) (<a = <b ? (lst >l) (a . lst >l)) _ l)
            (one nm) (: k (name nm) e (fn-end nm)
                        (o-has? lb k && o-has? lb e ?
                           (: lo (lb k) hi (lb e)
                              d (in bl lo hi @ (b . _) b (in al lo hi @ (b . _) b ()))
-                             [[lo k (hi - lo) nm (two? d ? [(peep fix (d 4) 1) (d 3)] [1 0]) (elem nm gfn) lb]])))
+                             [[lo k (hi - lo) nm (two? d ? [(peep fix (d 4) 1) (d 3)] [1 0]) (elem nm gfn) lb (lst (in al lo hi))]])))
            (sort (catmap one (uniq fnl))))
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
        pre (le16 5 + [1 8] + le32 0 + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
@@ -930,7 +931,7 @@
            (go ss))
        ; -> the list's place past .debug_loclists' head, () when v has no home
        (loclist v f)
-        (@ f [f0 fk lb scs ss hi]
+        (@ f [f0 fk lb scs ss hi _]
            (rev (peep ss v ()) @ () ()
               hs (: b ([6] + le64 0 + catmap ([a e h] \ (hexp h @ x ([4] + uleb (a - f0) + uleb (e - f0) + uleb #x + x))) hs + [0])
                     n (lc 'n)
@@ -945,40 +946,44 @@
              () [((codes 0) . hd) ()]
              _ [((codes 1) . hd + homed h) ()])
        (loc1 f ps acc v)
-        (@ acc [bs rels]
+        (@ acc [n bl rels]
            (@ v [nm h j]
               (? (j = () || (h @ ('g l) !(laid? l) _ ())) acc
                  (@ (homef f h (str nm + ref j) (elem nm ps ? [6 23 26] [24 18 27])) [b rs]
-                    [(bs + b) (map (r \ ((<r + #bs) . >r)) rs + rels)]))))
+                    [(n + #b) (b . bl) (map (r \ ((<r + n) . >r)) rs + rels)]))))
        ; a scope's names, then the blocks in it by address, each inside its parent and past its
-       ; elder; one whose mark is gone lays nothing. f: the function's start, its label, labels, scopes
+       ; elder; one whose mark is gone lays nothing. f: the function's start, its label, labels, scopes.
+       ; acc: a length, its byte runs newest first, its relocs
        (scope acc f k lo hi)
-        (@ f [f0 fk lb scs _ _]
+        (@ f [f0 fk lb scs _ _ rows]
            (: own (peep (scs 0) k ())
               ; a copy's params are the callee's
               ps (own @ ([_ _ _ (nm . _)] . _) (map cap ((peep (dt 2) nm [() ()]) 1)) _ ())
               a1 (foldl (loc1 f ps) acc (catmap (s \ s 2) own))
               (at p j d) (peep lb (name "\(p).\(j)") d)
-              kids (sort (catmap (s \ (at ".dlb" <s () @ b (charm? b ? (at ".dle" <s hi @ e [[b (e <= b ? (at ".dlz" <s e) e) <s]]) ()))) (filter (s \ 0 < <s) (peep (scs 1) k ()))))
+              ; a block ends at the first row past its start that another scope laid, or where its parent does
+              (cut b z sp) (foldl (\ m r (b < <r && <r < m && !(sp 0 <= r 2 && r 2 < sp 1) ? <r m)) z rows)
+              kids (sort (catmap (s \ (at ".dlb" <s () @ b (charm? b ? [[b (cut b hi (s 4)) <s]] ()))) (filter (s \ 0 < <s) (peep (scs 1) k ()))))
               (kid st c)
                (@ st [acc from]
                   (: b (max from <c) e (min hi (c 1))
                      (? (e <= b) st
-                        (@ acc [bs rels]
+                        (@ acc [n bl rels]
                            (: in (peep (scs 0) (c 2) () @ (s . _) (s 3) ())
                               hd (in @ (nm . _) ([30] + le32 (ino nm)) _ [25])
                               pl (in @ [_ cf cl] (uleb (peep fix cf 1) + uleb cl) _ ())
-                              a2 (scope [(bs + hd + le64 0 + le32 (e - b) + pl) ([(#bs + #hd) 'abs64 fk (b - f0) 0] . rels)] f (c 2) b e)
-                              [[(<a2 + [0]) (a2 1)] e])))))
+                              h2 (hd + le64 0 + le32 (e - b) + pl)
+                              a2 (scope [(n + #h2) (h2 . bl) ([(n + #hd) 'abs64 fk (b - f0) 0] . rels)] f (c 2) b e)
+                              [[(<a2 + 1) ([0] . a2 1) (a2 2)] e])))))
               <(foldl kid [a1 lo] kids)))
        (die acc f)
         (@ acc [bn bl rels]
-           (@ f [f0 k n nm fl ex lb]
+           (@ f [f0 k n nm fl ex lb rows]
               (: sg (peep (dt 2) nm [() ()])
                  sl (peep (dt 3) nm [() ()])
                  scs <sl
                  (by i) (foldl (t \ s \ pin t (s i) (s . peep t (s i) ())) {} (rev scs))
-                 fr [f0 k lb [(by 0) (by 1)] (sort (catmap ([i s] \ (peep lb (name ".dls.\(i)") () @ a (charm? a ? [[a i s]] ()))) (sl 1)) @ l (: k0 (foldl (\ m r (min m (r 1))) (? (two? l) (<l 1) 0) l) (hidx (map ([a i s] \ [(i = k0 ? f0 a) s]) l) (f0 + n)))) (f0 + n)]
+                 fr [f0 k lb [(by 0) (by 1)] (sort (catmap ([i s] \ (peep lb (name ".dls.\(i)") () @ a (charm? a ? [[a i s]] ()))) (sl 1)) @ l (: k0 (foldl (\ m r (min m (r 1))) (? (two? l) (<l 1) 0) l) (hidx (map ([a i s] \ [(i = k0 ? f0 a) s]) l) (f0 + n)))) (f0 + n) rows]
                  ph (catmap (s \ <s = -1 ? (s 2) ()) scs)
                  (par acc p) (: h (filter (b \ <b = <p) ph @ (b . _) (b 1) ())
                                 (@ acc [bs rs]
@@ -988,10 +993,10 @@
                  b0 (hd + le64 0 + le32 n + uleb <fl + uleb (fl 1)
                       + (<sg = () ? () (ref <sg)) + [1 156])
                  p0 (foldl par [b0 ()] (filter (p \ p 1 != ()) (sg 1)))
-                 r (scope p0 fr 0 f0 (f0 + n))
+                 r (scope [#(<p0) [<p0] (p0 1)] fr 0 f0 (f0 + n))
                  o (4 + bn)
-                 [(bn + #(<r) + 1) ((<r + [0]) . bl)
-                  (map (r \ ((<r + o) . >r)) (r 1) + ([(o + #hd) 'abs64 k 0 0] . rels))])))
+                 [(bn + <r + 1) ([0] . (r 1 + bl))
+                  (map (r \ ((<r + o) . >r)) (r 2) + ([(o + #hd) 'abs64 k 0 0] . rels))])))
        ds (foldl die [#(<vs) [<vs] <>vs] fs)
        cu (catall (rev (ds 1)) + [0])
        inf [".debug_info" 1 0 1 (le32 #cu + cu)

@@ -161,6 +161,46 @@ for t in x64 a64 rv64; do
   fi
 done
 
+# a copy whose arm moved covers no code moved from elsewhere: no line row in one is a line of no callee's
+cat > "$d/o.c" <<'EOF'
+long opq(long);
+struct g { long a, b, n; char *p; };
+static inline __attribute__((always_inline)) long torn(struct g *g, long k) {
+  g->n = k;
+  g->b = 0;
+  return -1; }
+static inline __attribute__((always_inline)) long same(long v) {
+  if (v < 0)
+    return -1;
+  return opq(v); }
+long read1(struct g *g, long c) {
+  for (;;) {
+    c = opq(c);
+    if (c == 1) return torn(g, 4);
+    if (c == 2) { g->a += c; continue; }
+    if (c == 3) {
+      g->b = opq(g->a);
+      if (g->b < 0) return torn(g, 5);
+      break; }
+    if (c > 90) return torn(g, c);
+    g->n++; }
+  for (long i = 0; i < g->a; i++) {
+    g->p[i] = i;
+    if (opq(i) < 0) return same(i); }
+  return same(g->a); }
+EOF
+for t in x64 a64 rv64; do
+  mc -t $t -os linux -g -c "$d/o.c" -o "$d/o.$t"
+  if [ -n "$dd" ]; then
+    "$dd" --debug-line "$d/o.$t" | awk '/^0x/ && !/end_sequence/ {print "x" substr($1, 3), $2}' > "$d/o.rows"
+    "$dd" --debug-info "$d/o.$t" | awk '/DW_TAG/ {i = /inlined_subroutine/} i && /low_pc/ {gsub(/[^0-9a-fx]/, "", $2); lo = "x" substr($2, 3)}
+      i && /high_pc/ {gsub(/[^0-9a-fx]/, "", $2); print lo, "x" substr($2, 3)}' > "$d/o.copies"
+    b=`awk 'NR == FNR {lo[NR] = $1; hi[NR] = $2; n = NR; next} $2 > 11 {for (i = 1; i <= n; i++) if (lo[i] <= $1 && $1 < hi[i]) print $1, $2}' "$d/o.copies" "$d/o.rows"`
+    n=`wc -l < "$d/o.copies"`
+    [ -z "$b" ] && [ "$n" -ge 5 ] || { cat "$d/o.copies"; echo "FAIL $name: $t: $n copies, rows of another's code in them: $b"; exit 1; }
+  fi
+done
+
 # without -g no debug section; strip -g takes them
 mc -c "$d/u.c" -o "$d/u0.o"
 mc -t x64 -os linux -c "$d/t.c" -o "$d/t0.o"
