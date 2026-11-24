@@ -207,11 +207,10 @@
        wkset (o-names wknames)
        ; i386: a reach to any global stays a relocation, as gas leaves it
        gbset (x86 ? (o-names (wknames + funcnames + globnames)) wkset)
-       nsec #secs
-       _ (0 >= nsec ? (scare 'obj-no-sections target))
+       _ (atom? secs ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
        ; one section is one lay, an executable one through the relaxer
-       lanes (map (s \
+       lanes0 (map (s \
                 (: fm (s 4)
                    p (exec? s ?
                         (laylax @ r
@@ -221,6 +220,12 @@
                    w (o-walk be <p >p gbset (x86 || exec? s ? 1) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
+       ; -g's sections: their words reach a section and an offset, so a function's has no thumb bit
+       lanes (lanes0 + (5 < #ax && two? (ax 5) ?
+                          (map ([nm t f al bs rs lb] \ [nm t f al bs (map ([o k l a p] \ [o 'dabs32 l a p]) rs) lb])
+                               (o-dwarf lanes0 (ax 5) (funcnames + loc0) funcnames target))
+                          ()))
+       nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (lnt i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
@@ -293,6 +298,7 @@
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
                             (go >rs (? (<>r == 'abs32 || <>r == 'abs32d) (a32k <>r <>>r <>>>r @ sl (o-put32 bs <r <>sl))
+                                       (<>r == 'dabs32) (o-where wx (<>>r) @ w (o-put32 bs <r (<>w + <>>>r)))
                                        (<>r == 'abs16) (a32k <>r <>>r <>>>r @ sl (o-putbs bs <r (le16 <>sl)))
                                        (<>r == 'abs8) (a32k <>r <>>r <>>>r @ sl (o-putbs bs <r [(<>sl & 255)]))
                                        bs))))
@@ -374,6 +380,7 @@
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'bcc (o-rel32 off (fnsym lbl) r-thm-jump19)  ; a Bcc.W into another section
                ('abs32 || 'abs32d) (a32k k lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
+               'dabs32 (o-where wx lbl @ w (o-rel32 off <w (x86 ? r-386-32 r-arm-abs32)))
                'abs16 (a32k k lbl aux @ sl (o-rel32 off <sl r-386-16))
                'abs8 (a32k k lbl aux @ sl (o-rel32 off <sl r-386-8))
                ('movw16 || 'movt16)

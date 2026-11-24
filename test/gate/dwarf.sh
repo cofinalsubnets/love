@@ -199,8 +199,9 @@ for t in x64 a64 rv64; do
   fi
 done
 
-# the 32-bit targets: addresses of 4 bytes in the target's order, a unit whose range is its code
-for t in rv32 mips; do
+# the 32-bit targets, linked: addresses of 4 bytes in the target's order, a unit whose range is its code,
+# and no thumb bit in either
+for t in rv32 mips arm i386; do
   mc -t $t -os linux -g "$d/y.c" -o "$d/y.$t"
   mc -t $t -os linux -g "$d/l.c" -o "$d/l.$t"
   if [ -n "$dd" ]; then
@@ -209,6 +210,7 @@ for t in rv32 mips; do
       "$dd" --debug-info "$d/$f.$t" > "$d/i$f.$t" 2>&1
       grep -q 'addr_size = 0x04' "$d/i$f.$t" || { echo "FAIL $name: $t's addresses are not 4 bytes"; exit 1; }
       m=`"$ho/love" nm "$d/$f.$t" | awk '$3 == "main" {print $1}' | sed 's/^0*//'`
+      [ $t = arm ] && m=`printf %x $(( 0x$m / 2 * 2 ))`
       r=`sed -n '/DW_AT_ranges/,/)$/ s/.*\[0x0*\([0-9a-f]*\), 0x0*\([0-9a-f]*\)).*/\1 \2/p' "$d/i$f.$t" | head -1`
       lo=${r% *} hi=${r#* }
       [ -n "$m" ] && [ -n "$lo" ] && [ `printf %d 0x$lo` -le `printf %d 0x$m` ] && [ `printf %d 0x$m` -lt `printf %d 0x$hi` ] \
