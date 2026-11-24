@@ -372,38 +372,41 @@
      (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
 
 ; thunk expecting the kernel to refuse
-; a family's names are its own: nothing pins over them
+; a name is pinned once, asked before anything is laid: a value is read when a closure runs, so
+; a second would change what a sealed type says
 ; a statement and its term have their bare UUs made level vars; the source keeps them bare
-(: (gpin nm v) (IND nm == () ? (pin GLOB nm v) (scare 'uu-defind-owns nm))
+(: (gnew nm) (? (IND nm != ()) (scare 'uu-defind-owns nm)
+                (peep GLOB nm () != ()) (scare 'uu-taken nm)
+                (ureset nm))
    (ulabs t) (uon? 0 ? (ulab t) t)
    (defn nm T0 t0)
-   (: _ (ureset nm) t (sugar t0) T (ulabs (sugar T0)) u (ulabs t) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) t (sugar t0) T (ulabs (sugar T0)) u (ulabs t) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      upoly nm T (ucommit nm),
-     gpin nm [Tv (vof 0 u)],
+     pin GLOB nm [Tv (vof 0 u)],
      pin SRC nm [t],
      nm))
    (axm nm T0)
-   (: _ (ureset nm) T (ulabs (sugar T0))
+   (: _ (gnew nm) T (ulabs (sugar T0))
     (usort 0 0 0 T,
      upoly nm T (ucommit nm),
-     gpin nm [(vof 0 T) ['nv nm]],
+     pin GLOB nm [(vof 0 T) ['nv nm]],
      nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
    (defq nm T0 t0)
-   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      upoly nm T (ucommit nm),
-     gpin nm [Tv ['nv nm]],
+     pin GLOB nm [Tv ['nv nm]],
      nm))
    ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
    ; ran, and a cite of it is unbound
    (defvc nm T0 t0)
-   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      ucompact () (ucommit nm),
-     gpin nm 1,
+     pin GLOB nm 1,
      nm))
    ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
    (vcs-of l)
