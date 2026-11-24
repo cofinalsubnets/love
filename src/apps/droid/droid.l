@@ -319,12 +319,13 @@
    ; a love's abi off its elf header
    (ap-abi lb lov) (lb 18 @ 183 "arm64-v8a" 40 "armeabi-v7a" _ (udie 1 ("apk: " + lov + " is no a64 or arm love")))
    ; ..glhelp built in, the gpu drawing on the app's window from the app's own process
+   ; softfp on arm, android's abi: a float handed to its libraries goes in the words
    (bridge-so tmp abi)
     (: c (bridge-src 0) gc (carried "src/apps/lore/glhelp.c")
        _ (string? c && string? gc ? 0 (udie 1 "apk: this love carries no src/apps/droid/bridge.c or src/apps/lore/glhelp.c"))
        src (tmp + "/bridge.c") gsrc (tmp + "/glhelp-in.c") so (tmp + "/libbridge-" + abi + ".so")
        (uwrite src c, uwrite gsrc gc,
-        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic"])
+        (? ((cite 'moon 'moon-run) ((abi = "arm64-v8a" ? ["-t" "a64"] ["-t" "arm" "-fpic" "-mfloat-abi=softfp"])
                                     + ["-shared" "-D" "GLHELP_IN" "-landroid" "-llog" "-laaudio" "-ldl" "-lc" "-o" so src gsrc]) != 0)
            (udie 1 "apk: the bridge does not compile")
            (uread so @ r (? (two? r) <>r (udie 1 "apk: no bridge laid"))))))
