@@ -104,6 +104,9 @@
    _ (tuner-hear q (tuner-sine 220.0 * 0.015))
    _ (test !(q 'c) (0 < fl < 80.0) (fl < q 'floor < 1.02 * fl)
            (has? (tuner-plain (tuner-frame q 60 12 @ r (r 9))) "(listening)"))
+   ; the mic gone is said where listening was, whole on a phone's 45 columns
+   dq (pins (fresh ()) 'src "no mic" 'deaf 1)
+   _ (test (has? (foldl (a \ r \ a + tuner-plain r) "" (tuner-frame dq 45 12)) "(the mic is refused or gone)"))
    _ (tuner-hear q (tuner-sine 220.0 * 0.5))
    (test (cents-off (q 'hz) 220.0 < 1.0)))
 

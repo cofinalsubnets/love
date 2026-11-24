@@ -204,7 +204,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
        keys "a/A A4 ∓1 Hz  s spectrum  q quit"
        bot (sgr "2" (pad ((? (w < 64) "  " (w < 84) "  ━ semitone  ╺━ ¼  · ⅛    "
                              "  ━ semitone  ╺━ quarter tone  · eighth tone    ") + keys) w))
-       nl (on ? (needle t (t 'nd) w lo hi gone) (sgr "2" "  (listening)"))
+       nl (on ? (needle t (t 'nd) w lo hi gone) (sgr "2" (peep t 'deaf 0 ? "  (the mic is refused or gone)" "  (listening)")))
        ([top] + rows + [nl ""] + (sp ? (strip t (max 11 (w - 4)) on c + [""]) ()) + [bot]))
    (paint t w h) (tuner-frame t w h @ rs ("\e[H" + catmap (r \ "\(r)\e[K\r\n") (init rs) + last rs + "\e[K"))
 
@@ -234,7 +234,7 @@ keys: a/A move A4, s shows the spectrum, q quits"
    ; the mic: the last long frames kept, a reading every 100 ms once win + hi are in
    need (2 * (win + hi)) keep (2 * long)
    (listen t h buf fresh)
-    (see h @ c (c = -1 || t 'over ? (c = -1 ? (pin t 'src "no mic: the device is refused or gone") 0, ())
+    (see h @ c (c = -1 || t 'over ? (c = -1 ? (pins t 'src "no mic" 'deaf 1) 0, ())
       (: b (buf + string c + chug h) b2 (#b > keep ? (snip b (#b - keep) #b) b)
          n2 (fresh + #b - #buf)
          (n2 >= 4800 && #b2 >= need ? (tuner-hear t (samples b2), listen t h b2 0) (listen t h b2 n2)))))
