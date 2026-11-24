@@ -263,6 +263,16 @@
    _ (pin d 'ph 0.0) _ (world-step d 'tap) dm (d 'music)
  (test (peep fb 'held 0 = 0) (w0 = 0) (h1 = 1) (w1 = 1) (wd = ()) (w2 = 0) (h2 = 0)
        (mag (p2 0 - p1 0) < 0.05) (mag (p2 2 - p1 2) < 0.05) (mag (p2 1 - 0.12) < 0.02) (db 'held = 1) (tablet? dm)))
+; the brushes by the plan's cells: what is over and under a place, and near it, as the whole list
+; filtered says, in its order, at the cells' edges too; and another list begins again
+(: gs (world-new 160 100 (world-read ("(level \"t\" (room [-40 0 -40] [40 9 40]) (void [-12 -4 -9] [3 2 5]) (solid (box [1.9 0 -3] [4.1 2 3.3])) (solid (box [-4 0 -4] [-2 1 -2])) "
+            + "(solid (box [6 0 6] [6.05 3 20])) (air (box [-30 2 -30] [30 3 -29])) (start [5 0 5] 0 0))")) "")
+   bs (gs 'sc 'brushes) (lin l x z) (filter (b \ b 'lo 0 <= x && x <= b 'hi 0 && b 'lo 2 <= z && z <= b 'hi 2) l)
+   (box l x z r) (filter (b \ b 'lo 0 - r <= x && x <= b 'hi 0 + r && b 'lo 2 - r <= z && z <= b 'hi 2 + r) l)
+   xs [-41.0 -40.0 -30.0 -12.0 -9.001 -4.0 -2.0 -0.001 0.0 1.9 2.0 3.0 4.0 4.1 5.5 6.0 6.05 8.0 8.5 9.0 30.0 40.0 47.0] (eqs a b) (#a = #b && all (i \ a i == b i) ^#a)
+   same (all (x \ all (z \ eqs (column-at gs x z) (lin bs x z) && eqs (box (near-bs gs x z) x z 1.0) (box bs x z 1.0)) xs) xs)
+   n0 #(column-at gs 2.5 0.0) _ (pin (gs 'sc) 'brushes (take 1 bs)) n1 #(column-at gs 2.5 0.0)
+ (test same (n0 > 1) (n1 <= 1)))
 ; the stick: at a full lean the key's walk to the digit, past the rim the sprint's, half way less, in
 ; its dead middle nothing
 (: (wk n f) (: st (world-new 160 100 (world-read "(level \"t\" (room [0 0 0] [40 5 40]) (start [5 0 5] 0 0))") "")

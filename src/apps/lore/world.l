@@ -9,7 +9,7 @@
 ; met or a bed slept in, and world-run walks on there in the same window.
 (module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
-         world-move world-mouse world-winds? world-walks? world-lean world-frame world-whole? world-pens world-opts world-read world-reading world-load
+         world-move near-bs column-at world-mouse world-winds? world-walks? world-lean world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
@@ -1743,7 +1743,7 @@
                             (n < <h || n = <h && (x - st 'px) * h 1 + (z - st 'pz) * h 2 < 0.0)))))
  ; ..how much of a body at x z is in the way: its points, 50 more for its middle, 99 a shut door;
  ; and the way to those caught, summed
- (caught st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (lv 'cars)
+ (caught st x z) (: r body-r lv (st 'lvl) bs (near-bs st x z) cs (lv 'cars)
    pts ([x z] . body-ring x z r)
    (shut? i) (: d (lv 'doors i) al (d 'ax @ 'z x z) ac (d 'ax @ 'z z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
@@ -1793,7 +1793,7 @@
  ; ..in the air against a ledge no more than mantle-h over the feet, a pull up onto it where
  ; a body fits: the ledge looked for a body's breadth on the way, and stood on as far in
  (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max 1e-9 (sqrt (2 dx + 2 dz)))
-   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (column (st 'sc 'brushes) cx cz) cx cz (fl + mantle-h)) y0 (st 'py)
+   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (column-at st cx cz) cx cz (fl + mantle-h)) y0 (st 'py)
    (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
       (: _ (pin st 'py (t + eye-h)) ok (world-free? st cx cz) _ (pin st 'py y0)
          (ok ? (: _ (pins st 'fv 0.0 'hoist {'y0 y0 'y1 (t + eye-h) 'x0 (st 'px) 'z0 (st 'pz) 'x1 cx 'z1 cz 'k 0.0}) 1) 0))))
@@ -1877,7 +1877,7 @@
    face (two? c && (sin th * c 0 + cos th * c 1) / max 1e-9 (c 2) > 0.4)
    (? (!(two? c) || peep st 'fv 0.0 > 0.0 || (f != 0 && !face)) (pin st 'cling 0)
       (face && f != 0)
-      (: ny (min (c 3 - 1.0) (fl + f * ladder-v * dt)) g (floor-at (column (st 'sc 'brushes) (st 'px) (st 'pz)) (st 'px) (st 'pz) ny)
+      (: ny (min (c 3 - 1.0) (fl + f * ladder-v * dt)) g (floor-at (column-at st (st 'px) (st 'pz)) (st 'px) (st 'pz) ny)
          down (f < 0 && (charm? g || gem? g) && ny <= g)
          (pins st 'py ((down ? g ny) + eye-h) 'fv 0.0 'gt (st 'mt) 'cling (down ? 0 1) 'mf 0))
       (peep st 'cling 0 = 1) (pins st 'fv 0.0 'gt (st 'mt))
@@ -1956,6 +1956,18 @@
  ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none; up
  ; from feet in a solid, down from feet in the air
  ; ..the brushes whose plan holds x z, in their order: all a point there can be in
+ ; ..the brushes by the plan's cells, each cell's found the first time something is in it, in
+ ; their order and near-m wider than the cell: (near-bs st x z) holds all a box about x z
+ ; reaching near-m could meet. begun again for another list of them
+ near-g 2.0 near-m 1.05
+ (near-bs st x z) (: sc (st 'sc) bs (sc 'brushes) n (peep sc 'near ())
+   t (tablet? n && n 'bs == bs ? n (: n {'bs bs 'cells {}} (pin sc 'near n, n)))
+   i (int (floor (x / near-g))) j (int (floor (z / near-g))) k ((i + 8192) * 16384 + j + 8192) c (t 'cells)
+   (peep c k 0 @ 0 (: x0 (i * near-g - near-m) x1 ((i + 1) * near-g + near-m) z0 (j * near-g - near-m) z1 ((j + 1) * near-g + near-m)
+                      l (filter (b \ b 'lo 0 <= x1 && x0 <= b 'hi 0 && b 'lo 2 <= z1 && z0 <= b 'hi 2) bs)
+                    (pin c k l, l))
+             l l))
+ (column-at st x z) (column (near-bs st x z) x z)
  (column bs x z) (filter (b \ b 'lo 0 <= x && x <= b 'hi 0 && b 'lo 2 <= z && z <= b 'hi 2) bs)
  (floor-at bs x z fl) (: (air? y) (brush-medium bs [x y z] = 1)
    (top a b) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (air? m ? [(q 0) m] [m (q 1)]))) [a b] ^7 @ q (q 1))
@@ -1965,7 +1977,7 @@
  (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (lv 'gravs))
    (? (shaft || any (c \ car-track? c x z) (lv 'cars)) (pins st 'fv 0.0 'gt (st 'mt))
-      (: bss (map (q \ [(column (st 'sc 'brushes) (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z (tread st 'feet))) bs (bss 0 0)
+      (: bss (map (q \ [(column-at st (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z (tread st 'feet))) bs (bss 0 0)
          ; ..the floor under the middle, or under the feet's edge where that is a step higher
          (num? y) (charm? y || gem? y)
          (top l) (: m <l r (foldl (\ a y (num? y && !(num? a && a >= y) ? y a)) () >l)
@@ -1990,7 +2002,7 @@
  ; ..how far the eye is sunk: down to the dip's depth at dip-t, and eased back
  (dip st) (st 'dip @ () 0.0 d (: u ((st 'mt - d 1) / dip-t) (u > 8.0 ? 0.0 -(d 0 * u * exp (1.0 - u)))))
  ; ..what the floor under the feet is: the brush the way down meets, its floor's texture's feel
- (feel-under st) (: bs (column (st 'sc 'brushes) (st 'px) (st 'pz)) fl (st 'py - eye-h) h (brush-ray bs [(st 'px) (fl + 0.05) (st 'pz)] [0.0 -1.0 0.0])
+ (feel-under st) (: bs (column-at st (st 'px) (st 'pz)) fl (st 'py - eye-h) h (brush-ray bs [(st 'px) (fl + 0.05) (st 'pz)] [0.0 -1.0 0.0])
    e (tablet? h ? (foldl (\ a e (e 0 @ 'floor e a)) () (bs (h 'b) 'skin)) ()) nm (two? e ? (e 1) 'floor)
    (foldl (\ a t (t 'name = nm ? (peep t 'feel 'hard) a)) 'hard (st 'lvl 'textures)))
  (land-cry st s) ("land " + show (feel-under st) + " " + show (? (s < 5.5) 0 (s < 10.0) 1 2))
@@ -2263,7 +2275,7 @@
  ; ..its flight in steps short beside its size: each way on its own, back off what it would
  ; meet; among only the brushes and panes near it
  (ball-fly st b dt) (: r (b 'r) ball (b 'kind = 'ball) p0 (b 'p) lv (st 'lvl)
-   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (st 'sc 'brushes))
+   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (near-bs st (p0 0) (p0 2)))
    (solid? q) (brush-medium bs q != 1
                || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
                             && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (st 'lvl 'panes))
