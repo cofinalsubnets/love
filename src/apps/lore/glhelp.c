@@ -70,7 +70,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <stdarg.h>
 
 #ifdef GLHELP_IN
 int __android_log_write(int, char const *, char const *);
@@ -78,17 +77,16 @@ static void note(char const *s) {
  char b[256]; snprintf(b, sizeof b, "lore: the gpu: %.200s", s);
  __android_log_write(4, "love", b); }
 // in the app, what goes wrong told its log too, each thing once in a row
-static int answer(int fd, char const *f, ...) {
+static int answer(int fd, char const *b, int n, int cap) {
  static char last[128];
- char b[640]; va_list a;
- va_start(a, f); int n = vsnprintf(b, sizeof b, f, a); va_end(a);
- if (n >= (int) sizeof b) n = sizeof b - 1;
+ if (n >= cap) n = cap - 1;
  if (n < 0) return n;
  if ((!strncmp(b, "err", 3) || !strncmp(b, "ready", 5)) && strncmp(b, last, sizeof last - 1)) {
   snprintf(last, sizeof last, "%.127s", b);
   note(b); }
  return (int) write(fd, b, (size_t) n); }
-#define dprintf answer
+// ..formatted by the caller: no va_list crosses to bionic
+#define dprintf(fd, ...) do { char ans_[640]; answer(fd, ans_, snprintf(ans_, sizeof ans_, __VA_ARGS__), sizeof ans_); } while (0)
 #else
 static void note(char const *s) { (void) s; }
 #endif
