@@ -337,7 +337,7 @@
     (!(peekp ts "(") ? [(elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1) ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
        (thenw (pexpr ps >ts) ")" @ er
           (atom? er ? [0 ts]
-             (cfold (pw64 ps) <er @ v [(charm? v ? v 0) <>er]))))
+             (cfold (ptm ps) <er @ v [(charm? v ? v 0) <>er]))))
    ; gcc's `aligned(N)` and C11's `_Alignas(N|type)` at one door, to the first depth-0 `;`
    ; or `{`. `aligned` counts only inside parens. -> N | ()
    (alignat? ps ts)
@@ -474,16 +474,16 @@
    (tyat? ps ts) (tkbty? ps <(pquals ts))              ; a type begins at ts, past its qualifiers
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor (floor.l, shared with gen) takes the word and the tag table from ps --
-   (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips))   ; long 4 bytes, long long the pair
+   (pst32? ps) (tmptr (ptm ps) = 4)   ; long 4 bytes, long long the pair
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
    (pchar ps) (ps 'uch @ 1 'cchar 0 'char (elem (ps 'tgt) '(a64 rv64 rv32 xtensa thumb1 thumb2 thumb2sp arm) ? 'cchar 'char))   ; -f[un]signed-char's, else the ABI's
-   (pw64 ps) !(pst32? ps)                          ; is long 8 bytes?
-   (psword ps) (pst32? ps ? 4 8)
+   (ptm ps) (tmof (ps 'tgt))                       ; the target's type model
+   (psword ps) (tmptr (ptm ps))
    (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t
-   (tsz ps ty) (tysz (psword ps) (ps 'stag) ty)
-   (talign ps ty) (tyalign (psword ps) (psacap ps) (ps 'stag) ty)
+   (tsz ps ty) (tysz (ptm ps) (ps 'stag) ty)
+   (talign ps ty) (tyalign (ptm ps) (psacap ps) (ps 'stag) ty)
    (psacap ps) (? (elem (ps 'tgt) '(i386 i386m16)) 4 (pst32? ps) 8 16)   ; the widest scalar alignment
 
    ; -- parse-time expr typer (for sizeof folding): the undecayed type of an expr, () when
@@ -503,7 +503,7 @@
            (<b = 'deref)
             (<>b @ c
                (two? c && <c = 'cast ?
-                   (: ty <>c v (cfold (pw64 ps) <>>c)
+                   (: ty <>c v (cfold (ptm ps) <>>c)
                       (ptr? ty && charm? v && v = 0 ? [0 <>ty]))
                   ; a constant index off a null-grounded array or pointer: in[1].b
                   (: pv (zbase? c ? (pval c))
@@ -518,7 +518,7 @@
        ; the pointer under an index grounds at null itself, never at another constant
        (zbase? x)
         (? (atom? x) ()
-           (<x = 'cast) (cfold (pw64 ps) <>>x @ v (charm? v && v = 0))
+           (<x = 'cast) (cfold (ptm ps) <>>x @ v (charm? v && v = 0))
            (<x = 'bin) (zbase? <>>x || zbase? <>>>x)
            (<x = 'dot) (two? (ground x))
            ())
@@ -527,15 +527,15 @@
         (? (atom? x) ()
            (<x = 'cast && ptr? <>x)
             (: ty <>x
-               v (cfold (pw64 ps) <>>x)
+               v (cfold (ptm ps) <>>x)
                (charm? v ? [v (tsz ps <>ty)]))
            (<x = 'bin && <>x = '+)
             (pval <>>x @ pa
                (two? pa ?
-                  (cfold (pw64 ps) <>>>x @ n (charm? n ? [(<pa + n * <>pa) <>pa]))
+                  (cfold (ptm ps) <>>>x @ n (charm? n ? [(<pa + n * <>pa) <>pa]))
                   (pval <>>>x @ pb
                      (atom? pb ? ()
-                        (cfold (pw64 ps) <>>x @ n (charm? n ? [(<pb + n * <>pb) <>pb]))))))
+                        (cfold (ptm ps) <>>x @ n (charm? n ? [(<pb + n * <>pb) <>pb]))))))
            ; a null-grounded array member decays to its constant address, element stride
            (<x = 'dot)
             (ground x @ gr
@@ -555,7 +555,7 @@
                        (? (ptr? a || arr? a) a (ptr? b || arr? b) b ())))
    ; a null pointer constant (C11 6.3.2.3p3): an integer constant expression folding to 0,
    ; cast or not (cfold folds through a pointer cast)
-   (npc? e) (cfold 1 e @ v (cint? v && v = 0 ? 1))
+   (npc? e) (cfold tm-lp64 e @ v (cint? v && v = 0 ? 1))
    (ptype ps e)
     (atom? e ? ()
        (<e @ k
@@ -599,18 +599,18 @@
                  (? ((ptr? a || arr? a) && (ptr? b || arr? b)) (<>e = '- ? 'long)
                     (ptr? a || arr? a) (elem <>e '(+ -) ? (edecay ps <>>e a))
                     (ptr? b || arr? b) (<>e = '+ ? (edecay ps <>>>e b))
-                    (parith? a && parith? b) (puac !(pst32? ps) a b)
+                    (parith? a && parith? b) (puac (ptm ps) a b)
                     (elem <>e '(+ - * /) && (cplxty? a || cplxty? b) && a && b) (cxuac a b)
                     ()))
              ; a shift is the promoted left operand alone (C11 6.5.7)
              (k = 'bin && elem <>e '(shl shr))
-              (ptype ps <>>e @ a (parith? a ? (pprom a)))
+              (ptype ps <>>e @ a (parith? a ? (pprom (ptm ps) a)))
              (k = 'un && elem <>e '(neg bnot))
-              (ptype ps <>>e @ a (? (parith? a) (pprom a) (cplxty? a && <>e = 'neg) a))
+              (ptype ps <>>e @ a (? (parith? a) (pprom (ptm ps) a) (cplxty? a && <>e = 'neg) a))
              ; ?: arms meet by puac (6.5.15); one non-arithmetic type rides through
              (k = 'cond)
               (: a (tdecay (ptype ps <>>e)) b (tdecay (ptype ps <>>>e))   ; an array arm decays
-                 (? (parith? a && parith? b) (puac !(pst32? ps) a b)
+                 (? (parith? a && parith? b) (puac (ptm ps) a b)
                     (two? a && alstrip a = alstrip b) a
                     ; 6.5.15p6: beside a null pointer constant, the other's type. a cast is
                     ; one only when its operand folds, which the kernel's __is_constexpr reads
@@ -647,7 +647,7 @@
                                (peekp t2 "*" && peekp >t2 "]") (adims ps >>t2 (0 . acc))
                                (thenw (pexpr ps t2) "]" @ er
                                   (atom? er ? ()
-                                     (cfold (pw64 ps) <er @ dv
+                                     (cfold (ptm ps) <er @ dv
                                         (charm? dv ? (adims ps <>er (dv . acc))
                                            (adims ps <>er (['vdim <er] . acc)))))))))
    ; fold dims (outer..inner) into a nested arr: [3][4] of T -> (arr (arr T 4) 3);
@@ -747,7 +747,7 @@
    (pbits ps ts) (!(peekp ts ":") ? ()
                     (pasn ps >ts @ er
                        (atom? er ? ()
-                          (cfold (pw64 ps) <er @ cv (charm? cv ? [cv <>er])))))
+                          (cfold (ptm ps) <er @ cv (charm? cv ? [cv <>er])))))
    ; the extensions ride the `moon` dialect, the default; `-std=c` fences them
    (moon? ps) (peep ps 'dia 'moon = 'moon)
    ; a label: an identifier then `:`
@@ -1023,7 +1023,7 @@
                               vr (peekp ts5 "=" ?
                                     (pasn ps >ts5 @ er              ; = const-expr, folded
                                        (atom? er ? ()
-                                          (cfold (pw64 ps) <er @ cv
+                                          (cfold (ptm ps) <er @ cv
                                              ; a wide enumerator widens the type, as gcc's
                                              (cint? cv ? [cv <>er]))))
                                     [v ts5])
@@ -1335,7 +1335,7 @@
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
-                 (two? rest ? [(charm? (cfold (pw64 ps) <ra) ? ['num 1] ['bcp <ra]) rest]))
+                 (two? rest ? [(charm? (cfold (ptm ps) <ra) ? ['num 1] ['bcp <ra]) rest]))
              ; __builtin_object_size and its dynamic spelling: gcc's unseen-object answer,
              ; (size_t)-1 for types 0/1, 0 for 2/3, where fortify checks stand down
              (tkk t = 'id && bib? (tkv t) &&
@@ -1345,7 +1345,7 @@
                  r2 (two? ra ? (want <>ra ","))
                  rb (two? r2 ? (pasn ps r2))
                  rest (two? rb ? (want <>rb ")"))
-                 tv (two? rb ? (cfold (pw64 ps) <rb))
+                 tv (two? rb ? (cfold (ptm ps) <rb))
                  (atom? rest ? ()
                     [['cast (szty ps) ['num (charm? tv && 1 < tv ? 0 -1)]] rest]))
              ; __builtin_assume_aligned(p, a[, off]) is p, the promise dropped;
@@ -1376,7 +1376,7 @@
                  r3 (two? ra ? (want <>ra ","))
                  rb (two? r3 ? (pasn ps r3))
                  rest (two? rb ? (want <>rb ")"))
-                 cv (two? rc ? (cfold (pw64 ps) <rc))
+                 cv (two? rc ? (cfold (ptm ps) <rc))
                  (? (atom? rest) ()
                     !(charm? cv) (blame r1 "__builtin_choose_expr wants a constant condition")
                     [(cv = 0 ? <rb <ra) rest]))
@@ -1419,7 +1419,7 @@
    ; tuargs: a transparent union parameter takes any member's type, the argument laid as the
    ; union through its first member. bicall: __builtin_isdigit(c) is (unsigned)(c - '0') < 10.
    ; ppostfrom: the suffix run from a seed, a primary or a compound literal
-   (tuok? ps lay) (: w (pw64 ps ? 8 4)
+   (tuok? ps lay) (: w (psword ps)
                      (<>lay = w && all (f \ (f 2 @ t (ptr? t || elem t '(long ulong int uint))) && tsz ps (f 2) = w) <lay))
    (tuargs ps e as)
     (: sg (e @ ('var nm) (peep (ps 'sigs) nm ()) ())
@@ -1519,7 +1519,7 @@
        ; a scalar initializer that folds is its number (globals demand it)
        (pasn ps ts @ r
           (atom? r ? ()
-             (: e <r v (cfold (pw64 ps) e)
+             (: e <r v (cfold (ptm ps) e)
                 (? (cint? v) [['num v] <>r]            ; a sun-sized fold is still a number
                    (<e = 'un &&
                     <>e = 'neg && <<>>e = 'flo)
@@ -1593,13 +1593,13 @@
            (? (atom? er) ()
               (peekp <>er "...")                     ; gcc's range designator: one item per index
                (: e2 (thenw (pexpr ps ><>er) "]")
-                  n (cfold (pw64 ps) <er)
-                  m (two? e2 ? (cfold (pw64 ps) <e2))
+                  n (cfold (ptm ps) <er)
+                  m (two? e2 ? (cfold (ptm ps) <e2))
                   (? (atom? e2) ()
                      !(charm? n && charm? m) ()
                      (pdesigs ps <>e2 (['r n m] . acc))))
               (: r2 (want <>er "]")
-                 n (cfold (pw64 ps) <er)
+                 n (cfold (ptm ps) <er)
                  (? (atom? r2) () (charm? n) (pdesigs ps r2 (['i n] . acc)) ()))))
        (atom? acc) ()
        (want ts "=" @ r
@@ -1646,7 +1646,7 @@
 
    ; a constant-expression folder: an integer | () when not constant. it folds C's way: each
    ; value in its type, operands meeting by puac (-1 < 1u is 0), results wrapping to their
-   ; width, an unsigned answer never negative. w64: long is 8 bytes.
+   ; width, an unsigned answer never negative. tm is the type model.
    (cint? x) (charm? x || sun? x)
    ; an enum constant as an operand: int when it fits, past int the enum's type: uint up to 2**32,
    ; then 8 bytes, which ilp32 spells long long
@@ -1655,18 +1655,18 @@
                      (pst32? ps) ['cast 'llong ['num v]]
                      ['num v])
    (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
-   (tbits w64 ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) 32
-                        ('long || 'ulong) (w64 ? 64 32) ('i128 || 'u128) 128 64)
+   (tbits tm ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) (8 * tmint tm)
+                        ('long || 'ulong) (8 * tmlong tm) ('i128 || 'u128) 128 (8 * tmll tm))
    ; v as a value of ty (C11 6.3.1.3): an unsigned type is v modulo its width, a signed one
    ; that residue re-signed, _Bool a compare with 0
-   (wrapt w64 ty v)
+   (wrapt tm ty v)
     (ty = 'bool ? (v = 0 ? 0 1)
-       (: n (tbits w64 ty) m (v & ((2 ** n) - 1))
+       (: n (tbits tm ty) m (v & ((2 ** n) - 1))
           (tusg? ty || m < (2 ** (n - 1)) ? m (m - (2 ** n)))))
    ; a bit builtin's name -> (op operand-type) | ()
-   (bltab w64 nm)
+   (bltab tm nm)
     (nm @ "__builtin_bswap16" '(bswap ushort) "__builtin_bswap32" '(bswap uint)
-          "__builtin_bswap64" ['bswap (w64 ? 'ulong 'ullong)]
+          "__builtin_bswap64" ['bswap (tmlong tm = 8 ? 'ulong 'ullong)]
           "__builtin_clz" '(clz uint) "__builtin_clzl" '(clz ulong) "__builtin_clzll" '(clz ullong)
           "__builtin_ctz" '(ctz uint) "__builtin_ctzl" '(ctz ulong) "__builtin_ctzll" '(ctz ullong)
           "__builtin_popcount" '(pop uint) "__builtin_popcountl" '(pop ulong)
@@ -1677,49 +1677,51 @@
    (bpop v) (v = 0 ? 0 ((v & 1) + bpop (v >> 1)))
    (bswp v n) (n = 0 ? 0 ((v & 255) * (2 ** (8 * (n - 1))) + bswp (v >> 8) (n - 1)))
    ; v already in ty, unsigned -> (value type) | (); clz and ctz of 0 are undefined, no fold
-   (bfold w64 op ty v)
-    (op @ 'bswap [(bswp v (tbits w64 ty // 8)) ty]
-          'clz (v = 0 ? () [(tbits w64 ty - bitlen v) 'int])
+   (bfold tm op ty v)
+    (op @ 'bswap [(bswp v (tbits tm ty // 8)) ty]
+          'clz (v = 0 ? () [(tbits tm ty - bitlen v) 'int])
           'ctz (v = 0 ? () [(bctz v) 'int])
           'pop [(bpop v) 'int]
           'ffs [(v = 0 ? 0 (bctz v + 1)) 'int]
           ())
    ; an int where it fits, else the long that holds it (llong on ilp32)
-   (numt w64 n) (? (-2147483648 <= n && n <= 2147483647) 'int
-                   w64 (n < (2 ** 63) ? 'long 'ulong)
+   (sfits n w) (: h (2 ** (8 * w - 1)) (-h <= n && n < h))
+   (numt tm n) (? (sfits n (tmint tm)) 'int
+                   (tmlong tm = 8) (n < (2 ** 63) ? 'long 'ulong)
+                   (sfits n (tmlong tm)) 'long
                    (n < (2 ** 63) ? 'llong 'ullong))
    ; a const float expression -> its gem | 'bad; gen.l's ffold is the image-time twin
-   (fcfold w64 e)
+   (fcfold tm e)
     (atom? e ? 'bad
-       (cfold w64 e @ iv
+       (cfold tm e @ iv
           (? (cint? iv) (0.0 + iv)
              (<e = 'flo) (0.0 + <>e)
-             (<e = 'cast) (elem <>e '(double float) ? (fcfold w64 <>>e) 'bad)
-             (<e = 'un) (fcfold w64 <>>e @ v
+             (<e = 'cast) (elem <>e '(double float) ? (fcfold tm <>>e) 'bad)
+             (<e = 'un) (fcfold tm <>>e @ v
                            (? (v = 'bad) 'bad (<>e = 'neg) (0.0 - v) 'bad))
              (<e = 'bin)
-              (: op <>e a (fcfold w64 <>>e) b (fcfold w64 <>>>e)
+              (: op <>e a (fcfold tm <>>e) b (fcfold tm <>>>e)
                  (? (a = 'bad || b = 'bad) 'bad
                     (op = '+) (a + b) (op = '-) (a - b) (op = '*) (a * b)
                     (op = '/) (b = 0.0 ? 'bad (a / b))
                     'bad))
              'bad)))
-   (cfold w64 e) (cfty w64 e @ r (two? r ? <r))
+   (cfold tm e) (cfty tm e @ r (two? r ? <r))
    ; e -> (value type) | (), the value canonical in its type
-   (cfty w64 e)
-    (: (wr ty v) [(wrapt w64 ty v) ty]
+   (cfty tm e)
+    (: (wr ty v) [(wrapt tm ty v) ty]
        (? (atom? e) ()
-          (<e = 'num) (cint? <>e ? [<>e (numt w64 <>e)])
+          (<e = 'num) (cint? <>e ? [<>e (numt tm <>e)])
           (<e = 'bin)
-           (: op <>e ra (cfty w64 <>>e) rb (cfty w64 <>>>e)
+           (: op <>e ra (cfty tm <>>e) rb (cfty tm <>>>e)
               (? (atom? ra || atom? rb) ()
                  (elem op '(shl shr))                   ; the left operand's promoted type
-                  (: ty (pprom <>ra) a (wrapt w64 ty <ra) b <rb
+                  (: ty (pprom tm <>ra) a (wrapt tm ty <ra) b <rb
                      (? !(0 <= b && b <= 256) ()
                         (op = 'shl) (wr ty (a * (2 ** b)))
                         (wr ty (a >> b))))
-                 (: ty (puac w64 <>ra <>rb)
-                    a (wrapt w64 ty <ra) b (wrapt w64 ty <rb)
+                 (: ty (puac tm <>ra <>rb)
+                    a (wrapt tm ty <ra) b (wrapt tm ty <rb)
                     (op @ '+ (wr ty (a + b)) '- (wr ty (a - b)) '* (wr ty (a * b))
                           '/ (b = 0 ? () (wr ty (a // b)))
                           '% (b = 0 ? () (wr ty (a - (a // b) * b)))
@@ -1729,45 +1731,45 @@
                           'gt [(b < a ? 1 0) 'int] 'ge [(b <= a ? 1 0) 'int]
                           ()))))
           (<e = 'un)
-           (cfty w64 <>>e @ r
+           (cfty tm <>>e @ r
               (atom? r ? ()
-                 (: ty (pprom <>r) v (wrapt w64 ty <r)
+                 (: ty (pprom tm <>r) v (wrapt tm ty <r)
                     (<>e @ 'neg (wr ty (0 - v)) 'bnot (wr ty (0 - v - 1))
                            'not [(v = 0 ? 1 0) 'int] ()))))
           (<e = 'cast)
-           (: ty <>e r (cfty w64 <>>e)
+           (: ty <>e r (cfty tm <>>e)
               ; C11 6.6p6: an integer cast may take a float constant -- an unfoldable array
               ; dim would read as a VLA in silence
               (? (two? r) (? (ity? ty) (wr ty <r)
-                             (ptr? ty) (wr (w64 ? 'ulong 'uint) <r)
+                             (ptr? ty) (wr (tmptr tm = 8 ? 'ulong 'uint) <r)
                              r)                       ; a type this fold does not know: the value rides
                  !(ity? ty) ()
-                 (fcfold w64 <>>e @ f
+                 (fcfold tm <>>e @ f
                     (? (f = 'bad) ()
                        (ty = 'bool) [(f = 0.0 ? 0 1) 'bool]   ; to _Bool is a compare, never a truncation
                        (wr ty (ceil (f // 1)))))))           ; and every other one truncates toward zero
           ; a deferred __builtin_constant_p in a constant context: 1 if its operand folds, else 0
-          (<e = 'bcp) (cfty w64 <>e @ r (two? r ? [1 'int] [0 'int]))
+          (<e = 'bcp) (cfty tm <>e @ r (two? r ? [1 'int] [0 'int]))
           ; the bit builtins over a constant fold, so one can label a case or size a bit-field
           (<e = 'call)
            (: h <>e as <>>e
-              k (two? h && <h = 'var ? (bltab w64 <>h))
-              r (two? k && two? as && atom? >as ? (cfty w64 <as))
-              (atom? r ? () (bfold w64 <k <>k (wrapt w64 <>k <r))))
+              k (two? h && <h = 'var ? (bltab tm <>h))
+              r (two? k && two? as && atom? >as ? (cfty tm <as))
+              (atom? r ? () (bfold tm <k <>k (wrapt tm <>k <r))))
           ; land/lor are 3-element ('land l r); truthiness is != 0 (-1 && 1 == 1)
           (elem <e '(land lor))
-           (: a (cfty w64 <>e) b (cfty w64 <>>e)
+           (: a (cfty tm <>e) b (cfty tm <>>e)
               (? (atom? a || atom? b) ()
                  (<e = 'land) [(<a != 0 && <b != 0 ? 1 0) 'int]
                  [(<a != 0 || <b != 0 ? 1 0) 'int]))
           ; ('cond c a b): only the selected arm need be constant (C11 6.6). unless the other
           ; folds too its type is unknown, so only a value no conversion moves stands
           (<e = 'cond)
-           (cfty w64 <>e @ c
+           (cfty tm <>e @ c
               (atom? c ? ()
-                 (: r (<c = 0 ? (cfty w64 <>>>e) (cfty w64 <>>e))
-                    o (<c = 0 ? (cfty w64 <>>e) (cfty w64 <>>>e))
-                    (? (atom? r) () (atom? o) (0 <= <r && <r < 2147483648 ? r ()) (wr (puac w64 <>r <>o) <r)))))
+                 (: r (<c = 0 ? (cfty tm <>>>e) (cfty tm <>>e))
+                    o (<c = 0 ? (cfty tm <>>e) (cfty tm <>>>e))
+                    (? (atom? r) () (atom? o) (0 <= <r && <r < 2147483648 ? r ()) (wr (puac tm <>r <>o) <r)))))
           ()))
    ; _Static_assert ( const-expr [, "message"] ) ; -> (('tdef) rest) | (). false fails the
    ; compile, non-constant passes; the message is optional (C23)
@@ -1780,7 +1782,7 @@
              (two? re) (want <>re ")") ())          ; ..and the short one: expr alone
        ; peek the `;` first: want answers () when it matched the last token
        (!(two? r4 && peekp r4 ";") ? ()
-          (cfold (pw64 ps) <re @ v
+          (cfold (ptm ps) <re @ v
              (charm? v && v <= 0 ? (blame r4 (strat? r2 ? "static assertion failed: \(tkv <r2)"
                                                          "static assertion failed"))
                 ['(tdef) >r4]))))
@@ -2164,13 +2166,13 @@
              (tkw? t 'case)
               (pexpr ps >ts @ rv
                  (atom? rv ? ()
-                    (: v (cfold (pw64 ps) <rv)
+                    (: v (cfold (ptm ps) <rv)
                        (crange lo hi acc) (hi < lo ? (rev acc) (crange (lo + 1) hi (['case lo] . acc)))
                        (? !(cint? v) ()
                           (peekp <>rv "...")
                            (pexpr ps ><>rv @ r2
                               (atom? r2 ? ()
-                                 (: hi (cfold (pw64 ps) <r2)
+                                 (: hi (cfold (ptm ps) <r2)
                                     rest (want <>r2 ":")
                                     (? !(cint? hi) ()
                                        (atom? rest) ()
@@ -2968,7 +2970,7 @@
    ; each constructor's and destructor's word in .init_array / .fini_array, gcc's section
    ; names: a priority's in .NNNNN, which the link lays first, in order
    (ctasm ps)
-    (: w (pw64 ps)
+    (: w (8 = psword ps)
        (sec k p) ((k = 'init ? ".init_array" ".fini_array") + (charm? p ? "." + snip (show (100000 + p)) 1 6 ""))
        (map ((nm k p) \ ['tasm (cats ["\t.pushsection \(sec k p),\"aw\"\n\t.p2align \(w ? 3 2)\n"
                                        "\t\(w ? ".quad" ".long") \(nm)\n\t.popsection\n"])])

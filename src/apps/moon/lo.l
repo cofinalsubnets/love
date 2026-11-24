@@ -553,7 +553,7 @@
           ['b [_ r fs] bt off a]
            (: uty <>bt bitoff <>>bt width <>>>bt hi (8 * wsize g - (bitoff + width)) lo (8 * wsize g - width)
               (lobfld g bt r off a @ [_ t f2]
-                 [(pprom bt) t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
+                 [(pprom (gtm g) bt) t (fs + f2 + (0 < hi ? [['shl t hi]]) + (0 < lo ? [[(usg? uty || uty = 'bool ? 'shr 'sar) t lo]]))]))
           'bad)
    ; a bitfield's unit at b+off into a fresh vreg, and back: one access as its type says, or the
    ; chunks when packed, their scratch renamed
@@ -583,9 +583,9 @@
    ; a shift by a constant, and those bits as the field's value
    (lobfk g op v k) (lomk g @ t (lobin g op v ['int t [['li t k]]] [k]))
    (lobf9v g bt u)
-    (: sh (64 - bt 3) (lotr g (sh = 0 ? u (lobfk g 'shr (lotr g (lobfk g 'shl u sh) (usg? <>bt ? 'ullong 'llong)) sh)) (pprom bt)))
+    (: sh (64 - bt 3) (lotr g (sh = 0 ? u (lobfk g 'shr (lotr g (lobfk g 'shl u sh) (usg? <>bt ? 'ullong 'llong)) sh)) (pprom (gtm g) bt)))
    ; a field's two words as the value it promotes to
-   (lobfwv g bt l h fs) (pprom bt @ t (pair? g t ? [t [l h] fs] [t l fs]))
+   (lobfwv g bt l h fs) (pprom (gtm g) bt @ t (pair? g t ? [t [l h] fs] [t l fs]))
    ; -- -mstrict-align: no access wider than the alignment its address carries --
    ; what a member at o keeps of its struct's alignment
    (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
@@ -662,7 +662,7 @@
                                ['mov x m]] + (0 < bitoff ? [['shl x bitoff]]) + [['or u u x]] + lobfst g bt b off u a +
                          ; the field's value, a signed one's top bit its sign
                          (usg? uty || uty = 'bool || 8 * wsize g <= width ? () [['shl m (8 * wsize g - width)] ['sar m (8 * wsize g - width)]]))
-                        [(pprom bt) m ()]]))))
+                        [(pprom (gtm g) bt) m ()]]))))
           (['a [_ b _] ty off] && (d128? ty || pair? g ty))
            (lotr g v ty @ [_ ws fs] [(fs + map (k \ ['st b (? !(pair? g ty) (off + k * lowd g) (k = 0) (plo g off) (phi g off)) (ws k)]) ^#ws) [ty ws ()]] _ 'bad)
           (['a _ ty _] && gcplx? ty && !(locxsame? (vty v) ty)) (lotr g v ty @ 'bad 'bad v2 (lost g lv v2))
@@ -1135,7 +1135,7 @@
          ['cast 'float ['flo v]] (lomk g @ t (lomkf g @ w ['float w [['li t (fbits32 v)] ['movdxr w t]]]))
          ; a float of a wide value: a constant only, folded exactly
          (['cast ty x] && lofl? ty && d128? (lopeek g env x))
-          (cfold 1 x @ (v && cint? v) (lox g env ['cast ty ['flo (0.0 + v)]]) _ (lox g env x @ 'bad 'bad v2 (lotr g v2 ty)))
+          (cfold tm-lp64 x @ (v && cint? v) (lox g env ['cast ty ['flo (0.0 + v)]]) _ (lox g env x @ 'bad 'bad v2 (lotr g v2 ty)))
          ; gcc's cast to a union: the member of the operand's type takes it
          (['cast ty x] && stru? ty && !(gcplx? ty) && lounm g ty (lopeek g env x) != ())
           (lox g env ['clit ty ['init [['dfield (lounm g ty (lopeek g env x)) x]]]])
@@ -1443,7 +1443,7 @@
           (kind = 'fence) (lomk g @ d ['long d (<>mo + (<mo = 0 ? () [(fx () () (afence g))]) + [['li d 0]])])
           (kind = 'sfence) (lomk g @ d ['long d (<>mo + [(fx () () (abar g))] + [['li d 0]])])
           (kind = 'lockfree)
-           (cfold !(ilp32? g) <as @ n
+           (cfold (gtm g) <as @ n
               (charm? n ? (lomk g @ d ['int d [['li d (elem n (awidths g) ? 1 0)]]]) (lono g ['call nm])))
           (lobi1 g env <as @
              'bad 'bad
