@@ -1192,10 +1192,17 @@
 (: kd (cwd 0 + "/out/.world-kept-" + show (getpid 0)) n0 (getenv "LOVE_NEST")
    _ (hark ["rm" "-rf" kd], mkdir kd 448, setenv "LOVE_NEST" kd)
    ; ..each read afresh, as a run reads its file: a scene pins what it grows into its level
-   (klv _) (world-read "(level \"t\" (room [0 0 0] [6 3 6]) (lamp [3 2.5 3]) (start [3 0 1] 0 0))")
+   (klv _) (world-read "(level \"t\" (room [0 0 0] [6 3 6]) (start [3 0 1] 0 0))")
    ka (world-new 40 25 (klv ()) "test/lore/" 'sc)
    kf (filter (f \ #f > 6 && snip f (#f - 6) #f = ".scene") (readdir (kd + "/cache/lore/")))
    kb (world-new 40 25 (klv ()) "test/lore/" 'sc)
+   ; ..the cache kept under its bytes: of six old ones of 300 MB, holes, the newest three stay
+   ; beside seven small ones; with 2.3 GB free, one; past one of 2 GB, none
+   kc (kd + "/cache/lore/") (hole n mb) (: q (open (kc + n) "w") _ (close q) w (openfd (kc + n) 1) _ (truncate w (mb * 1048576) 0) (close w))
+   _ (each ^6 (i \ (hole "o\(i).scene" 300, utime "\(kc)o\(i).scene" (1000000 * (i + 1)))))
+   _ (each ^7 (i \ (hole "s\(i).scene" 0, utime "\(kc)s\(i).scene" 100000000)))
+   (held fr) (: _ (scene-sweep kc fr) (sort (filter (f \ #f = 8) (readdir kc)))) (os l) (filter (f \ f 0 = 111) l)
+   h1 (held ()) h2 (held 2300000000) _ (hole "z0.scene" 2000) h3 (held ())
    _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
    (canon x) (kind x @ 'tablet ['T (map (k \ [k (canon (x k))]) (sort (keys x)))] 'chain (map canon x) x)
    ks (filter (k \ k != 'memo) (sort (keys ka)))
@@ -1204,7 +1211,7 @@
    _ (mkdir kd 448, setenv "LOVE_NEST" kd) ta (world-new 40 25 (tlv ()) "test/lore/") tb (world-new 40 25 (tlv ()) "test/lore/")
    _ (setenv "LOVE_NEST" n0, hark ["rm" "-rf" kd])
    (trunk st) (<(st 'lvl 'trees) 'trunk)
- (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
+ (test (#kf = 1) (os h1 = ["o3.scene" "o4.scene" "o5.scene"]) (#h1 = 10) (os h2 = ["o5.scene"]) (h3 = ["z0.scene"]) (scene-bound () 5 = 1073741824) (scene-bound 5000000000 1000 = 500000100) (scene-bound 50000000000 0 = 1073741824) (scene-bound 0 0 = 0) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
        (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
        (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
 ; a phone's tap: the bottom's middle third jumps, its sides and the scene act, a top corner leaves
