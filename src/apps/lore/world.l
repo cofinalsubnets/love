@@ -1153,9 +1153,10 @@
    ; them, so the light falls off from a wall the same way all along it
    sv (filter (b \ b 'air = 0 && b 'land = () && all (pl \ abs (pl 0 1) < 1e-9 || abs (pl 0 1) > 1.0 - 1e-9) (b 'planes)) bs)
    sk (map (b \ [(b 'lo) (b 'hi)]) sv) foot-w 0.4
+   (tab l) (foldl (\ t x (pin t #t x)) {} l)
    (foot-cut m) (? (atom? sv) m
-     (: vs (m 0) ts (m 1) n #ts
-        (co k j) (gem-tray [n] (map (t \ 1.0 * vs (t j) k) ts))
+     (: n #(m 1) vs (tab (m 0)) ts (tab (m 1))
+        (co k j) (gem-tray [n] (map (t \ 1.0 * vs (t j) k) (m 1)))
         mn (map (k \ min (co k 0) (min (co k 1) (co k 2))) ^3) mx (map (k \ max (co k 0) (max (co k 1) (co k 2))) ^3)
         hit (foldl (\ h j (: lo (sk j 0) hi (sk j 1)
                              I (iota ((mx 0 > lo 0 - foot-w) * (mn 0 < hi 0 + foot-w) * (mx 2 > lo 2 - foot-w) * (mn 2 < hi 2 + foot-w)
@@ -1177,8 +1178,8 @@
         ; ..a piece [poly under] by a solid: its band and what is under it
         (pieces b pc) (: r1 (cut-by b foot-w (pc 0)) o1 (map (p \ [p (pc 1)]) (r1 0))
           (#(r1 1) < 3 ? o1 (: r2 (cut-by b 0.0 (r1 1)) (o1 + map (p \ [p (pc 1)]) (r2 0) + (#(r2 1) >= 3 ? [[(r2 1) 1]] ())))))
-        ks (sort (keys hit))
-        res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (sv j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
+        ks (sort (keys hit)) st (tab sv)
+        res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (st j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
                             (map (pc \ [(pc 0) (t 3)]) pcs)))
                     ks)
         ; ..and every edge, the pieces' and the whole triangles' beside them, taking the corners
@@ -1200,11 +1201,11 @@
         (whole P) (: k #P (catmap (i \ (P i . on-edge (P i) (P ((i + 1) % k)))) ^k))
         un (map (i \ (: t (ts i) Q (whole [(vs (t 0)) (vs (t 1)) (vs (t 2))]) [i Q])) (filter (i \ peep hit i () = ()) ^n))
         ps (map (q \ [(whole (q 0)) (q 1)]) res + map (u \ [(u 1) (ts (u 0) 3)]) (filter (u \ #(u 1) > 3) un))
-        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] ps)
-        (mesh (vs + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
+        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#(m 0) ()] ps)
+        (mesh (m 0 + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
    (ground-cut m0 d) (: m (peep d 'land 0 ? (foot-cut m0) m0) (? (!(peep d 'land 0) || atom? cv) m
-     (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
-        (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
+     (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) n #(m 1) ts (tab (m 1))
+        (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) (m 1)))
         X (mid 0) Y (mid 1 - 0.05) Z (mid 2)
         I (iota (foldl (\ a b (a + (b 'lo 0 < X) * (X < b 'hi 0) * (b 'lo 1 < Y) * (Y < b 'hi 1) * (b 'lo 2 < Z) * (Z < b 'hi 2))) (X * 0) cv > 0))
         gone (foldl (\ t j (: i (I j) (brush-medium bs [(X i) (Y i) (Z i)] @ 1 (pin t i 1) t))) {} ^#I)
