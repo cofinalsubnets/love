@@ -2,7 +2,8 @@
 // a polygon is a list of points going round, each [x y z]; a plane [n d] holds the points p
 // with dot n p <= d. a corner that comes through uncut is the same word it came in as.
 //  (poly-keep ps pls)  ps kept inside each plane in turn, till it is under three corners
-//  (poly-carve ps pls) ps in pieces, each plane through it cutting every piece it crosses
+//  (poly-carve ps pls) ps in pieces, each plane through it cutting every piece it crosses, or, of
+//                       [n d [lo hi]], those that reach into that box
 //  (poly-grid ps cell) ps cut at every multiple of cell, x then y then z
 //  (poly-beside ..)    each face's neighbours, for brush.l's sides
 // a carve's or a grid's pieces are those three or more corners round and over 1e-8 in area,
@@ -138,24 +139,45 @@ love_noinline static struct g *host_poly_keep(struct g *g) {
  if (pl) alloc(pl, 0);
  return bag_fin(&a), bag_fin(&c), g; }
 
+#define pl_gone ((flo_t) 1e30)
+// each plane's box in rows of lo and hi, all there is where it has none
+static flo_t *pl_boxes(word l, uintptr_t n, int *bad) {
+ uintptr_t cap = 0;
+ flo_t *b = pl_grow(NULL, 6 * n + 6, &cap, sizeof *b, bad);
+ if (*bad) return NULL;
+ for (uintptr_t i = 0; i < n; i++, l = B(l)) {
+  word const q = B(B(A(l)));
+  flo_t *o = b + 6 * i;
+  for (int k = 0; k < 3; k++) o[k] = -pl_gone, o[3 + k] = pl_gone;
+  if (chainp(q) && !(chainp(A(q)) && chainp(B(A(q))) && pl_num3(A(A(q)), o) && pl_num3(A(B(A(q))), o + 3))) return alloc(b, 0), *bad = 1, NULL; }
+ return b; }
+// whether a piece reaches into box o: past a shared edge along it, or onto it where it is flat
+static bool pl_reach(struct pv const *ps, uintptr_t n, flo_t const *o) {
+ for (int k = 0; k < 3; k++) {
+  flo_t lo = ps->p[k], hi = lo;
+  for (uintptr_t i = 1; i < n; i++) lo = ps[i].p[k] < lo ? ps[i].p[k] : lo, hi = ps[i].p[k] > hi ? ps[i].p[k] : hi;
+  flo_t const e = hi - lo > (flo_t) 2e-3 && o[3 + k] - o[k] > (flo_t) 2e-3 ? (flo_t) -2e-6 : (flo_t) 1e-3;
+  if (!(hi >= o[k] - e && lo <= o[3 + k] + e)) return 0; }
+ return 1; }
 love_noinline static struct g *host_poly_carve(struct g *g) {
  struct bag a, c;
  bag_ini(&a), bag_ini(&c);
  uintptr_t np = 0;
- flo_t *pl = pl_planes(g->sp[1], &np, &a.bad);
+ flo_t *pl = pl_planes(g->sp[1], &np, &a.bad), *bx = a.bad ? NULL : pl_boxes(g->sp[1], np, &a.bad);
  if (!a.bad && pl_read(g->sp[0], &a))
   for (uintptr_t j = 0; j < np && !a.bad && !c.bad; j++) {
    bag_reset(&c);
    for (uintptr_t i = 0; i < a.np; i++) {
     struct pv const *ps = bag_piece(&a, i);
     uintptr_t const n = bag_n(&a, i);
-    if (!pl_crosses(ps, n, pl + 4 * j)) { bag_copy(&c, ps, n); continue; }
+    if (!pl_crosses(ps, n, pl + 4 * j) || !pl_reach(ps, n, bx + 6 * j)) { bag_copy(&c, ps, n); continue; }
     for (int s = 0; s < 2; s++) {
      pl_split(ps, n, pl + 4 * j, s ? NULL : &c, s ? &c : NULL);
      if (pl_ok(c.v + c.at[c.np], c.nv - c.at[c.np])) bag_end(&c); else bag_drop(&c); } }
    struct bag t = a; a = c, c = t; }
  else a.bad = 1;
  g = a.bad || c.bad ? (g->sp[0] = ZeroPoint, g) : pl_emit(g, &a, 0);
+ if (bx) alloc(bx, 0);
  if (pl) alloc(pl, 0);
  return bag_fin(&a), bag_fin(&c), g; }
 
@@ -199,7 +221,6 @@ love_noinline static struct g *host_poly_grid(struct g *g) {
 // numbers, empty where the first is pl_gone. corners a millimetre apart are one; a corner
 // hashes by its bucket, 256 mm a side, so a bucket's corners lie between its hash and an
 // empty slot
-#define pl_gone ((flo_t) 1e30)
 struct seen { uint8_t *s; uint64_t cap; };
 static int64_t pl_mm(flo_t x) { return flo_i64(love_floor(x * (flo_t) 1000.0 + (flo_t) 0.5)); }
 static int64_t pl_bk(flo_t x) { int64_t const k = pl_mm(x); return k >= 0 ? k / 256 : -((255 - k) / 256); }
