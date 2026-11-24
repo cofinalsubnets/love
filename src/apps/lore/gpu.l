@@ -145,6 +145,9 @@
  (room! g n) (settle g, (g 'room < n ? (truncate (g 'w) n 0, pin g 'room n) g))
  (settle g) (0 < peep g 'shows 0 ? (line (g 'from), pin g 'shows (g 'shows - 1), settle g) g)
  (put! g c) (room! g #c, fdpush (g 'w) c 0 0 #c)
+ ; ..a line with its numbers l, floats laid in the file
+ (tell g s l) (: t (gem-tray [#l] (map (* 1.0) l)) c (cask (4 * #l)) _ ((cite 'guts 'pinf) c 0 4 t)
+   (put! g c, ask g "\(s) \(show #l) 0"))
  (gpu-tex g id w h t)
   (: ls (two? t && !(tray? t) ? t [t])
      (side n k) (max 1 (n // (k 2)))
@@ -173,7 +176,7 @@
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
     (put! g c, ask g ("sun \(show (shape sd 1)) \(show (shape sd 0)) 0 " + unwords (map num (bias . map (i \ sv i) ^16)))))
  (gpu-drop g id) (ask g "drop \(show id)")
- (gpu-place g ps) (ask g ("place " + unwords (map (p \ unwords (show (p 0) . map num (p 1))) ps)))
+ (gpu-place g ps) (tell g "place" (catmap (p \ (p 0 . p 1)) ps))
  ; ..spots [S C] for the next frame w by h, laid in its sky
  (gpu-spots g w h sp) (: I (iota (sp 0 >= 0)) ns #I c (cask (8 * ns))
    _ (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
@@ -202,8 +205,8 @@
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
-  (room! g (8 * w * h), say (g 'to) ("frame \(show w) \(show h) 0 " + unwords (map num (o + map (i \ mat i) ^16)) + " "
-                                     + unwords (map show ids) + "\n"), ())
+  (: l (o + map (i \ mat i) ^16 + ids) c (cask (8 * #l)) _ ((cite 'guts 'pind) c 0 (gem-tray [#l] (map (* 1.0) l)))
+   (put! g c, room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) 0\n", ()))
  (gpu-take g w h) (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r)
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {} 'lamped {} 'held {} 'placed {}}
@@ -248,14 +251,14 @@
                    (: c (cask (4 * #t)) _ ((cite 'guts 'pinf) c 0 4 t)
                       ((put! (s 'g) c, ask (s 'g) say) @ () (pin s k t, ()) r r)))
               r (lay 'cmap m "cloud \(show (int (sqrt #m))) 0" @ () (lay 'amap A "air 128 \(show (#A // 384)) 0") q q)
-              (string? r ? r (ask (s 'g) ("skyp " + unwords (map num (P 0))) @ () [-1] r r)))
+              (string? r ? r (tell (s 'g) "skyp" (P 0) @ () [-1] r r)))
            (peep s 'skv () == sk 0 && peep s 'skt () == sk 1) [(s 'skid)]
            (once s 'sky (sk 0) (sk 1) 11 @ [id] (pins s 'skv (sk 0) 'skt (sk 1) 'skid id, [id]) r r))
      (q @ [id] (id < 0 && #sk < 6 ? () (ask (s 'g) "sky \(show id) \(num (sk 2)) \(num (e 0)) \(num (e 1)) \(num (e 2))")) r r)))
  ; ..the lamps' strengths, sent as they change; and each batch's lamps lm i, [cols li sun] or (),
  ; laid on its buf once
  (lamps! s bs lm ks)
-  (: k (? (!(two? ks) || alike (peep s 'ks ()) ks) () (ask (s 'g) ("ks " + unwords (map num ks)) @ () (pin s 'ks ks, ()) r r))
+  (: k (? (!(two? ks) || alike (peep s 'ks ()) ks) () (tell (s 'g) "ks" ks @ () (pin s 'ks ks, ()) r r))
      (one i) (: q (lm i) id (bs i 0)
                t (id >= 0 ? (peep (s 'lamped) id ()) 0) l (two? q ? (q 0) ()) su (two? q && 2 < #q ? (q 2) ()) was (two? t ? (t 1) ())
                (? (charm? t || (two? t ? (t 0 == l && t 1 == su) (atom? q))) ()
@@ -277,7 +280,7 @@
                                        (two? o && id >= 0 && !(peep (s 'placed) id () = o) ? [[id o]] ()))) ^(min #bs #os))
    (atom? ps ? () (gpu-place (s 'g) (map (p \ [(p 0) (p 1)]) ps) @ () (each ps (p \ pin (s 'placed) (p 0) (p 1)), ()) e e)))
  ; ..the eye the glows face and the depths they fade by, facets's opts past 8, each frame
- (glow! s o) (? (#o < 18) () (ask (s 'g) ("glow " + unwords (map (i \ num (o (8 + i))) ^10))))
+ (glow! s o) (? (#o < 18) () (tell (s 'g) "glow" (map (i \ o (8 + i)) ^10)))
  ; ..the textures, each laid again only when it is not the one laid
  (texs! s texs) (? (alike (s 'texs) texs) ()
    (: o (s 'texs) all (!(two? o) || #o != #texs)

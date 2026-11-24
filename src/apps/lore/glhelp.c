@@ -13,12 +13,14 @@
 //                     texture: -1 none, -2 a glow, -3 - t a glass of t, a pane's class or a
 //                     lens as facets has them), drawn in their order
 //   drop ID           a buf forgotten
-//   place ID X Y Z ..  each buf ID drawn moved by X Y Z, kept until it is laid again
+//   place N OFF        N floats from OFF, ID X Y Z ..: each buf ID drawn moved by X Y Z, kept
+//                     until it is laid again
 //   lamps ID NV OFF L0 .. L7
 //                     buf ID's lamps: NV vertices of 24 floats from OFF, 8 slots of r g b, slot k
 //                     the light lamp LK gives it at full strength
 //   suns ID NV OFF     buf ID's sun: NV vertices of 3 floats from OFF, its colour that is the sun's
-//   ks K ..           the lamps' strengths, each slot's light times its lamp's added to the colour
+//   ks N OFF          the lamps' strengths, N floats from OFF, each slot's light times
+//                     its lamp's added to the colour
 //   scene N OFF       the scene, kept: N bufs, each 9 floats from OFF: its id, the ball it lies
 //                     in, x y z r, a light L and weight W, its colours times W times light L's
 //                     strength, L below 0 as they are, its group G, and a mark M; a frame's id
@@ -36,8 +38,8 @@
 //                     2 none, and its matrix, row-major, the depths asked less BIAS
 //   cloud N OFF       the sky's cloud map, kept: N by N floats from OFF, rows first
 //   air W H OFF       the sky's air table, kept: W by H colours of three floats, rows first
-//   skyp K ..         the next frames' sky asked a pixel at a time, as sky.l's sky-colour-at
-//                     asks it: sky-gpu's numbers, then the view's right, up and ahead, its focal
+//   skyp N OFF        N floats from OFF: the next frames' sky asked a pixel at a time, as sky.l's
+//                     sky-colour-at asks it: sky-gpu's numbers, then the view's right, up and ahead, its focal
 //                     length in pixels, the radians between pixels, its width and height
 //   sky ID TONE [EX EY EZ]
 //                     the next frame's sky: buf ID drawn last, only where the frame is bare,
@@ -46,11 +48,12 @@
 //                     ID -1 asks it a pixel at a time, by skyp's numbers and the cloud map
 //   spots W H NS OFF  the next frame's spots, W by H, as show takes them: NS pixels' indices
 //                     then their words, floats at OFF, laid in its sky in the sky's stead
-//   glow RX RY RZ UX UY UZ ZN ZF LEAD SOFT
-//                     the next frame's glows as facets has them: a buf all glow turned to face
+//   glow 10 OFF       RX RY RZ UX UY UZ ZN ZF LEAD SOFT, floats from OFF: the next frame's
+//                     glows as facets has them: a buf all glow turned to face
 //                     the eye, each vertex u along R and v along U; a glow seen as much as what is
 //                     behind it lies past it less LEAD, over SOFT, ZN ZF the view's near and far
-//   frame W H OFF CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..
+//   frame W H OFF N AT
+//                     N doubles from AT: CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..;
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
 //                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
 //                     facets's 8 and 128 (cull: anticlockwise in gl's y-up faces the eye; seen,
@@ -633,9 +636,11 @@ static void cmd_suns(struct helper *H, int id, int nv, size_t off) {
  dprintf(H->out, "ok\n"); }
 
 // the lamps' strengths, n of them, kept until the next
-static void cmd_ks(struct helper *H, char const *l) {
- float k[128] = {0}; int n = 0; char *e;
- for (double x = strtod(l, &e); e != l && n < 128; l = e, x = strtod(l, &e)) k[n++] = (float) x;
+static void cmd_ks(struct helper *H, int n, size_t off) {
+ float const *p = n >= 0 ? (float const*) bytes(H, off, 4 * (size_t) n) : NULL;
+ if (!p) { dprintf(H->out, "err ks args\n"); return; }
+ float k[128] = {0};
+ memcpy(k, p, 4 * (size_t) (n < 128 ? n : 128));
  glUseProgram(H->prog); glUniform1fv(H->u_ks, 128, k);
  dprintf(H->out, "ok\n"); }
 
@@ -829,11 +834,10 @@ static void cmd_air(struct helper *H, int w, int h, size_t off) {
  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, w, h, 0, GL_RGB, GL_FLOAT, p);
  glActiveTexture(GL_TEXTURE0);
  dprintf(H->out, "ok\n"); }
-static void cmd_skyp(struct helper *H, char *l) {
- double v[64];
- int const n = words(l, v, 64);
- if (n < 50) { dprintf(H->out, "err skyp args\n"); return; }
- for (int i = 0; i < n; i++) H->kp[i] = (float) v[i];
+static void cmd_skyp(struct helper *H, int n, size_t off) {
+ float const *p = n >= 50 && n <= 64 ? (float const*) bytes(H, off, 4 * (size_t) n) : NULL;
+ if (!p) { dprintf(H->out, "err skyp args\n"); return; }
+ memcpy(H->kp, p, 4 * (size_t) n);
  H->nkp = n;
  dprintf(H->out, "ok\n"); }
 static void cmd_sky(struct helper *H, int id, double tone, double const *e) {
@@ -847,12 +851,11 @@ static void cmd_spots(struct helper *H, int w, int h, int ns, size_t off) {
  glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glUseProgram(H->prog);
  dprintf(H->out, H->opend ? "ok\n" : "err spots\n"); }
 
-static int words(char *s, double *v, int max);
-static void cmd_glow(struct helper *H, char *args) {
- double v[10];
- if (words(args, v, 10) != 10) { dprintf(H->out, "err glow args\n"); return; }
- for (int i = 0; i < 10; i++) H->eye[i] = (float) v[i];
- H->epend = v[7] > v[6] && v[9] > 0;
+static void cmd_glow(struct helper *H, int n, size_t off) {
+ float const *p = n == 10 ? (float const*) bytes(H, off, 40) : NULL;
+ if (!p) { dprintf(H->out, "err glow args\n"); return; }
+ memcpy(H->eye, p, 40);
+ H->epend = p[7] > p[6] && p[9] > 0;
  dprintf(H->out, "ok\n"); }
 
 static void cmd_drop(struct helper *H, int id) {
@@ -953,13 +956,12 @@ static void cmd_scene(struct helper *H, int n, size_t off) {
  if (!q) { dprintf(H->out, "err scene room\n"); return; }
  H->scn = q; memcpy(q, p, 36 * (size_t) n); H->nscn = n;
  dprintf(H->out, "ok\n"); }
-static void cmd_place(struct helper *H, char *l) {
- double v[4 * 1024];
- int const n = words(l, v, 4 * 1024);
- if (n % 4) { dprintf(H->out, "err place args\n"); return; }
+static void cmd_place(struct helper *H, int n, size_t off) {
+ float const *v = n >= 0 && n % 4 == 0 ? (float const*) bytes(H, off, 4 * (size_t) n) : NULL;
+ if (!v) { dprintf(H->out, "err place args\n"); return; }
  for (int i = 0; i < n; i += 4) {
   struct buf *b = buf_of(H, (int) v[i]);
-  if (b) for (int k = 0; k < 3; k++) b->off[k] = (float) v[i + 1 + k]; }
+  if (b) for (int k = 0; k < 3; k++) b->off[k] = v[i + 1 + k]; }
  dprintf(H->out, "ok\n"); }
 static void cmd_vis(struct helper *H, int n, int k, size_t off) {
  float const *p = n >= 0 && k >= 0 && k <= 1024 ? (float const*) bytes(H, off, 4 * ((size_t) n + k)) : NULL;
@@ -993,11 +995,13 @@ static int scene_seen(struct helper *H, float const *m, int g, int *out, float *
  for (int i = 0; i < n; i++) out[i] = q[i].id, mul[i] = q[i].k;
  return n; }
 
-static void cmd_frame(struct helper *H, char *args) {
+static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, size_t at) {
  enum { lead = 27 };   // w h off clear fr fg fb near far tone flags, then the 16 of m
  double v[lead + 4096];
- int n = words(args, v, lead + 4096);
- if (n < lead) { dprintf(H->out, "err frame args\n"); return; }
+ int n = fn < 4096 + lead - 3 ? fn + 3 : lead + 4096;
+ unsigned char const *pv = fn >= lead - 3 ? bytes(H, at, 8 * (size_t) (n - 3)) : NULL;
+ if (pv) v[0] = fw, v[1] = fh, v[2] = (double) foff, memcpy(v + 3, pv, 8 * (size_t) (n - 3));
+ if (!pv) { dprintf(H->out, "err frame args\n"); return; }
  int w = (int) v[0], h = (int) v[1];
  unsigned char *out = w > 0 && h > 0 ? bytes(H, (size_t) v[2], 8 * (size_t) w * h) : NULL;
  if (!out || !target(H, w, h)) { dprintf(H->out, "err frame target\n"); return; }
@@ -1209,7 +1213,7 @@ static int serve(struct helper *H, char const *file, int x) {
   if (!setup(H, 0)) return 3; }
  dprintf(H->out, "ready %s\n", glGetString(GL_RENDERER));
  for (char *l; (l = next_line(H)); ) {
-  int id, a, b, c, k; long off; double tone;
+  int id, a, b, c, k; long off, at; double tone;
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
   else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
@@ -1218,7 +1222,7 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "lamps ", 6)) {
    int li[8]; if (sscanf(l + 6, "%d %d %ld %d %d %d %d %d %d %d %d", &id, &a, &off, li, li + 1, li + 2, li + 3, li + 4, li + 5, li + 6, li + 7) == 11) cmd_lamps(H, id, a, (size_t) off, li);
    else dprintf(H->out, "err what: %s\n", l); }
-  else if (!strncmp(l, "ks", 2) && (l[2] == ' ' || !l[2])) cmd_ks(H, l + 2);
+  else if (!strncmp(l, "ks ", 3) && sscanf(l + 3, "%d %ld", &a, &off) == 2) cmd_ks(H, a, (size_t) off);
   else if (!strncmp(l, "win ", 4)) cmd_win(H, strtoul(l + 4, NULL, 10));
   else if (!strncmp(l, "show ", 5)) cmd_show(H, l + 5);
   else if (!strncmp(l, "sky ", 4) && sscanf(l + 4, "%d %lf", &id, &tone) == 2) {
@@ -1226,17 +1230,17 @@ static int serve(struct helper *H, char const *file, int x) {
    sscanf(l + 4, "%*d %*f %lf %lf %lf", &e[0], &e[1], &e[2]);
    cmd_sky(H, id, tone, e); }
   else if (!strncmp(l, "spots ", 6) && sscanf(l + 6, "%d %d %d %ld", &a, &b, &c, &off) == 4) cmd_spots(H, a, b, c, (size_t) off);
-  else if (!strncmp(l, "glow ", 5)) cmd_glow(H, l + 5);
+  else if (!strncmp(l, "glow ", 5) && sscanf(l + 5, "%d %ld", &a, &off) == 2) cmd_glow(H, a, (size_t) off);
   else if (!strncmp(l, "drop ", 5) && sscanf(l + 5, "%d", &id) == 1) cmd_drop(H, id);
   else if (!strncmp(l, "under ", 6) && sscanf(l + 6, "%d %d %ld", &a, &b, &off) == 3) cmd_under(H, a, b, (size_t) off);
   else if (!strncmp(l, "base ", 5) && sscanf(l + 5, "%d %d %ld", &a, &b, &off) == 3) cmd_base(H, a, b, (size_t) off);
   else if (!strncmp(l, "cloud ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_cloud(H, a, (size_t) off);
   else if (!strncmp(l, "air ", 4) && sscanf(l + 4, "%d %d %ld", &a, &b, &off) == 3) cmd_air(H, a, b, (size_t) off);
-  else if (!strncmp(l, "skyp ", 5)) cmd_skyp(H, l + 5);
-  else if (!strncmp(l, "place ", 6)) cmd_place(H, l + 6);
+  else if (!strncmp(l, "skyp ", 5) && sscanf(l + 5, "%d %ld", &a, &off) == 2) cmd_skyp(H, a, (size_t) off);
+  else if (!strncmp(l, "place ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_place(H, a, (size_t) off);
   else if (!strncmp(l, "vis ", 4) && sscanf(l + 4, "%d %d %ld", &a, &b, &off) == 3) cmd_vis(H, a, b, (size_t) off);
   else if (!strncmp(l, "scene ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_scene(H, a, (size_t) off);
-  else if (!strncmp(l, "frame ", 6)) cmd_frame(H, l + 6);
+  else if (!strncmp(l, "frame ", 6) && sscanf(l + 6, "%d %d %ld %d %ld", &a, &b, &off, &c, &at) == 5) cmd_frame(H, a, b, (size_t) off, c, (size_t) at);
   else if (!strcmp(l, "quit")) break;
   else dprintf(H->out, "err what: %s\n", l); }
  return 0; }
