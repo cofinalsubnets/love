@@ -328,13 +328,14 @@
    ;   'syms / 'nsym       symbol index -> (name bind typ shndx value size)
    ;   'relas              ((secidx (off kind symidx addend)..) ..), the addend ()
    ;                       on a rel, where it rides in the field instead
-   ; layout pins 'base later, section index -> load address
+   ;   'dsecs / 'drelas    a debug section's index -> (name off size align flags), and its relas
+   ; layout pins 'base later, section index -> load address; ld-dbg 'dbase, -> its offset
    (ld-read id s mach)
     (: r (ld-obj id s 1) sec (r 'sec) shnum (r 'shnum) rty (? (r 'class = 64 || elem (r 'mach) '(243 94 8)) 4 9)
        _ (r 'type = 1 && r 'mach = mach ? 0 (scare 'link-machine id))
-       secs {} lanes {} drops {}
+       secs {} lanes {} drops {} dsecs {}
        ; 'pic: a mips object laid pic (e_flags bit 1), each function's gp from $t9
-       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach
+       ob {'id id 'src s 'lanes lanes 'secs secs 'drops drops 'base {} 'mach mach 'dsecs dsecs 'dbase {}
            'pic (mach = 8 && 0 < rle32 (r 'src) 36 & 2)}
        ; droppable: empty, no shf_alloc, a note, or the unwinder's tables. the index is
        ; recorded so a relocation against it is skipped, not scared at.
@@ -353,6 +354,9 @@
                       (? lane (pin secs i [lane (ty = 8 ? 0 off) sz (h 5) (ld-home lane fl ty)],
                                pin lanes lane (i . lanes lane),
                                class (i + 1))
+                         ; a debug section rides aside, laid past the image by ld-dbg
+                         (ty = 1 && 0 = fl & 2 && 0 < sz && ld-debug? nm)
+                          (pin dsecs i [nm off sz (h 5) (fl & 48)], class (i + 1))
                          ; .comment is dropped but kept: the output's is the union of the inputs'
                          (drop? i ty fl nm sz)
                           (nm = ".comment" ? (pin ob 'comment (snip s off (off + sz))) 0,
@@ -378,11 +382,14 @@
        _ (r 'nsym = 0 ? (scare 'link-no-symtab id))
        _ (pin ob 'syms (r 'syms), pin ob 'nsym (r 'nsym), pin ob 'sec (r 'sec), pin ob 'shnum shnum)
        ; a .rela whose target was dropped goes with it; one neither placed nor dropped scares.
-       ; a REL addend arrives () and the patcher pulls it from the field.
+       ; a REL addend arrives () and the patcher pulls it from the field. a debug section's are its own
+       rs (rev (r 'rels))
+       _ (pin ob 'drelas (filter (x \ two? (dsecs <x)) rs))
        (pin ob 'relas (filter (x \ (? (two? (secs <x)) 1
                                      (drops <x) ()
+                                     (two? (dsecs <x)) ()
                                      (scare 'link-rela-target id)))
-                              (rev (r 'rels))),
+                              rs),
         ob))
 
    ; every symbol in .symtab of a file of any e_type (`love nm`) -> rows
@@ -894,6 +901,31 @@
    ;     sections come after every object's, as lld appends them.
    ld-skip '(0 2 3 4 9 17 1879002115)             ; null symtab strtab rela rel group addrsig
    (ld-debug? nm) (starts? nm ".debug" || starts? nm ".zdebug")
+   ; ldlink's debug sections, past the image: each name once in first-seen order, its pieces in
+   ; object order on their alignment, patched as a lane is but with no -pie table, since no loader
+   ; reads them. cx as ldpatch takes it -> ((name flags size pieces)..)
+   (ld-dbg objs cx)
+    (: (ixs ob) (sort (keys (ob 'dsecs)))
+       nms (uniq (catmap (ob \ map (i \ <(ob 'dsecs i)) (ixs ob)) objs))
+       (lay nm) (foldl (\ c ob (foldl (\ c2 i (: se (ob 'dsecs i)
+                                               (<se = nm ? (: a (ld-align (max 1 (se 3)) c2) (pin (ob 'dbase) i a, a + se 2)) c2)))
+                                        c (ixs ob)))
+                       0 objs)
+       ends (map lay nms)
+       cxd (take 5 cx + [()] + drop 6 cx)
+       ; the object as ldpatch reads it: its debug sections beside its lanes, their relas alone
+       (view ob) (: v {} ss {} bs {}
+                    _ (map (k \ pin v k (ob k)) (keys ob))
+                    _ (map (k \ pin ss k (ob 'secs k)) (keys (ob 'secs)), map (k \ pin ss k (ob 'dsecs k)) (ixs ob))
+                    _ (map (k \ pin bs k (ob 'base k)) (keys (ob 'base)), map (k \ pin bs k (ob 'dbase k)) (ixs ob))
+                    (pins v 'secs ss 'base bs 'relas (ob 'drelas)))
+       vs (map view objs)
+       (pieces nm) (foldl (\ acc v (foldl (\ a2 i (: se (v 'secs i) b (v 'base i)
+                                                   (<se = nm ? (@ a2 [c ps] [(b + se 2) (ps + (c < b ? [(ld-zeros (b - c))]) + ldpatch v i b cxd)]) a2)))
+                                           acc (ixs v)))
+                          [0 ()] vs @ r (r 1))
+       (flags nm) (catmap (ob \ filter (se \ <se = nm) (map (ob 'dsecs) (ixs ob))) objs @ l (<l 4))
+       (o-mapi (\ k nm [nm (flags nm) (ends k) (pieces nm)]) nms))
    (ld-zip l) (: (go l i acc) (? (atom? l) (rev acc) (go >l (i + 1) ([i <l] . acc))) (go l 0 ()))
    ; SECTIONS' output sections -> [tablet ..], each with 'pos
    (ld-outs cmds)
@@ -1408,7 +1440,7 @@
                   't1 t1 'o0 o0 'o1 o1 'd0 d0 'ed <ed 'n0 n0 'en <en 'r0 r0 'r1 r1 'dend dend 'bend bend
                   'iaddr iaddr 'iend iend 'tl0 tl0 'tl1 tl1 'tal tal
                   'rows (ldsyrows objs glo lanesx) 'cmt (ld-comment objs prod) 'readme readme
-                  'body (>etd + tbz + tail + [rtab]) 'image >ei}))
+                  'body (>etd + tbz + tail + [rtab]) 'image >ei 'dbg (ld-dbg objs cx)}))
 
    ; the file from a lay: its addresses, its bytes from past the header to .love.rela's
    ; end (body) and from iaddr (image), the symbols as ldsyrows answers them
@@ -1440,9 +1472,11 @@
        ; an object says love_nifs, a C identifier, so GNU ld synthesizes its brackets; the
        ; binary may say .love.nifs, ldres defining the pair itself.
        en (L 'en)
+       ; ld-dbg's sections, the file's last before the headers: no loader reads them
+       dbg (peep L 'dbg ())
        shstr (o-strtab ('(".text" ".rodata" ".data" ".love.nifs" ".love.rela" ".bss" ".love.image"
                           ".symtab" ".strtab" ".shstrtab" ".comment" ".love.README" ".note.netbsd.ident")
-                        + (tls? ? '(".tdata"))))
+                        + (tls? ? '(".tdata")) + map cap dbg))
        (snm k) (<>shstr k)
        symo (ld-align 8 endf) symz #<st
        stro (symo + symz) strz #<>st
@@ -1450,9 +1484,11 @@
        cmto (ssto + sstz) cmtz #cmt
        rdm (string? readme ? (o-strbytes readme))
        rdmo (cmto + cmtz) rdmz #rdm
-       nsh ((0 < rdmz ? 13 12) + ?nb? + ?tls?)
-       shto (ld-align 8 (rdmo + rdmz))
-       sht (catall [(shf 0 0 0 0 0 0 0 0 0 0)                                    ; the reserved null header
+       dbgo (rdmo + rdmz)
+       dos (rev (foldl (\ a d ((<a + d 2) . a)) [dbgo] dbg))     ; each one's offset, then their end
+       nsh ((0 < rdmz ? 13 12) + ?nb? + ?tls? + #dbg)
+       shto (ld-align 8 (rev dos @ l <l))
+       sht (catall ([(shf 0 0 0 0 0 0 0 0 0 0)                                   ; the reserved null header
                      ; a lane's offset follows the last byte before it, so no gap is unowned
                     (shf (snm 0) 1 6 (base + hdrsz) hdrsz (t1 - (base + hdrsz)) 0 0 16 0)
                     (shf (snm 1) 1 2 o0 (t1 - base) (o1 - o0) 0 0 16 0)
@@ -1467,7 +1503,8 @@
                     (shf (snm 10) 1 48 0 cmto cmtz 0 0 1 1)                     ; .comment: merge|strings, no alloc
                     (0 < rdmz ? (shf (snm 11) 1 32 0 rdmo rdmz 0 0 1 0) ())    ; .love.README: strings, no alloc
                     (nb? ? (shf (snm 12) 7 2 (base + nbo) nbo 24 0 0 4 0))     ; sht_note, alloc: strip keeps it
-                    (tls? ? (shf (snm 13) 1 1027 tl0 (tl0 - base - sk) (tl1 - tl0) 0 0 tal 0))])   ; alloc|write|tls
+                    (tls? ? (shf (snm 13) 1 1027 tl0 (tl0 - base - sk) (tl1 - tl0) 0 0 tal 0))]
+                   + o-mapi (\ k d (shf (snm (13 + ?tls? + k)) 1 (d 1) 0 (dos k) (d 2) 0 0 1 (d 1 & 32 ? 1 0))) dbg))   ; alloc|write|tls
        ; w^x: headers + code r-x; literals r; .data through love_rela, bss in memsz, rw; the
        ; image rw. no page is in two segments, and the file pays no padding: offsets run on
        ; while addresses skip. sound only while no relocation lands in text or rodata.
@@ -1487,8 +1524,9 @@
        hdr9 (bsd? ? (ld-brand hdr 7 9) hdr)
        (elf-order mach
         (hdr9 . ((nb? ? [nbnote]) + L 'body + L 'image
-                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm
-                     (ld-zeros (shto - (rdmo + rdmz))) sht]))))
+                  + [(ld-zeros (symo - endf)) <st <>st <shstr cmt rdm]
+                  + catmap (d \ d 3) dbg
+                  + [(ld-zeros (shto - (rev dos @ l <l))) sht]))))
 
    ; --- the shared object: ldlink's lay at base 0, plus what a dynamic loader reads ---
    ; a strong undefined no object defines is an import: a plt stub branches through a got

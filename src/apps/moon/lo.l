@@ -1861,12 +1861,50 @@
           (at 8 @ [a f2] (lomkt g ty @ d [ty d (f2 + [(lofl? ty ? ['ldsd d a 0] [(ldop ty) d a 0])])]))))
 
    (lodl g pfx l f) (peep g 'dln 0 @ k (pin g 'dln (k + 1), name "\(pfx).\(k):\(l):\(f || "")"))
+   ; a local's C spelling, its respells and unrolled copies' (nm`2, nm`u1) cut, an inlined copy's
+   ; (nm`a3) inside its own splice alone; () for what no C names here
+   (dlnm g nm)
+    (: ps (split "`" nm) (dig? s) (0 < #s && all digit? (map s ^#s)) (tl s) (snip s 1 #s)
+       (? (<ps != "" && all (s \ dig? s || starts? s "u" && dig? (tl s) || starts? s "a" && elem (tl s) (g 'dlik)) >ps) <ps))
+   ; -g's blocks: one that binds a C name has a mark at its start and a record in 'dlsc: (k parent
+   ; bindings in span), k 0 the body's own and -1 the params, neither marked; it runs to the first row it did not lay (obj.l). in: (fn file line) of the
+   ; call where the block is an inlined copy. span: the line marks' counts laid in it
+   (dlrec g k par e2 env in n0)
+    (: (go e a) (e == env || atom? e ? a (go >e (string? <<e && dlnm g <<e @ () a n ((n . ><e) . a))))
+       (pin g 'dlsc ([k par (go e2 ()) in [n0 (peep g 'dln 0)]] . g 'dlsc)))
+   (dlbinds? g items) (any (s \ s @ (('decl || 'sdecl) ps) (any (p \ dlnm g <p) ps) _ ()) items)
+   ; ainl's marks at a splice's ends: the copy's block, its code at the callee's `{` and what follows
+   ; at the call's line. 'dlis the open ones, 'dlik their splices
+   (dlopen g env f l k nm)
+    (: id (peep g 'dlbn 1) par (g 'dlb) at (peep (g 'dlfnl) nm [f l]) n0 (peep g 'dln 0)
+       (pins g 'dlbn (id + 1) 'dlb id 'dlis ([k id par env nm f l n0] . g 'dlis) 'dlik ("\(k)" . g 'dlik) 'dlcur at,
+        [['label (name ".dlb.\(id)")] ['label (lodl g ".dl" (at 1) <at)]]))
+   (dlclose g env f l k)
+    (any (e \ <e = k) (g 'dlis) ?
+       (<(g 'dlis) @ [k2 id par e0 nm cf cl n0]
+          (dlrec g id par env e0 [nm cf cl] n0,
+           pins g 'dlb par 'dlis >(g 'dlis) 'dlik >(g 'dlik),
+           (k2 = k ? (pin g 'dlcur [f l], [['label (lodl g ".dl" l f)]]) (dlclose g env f l k)))))
+   ; ..those a return's prune left open, at their block's end. is: the ones open ahead of it
+   (dlshut g env is)
+    (two? (g 'dlis) && g 'dlis != is ?
+       (<(g 'dlis) @ [k id par e0 nm f l n0]
+          (dlrec g id par env e0 [nm f l] n0, pins g 'dlb par 'dlis >(g 'dlis) 'dlik >(g 'dlik), dlshut g env is)))
+   ; f lays a block's forms -> [forms env] | 'bad, under its marks where it asks them
+   (dlscope g env ask f)
+    (: par (g 'dlb) top (par = ())
+       (? (!top && !(ask && g 'dlcur)) (f 0)
+          (: k (? top 0 (peep g 'dlbn 1)) _ (top ? 0 (pin g 'dlbn (k + 1))) _ (pin g 'dlb k) n0 (peep g 'dln 0)
+             r (f 0) _ (pin g 'dlb par)
+             (r @ [fs e2] (dlrec g k par e2 env () n0, (top ? r [([['label (name ".dlb.\(k)")]] + fs) e2])) _ r))))
    ; -- statements -> forms | 'bad --
    (lost1 g env s)
     (: ; an arm that lays code and opens with no mark takes one of the statement around it, so code moved out of line keeps a row
        (st x e2 _) (lost1 g e2 x @ 'bad 'bad
                       fs (g 'dlcur @ [f l] (two? x && !(x @ ('blk (('loc . _) . _)) 1 _ 0) && any (y \ <y != 'label) fs ? ([['label (lodl g ".dl" l f)]] + fs) fs) _ fs))
        (br x s L _) (lobr g env x s L)
+       ; a loop's step and test take the loop's row again, the body's being the last laid
+       lp (g 'dlcur) (row L _) ([['label L]] + (lp @ [f l] (pin g 'dlcur lp, [['label (lodl g ".dl" l f)]]) _ ()))
        (s @ () ()
             ((_ . _) . _) (loitems g env s)
             ('nop . _) ()
@@ -1874,6 +1912,7 @@
             ; its own counter, so the other labels number as under -g0
             ['loc f l] (pin g 'dlcur [f l], [['label (lodl g ".dl" l f)]])
             ['loc f l _] (pin g 'dlcur [f l], [['label (lodl g ".dlf" l f)]])   ; a body's `{`
+            ('loc . _) ()
             ('tdef . _) ()
             ; the canary at fp-16, the frame keeps its cell; the blob puts back what it borrows
             ('ssp k) [['fix () () (sspblob g k)]]
@@ -1914,24 +1953,25 @@
             ; a loop tests at its bottom, entered by a jump to the test
             ['while c body]
              (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lt
-                (loseq [(lol [['jmp lc] ['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (lol [['label lc]])
+                (loseq [(lol [['jmp lc] ['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (row lc)
                         (br c 1 lt) (lol [['label lb]])]))))
             ['do body c]
              (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb
-                (loseq [(lol [['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (lol [['label lc]]) (br c 1 lt) (lol [['label lb]])]))))
+                (loseq [(lol [['label lt]]) (st body (['brk lb] . ['cont lc] . env)) (row lc) (br c 1 lt) (lol [['label lb]])]))))
             ['for init c stp body]
              (nlab g ".lo" @ lt (nlab g ".lo" @ lc (nlab g ".lo" @ lb (nlab g ".lo" @ lq
+                (dlscope g env (dlbinds? g [init]) (_ \
                 ((init @ () [() env]
                          ['decl ps] (lodecl g env ps)
                          [_ x] (lox g env x @ [_ _ fs] [fs env] 'bad)
                          'bad) @
                  [fi e1]
                   (loseq [(lol (fi + (c @ () () _ [['jmp lq]]) + [['label lt]]))
-                          (st body (['brk lb] . ['cont lc] . e1)) (lol [['label lc]])
+                          (st body (['brk lb] . ['cont lc] . e1)) (row lc)
                           (u \ (stp @ () () _ (lox g e1 stp @ [_ _ fs] fs 'bad)))
                           (u \ (c @ () [['jmp lt] ['label lb]]
-                                   _ (lobr g e1 c 1 lt @ 'bad 'bad fs ([['label lq]] + fs + [['label lb]]))))])
-                  'bad)))))
+                                   _ (lobr g e1 c 1 lt @ 'bad 'bad fs ([['label lq]] + fs + [['label lb]]))))] @ 'bad 'bad fs [fs e1])
+                  'bad)) @ [fs _] fs 'bad)))))
             ('brk . _) (assoc 'brk env @ [_ L] [['jmp L]] 'bad)
             ('cont . _) (assoc 'cont env @ [_ L] [['jmp L]] 'bad)
             ['goto nm] [['jmp (name "\(g 'fn).\(nm)")]]
@@ -2117,9 +2157,13 @@
     (: (go l env acc)
         (l @ (['decl ps] . u) (lodecl g env ps @ [fs e2] (go u e2 (acc + fs)) 'bad)
              (['sdecl ps] . u) (go u (losdecl g env ps) acc)
+             (['loc f ln 'in k nm] . u) (go u env (acc + dlopen g env f ln k nm))
+             (['loc f ln 'out k nm] . u) (go u env (acc + dlclose g env f ln k))
              (it . u) (lost1 g env it @ 'bad 'bad fs (go u env (acc + fs)))
-             [acc env])
-       (go items env ()))
+             (dlshut g env is, [acc env]))
+       b (g 'dlb) is (g 'dlis) ik (g 'dlik)
+       r (dlscope g env (dlbinds? g items) (_ \ go items env ()))
+       (pins g 'dlb b 'dlis is 'dlik ik, r))
    ; a VLA's block: the prior one this site laid given back (a loop runs the decl again), the bytes
    ; stashed, sp down by them rounded to 16, the block's address stashed. sp moves: no sibcall, no
    ; unframing
@@ -2214,7 +2258,7 @@
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
-          _ (pin g 'lon 0)
+          _ (pins g 'lon 0 'dlb () 'dlis () 'dlik () 'dlsc () 'dltw () 'dlal () 'dlst () 'dlfd [0 0])
           ; riscv's saves ride csframe here, so every exit restores at its marker
           _ (rvx? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))
@@ -2283,7 +2327,7 @@
              (pins g 'vagp gi 'vaxmm fi 'vaov ov,
               (va ? (lovasave g)) @ vs
               (loitems g env (f 3 @ ['blk items] items x [x]) @ 'bad 'bad
-                 body (lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
+                 body (dlrec g -1 () env () () 0, lobuild g f (vs + pe + body + fz0 g <>f + peep g 'epi epi))))))
        (pin g 'lowhy ['fn (sig @ (rt . p . va . _) [rt va (map (x \ <>x) params)] 'nosig)
                            (g 'abad)], 'bad))
 
@@ -2392,7 +2436,7 @@
                  (map (w \ (puts ";; lolaw \(<>f) ", putx w, putc 10)) (getenv "MOON_LOLOG" @ () () _ ws),
                   pins g 'lolawn (peep g 'lolawn 0 + 1) 'lolaw ((g 'lolaw) + map (w \ [<>f w]) ws)))),
          ; x64: a frame load only a compare reads becomes the compare's memory operand
-         (mprof 'rasub (_ \ dlout g (raunmark (radrl g (rakeep g (rasubk f2 loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
+         (mprof 'rasub (_ \ raunmark (radrl g (rakeep g (dlout g (rasubk (dlstates g f2 loc) loc)))) @ b0 (? (x64? g) (lo32op (lofuse g (cmpfuse g b0))) ret4 (map (f \ f = '(ret) ? ret4 f) b0) b0))) @ body
          ((getenv "MOON_LOLOG" @ "2" (puts ";; allocated\n", map (x \ (putx x, putc 10)) body) 0),
              (: F (aup (peep g 'off 0) 16 + (? (ia32? g) 8 (v6m? g) 4 0))
                 (rvx? g ? (lorvf g (g 'sigs <>f @ s (two? s && s 2)) (a4ize (sibcall g ([['label (name <>f)] '(push lr) '(push fp) ['sub 'sp 'sp F] '(lea fp sp 0) '(saves)] + body))))
