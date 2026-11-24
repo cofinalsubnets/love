@@ -1026,42 +1026,23 @@
  (cells-seen sc v e) (: cl (sc 'cells)
    at (? (!(tablet? cl)) () (: L (cl 'lo) H (cl 'hi) (iota ((L 0 <= e 0) * (e 0 <= H 0) * (L 1 <= e 1) * (e 1 <= H 1) * (L 2 <= e 2) * (e 2 <= H 2)))))
    (? (at = () || #at = 0) ()
-     (: cam (v 'cam) (row i) (map (j \ cam (4 * i + j)) ^4) r0 (row 0) r1 (row 1) r3 (row 3)
-        bent (tablet? (sc 'surf)) mx (8.0 / v 'w) my (8.0 / v 'h) nr (v 'near)
-        (on q P) (q 0 * P 0 + q 1 * P 1 + q 2 * P 2 + q 3)
-        Q {} (seen i) (Q i @ () (: P (cl 'cells i 'P) q [(on r0 P) (on r1 P) (on r3 P)] (pin Q i q, q)) q q)
-        ; ..points across the near plane also as far out as they cross it, each no further out
-        ; there than it is over the plane's depth
-        (span q I r) (: ww (peep (q 2) I 0.0) n (amin ww) xs (peep (q 0) I 0.0) ys (peep (q 1) I 0.0)
-          k (max n nr) a (max mx (bent ? (0.04 / k) 0.0)) b (max my (bent ? (0.04 / k) 0.0))
-          x (xs / max ww nr) y (ys / max ww nr) c (n < nr)
-          x0 (c ? (min (amin x) (amin xs / nr)) (amin x)) x1 (c ? (max (amax x) (amax xs / nr)) (amax x))
-          y0 (c ? (min (amin y) (amin ys / nr)) (amin y)) y1 (c ? (max (amax y) (amax ys / nr)) (amax y))
-          p [(max (r 0) (x0 - a)) (min (r 1) (x1 + a)) (max (r 2) (y0 - b)) (min (r 3) (y1 + b))]
-          (amax ww >= nr && p 0 <= p 1 && p 2 <= p 3 ? p ()))
-        ; ..a box come to a cell: none if one there holds it, else joined with those it meets,
-        ; and all as one past four
-        R {} (has a b) (a 0 <= b 0 && b 1 <= a 1 && a 2 <= b 2 && b 3 <= a 3) (meets a b) (a 0 <= b 1 && b 0 <= a 1 && a 2 <= b 3 && b 2 <= a 3)
-        (join a b) [(min (a 0) (b 0)) (max (a 1) (b 1)) (min (a 2) (b 2)) (max (a 3) (b 3))]
-        (from i r) (: o (R i)
-          (? (any (q \ has q r) o) ()
-             (: u (foldl join r (filter (meets r) o)) l (u . filter (q \ !(meets r q)) o) l (#l > 4 ? [(foldl join <l >l)] l)
-                _ (pin R i l) <l)))
-        (past e) (: i (e 0) r (e 1) q (seen i)
-          (catmap (w \ span q (w 1) r @ () () p (from (w 0) p @ () () u (w 0 < 0 ? () [[(w 0) u]]))) (cl 'cells i 'ways)))
-        (go q) (? (atom? q) 0 (go (past <q + >q)))
-        _ (go (map (k \ (: i (at k) [i (from i [-1.0 1.0 -1.0 1.0])])) ^#at))
-        cks (sc 'chunks) S {}
-        ; ..past the sky, a chunk kept where its ball is inside the four planes through the eye
-        ; and a box's edges
-        (sides r) (map (q \ (: s (1.0 / sqrt (sq (q 0) + sq (q 1) + sq (q 2))) (map (x \ s * x) q)))
-                       [(map (j \ r0 j - r 0 * r3 j) ^4) (map (j \ r 1 * r3 j - r0 j) ^4) (map (j \ r1 j - r 2 * r3 j) ^4) (map (j \ r 3 * r3 j - r1 j) ^4)])
-        (ball r) (: ns (sides r)
-          (each ^#cks (k \ (: c (cks k) m (c 'mid) d -(c 'rad) (all (q \ q 0 * m 0 + q 1 * m 1 + q 2 * m 2 + q 3 >= d) ns ? (pin S k 1) 0)))))
-        (kept i) (: q (seen i) rs (R i)
-          (each (cl 'cells i 'ks) (c \ peep S (c 0) 0 = 1 || !(any (r \ span q (c 1) r != ()) rs) ? 0 (pin S (c 0) 1))))
-        _ (each (keys R) (i \ i < 0 ? (each (R i) ball) (kept i)))
-        S)))
+     (: cam (v 'cam) (row i) (map (j \ 1.0 * cam (4 * i + j)) ^4)
+        V (gem-tray [16] (row 0 + row 1 + row 3 + [(8.0 / v 'w) (8.0 / v 'h) (1.0 * v 'near) (tablet? (sc 'surf) ? 1.0 0.0)]))
+        (foldl (\ t c (pin t c 1)) {} (ways-seen (cells-flat cl (sc 'chunks)) V at)))))
+ ; ..its cells end to end, as ways-seen takes them
+ (cells-flat cl cks) (peep cl 'flat () @ () (: f (flat-of cl cks) (pin cl 'flat f, f)) f f)
+ (flat-of cl cks) (: cs (cl 'cells) P (k \ cat-trays (map (c \ c 'P k) cs))
+   ws (catmap (c \ c 'ways) cs) kl (catmap (c \ c 'ks) cs) (z n) (int (gem-tray [#n] (map (x \ 1.0 * x) n)))
+   (ends l) (z (rev (foldl (\ a n (n + <a . a)) [0] l))) pb (ends (map (c \ #(c 'P 0)) cs))
+   ; ..a cell's points' places made the whole's
+   (at key) (cat-ints (catmap (i \ map (w \ w 1 + pb i) (cs i key)) ^#cs))
+   (ball k) (gem-tray [#cks] (map (c \ 1.0 * (k = 3 ? (c 'rad) (c 'mid k))) cks))
+   (map P ^3 + [pb (ends (map (c \ #(c 'ways)) cs)) (z (map (w \ w 0) ws)) (ends (map (w \ #(w 1)) ws)) (at 'ways)
+                (ends (map (c \ #(c 'ks)) cs)) (z (map (w \ w 0) kl)) (ends (map (w \ #(w 1)) kl)) (at 'ks)]
+    + map ball ^4))
+ (cat-trays l) (foldl (\ a q (: n (q 0) t (q 1) (#t = 0 ? a (pin a (iota #t + n) t)))) (gem-tray [(net (map (t \ #t) l))] ()) (cat-at l))
+ (cat-ints l) (int (cat-trays (map (t \ 1.0 * t) l)))
+ (cat-at l) (rev (<(foldl (\ a t [([(a 1) t] . a 0) (a 1 + #t)]) [() 0] l)))
  ; ..the cells kept as the scenes before made them, while the brushes, the chunks and the
  ; surface are as they were
  (celled bs dp sf kp sc) (: ch (sc 'chunks)
