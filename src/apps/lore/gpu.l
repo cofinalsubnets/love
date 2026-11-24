@@ -338,7 +338,7 @@
  (take s p) (: t0 (clock 0) f (gpu-take (s 'g) (p 0) (p 1)) _ (pin s 'wait (peep s 'wait 0 + clock t0)) (string? f ? f (no s 'drawn, [f (p 2)])))
  ; ..a helper that failed let go, and why: under android's bridge its stderr is the log
  (gone s e) (gpu-quit (s 'g) (" " + e), pins s 'g () 'pend () 'last () 'fail e, gpu-said e, ())
- (gpu-said e) (string? (getenv "LOVE_GPU_FACE") ? (say err "lore: the gpu let go: \(e)\n") ())
+ (gpu-said e) (string? (getenv "LOVE_GPU_FACE") ? (cite 'said 'said "lore: the gpu let go: \(e)") ())
  ; ..and one sent and no longer wanted, the last shown forgotten with it
  (drain s) (s 'pend @ () () p (pins s 'pend () 'last (), take s p, ()))
  (no s k) (: t (peep s 'why {}) (pins s 'why (pin t k (peep t k 0 + 1)), ())))

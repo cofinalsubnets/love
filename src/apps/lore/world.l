@@ -9,7 +9,7 @@
 ; met or a bed slept in, and world-run walks on there in the same window.
 (module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
-         world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
+         world-move world-mouse world-winds? world-walks? world-lean world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
@@ -1328,9 +1328,9 @@
    (? (!(two? r)) "none kept" (!(two? u)) "unpacking" (!(tablet? sc)) "unstowing"
       (: sf (surf-of lv) (utime f (clock ()),
          pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
- ; ..which level came, kept or made, and why not kept: under android's bridge its stderr is the log
- (scene-said lv k got hit) (string? (getenv "LOVE_GPU_FACE")
-   ? (say err "lore: the scene of \(lv 'name): \(hit ? "kept" "made, \(!(string? k) ? "no nest" (string? got) ? got "no burnt")")\n", flush err) ())
+ ; ..which level came, kept or made, and why not kept, in a phone's log
+ (scene-said lv k got hit) (string? (getenv "LOVE_DROID")
+   ? (cite 'said 'said "lore: the scene of \(lv 'name): \(hit ? "kept" "made, \(!(string? k) ? "no nest" (string? got) ? got "no burnt")")") ())
  ; ..and what growing the trees pinned into the level, kept beside it and pinned back on a hit:
  ; the brushes it added, the pits and embers, each tree's plane, trunk and shade
  (burnt lv n0) {'bs (drop n0 (lv 'brushes)) 'pits (lv 'pits) 'embers (lv 'embers)
@@ -1819,7 +1819,7 @@
            'sprint-back (pin (go -1 0) 'run-at (st 'mt)) 'sprint-left (pin (go 0 -1) 'run-at (st 'mt)) 'sprint-right (pin (go 0 1) 'run-at (st 'mt))
       'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
-      'tap (touch st @ () st t t)
+      'tap (tap! st)
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a @ 'where (pin st 'pos (1 - peep st 'pos 0)) st)
            s s))))
@@ -2230,8 +2230,19 @@
       (ev = 'press && bt = 1 && <h 'kind = 'wisp && brazier-at st != ()) (seat! st <h (brazier-at st))
       (ev = 'press && bt = 1) (pin st 'wind (st 'mt))
       (ev = 'release && bt = 1 && two? h && st 'wind != ()) (ball-go st <h (throw-lo + (throw-hi - throw-lo) * wind-k st))
+      (ev = 'cancel) (pin st 'wind ())
       (ev = 'press && bt = 3 && two? h) (ball-go st <h 0.0)
       st))
+ ; ..a tap, or its key, with no button to it: what is looked at used, else taken; with a
+ ; thing in hand, a wisp set in the brazier looked at, else what is looked at used, else let fall
+ (tap! st) (: h (filter (b \ peep b 'held 0 = 1) (st 'balls)) i (two? h && <h 'kind = 'wisp ? (brazier-at st) ())
+   (? (charm? i) (seat! st <h i)
+      (touch st @ () (two? h ? (ball-go st <h 0.0) (ball-take st)) t t)))
+ ; ..on foot, the stick as it leans: x right and y ahead, 1 a key's; past its rim a sprint
+ (world-walks? st) (!(two? (st 'cut)) && !(charm? (st 'dlg)) && peep st 'eye 'walk = 'walk)
+ (world-lean st x y run) (pins st 'mf (peep st 'mf 0 + y) 'ms (peep st 'ms 0 + x), run ? (pin st 'run-at (st 'mt)) st)
+ ; ..whether a held touch is the button: a thing in hand, and the walk's
+ (world-winds? st) (any (b \ peep b 'held 0 = 1) (st 'balls) && world-walks? st)
  ; ..the nearest ball the eye's line passes within a hand of, no further than reach; a wisp
  ; within a wider hand and hold-reach
  (ball-take st) (: e (eye-at st) d (look-way st)
@@ -2719,7 +2730,7 @@
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                _ (mesh-gpu st)         ; its helper built while loading, not in a frame
                                (world-watch (world-size st w (h // 2)))))
-               'stick [119 115 97 100 87] 'tap world-tap
+               'stick [119 115 97 100 87] 'tap world-tap 'winds world-winds? 'leans world-walks? 'lean world-lean
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
                'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser 'auto 'console])
                'words world-words
