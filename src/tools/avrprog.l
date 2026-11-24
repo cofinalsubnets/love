@@ -6,7 +6,7 @@
 ;                                                     page filled with ff; OLD, a new file, gets
 ;                                                     the flash as it was. only pages that differ
 ;                                                     are written, then all of it is read back
-; write takes a pty alone, as /dev/tty
+; write takes a 328p; a 32u4 on a pty alone, as /dev/tty
 ; the board's sketch stops, and starts again after. TTY is best a /dev/serial/by-path name,
 ; which stays the same when the 32u4 comes back as its bootloader
 (borrow 'posix)
@@ -40,7 +40,7 @@
        _ (two? row ? 0 (die usage))
        sig (row 0) top (row 1)
        write (string? src)
-       _ (write && dev != "/dev/tty" ? (die "write takes a pty alone"))
+       _ (write && chip != "328p" && dev != "/dev/tty" ? (die "a 32u4 is written on a pty alone"))
        raw0 (write ? (uread src @ [1 t] t _ (die ("cannot read " + src))) "")
        _ (write && #raw0 = 0 ? (die "empty image") (top < #raw0) (die "the image reaches the bootloader"))
        _ (write && two? (stat path) ? (die (path + ": there already")))

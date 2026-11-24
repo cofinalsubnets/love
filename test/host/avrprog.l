@@ -62,7 +62,7 @@
    t2 (playv "328p" "t2" (w "b2") (opti [30 149 15]))
    t3 (playv "328p" "t3" (w "e") (opti [30 149 15]))
    t4 (playv "328p" "there" (w "im") (opti [30 149 15]))
-   r1 (hark ["sh" "-c" ("'" + selfpath 0 + "' src/tools/avrprog.l -p /dev/null 328p write '" + dir + "/im' '" + dir + "/null' 2>'" + dir + "/r1'")])
+   r1 (hark ["sh" "-c" ("'" + selfpath 0 + "' src/tools/avrprog.l -p /dev/null 32u4 write '" + dir + "/im' '" + dir + "/null' 2>'" + dir + "/r1'")])
    o (playv "32u4" "nodir/o" (w "im") (caterina [30 149 135]))
    _ (test (v 0 = 0) (v 2 = want) (v 3 = [0 256]) (file "v" = img) (only (v 1) "SsAgBE")
            (q 0 = 0) (q 2 = want) (q 3 = [0 256]) (file "q" = img) (only (q 1) "0uUtdQ")
@@ -71,7 +71,7 @@
            ; refused before a byte is sent
            (t1 0 = 1) (t1 1 = ()) (t2 0 = 1) (t2 1 = ()) (t3 0 = 1) (t3 1 = ()) (t4 0 = 1) (t4 1 = ()) (file "there" = "x")
            (#(filter (c \ c = 66 || c = 100) (u 1 + p 1)) = 0)
-           (<r1 = 1) (file "r1" = "avrprog: write takes a pty alone\n") (file "null" = ())
+           (<r1 = 1) (file "r1" = "avrprog: a 32u4 is written on a pty alone\n") (file "null" = ())
            ; the flash not saved: nothing written
            (o 0 = 1) (o 3 = ()) (only (o 1) "SsAgE"))
    _ (hark ["rm" "-rf" dir])
