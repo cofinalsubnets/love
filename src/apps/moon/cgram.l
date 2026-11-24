@@ -43,25 +43,14 @@
    (cx-num ps t)
     (: k (tkk t) v (tkv t)
        (? (k = 'num && pchar ps = 'char && chq? t && 127 < v && v < 256) ['num (v - 256)]
-          (k = 'num) (pst32? ps && 2147483647 < v ? ['cast 'llong ['num v]] ['num v])
-          (k = 'unum) ['cast 'uint ['num v]]
-          (k = 'ulnum) ['cast (pst32? ps && (v < 0 || 4294967295 < v) ? 'ullong 'ulong) ['num v]]
-          (k = 'ullnum) ['cast (pst32? ps ? 'ullong 'ulong) ['num v]]
-          (k = 'llnum) ['cast (pst32? ps ? 'llong 'long) ['num v]]
-          (k = 'lnum)
-           (: sp (t 4)
-              dec !(sp 0 = 48 && 1 < #sp && !(elem (sp 1) '(108 76 117 85)))
-              ty (? !(pst32? ps && 2147483647 < v) 'long
-                    (!dec && v <= 4294967295) 'ulong
-                    'llong)
-              ['cast ty ['num v]])
+          (elem k '(num unum ulnum ullnum llnum lnum)) (plit (ptm ps) t)
           (k = 'flo) ['flo (cflo v)]
           (k = 'flof) ['cast 'float ['flo (cflo32 v)]]
           ['clit '(struct "__cplx_double") ['init ['(flo 0.0) ['flo (cflo v)]]]]))
    (cx-wstr ps t)
     (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
               (tkk t = 'str32) 'uint
-              (elem (ps 'tgt) '(a64 thumb2 thumb2sp arm thumb1)) 'uint
+              (wchu? (ps 'tgt)) 'uint
               'int)
        (s16 l) (? (atom? l) ()
                   (65536 <= <l) (<l - 65536 @ v

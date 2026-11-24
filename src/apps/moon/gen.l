@@ -191,7 +191,11 @@
    (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
    (acw g w) (m16? g ? (w @ 4 [102] ()) (w @ 2 [102] 8 [72] ()))   ; a cmpxchg's width prefix: a 16-bit segment reads 16 bits bare
    (gtm g) (tmof (peep g 'tgt 'x64))                ; the target's type model
-   (wsize g) (ilp32? g ? 4 8)                       ; a pointer, a gp scalar, a stack cell
+   (wsize g) (tmptr (gtm g))                       ; a pointer, a gp scalar, a stack cell
+   (iword? g) (tmint (gtm g) = wsize g)             ; an int fills a register
+   (llp? g) (wsize g < tmll (gtm g))                ; a long long is wider than a register
+   (dp? g) (wsize g < tmdbl (gtm g))                ; a double's bits are
+   (no128? g) (wsize g < 8)                         ; no __int128
    (argr g) (? (a8? g || rv32? g) argregs-a64 (xt? g) argregs-xt (mp? g) argregs-mp (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
    ; [lo hi] of a pair in argument words i and i+1, and of a returned pair: big-endian o32 lays the high word first
    (ap g i) (mp? g ? [(argr g (i + 1)) (argr g i)] [(argr g i) (argr g (i + 1))])
@@ -323,7 +327,7 @@
           (tusg? c) 'ulong 'long))
    ; a 32-bit unsigned result wraps in C and not in a 64-bit register: rbin types every uint binary
    ; op 'uint (so a later op sees the narrow operand) and + - * << also re-narrow. 64-bit only: t32's word is 32
-   (u32? g ty) (!(ilp32? g) && ty = 'uint)
+   (u32? g ty) (!(iword? g) && ty = 'uint)
    (u32bin? g ta tb)
     (!(ptr? ta || ptr? tb) &&
      !(elem ta '(long ulong llong ullong) ||
@@ -332,7 +336,7 @@
    ; ..and under -fwrapv a 32-bit signed one: an int op int is typed 'int, + - * sign-extend again
    (wrapv? g) (drop 13 (g 'mo) @ r (two? r && <r))
    (s32? ty) (elem ty '(int short schar char cchar uchar ushort bool))
-   (s32bin? g ta tb) (wrapv? g && !(ilp32? g) && s32? ta && s32? tb)
+   (s32bin? g ta tb) (wrapv? g && !(iword? g) && s32? ta && s32? tb)
    (rbin g ta tb) (? (u32bin? g ta tb) 'uint (s32bin? g ta tb) 'int (ubin (gtm g) ta tb))
    ; does a 32-bit unsigned result owe its re-narrow? + - * carry out of the word; | ^ with a
    ; sign-extended operand (a signed type, a negative literal) spread its top into the result
@@ -363,7 +367,7 @@
                r (n & ((1 << w) - 1))
                s (r < 1 << (w - 1) ? r (r - (1 << w)))
              [s ty])
-           ('long || 'ulong) (ilp32? g ? () [n ty])))
+           ('long || 'ulong) (tmlong (gtm g) < 8 ? () [n ty])))
    (knum g e) (e @ ('num n) [n (numty n)] (cnum g e))
    ; a compare or divide takes the common converted type's signedness (puac); a pointer compares
    ; as the unsigned word. znrw: int meets uint at uint, so the 64-bit targets also owe the 32-bit narrow
@@ -372,7 +376,7 @@
    ; a case constant converts to the switch control's type (C11 6.8.4.2p5) as the register's
    ; extended pattern. no & here: the 64-bit mask is a big, and love's bitwise ops answer nothing on one
    (cfit g ty v)
-    (: m (ilp32? g || !(elem ty '(long ulong llong ullong)) ? 4294967296 18446744073709551616)
+    (: m (tmlong (gtm g) < 8 || !(elem ty '(long ulong llong ullong)) ? 4294967296 18446744073709551616)
        r (v % m)
        u (r < 0 ? (r + m) r)
        (? (usg? ty || ptr? ty) u
@@ -494,7 +498,7 @@
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the pair kit (ilp32 llong/ullong): a 64-bit value rides r0 (lo) : r1 (hi). pairs never enter
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
-   (pair? g ty) (ilp32? g && llt? ty)
+   (pair? g ty) (llp? g && llt? ty)
    ; a pair shift by a variable count in r2 (0..63): count >= 32 moves one word across, else the
    ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M and rv32 call the helper
    (pshiftv g kind)
@@ -717,7 +721,7 @@
               ['label lo] '(li r1 1) ['label l2]])))
    (popops g w32)
     (: fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
-       (w32 ? ((ilp32? g ? () '((li r2 4294967295) (and r0 r0 r2)))
+       (w32 ? ((iword? g ? () '((li r2 4294967295) (and r0 r0 r2)))
                + '((li r2 1431655765) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
                    (li r2 858993459) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
                    (li r2 252645135) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
@@ -1026,8 +1030,8 @@
        _ (arm unops (g \ f \ [[<>f] [<>f] 1]))
        ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else a dead-store sweep
        ; kills a live read
-       _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
-       _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
+       _ (arm '(movqxr) (g \ f \ [([<>>f] + (dp? g ? (qtwin <>>f) ())) () ()]))
+       _ (arm '(movqrx) (g \ f \ [() ([<>f] + (dp? g ? (qtwin <>f) ())) 1]))
        _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
        _ (arm '(movqrr) (_ \ f \ [[(f 2) (f 3)] [(f 1)] 1]))
        ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
@@ -2630,13 +2634,13 @@
      (<ini = 'clit && !(aggish? <>ini) && two? >>ini)
       (<>>ini @ ('init (e . _)) (cgimage g ty e) (cgimage g ty <>>ini))
      (ptr? ty) (imaddr g ini @ r                    ; a data pointer: a constant address (word-sized abs label+offset),
-                   (r != 'no ? [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
+                   (r != 'no ? [['fix (wsize g) (wsize g = 4 ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (icfold ini @ v (v @ 'no 'bad (imnum g ty v)))))
      ; a label cast to a word-sized integer ((intptr_t)f) is still its address, and so is one
      ; plus or minus a constant ((unsigned long)&init_stack + 16384)
      (elem <ini '(cast bin) && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
       (imaddr g ini @ r
-         (? (r != 'no) [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]
+         (? (r != 'no) [['fix (wsize g) (wsize g = 4 ? 'abs32 'abs64) <r <>r]]
             (<ini = 'bin) (imcexp g ty ini)
             (icfold ini @ v (v @ 'no (imgbytes g ty <>>ini) (imnum g ty v)))))
      (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast)) (imcexp g ty ini)
@@ -3040,7 +3044,7 @@
          ('un _ x) (rotp? x)
          ())
    (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width; ilp32's long long is a pair
-    (rotty g env e @ 'uint 32 'ulong (ilp32? g ? 32 64) 'ullong (ilp32? g ? () 64))
+    (rotty g env e @ 'uint 32 'ulong (8 * tmlong (gtm g)) 'ullong (llp? g ? () 64))
    ; does the AST write anything? a face's base register must survive the rhs, so a
    ; store rides the face only past a write-free right side (calls clobber the pool too)
    (wrany? (a . u))
@@ -5282,7 +5286,7 @@
              ; the pads' words, a fixup to each: what ftrace and the kernel's call padding walk
              ; ..only those whose label the text still lays, once each, one section per function
              ; section and ordered by it (shf_link_order), as a discarded .init.text takes its own
-             pfs (: w (ilp32? <r ? 4 8)
+             pfs (: w (wsize <r)
                     (lt fs) (foldl (t \ f \ (two? f && <f = 'label ? (pin t (<>f) 1) t)) {} fs)
                     (pfsec fs) (lt fs @ t (foldl (a \ L \ (t L && !(elem L a) ? (L . a) a)) () (<r 'pfel) @ ls
                                   (two? ls ? [["__patchable_function_entries"

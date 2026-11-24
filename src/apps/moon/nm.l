@@ -65,7 +65,7 @@
    (nmand x y) (? (nmnn x && nmnn y) [0 (min (x 1) (y 1))] (nmnn x) [0 (x 1)] (nmnn y) [0 (y 1)]
                   (two? x && two? y) (nmbits x y) ())
    ; a word holds a bound as signed; one worked exactly that fits did not wrap
-   (nmlim g) (ilp32? g ? 2147483648 9223372036854775808)
+   (nmlim g) (2 ** (8 * wsize g - 1))
    (nmok g x) (two? x && -(nmlim g) <= <x && x 1 < nmlim g)
    ; x's bounds where (x cc y) holds, an unknown x the whole word
    (nmcut g x cc y)

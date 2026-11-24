@@ -85,8 +85,8 @@
        (elem 'float specs) 'float
        (elem '__int128 specs) (elem 'unsigned specs ? 'u128 'i128)
        (: uns (elem 'unsigned specs)
-          ll (pst32? ps && (: (n2 l k) (atom? l ? k (n2 >l (<l = 'long ? (k + 1) k)))
-                             (1 < n2 specs 0)))                             ; two longs on t32
+          ll (psll? ps && (: (n2 l k) (atom? l ? k (n2 >l (<l = 'long ? (k + 1) k)))
+                             (1 < n2 specs 0)))                             ; two longs, where it is no long
           base (? (elem 'char specs) 'char (elem 'short specs) 'short
                   ll 'llong (elem 'long specs) 'long 'int)
           (? (base = 'char && !uns) (elem 'signed specs ? 'schar (pchar ps))   ; signed char, or plain: the target's own
@@ -187,9 +187,9 @@
           (w < 1) "__attribute__((mode(\(m)))) is not carried out"
           !(elem ty '(char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
            "__attribute__((mode(\(m)))) on a non-integer type is not carried out"
-          (w = 16 && pst32? ps) "__attribute__((mode(\(m)))) is not carried out on a 32-bit target"
+          (w = 16 && psword ps < 8) "__attribute__((mode(\(m)))) is not carried out on a 32-bit target"
           (w @ 1 (uns ? 'uchar 'schar) 2 (uns ? 'ushort 'short) 4 (uns ? 'uint 'int)
-             8 (? (pst32? ps) (uns ? 'ullong 'llong) uns 'ulong 'long)
+             8 (? (psll? ps) (uns ? 'ullong 'llong) uns 'ulong 'long)
              (uns ? 'u128 'i128))))
    ; gcc's `__label__ a, b;`: each name takes a fresh spelling for the rest of its block
    ; (restored with the block's shadows). -> (rest shadows)
@@ -426,7 +426,7 @@
                  pin t 'gqs {},           ; file-scope name -> its mask, likewise
                 ; gcc's builtin va_list: gen bakes the offsets, only size/align/decay ride here
                  pin (t 'stag) "__va_list_tag"
-                     (? (pst32? t) '((("__ap" 0 (ptr void))) 4 4)
+                     (? (psword t = 4) '((("__ap" 0 (ptr void))) 4 4)
                         (tgt = 'rv64) '((("__ap" 0 (ptr void))) 8 8)   ; LP64: one walking pointer, 8-byte slots
                         (tgt = 'a64)
                          '((("__stack" 0 (ptr void)) ("__gr_top" 8 (ptr void)) ("__vr_top" 16 (ptr void))
@@ -440,7 +440,7 @@
                 ; the bswap trio types unsigned: compare/divide/sizeof read the width
                  pin (t 'sigs) "__builtin_bswap16" '(ushort (ushort) ()),
                  pin (t 'sigs) "__builtin_bswap32" '(uint (uint) ()),
-                 pin (t 'sigs) "__builtin_bswap64" (pst32? t ? '(ullong (ullong) ()) '(ulong (ulong) ())),   ; long long on 32-bit
+                 pin (t 'sigs) "__builtin_bswap64" (psll? t ? '(ullong (ullong) ()) '(ulong (ulong) ())),
                 ; the popcount trio: an unsigned operand, a plain int result
                  pin (t 'sigs) "__builtin_popcount" '(int (uint) ()),
                  pin (t 'sigs) "__builtin_popcountl" '(int (ulong) ()),
@@ -474,17 +474,17 @@
    (tyat? ps ts) (tkbty? ps <(pquals ts))              ; a type begins at ts, past its qualifiers
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor (floor.l, shared with gen) takes the word and the tag table from ps --
-   (pst32? ps) (tmptr (ptm ps) = 4)   ; long 4 bytes, long long the pair
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
    (pchar ps) (ps 'uch @ 1 'cchar 0 'char (elem (ps 'tgt) '(a64 rv64 rv32 xtensa thumb1 thumb2 thumb2sp arm) ? 'cchar 'char))   ; -f[un]signed-char's, else the ABI's
    (ptm ps) (tmof (ps 'tgt))                       ; the target's type model
    (psword ps) (tmptr (ptm ps))
-   (szty ps) (pst32? ps ? 'uint 'ulong)          ; size_t
+   (psll? ps) (tmwll? (ptm ps))
+   (szty ps) (tmsz (ptm ps))                     ; size_t
    (tsz ps ty) (tysz (ptm ps) (ps 'stag) ty)
    (talign ps ty) (tyalign (ptm ps) (psacap ps) (ps 'stag) ty)
-   (psacap ps) (? (elem (ps 'tgt) '(i386 i386m16)) 4 (pst32? ps) 8 16)   ; the widest scalar alignment
+   (psacap ps) (? (elem (ps 'tgt) '(i386 i386m16)) 4 (psword ps < 8) 8 16)   ; the widest scalar alignment
 
    ; -- parse-time expr typer (for sizeof folding): the undecayed type of an expr, () when
    ; unknown (gen sizes a deferred 'szof then). sizeof of an array is its span.
@@ -985,14 +985,16 @@
                  ; AAPCS32 or a packed enum takes the smallest type holding every enumerator,
                  ; others int; past 32 bits both widen
                  (ety pos lo hi pk m)
-                  (: wide (? (pos && 4294967295 < hi) (pst32? ps ? 'ullong 'ulong)
-                             (!pos && (hi > 2147483647 || lo < -2147483648)) (pst32? ps ? 'llong 'long) ())
+                  (: tm (ptm ps)
+                     (ll x b) (psll? ps && !(sfits x (tmlong tm)) && !(b && 0 <= x && x < 2 ** (8 * tmlong tm)))
+                     wide (? (pos && (2 ** (8 * tmint tm)) <= hi) (ll hi 1 ? 'ullong 'ulong)
+                             (!pos && !(sfits hi (tmint tm) && sfits lo (tmint tm))) (ll hi 0 || ll lo 0 ? 'llong 'long) ())
                      narrow (? pos (? (hi <= 255) 'uchar (hi <= 65535) 'ushort 'uint)
                                (-128 <= lo && hi <= 127) 'char
                                (-32768 <= lo && hi <= 32767) 'short
                                'int)
                      ty0 (? wide wide
-                            (pst32? ps && !(elem (ps 'tgt) '(i386 i386m16 rv32 xtensa mips)) || pk) narrow   ; AAPCS32's short enums; SysV i386, riscv, xtensa and o32 say int
+                            (elem (ps 'tgt) '(thumb1 thumb2 thumb2sp arm) || pk) narrow   ; AAPCS32's short enums; the rest say int
                             pos 'uint 'int)
                      ; mode(M): M's width, signedness kept; refused if an enumerator won't fit
                      ty (? (m = ()) ty0
@@ -1202,32 +1204,29 @@
           (cl && cr && op = '/) (cxdiv ps l r tl tr)
           ['bin op l r]))
 
+   ; an integer literal in C11 6.4.4.1's type, bare where numt gives it that one
+   (plit tm t)
+    (: k (tkk t) v (tkv t) ll (tmwll? tm)
+       (fits n) (v < 2 ** (8 * n - 1))
+       (ufits n) (0 <= v && v < 2 ** (8 * n))
+       (as ty) ['cast ty ['num v]]
+       (k @ 'num (!ll || fits (tmptr tm) ? ['num v] (as (fits (tmlong tm) ? 'long 'llong)))
+            'unum (as (ufits (tmint tm) ? 'uint 'ulong))
+            'ulnum (as (ll && !(ufits (tmlong tm)) ? 'ullong 'ulong))
+            'ullnum (as (ll ? 'ullong 'ulong))
+            'llnum (as (ll ? 'llong 'long))
+            (: sp (t 4)
+               dec !(sp 0 = 48 && 1 < #sp && !(elem (sp 1) '(108 76 117 85)))
+               (as (? (!ll || fits (tmlong tm)) 'long
+                      (!dec && ufits (tmlong tm)) 'ulong
+                      'llong)))))
    ; primary := num | str | id (an enum constant folds here) | ( expr )
    (pprim ps ts)
     (atom? (mark ts) ? ()         ; a bad operand reports itself
        (<ts @ t
           (? (tkk t = 'num && pchar ps = 'char && chq? t && 127 < tkv t && tkv t < 256)   ; 'c' is (int) (char) c
               [['num (tkv t - 256)] >ts]
-             (tkk t = 'num)                           ; past int on t32: long long
-              [(pst32? ps && 2147483647 < tkv t ? ['cast 'llong ['num (tkv t)]] ['num (tkv t)]) >ts]
-             (tkk t = 'unum)                          ; u: unsigned int (neg/div/shift go unsigned)
-              [['cast 'uint ['num (tkv t)]] >ts]
-             (tkk t = 'ulnum)                                   ; ul: ulong; on t32 past the word, ullong
-              (: v (tkv t)
-                 uty (pst32? ps && (v < 0 || 4294967295 < v) ? 'ullong 'ulong)     ; C99 6.4.4.1
-                 [['cast uty ['num v]] >ts])
-             (tkk t = 'ullnum)                                  ; ull: 64 bits on t32
-              [['cast (pst32? ps ? 'ullong 'ulong) ['num (tkv t)]] >ts]
-             (tkk t = 'llnum)                                   ; 1ll: llong on t32, long elsewhere
-              [['cast (pst32? ps ? 'llong 'long) ['num (tkv t)]] >ts]
-             ; l/L makes a long (C11 6.4.4.1); on t32 past the word, hex/octal ulong, else llong
-             (tkk t = 'lnum)
-              (: v (tkv t) sp (t 4)
-                 dec !(sp 0 = 48 && 1 < #sp && !(elem (sp 1) '(108 76 117 85)))
-                 ty (? !(pst32? ps && 2147483647 < v) 'long
-                       (!dec && v <= 4294967295) 'ulong
-                       'llong)
-                 [['cast ty ['num v]] >ts])
+             (elem (tkk t) '(num unum ulnum ullnum llnum lnum)) [(plit (ptm ps) t) >ts]
              (tkk t = 'flo) [['flo (cflo (tkv t))] >ts]
              ; an f suffix (C11 6.4.4.2): cflo32 rounds to binary32 once and the cast keeps float
              (tkk t = 'flof) [['cast 'float ['flo (cflo32 (tkv t))]] >ts]
@@ -1240,7 +1239,7 @@
              (elem (tkk t) '(wstr str16 str32))
               (: ety (? (tkk t = 'str16 || ps 'swch) 'ushort
                         (tkk t = 'str32) 'uint
-                        (elem (ps 'tgt) '(a64 thumb2 thumb2sp arm thumb1)) 'uint
+                        (wchu? (ps 'tgt)) 'uint
                         'int)
                  (s16 l) (? (atom? l) ()
                             (65536 <= <l) (<l - 65536 @ v
@@ -1648,12 +1647,13 @@
    ; value in its type, operands meeting by puac (-1 < 1u is 0), results wrapping to their
    ; width, an unsigned answer never negative. tm is the type model.
    (cint? x) (charm? x || sun? x)
-   ; an enum constant as an operand: int when it fits, past int the enum's type: uint up to 2**32,
-   ; then 8 bytes, which ilp32 spells long long
-   (enumnum ps v) (? (!(charm? v) || -2147483648 <= v && v <= 2147483647) ['num v]
-                     (0 < v && v <= 4294967295) ['cast 'uint ['num v]]
-                     (pst32? ps) ['cast 'llong ['num v]]
-                     ['num v])
+   ; an enum constant as an operand: int when it fits, then uint, then the first of long and long long
+   (enumnum ps v)
+    (: tm (ptm ps)
+       (? (!(charm? v) || sfits v (tmint tm)) ['num v]
+          (0 < v && v < 2 ** (8 * tmint tm)) ['cast 'uint ['num v]]
+          (!(tmwll? tm)) ['num v]
+          ['cast (sfits v (tmlong tm) ? 'long 'llong) ['num v]]))
    (ity? ty) (elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong i128 u128))
    (tbits tm ty) (ty @ 'bool 1 ('char || 'schar || 'cchar || 'uchar) 8 ('short || 'ushort) 16 ('int || 'uint) (8 * tmint tm)
                         ('long || 'ulong) (8 * tmlong tm) ('i128 || 'u128) 128 (8 * tmll tm))

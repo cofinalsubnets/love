@@ -14,12 +14,16 @@
    ; -- the type model: a target's [int long llong double pointer] in bytes, the one place they are said
    tm-lp64 '(4 8 8 8 8)
    tm-ilp32 '(4 4 8 8 4)
-   (tmof tgt) (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips) ? tm-ilp32 tm-lp64)
+   (tmof tgt) (? (tgt = 'x64) tm-lp64 (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips)) tm-ilp32 tm-lp64)
+   (wchu? tgt) (elem tgt '(a64 thumb2 thumb2sp arm thumb1))   ; wchar_t is unsigned int
    (tmint tm) <tm
    (tmlong tm) (tm 1)
    (tmll tm) (tm 2)
    (tmdbl tm) (tm 3)
    (tmptr tm) (tm 4)
+
+   (tmsz tm) (tmptr tm = tmint tm ? 'uint 'ulong)   ; size_t; ptrdiff_t is its signed twin
+   (tmwll? tm) (tmlong tm < tmll tm)                ; a long long is wider than a long
 
    ; -- sizes and alignment. tm is the model, stag: tag -> (fields size align).
    ; one body: parse bakes member offsets into stag and gen trusts them.
