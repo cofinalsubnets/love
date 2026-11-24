@@ -123,7 +123,9 @@
  (view-scaled lv st s) (pin st 'scale s, lv 'size st (st 'w) (st 'h // 2))
  ; ..or moved a step at a time by the frame's time: a gauge over steps whose pixels are pix,
  ; finest first, at step i, a frame's goal in ms with the song's feed counted in it
- (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low () 'sl () 'bk () 'seen {}}
+ ; ..g 'wait, pinned before each frame, the ms of it spent waiting on a helper that draws, ()
+ ; where the pixels are lore's own: past that wait nothing is the pixels', so no coarser step wins
+ (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low () 'sl () 'bk () 'wait () 'w () 'seen {}}
  ; ..a frame's paint and feed ms, and whether the horn is running low, at clock t: the step
  ; to draw at. coarser half a second after a step on a low horn, a second after it over the
  ; goal, five on one come back to, where the coarser step's frame is guessed under 0.9 of
@@ -139,6 +141,9 @@
    p (avg (g 'p) ms 0.25) f (avg (g 'f) fd 0.0625) at (g 'at @ () t a a) i (g 'i) pix (g 'pix)
    b (g 'goal - f) held (t - at) lw (low ? t (g 'low)) quiet (lw = () || 3000 <= t - lw)
    sl (g 'sl @ () (min (1.0 * ms) (2.0 * p)) o (o + 0.0625 * (min ms (2.0 * o) - o)))
+   w (g 'wait @ () () wt (avg (g 'w) (min (1.0 * wt) (1.0 * ms)) 0.0625))
+   ; ..what a coarser step can save, at most
+   (saves k) (w = () || 0.1 * sl < w * (1.0 - pix k / (1.0 * pix i)))
    sn (g 'seen) _ (500 <= held ? (pin sn i [sl t]))
    (fresh k) (sn k @ [q s] (t - s <= 30000 ? q) ())
    (guess k) (fresh k @ ()
@@ -149,11 +154,11 @@
                         (a + c * pix k))))
                q q)
    bk (0 < i && 1000 <= held && (quiet || b < sl) && (fresh (i - 1) @ () 0 q (0.9 * q <= sl)))
-   j (? (i + 1 < #pix && (low && 500 <= held || b < sl && (g 'bk = i ? 5000 1000) <= held) && guess (i + 1) < 0.9 * sl) (i + 1)
+   j (? (i + 1 < #pix && (low && 500 <= held || b < sl && (g 'bk = i ? 5000 1000) <= held) && saves (i + 1) && guess (i + 1) < 0.9 * sl) (i + 1)
         bk (i - 1)
         (0 < i && 3000 <= held && quiet && (guess (i - 1) < 0.8 * b || fresh (i - 1) = () && sl < 0.5 * b)) (i - 1)
         i)
-   (pins g 'p (j = i ? p (guess j)) 'sl (j = i ? sl ()) 'bk (? (j = i) (g 'bk) (bk && j < i) j ()) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
+   (pins g 'p (j = i ? p (guess j)) 'sl (j = i ? sl ()) 'bk (? (j = i) (g 'bk) (bk && j < i) j ()) 'w (j = i ? w ()) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
@@ -332,8 +337,13 @@
    (steer paint feed l0 t) (: g (gz 'g @ () (: g0 (view-gauge [64 16 4 1] (scale-step (peep st 'scale 2)) (1.0 * tick)) (pin gz 'g g0, g0)) g g)
      per (gz 't @ () tick u (t - u))
      lw (hn && l0 * 1000 < 1.25 * per * song-rate && l0 < gz 'l0) i (g 'i)
+     ; ..a phone's window is drawn by its helper alone
+     gp (st 'gpu) hp (phone && tablet? gp && tablet? (gp 'g)) _ (pin g 'wait (hp ? (peep gp 'wait 0) ())) _ (hp ? (pin gp 'wait 0))
      j (view-gauged g paint feed lw t)
-     (pins gz 'l0 l0 't t, j != i ? (view-scaled lv st (scales j))))
+     (pins gz 'l0 l0 't t, j != i ? (scale-said i j paint (g 'wait), view-scaled lv st (scales j))))
+   ; ..the steps, under android's bridge whose log stderr is
+   (scale-said i j paint wt) (string? (getenv "LOVE_GPU_FACE")
+     ? (say err "lore: scale \(scales i) to \(scales j) on a frame of \(paint) ms, \(wt) waiting\n", flush err) ())
    (scale-step s) (s @ 1 0 2 1 4 2 3)
    (go _) (: t0 (clock 0)
              l0 (hn ? (horn-lag hn) 0)
