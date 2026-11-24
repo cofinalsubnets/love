@@ -15,6 +15,14 @@
        (#py-g = 4 && py-g 3 = [[0.0 0.0 0.0] [1.0 0.0 0.0] [1.0 1.0 0.0] [0.0 1.0 0.0]])
        (net (map (p \ #p) py-g) = 16)
        (poly-grid py-sq 4.0 = [py-sq])
+       ; ..within a box: only the pieces reaching into it are cut, one beside it or off it not
+       (: py-in (\ d lo hi (py-x d + [[lo hi]]))
+        (poly-carve py-sq [(py-in 1.0 [0.5 0.0 -1.0] [1.5 2.0 0.0])] = poly-carve py-sq [(py-x 1.0)]
+         && poly-carve py-sq [(py-in 1.0 [0.5 2.0 -1.0] [1.5 3.0 0.0])] = [py-sq]
+         && poly-carve py-sq [(py-in 1.0 [0.5 0.0 -1.0] [1.5 2.0 -0.1])] = [py-sq]
+         && #(poly-carve py-sq [(py-y 1.0) (py-in 1.0 [0.0 1.0 -1.0] [1.0 2.0 0.0])]) = 3
+         && #(poly-carve py-sq [(py-y 1.0) (py-x 1.0)]) = 4))
+       (poly-carve py-sq [(py-x 1.0 + ['a])] = ())
        (poly-carve py-sq [(py-x 'a)] = ()) (poly-grid [[0.0 0.0]] 1.0 = ()) (poly-keep 3 () = ())))
 ; poly-fans: a face's pieces fanned, an edge taking on a corner some piece has on it -- then
 ; fanned from the middle -- each corner's texels U and V on [x y z 1], as
