@@ -53,19 +53,17 @@ for t in x64 a64 rv64; do
   fi
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
-# x64 and a64 lay .debug_frame under -g; a function whose rows refuse lays none, never failing
-# the compile: raster.c's rz_row is one on a64
-for t in x64 a64; do
+# .debug_frame under -g, an fde for each function: raster.c's, past jump tables, restores and d29
+for t in x64 a64 rv64; do
   [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; }
+  mc -t $t -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
+  if [ -n "$dd" ]; then
+    "$dd" --debug-info "$d/raster.o" | awk '/DW_TAG/ {f = /subprogram/} f && /low_pc/ {gsub(/[^0-9a-fx]/, "", $2); print substr($2, 3)}' | sed 's/^0*//' | sort -u > "$d/r.fns"
+    "$dd" --debug-frame "$d/raster.o" | sed -n 's/.* FDE .*pc=0*\([0-9a-f]*\)\.\.\..*/\1/p' | sort -u > "$d/r.fdes"
+    n=`comm -23 "$d/r.fns" "$d/r.fdes" | wc -l`
+    [ -s "$d/r.fns" ] && [ "$n" = 0 ] || { echo "FAIL $name: $t raster.c: $n of `wc -l < "$d/r.fns"` functions without an fde"; exit 1; }
+  fi
 done
-mc -t a64 -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
-# the hole kept in sight: raster.c's a64 functions that lay no fde
-holes=-
-if [ -n "$dd" ]; then
-  nf=`"$ho/love" nm "$d/raster.o" | awk '$2 ~ /^[Tt]$/' | wc -l`
-  ne=`"$dd" --debug-frame "$d/raster.o" | grep -c ' FDE '`
-  holes=`expr $nf - $ne`
-fi
 
 # types and globals: a struct that points at itself and a pair that point at each other, each
 # compile held to 1 GB and a minute, so a walk that never ends fails here and takes no more
@@ -237,4 +235,28 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; a64 raster.c: $holes function(s) without an fde"
+# the same on a64 and rv64, under qemu's user stub
+for t in a64 rv64; do
+  case $t in a64) q=qemu-aarch64;; *) q=qemu-riscv64;; esac
+  if [ -z "$gdb" ] || ! command -v $q > /dev/null 2>&1 || ! "$gdb" -q -batch -nx -ex "file $d/two.$t" -ex 'info line main' 2>/dev/null | grep -q 'Line 9'; then
+    gate_partly "$name: no gdb or $q for $t, its session skipped"; continue
+  fi
+  # ses PROGRAM OUT gdb-args..
+  ses() {
+    sp=$1; so=$2; shift 2
+    ( cd "$d" && rm -f q.sock && { $q -g q.sock ./$sp > /dev/null 2>&1 & }
+      n=0; while [ ! -S q.sock ] && [ $n -lt 50 ]; do sleep 0.1; n=`expr $n + 1`; done
+      $tmo ${tmo:+60} "$gdb" -q -batch -nx -ex "file $sp" -ex 'target remote q.sock' "$@" ) > "$d/$so" 2>&1 < /dev/null
+  }
+  ses two.$t gdbt.$t -ex 'break *twice' -ex 'break t.c:6' -ex continue -ex bt -ex continue -ex bt -ex finish -ex 'print $pc' -ex kill
+  grep -q 'Breakpoint 2, dist (p=.*, k=.*) at .*t.c:6' "$d/gdbt.$t" && grep -q 'Breakpoint 1, twice (v=1) at .*u.c:[12]' "$d/gdbt.$t" \
+    && grep -q '^#1  0x[0-9a-f]* in main () at .*t.c:' "$d/gdbt.$t" && grep -q '^0x[0-9a-f]* in main () at .*t.c:' "$d/gdbt.$t" \
+    || { cat "$d/gdbt.$t"; echo "FAIL $name: $t's gdb, by line, bt and finish"; exit 1; }
+  ses l.$t gdbl.$t -ex 'break l.c:9' -ex 'break l.c:11' -ex 'break l.c:14' -ex continue \
+      -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex 'print n' -ex 'print k' -ex 'print i' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' -ex 'print n' \
+      -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' \
+      -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p' -ex kill
+  l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.$t" | tr '\n' ' '`
+  [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.$t"; echo "FAIL $name: $t's gdb's locals: $l"; exit 1; }
+done
+echo "dwarf: two units on x64 a64 rv64 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; every function of raster.c has an fde"
