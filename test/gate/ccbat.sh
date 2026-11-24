@@ -595,6 +595,58 @@ if [ $tgt = i386 ]; then
   done
   echo "skew386: $(tail -1 "$d/skew.out"), -mstack-alignment=4 and plain, -mregparm 0 and 3"
 fi
+# a va_list crosses a call as the psABI has it: ours and CC's objects, each calling the other,
+# linked and run. va_pair CC FLAGS..
+va_pair() {
+  vcc=$1; shift
+  cat > "$d/.vl.c" <<'EOF'
+#include <stdarg.h>
+struct box { int tag; va_list ap; };
+// a double by its words: no helper, no pool
+static int five(double d) { union { double d; long long l; } u = {d}; return u.l == 0x4014LL << 48; }
+// the other's: by value, by pointer, in a struct; mine the same here
+#define TAKE(nm) long long nm(int n, va_list ap) { \
+  long long t = 0; \
+  for (int i = 0; i < n; i++) t = t * 10 + va_arg(ap, int); \
+  t += va_arg(ap, long long); return t + (five(va_arg(ap, double)) ? 5 : 0); }
+#define STEP(nm) int nm(va_list *ap) { return va_arg(*ap, int); }
+#define HELD(nm) int nm(struct box *b) { return b->tag + va_arg(b->ap, int); }
+#define ONCE(nm, via) long long nm(int n, va_list ap) { va_list c; va_copy(c, ap); long long r = via(n, ap) + via(n, c); va_end(c); return r; }
+TAKE(P(take)) STEP(P(step)) HELD(P(held))
+extern long long Q(take)(int, va_list), Q(twice)(int, va_list);
+extern int Q(step)(va_list *), Q(held)(struct box *);
+ONCE(P(twice), Q(take))
+long long P(call)(int n, ...) {
+  va_list ap, b; struct box k; k.tag = 7;
+  va_start(ap, n);
+  long long r = Q(take)(n, ap);                      // 528, the caller's list where it was
+  if (Q(take)(n, ap) != r || Q(twice)(n, ap) != 2 * r) return -1;
+  va_copy(b, ap);
+  if (Q(step)(&b) != 1 || va_arg(b, int) != 2 || Q(step)(&b) != 3) return -2;
+  if (va_arg(b, long long) != 400 || !five(va_arg(b, double))) return -3;
+  va_copy(k.ap, ap);
+  if (Q(held)(&k) != 8 || Q(held)(&k) != 9) return -4;
+  va_end(k.ap), va_end(b), va_end(ap);
+  return r; }
+EOF
+  printf '%s\n' '#define P(x) m_##x' '#define Q(x) g_##x' '#include ".vl.c"' \
+    'extern long long g_call(int, ...);' \
+    'int main(void) { return m_call(3, 1, 2, 3, 400LL, 5.0) == 528 && g_call(3, 1, 2, 3, 400LL, 5.0) == 528 ? 42 : 1; }' > "$d/.vm.c"
+  printf '%s\n' '#define P(x) g_##x' '#define Q(x) m_##x' '#include ".vl.c"' > "$d/.vp.c"
+  $vcc -c -O2 -w -ffreestanding -fno-stack-protector -fno-pic -fno-asynchronous-unwind-tables -fno-unwind-tables -o "$d/vp.o" "$d/.vp.c" || fail "va_list: ${vcc%% *} could not build the reference"
+  for o in "" -O2 -Os; do
+    moonrun -t $tgt $o "$@" -o "$d/vpt" "$d/.vm.c" "$d/vp.o" > "$d/vp.log" 2>&1 || { cat "$d/vp.log" >&2; fail "va_list: mooncc -t $tgt $o"; }
+    timeout 60 $a64_qemu "$d/vpt"; a=$?
+    [ $a -eq 42 ] || fail "va_list: $o against ${vcc%% *}'s object (got $a want 42)"
+  done
+  echo "va_list: ours and ${vcc%% *}'s walk each other's, -O0 -O2 -Os"
+}
+case $tgt in
+  i386) va_pair "gcc -m32" ;;
+  rv64) [ -z "$GCC" ] || va_pair "$GCC -mno-relax" ;;
+  rv32) va_pair "clang $rvf" ;;
+  mips) va_pair "clang $mpf" -os linux ;;
+esac
 if [ -n "$exitonly" ]; then
   # -ftrivial-auto-var-init=zero clears every word of a VLA and an alloca block
   cat > "$d/avz.c" <<'AVZ'
@@ -739,6 +791,7 @@ EOF
       [ $a -eq 42 ] || fail "softfp: $o against gcc's softfp object (got $a want 42)"
     done
     case $(arm-none-eabi-readelf -h "$d/fpt") in *soft-float*) ;; *) fail "softfp: the header does not say soft-float" ;; esac
+    va_pair "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp" -mfloat-abi=softfp -nostdlib
   fi
   moonrun -t arm -mfloat-abi=softfp -o "$d/fpr" "$d/.ga.c" "$d/.gb.c" > "$d/fpr.log" 2>&1 \
     && fail "softfp: a link that pulls moonlibc, which is hard-float, was taken"

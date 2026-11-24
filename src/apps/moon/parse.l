@@ -433,7 +433,8 @@
                             ("__gr_offs" 24 int) ("__vr_offs" 28 int)) 32 8)
                         '((("gp_offset" 0 int) ("fp_offset" 4 int) ("overflow_arg_area" 8 (ptr void))
                            ("reg_save_area" 16 (ptr void))) 24 8)),
-                 pin (t 'types) "__builtin_va_list" '(arr (struct "__va_list_tag") 1),
+                 ; ..an array of one, so it decays; where it is passed by value, AAPCS32's struct or a pointer
+                 pin (t 'types) "__builtin_va_list" (pvaby? t @ 0 '(arr (struct "__va_list_tag") 1) 'ptr '(ptr void) _ '(struct "__va_list_tag")),
                 ; gcc's typedef names for the wide pair
                  pin (t 'types) "__int128_t" 'i128,
                  pin (t 'types) "__uint128_t" 'u128,
@@ -475,6 +476,8 @@
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor (floor.l, shared with gen) takes the word and the tag table from ps --
    (pst32? ps) (elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips))   ; long 4 bytes, long long the pair
+   (pvaby? ps) (ps 'tgt @ ('thumb1 || 'thumb2 || 'thumb2sp || 'arm) 'struct ('i386 || 'i386m16 || 'rv32 || 'rv64 || 'mips) 'ptr _ 0)
+   (pvap ps e) (pvaby? ps = 0 ? e ['addr e])          ; the list's address, as the va builtins take it
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
    (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
@@ -1265,27 +1268,27 @@
                  r2 (two? ra ? (want <>ra ","))
                  tr (two? r2 ? (pcty ps r2))
                  rest (two? tr ? (want <>tr ")"))
-                 (two? rest ? [['vaarg <ra <tr] rest]))
+                 (two? rest ? [['vaarg (pvap ps <ra) <tr] rest]))
              (idv? t "__builtin_va_start")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  r2 (two? ra ? (want <>ra ","))
                  rb (two? r2 ? (pasn ps r2))         ; the last named param (unused)
                  rest (two? rb ? (want <>rb ")"))
-                 (two? rest ? [['vastart <ra] rest]))
+                 (two? rest ? [['vastart (pvap ps <ra)] rest]))
              (idv? t "__builtin_va_end")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  rest (two? ra ? (want <>ra ")"))
                  (two? rest ? [['vaend <ra] rest]))
-             ; va_copy: a va_list is an array of one tag, so the copy is `*dst = *src`
+             ; va_copy: an array of one tag copies as `*dst = *src`
              (idv? t "__builtin_va_copy")
               (: r1 (want >ts "(")
                  ra (two? r1 ? (pasn ps r1))
                  r2 (two? ra ? (want <>ra ","))
                  rb (two? r2 ? (pasn ps r2))
                  rest (two? rb ? (want <>rb ")"))
-                 (two? rest ? [['asn ['deref <ra] ['deref <rb]] rest]))
+                 (two? rest ? [(pvaby? ps = 0 ? ['asn ['deref <ra] ['deref <rb]] ['asn <ra <rb]) rest]))
              ; __builtin_strcmp over two literals answers at parse; else strcmp's call
              (tkk t = 'id && bib? (tkv t) && tkv t = "__builtin_strcmp")
               (: r1 (want >ts "(")
