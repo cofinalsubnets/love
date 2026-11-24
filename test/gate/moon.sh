@@ -79,11 +79,11 @@ for f in test/cc/*.c; do
 done
 
 # -g lays line tables: each statement's line at its code, a body with a prologue its `{` at the
-# entry, an arm laid out of line its statement's (an inlined copy takes the caller's); -g0 lays
+# entry, an arm laid out of line its statement's, an inlined copy its function's `{`; -g0 lays
 # none, and the code is the same either way
 printf 'int sq(int x) {\n  int y = x * x;\n  return y + 1;\n}\nint q(int a) { if (a)\n    return sq(a);\n  return 7; }\n' > "$ho/.dwl.c"
 moonrun -g -c "$ho/.dwl.c" -o "$ho/.dwl.o" || fail "mooncc -g"
-[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 5 - " ] ||
+[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 1 - " ] ||
   fail "-g's line rows are not each statement's, at its code"
 moonrun -g0 -c "$ho/.dwl.c" -o "$ho/.dwl0.o" || fail "mooncc -g0"
 readelf -SW "$ho/.dwl0.o" | grep -q debug_ && fail "-g0 laid debug sections"

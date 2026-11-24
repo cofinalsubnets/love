@@ -18,7 +18,7 @@ include ../../../src/inle/port.mk
 
 rp_cc = $(MOONCC) -t thumb1 -D __STDC_HOSTED__=0 -I.
 
-objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/busb.o $(R)/$(o)/lm.o $(R)/$(o)/rt.o
+objs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/main.o $(R)/$(o)/busb.o $(R)/$(o)/lm.o $(R)/$(o)/lmf.o $(R)/$(o)/rt.o
 robjs = $(filter-out %/boot2.o,$(objs))
 pobjs = $(R)/$(o)/boot2.o $(R)/$(o)/rp2040.o $(R)/$(o)/probe.o $(R)/$(o)/usb.o $(R)/$(o)/rt.o
 

@@ -26,16 +26,21 @@ if [ -z "${cc_g:-}" ]; then
 fi
 
 lm=src/apps/moon/lib/moonlibc/math/lm.c
+lmf=src/apps/moon/lib/moonlibc/math/lmf.c
 
 # the two objects: one source, two compilers
 moonrun -c -o "$d/lm_moon.o" "$lm" > "$d/moon.build" 2>&1 \
   || { cat "$d/moon.build" >&2; fail "mooncc could not build $lm"; }
 $cc_g -O2 -c -o "$d/lm_sys.o" "$lm" 2> "$d/sys.build" \
   || { cat "$d/sys.build" >&2; fail "$cc_g could not build $lm"; }
+moonrun -c -o "$d/lmf_moon.o" "$lmf" > "$d/moon.build" 2>&1 \
+  || { cat "$d/moon.build" >&2; fail "mooncc could not build $lmf"; }
+$cc_g -O2 -c -o "$d/lmf_sys.o" "$lmf" 2> "$d/sys.build" \
+  || { cat "$d/sys.build" >&2; fail "$cc_g could not build $lmf"; }
 
-# the harness is always the system cc's, so only lm.c's object differs
+# the harness is always the system cc's, so only the floor's two objects differ
 for w in moon sys; do
-  $cc_g -O2 -o "$d/ulp_$w" src/tools/ulp.c "$d/lm_$w.o" -lm 2> "$d/link_$w" \
+  $cc_g -O2 -o "$d/ulp_$w" src/tools/ulp.c "$d/lm_$w.o" "$d/lmf_$w.o" -lm 2> "$d/link_$w" \
     || { cat "$d/link_$w" >&2; fail "could not link the $w harness"; }
 done
 

@@ -73,7 +73,7 @@ pd_local_c = $(wildcard *.c)
 # the song's tones go before horn.c, as the core's own (port.mk's love_m) do in src/inle/mps2's
 # baker, then the stones' rasterizer, lamps, sky tables and the pool they run on, and the packer: the nif
 # rows must lie in the baker's order, or the image's fingerprint refuses it and the egg bakes here
-pd_shared_c = $(love_c) $(f_c) $(S)/love/audio/tones.c $(S)/love/audio/tonerun.c $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/air.c $(S)/love/pool.c $(S)/love/mem.c
+pd_shared_c = $(love_c) $(S)/apps/moon/lib/moonlibc/math/lmf.c $(f_c) $(S)/love/audio/tones.c $(S)/love/audio/tonerun.c $(S)/love/bare.c $(S)/love/horn.c $(S)/love/raster.c $(S)/love/lamp.c $(S)/love/air.c $(S)/love/pool.c $(S)/love/mem.c
 # the bare-metal runtime, and the whole of it. the six moonlibc string members every
 # port takes (src/inle/port.mk's libc_m, out of the same source -- there is no second libc
 # in this tree), plus rt.c: the calls mooncc's own lowering makes where the machine
