@@ -3,9 +3,10 @@
 # laid for the board, then test/boards/esp32's battery, each loaded into ram by src/tools/esprom.l
 # on a host with the esp32-uart cap and read off uart0 through the board's usb bridge. ram only,
 # the flash never written; the board is reset into its own app after. the host's tty fact gives
-# BEE_TTY; this love goes along to run esprom.
+# BEE_TTY; a love of the host's own machine goes along to run esprom.
 # usage: esp32board.sh LOVE IMAGE OUTDIR
 . test/gate/skip.sh
+. test/gate/shiplove.sh
 set -u
 
 t=test_esp32_board love=$1 img=$2 d=$3/esp32board
@@ -16,7 +17,8 @@ fail() { echo "FAIL $t: $*" >&2; exit 1; }
 rm -rf "$d"; mkdir -p "$d/ship"
 cat src/love/holo/holo.l src/love/holo/xtensa.l test/holo/xtrun.l \
   | XT_BOARD=esp32 XT_OUT="$d/ship/law.elf" "$love" > "$d/law.log" 2>&1 || { cat "$d/law.log"; fail "love could not lay xtrun.l"; }
-cp "$love" "$d/ship/love"
+there=$(ship_love "$love" esp32-uart) || fail "no love to run on the host"
+cp "$there" "$d/ship/love"
 cp "$img" "$d/ship/firm.elf"
 cp src/tools/esprom.l "$d/ship/"
 cat > "$d/ship/run.sh" <<'EOF'
