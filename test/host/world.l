@@ -299,6 +299,16 @@
    (steps h y) (foldl (\ a i (a + " (solid (box [0 " + show y + " " + show (3.0 + 0.25 * i) + "] [4 " + show (y + h * (i + 1)) + " 12]))")) "" ^10)
    sa (sgo (steps 0.18 0)) sb (sgo ("(air (box [0 -2 3] [4 0 12]))" + steps 0.18 0)) sc (sgo (steps 0.32 0)) sd (sgo-at (steps 0.18 0) 0.2 8)
  (test (sa 0 > 5.5) (sa 1 > 1.7) (sb 1 > 1.7) (sc 0 < 3.0) (sc 1 = 0.0) (sd 0 > 5.5) (sd 1 > 1.7)))
+; walking's feel: at once with accel 0; by default drawn up over accel and down over stop, no faster at
+; the end, and in the air let go, down over air-stop, so a far jump drifts no further
+(: lv (world-load "test/lore/hall.l") sp (st \ sqrt (st 'vx * st 'vx + st 'vz * st 'vz))
+   (mk f) (pins (world-new 64 40 lv "test/lore") 'tread f 'dt 0.01 'cut ())
+   (go st n f) (each ^n (_ \ (pin st 'mf f, world-move st)))
+   a (mk {'accel 0.0}) _ (go a 1 1) va (sp a) _ (go a 1 0) va0 (sp a)
+   b (mk {}) _ (go b 3 1) v3 (sp b) _ (go b 30 1) vb (sp b) _ (go b 3 0) vs (sp b) _ (go b 20 0) v0 (sp b)
+   (far s) (: c (mk {'accel 0.1 'air-stop s}) _ (go c 30 1) _ (pin c 'fv 3.0) z0 (c 'pz) _ (go c 50 0) (abs (c 'pz - z0)))
+ (test (abs (va - 3.4) < 1e-9) (va0 = 0.0) (v3 < 0.9) (abs (vb - 3.4) < 1e-9) (0.0 < vs && vs < vb) (v0 = 0.0)
+       (0.3 < far 0.4) (far 0.4 < 0.8) (far 0.2 < far 0.4)))
 ; a landing sinks the eye as hard as it hit and thumps as its floor feels, a jump scuffs; a jump
 ; is taken a moment after leaving an edge but not later, one pressed a moment before landing is
 ; kept for it, and a head stopped on a ceiling jumps no more
@@ -501,7 +511,7 @@
        (all (s \ two? s && #(s 0) > 1000 && amax (s 0) <= 1.0 && amin (s 0) >= -1.0) snd) (atom? (world-sound "none"))))
 ; the walk: w a s d step and sidestep, two ways at once no faster than one
 (: L (lv "(room [-5 0 -5] [5 3 15]) (start [0 0 0] 0 0)")
-   (st _) (world-new 40 24 L "src/apps/lore/levels/")
+   (st _) (pins (world-new 40 24 L "src/apps/lore/levels/") 'tread {'accel 0.0})
    (at2 s) [(s 'px) (s 'pz)]
    w (at2 (steps (st ()) 119 10)) k (at2 (steps (st ()) 107 10)) s (at2 (steps (st ()) 115 10))
    d (at2 (steps (st ()) 100 10)) a (at2 (steps (st ()) 97 10))
@@ -804,15 +814,17 @@
 ; ring's outside as much shorter as its middle is than its outside, a place in the world
 ; charted back where it was laid; laid flat, only wrapping
 (: sfl (lv "(surface 'torus 40 20) (void [-2 -2 -2] [42 4 22]) (solid (box [0 -1 0] [40 0 20])) (start [5 0 10] 0 0)")
-   sfs (world-new 8 8 sfl "") sR (40.0 / (2.0 * pi)) sr (20.0 / (2.0 * pi))
+   sfs (pins (world-new 8 8 sfl "") 'tread {'accel 0.0}) sR (40.0 / (2.0 * pi)) sr (20.0 / (2.0 * pi))
    (off c) (: q (sqrt (c 0 * c 0 + c 2 * c 2)) (sqrt ((q - sR) * (q - sR) + c 1 * c 1)))
    ds (map (c \ off (c 'pk 'cols)) (sfs 'sc 'chunks)) dlo (foldl (\ a d (min a (amin d))) 99.0 ds) dhi (foldl (\ a d (max a (amax d))) 0.0 ds)
    _ (steps sfs 119 200) round [(sfs 'px) (sfs 'pz)]
-   ring (pins (world-new 8 8 sfl "") 'th (pi / 2.0)) _ (steps ring 119 10)
+   ring (pins (world-new 8 8 sfl "") 'tread {'accel 0.0} 'th (pi / 2.0)) _ (steps ring 119 10)
+   seam (pins (world-new 8 8 sfl "") 'tread {'accel 0.1}) _ (steps seam 119 200)
    pl (world-new 8 8 (lv "(surface 'plane 10 10) (void [-2 -1 -2] [12 3 12]) (solid (box [0 -1 0] [10 0 10])) (start [9 0 5] 90 0)")) _ (steps pl 119 30)
    ssf (sfs 'sc 'surf) back (map (q \ (: c (ssf 'chart (ssf 'at (q 0) (q 1) (q 2))) (net (map (i \ abs (c i - q i)) ^3)))) [[7.0 0.5 3.0] [33.0 -1.0 17.0]])
  (test (sfl 'surface 'shape = 'torus) (all (d \ d < 1e-9) back) (sfl 'surface 'lx = 40.0) (sr - 2.0 - 1e-6 < dlo) (dhi < sr + 1e-6)
        (mag (round 0 - 5.0) < 1e-9) (mag (round 1 - (10.0 + 200.0 * 3.4 / 30.0 - 20.0)) < 0.05)
+       (mag (seam 'pz - round 1) < 0.2) (mag (seam 'hv 1) > 3.3)
        (mag (ring 'px - 5.0 - 10.0 * 3.4 / 30.0 * sR / (sR + sr)) < 0.01)
        (mag (pl 'px - 2.4) < 0.05) (has? (lv "(surface 'cone 1 1)") "(surface 'torus lx lz)")))
 ; ..its sun fixed in the world: noon over the start on the tube's outside, night opposite on
@@ -853,7 +865,7 @@
 ; a tree climbed out of a well as a ladder: forward facing its trunk climbs it, held there
 ; with no key, back comes down, and a walk away from it at the top steps off onto the ground
 (: twl (lv "(room [-9 0 -9] [9 4 9]) (street [-12 4.5 -12] [12 12 12]) (street [-1 3.95 -1] [1 4.55 1]) (solid (box [-0.9 0 -0.9] [0.9 0.6 0.9])) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (start [6 0 0] 0 0)")
-   tst (world-new 8 8 twl "") (tgo a n) (each ^n (_ \ (? (a != ()) (world-step tst a), pin tst 'dt (1.0 / 30.0), world-move tst)))
+   tst (pins (world-new 8 8 twl "") 'tread {'accel 0.0}) (tgo a n) (each ^n (_ \ (? (a != ()) (world-step tst a), pin tst 'dt (1.0 / 30.0), world-move tst)))
    (tfl _) (tst 'py - eye-h)
    _ (pins tst 'px 0.8 'pz 0.0 'py (0.6 + eye-h) 'th (1.5 * pi)) _ (tgo () 5) t0 (tfl 0)
    _ (tgo 'forward 90) t1 (tfl 0) _ (tgo () 30) t2 (tfl 0) _ (tgo 'back 15) t3 (tfl 0) _ (tgo 'forward 30) t4 (tfl 0)
@@ -1195,5 +1207,9 @@
  (test (#kf = 1) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
        (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
        (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
+; a phone's tap: the bottom's middle third jumps, its sides and the scene act, a top corner leaves
+(: t (world-tap {'win {'w 900 'h 400}})
+ (test (t 450 390 = [32]) (t 310 390 = [32]) (t 290 390 = [101]) (t 610 390 = [101]) (t 450 340 = [101]) (t 450 200 = [101])
+       (t 10 10 = [113]) (t 890 10 = [113])))
 (test_fin ())
 (puts "world: ok\n")
