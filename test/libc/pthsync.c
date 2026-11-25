@@ -47,7 +47,8 @@ static void *call_once(void *arg) { pthread_once(&once, init_once); return 0; }
 static pthread_key_t key;
 static int destroyed;
 static long dsum;
-static void dtor(void *v) { destroyed++; dsum += (long) v; }
+/* each exiting thread runs it, four at once */
+static void dtor(void *v) { __atomic_fetch_add(&destroyed, 1, __ATOMIC_SEQ_CST); __atomic_fetch_add(&dsum, (long) v, __ATOMIC_SEQ_CST); }
 static void *keep(void *arg) {
   pthread_setspecific(key, arg);
   return (void *) (long) (pthread_getspecific(key) == arg); }

@@ -200,7 +200,8 @@
 ;                                      across its middle the thin way: what is beyond it
 ;                                      seen through the texture, the light on it; solid
 ;   (lens [x y z] WINDOW)              its pane, on the face toward x y z, one a beyond drape is
-;                                      seen through; other glass shows only what is there
+;                                      seen through; other glass shows only what is there; a
+;                                      glazed door's the same
 ;   (mirage WINDOW)                    its pane seen, and nothing to a body
 ;   (decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)  a picture laid on a surface,
 ;                                      its middle at x y z, facing n, its top toward u; its
@@ -475,8 +476,9 @@
    (texture? t ? [(with (air (box a b)) 'opening 1) (part 'pane [['lo (lo2 a b)] ['hi (hi2 a b)] ['tex t]])] (no u t)))
  (mirage w) (: u "(mirage (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
    (#ps @ 1 (map (p \ kind? p ['pane] ? (with p 'mirage 1) p) (flat [w])) (no u w)))
- (lens at w) (: u "(lens [x y z] (window ..))" ps (filter (p \ kind? p ['pane]) (flat [w]))
-   (? (!(pt? at)) (no u at) (#ps = 1) (map (p \ kind? p ['pane] ? (with p 'lens (P at u)) p) (flat [w])) (no u w)))
+ (lens at w) (: u "(lens [x y z] (window ..)) or (lens [x y z] (glazed TEXTURE (door ..)))"
+   (pane? p) (kind? p ['pane] || (kind? p ['door] && peep p 'glass () != ())) ps (filter pane? (flat [w]))
+   (? (!(pt? at)) (no u at) (#ps = 1) (map (p \ pane? p ? (with p 'lens (P at u)) p) (flat [w])) (no u w)))
  ; ..a decal: its middle, and points a metre on along its facing and its up
  (decal at n up w h t) (: u "(decal [x y z] [nx ny nz] [ux uy uz] width height TEXTURE)" a (P at u) nn (P n u) uu (P up u)
    (texture? t ? (part 'decal [['at a] ['np (map (k \ a k + nn k) ^3)] ['up (map (k \ a k + uu k) ^3)] ['w (N w u)] ['h (N h u)] ['tex t]])
@@ -1386,7 +1388,7 @@
        'rooms (map (r \ (: a (lo2 (r 'lo) (r 'hi)) b (hi2 (r 'lo) (r 'hi)) [(a 0) (a 2) (b 0) (b 2) (b 1) (a 1)])) (of 'room))
        'brushes (map (b \ b 'kind = 'land ? {'air 0 'land (b 'rows) 'skin (skin-of b) 'src (b 'src)}
                          {'air (b 'kind @ 'room 1 (b 'air)) 'shape (shape-of b) 'cuts (b 'cuts) 'skin (skin-of b) 'whole (peep b 'whole 0) 'open (peep b 'open 0) 'sheer (peep b 'sheer 0) 'opening (peep b 'opening 0) 'src (b 'src) 'xf (peep b 'xf xf-id)}) bs)
-       'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0) (d 'glass @ () () g (tname g))])) (of 'door))
+       'doors (map (d \ (: a (d 'at) [(a 0) (a 2) (d 'w) (d 'h) (a 1) (peep d 'hand 0) (d 'glass @ () () g (tname g)) (peep d 'lens ())])) (of 'door))
        'darks (map (r \ [(lo2 (r 'lo) (r 'hi)) (hi2 (r 'lo) (r 'hi))]) (filter (r \ peep r 'dark 0) (of 'room)))
        'trees (map (m \ {'at (m 'at) 'seed (m 'seed) 'tex (tname (m 'tex)) 'vine (peep m 'vine 0) 'xf (peep m 'xf xf-id) 'size (m 'size)
                           'burnt (peep m 'burnt 0) 'cuts (m 'cuts) 'hole (peep m 'hole 0)}
