@@ -462,6 +462,8 @@
              \ abs negate max min elem snip string cat rev assoc last charm? nom? tablet? lit? string? gem?)
    opwas {}  opmoved {}
    opmiss (mint 0)
+   ; the analyzer's row (ev.l's rowpin) as a global read. a name it lacks is canon's, a word as the lanes know it
+   (rowgv row) (n \ d \ (peep row n opmiss @ v (? (v == opmiss) (peep opwas n d)  v)))
    (spells? ws e) (? (two? e) (spells? ws <e || spells? ws >e) (nom? e) (elem e ws) 0)
    ; does s spell a word the lanes read by name that has another value now?
    (stale? gv s) (: ws (filter (n \ gv n opmiss !== peep opwas n opmiss) (keys opwas)) (two? ws && spells? ws s))
@@ -2893,7 +2895,7 @@
        _ (pin ga 'at (cite 'holo 'assemble-at))
        (asm t ir) (ga 'f t ir)
        gvbox (G 'gvbox)                                                     ; canon reads globals through ala's gv, pinned here on the first closure
-       probebox (G 'probebox)  stale? (G 'stale?)
+       probebox (G 'probebox)  stale? (G 'stale?)  rowgv (G 'rowgv)
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
@@ -2920,11 +2922,12 @@
                  (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
                   (: v (getenv "LOVE_GLAZE_HOT") (dg i n) (i < #v ? (48 <= v i <= 57 ? (dg (i + 1) (n * 10 + v i - 48)) ()) n) (dg 0 0))
                  hot-calls)
+           gz (rowgv (peep rt 'row {}))                             ; the names as the twin folded them, whatever the book says by the compile
         (? (charm? hn)
            (: lz (freeze-self lams nm)
-              L (hotcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) hn)
-              (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
-           (: r (natnow e s a gv farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
+              L (hotcell e a (\ L (deferpatch L (natnow e s a gz farq lz nm ti ta inl 0))) hn)
+              (L == () ? (natnow e s a gz farq lams nm ti ta inl rt) L))
+           (: r (natnow e s a gz farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
               (r == e && peep fires 'cc 0 = ix ? (countcell e a ix) r))))
        ; the self cell as it is now: a later compile reads its own import row as this one would
        (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
