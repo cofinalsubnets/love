@@ -426,9 +426,9 @@
     st))
  ; ..and the verb around a walk: the screen raised here and put back here, taps on for
  ; the rove floors a walk hands over to
+ ; ..put back whatever ends the walk, a scare too
  (view-run walk) (ttytake rove-modes,
-                  walk (),
-                  ttygive rove-modes,
+                  mind walk () (_ \ ttygive rove-modes),
                   0)
  ; ..or a window, unless its words asked for the terminal: 640 by 400 and given back after,
  ; and one that can't be had is the terminal's unless it was asked for. walk takes o with

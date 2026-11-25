@@ -1549,13 +1549,14 @@
                         g 'rumble ? (rumble! ()),
                         sng ? (song-tier sng g))
              (ttytake rove-modes,
-              rove-loop g crawl-frame idle press,
-             ; an end shows its frame for a beat, the song still going, before the screen is given back
-              (say out (crawl-frame g), flush out, hold 1200),
-             ; ..and the card goes back before the walk asks for it
-              hn ? (flush hn, close hn),
-              g 'over = 'won ? (tower-win g),
-              ttygive rove-modes,
+             ; the screen given back whatever ends the climb, a scare too
+              mind (_ \ (rove-loop g crawl-frame idle press,
+                         ; an end shows its frame for a beat, the song still going, before the screen is given back
+                          (say out (crawl-frame g), flush out, hold 1200),
+                         ; ..and the card goes back before the walk asks for it
+                          hn ? (flush hn, close hn),
+                          g 'over = 'won ? (tower-win g)))
+                   () (_ \ ttygive rove-modes),
              ; won: the token line is still in the note row, and goes to the shell too.
              ; the shell hears 0 whichever way the climb ended: a count is not a status
               puts ((g 'over @ 'won (fit (g 'msg) 200)
