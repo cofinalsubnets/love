@@ -872,6 +872,12 @@
                  ['st SP (-2 * W) T] ['st SP -W X]
                  (reach tgt IP 8) ['sub SP SP (4 * W)] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  ['label bb] ['ld A SP 0] ['add SP SP W]])
+             ; adrivet: adrive in tail position. the arg lands where our last was, our frame is popped and the
+             ; callee runs in our place under our continuation, as lvm_tap; a charm is driven
+             (adrivet so t) (!t ? (adrive so) (: sw (mint 0)  o (fro + W * (a - 1))
+              ([['ld X SP so] ['test X 1] ['br 'ne sw]
+                ['st SP o A] ['mov IP X] ['add SP SP o] ['ld T IP 0] ['jmpr T]
+                ['label sw]] + adrive so)))
              ; ayl: a peer waits at the countdown. nothing rides a register, so the frame walks as at a
              ; call-out: [x, charm(bb - entry0), entry0] off the fair resume. no room, no yield this time
              (ayl _) (: bb (mint 0) sk (mint 0)
@@ -887,10 +893,10 @@
                  ['st SP (-2 * W) T] ['st SP -W X]
                  (reach tgt IP 8) ['sub SP SP (4 * W)] ['ld T IP 0] ['jmpr T]
                  ['label bb] ['ld A SP 0] ['add SP SP W]])
-             (achain as cso d) (atom? >as
-                                  ? (acg <as d + adrive cso)
+             (achain as cso d t) (atom? >as
+                                  ? (acg <as d + adrivet cso t)
                                     (acg <as d + adrive cso + [['st SP (spill d) A]]
-                                     + achain >as (spill d) (d + 1)))
+                                     + achain >as (spill d) (d + 1) t))
              ; asite: (amble-lam i n v..) lays lvm_cur's partial cells on the heap under one room guard:
              ; [cur n-1 unc arg cont tag] while curry remains, [unc arg cont tag] last; cont = callee+2, tag = cell|2
              (asite as d) (: so (ino + W * <as)  n <>as  vs >>as
@@ -905,7 +911,7 @@
                                 ([['lea X HP (W * (8 + 6 * #vs))] ['cmp SP X] ['br 'below 'deopt] ['ld T SP so]]
                                  + gov vs n + [['mov A T]])
                                 [['ld A SP so]]))
-             (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
+             (astr1 cso t) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; in-range charm reads the byte; anything else drives, never deopts. one
                   ['ld X T 0] (reach tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; unsigned compare rejects negative and past-end alike
                   ['test A 1] ['br 'eq ld]
@@ -914,12 +920,12 @@
                   ['jmp ld]
                   ['label ok] ['ldxb A T X 1 (2 * W)] ['leax A A A 1 1]
                   ['jmp en] ['label ld]]
-               + adrive cso
+               + adrivet cso t
                + [['label en]]))
              ; the tablet fast lane at a 1-arg site keyed by a quoted nom, (t 'k): a map callee is probed
              ; inline off the nom's cached hash (dig, word 2) -- a hit its value, a gap () -- and anything
              ; else drives. a slot holding another nom of the same dig may be =, so that drives too
-             (amap1 cso d) (: lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) ld (mint 0) dr (mint 0) en (mint 0)
+             (amap1 cso d t) (: lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) ld (mint 0) dr (mint 0) en (mint 0)
               ([['ld T SP cso] ['test T 1] ['br 'ne dr]
                  ['ld X T 0] (reach tgt SC 2) ['cmp X SC] ['br 'ne dr]                                   ; not a map: drive, the key still in A
                  ['st SP (spill d) A]
@@ -936,7 +942,7 @@
                  ['label ht] ['leax A SC SC 1 0] ['ldx A T A W W] ['jmp en]
                  ['label ms] ['ld A SP gbo] ['jmp en]
                  ['label ld] ['ld A SP (spill d)] ['label dr]]
-               + adrive cso
+               + adrivet cso t
                + [['label en]]))
              (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) on a text: A = tag([X+8]); anything else drives the tally global off its gn slot
               (acg sx d
@@ -969,7 +975,7 @@
                + [['label dn]]))
              ; atsat: asat in tail position. a callee cur cell of arity n, n no more than this frame's own a,
              ; takes its args where ours were, under our continuation, and runs in our place: no frame of
-             ; ours is left, so a loop through a sibling or a parent never grows. anything else, the chain
+             ; ours is left, so a loop through a sibling or a parent never grows. anything else, the chain, its last apply a tail one
              (atsat as cso d) (: sw (mint 0)  n #as  o (fro + W * (a - n))
               (n > a ? (asat as cso d)
                  (agous as 0 d
@@ -980,27 +986,27 @@
                   + [['lea IP X (2 * W)] ['add SP SP o] ['ld T IP 0] ['jmpr T]                         ; our frame popped, our continuation theirs
                      ['label sw]]
                   + (: (goj j so) (j < n ?
-                                     ([['ld A SP (spill (d + j))]] + adrive so
+                                     ([['ld A SP (spill (d + j))]] + adrivet so (j = n - 1)
                                       + (j < (n - 1) ? [['st SP (spill d) A]] ())
                                       + goj (j + 1) (spill d))
                                      ()) (goj 0 cso)))))
              ; the string fast lane rides looping bodies and frame callees only: a gn or sibling callee is never a string
              (acall f as d t)
               (? (acomp? f) (acg f d + [['st SP (spill d) A]]                                        ; the head at spill d, then a frame callee's lanes
-                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1))))
+                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1) t)))
                  (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
                  (#as = (a - ni) ?                                                                  ; curry the own cell through its imports, then the args (a saturated
                     (aselfcall as d)                                                                        ; tail self-call took sgo instead)
-                    (achain (simp + as) soo d))
+                    (achain (simp + as) soo d t))
                  (elem f cn)                                                                             ; a sibling: its frozen entry takes the import names (all in the frame
                  (: sas (cimp f + as)  sso (gbo + W * (1 + #gn + posof f cn 0))            ; by fixcaps) then the args, saturated when it can be
-                    (two? >sas ? ((t ? atsat asat) sas sso d) (achain sas sso d)))
+                    (two? >sas ? ((t ? atsat asat) sas sso d) (achain sas sso d t)))
                  (: fr  (elem f vars || elem f ps || elem f lts)
                     cso (fr ? (voff f) (gbo + W * (1 + posof f gn 0)))
-                    (? (atom? >as && aqnom? <as) (acg <as d + amap1 cso d)
-                       ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso)
+                    (? (atom? >as && aqnom? <as) (acg <as d + amap1 cso d t)
+                       ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso t)
                        (two? >as) ((t ? atsat asat) as cso d)
-                       (achain as cso d))))
+                       (achain as cso d t))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
              (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (W * j) A]] + agomv (j - 1) d))
              (ago as d) (agous as 0 d + (k > 0 ? ([['st SP (W * (k - 1)) A]] + agomv (k - 2) d) ()) + fairck tgt SC T (ayl 0) + [['jmp 'top]])   ; updates read the old vars (spilled first); the last is still in A
