@@ -67,7 +67,7 @@
    (: two (_ \ [2 "fo" [["foo" " " "foo"] ["fob" " " "fob"]]])
       s (ed-said (_ \ ed-lnc (ed-keys (ed-bs "fo\t\r")) "P> " () two))
       (has? s "\nfoo  fob\r\e[1A" && !(has? (snip s 3 #s) "P> ")))
-   ; the first only fills, and the choices go round
+   ; the first only fills
    (!(has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "f\t\r")) "P> " () ch)) "foo  fob")))))
 
 ; a bracketed paste is text: a break (crlf one) splits the line, submits nothing; a tab stays
