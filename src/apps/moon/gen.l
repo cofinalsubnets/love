@@ -89,13 +89,14 @@
    ; ('g label), ('v vreg) by the states, (k ((vreg home)..)) at the mark .dls.K. csframe's shift is in, and the link sits 16 or 32 under the cfa
    (dlfin g nm)
     (: ln (dlcfa g) sh (g 'dlfd)
-       (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
+       ; under t2pm's list a local lies below it
+       (at o) (: o2 (? (o < 0 - <sh) (o - <>sh) o) ((o2 < 0 ? (o2 - g 'dlpm) o2) - ln))
        (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
                      [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
        (pin g 'dlv ([nm (map ([k par bs in sp] \ [k par (map (b \ (<b . home b)) bs) in sp]) (g 'dlsc))
                   (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
    ; the frame base's distance under the cfa, () where no cfa is described
-   (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())
+   (dlcfa g) (g 'tgt @ 'x64 16 ('a64 || 'rv64 || 'rv32 || 'mips) 32 ('thumb2 || 'thumb2sp) 8 'thumb1 12 _ ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -1730,7 +1731,7 @@
           ; an odd list, every one written, keeps sp's eight by four more below
           sb3 (#rs % 2 = 0 ? sb2 [['sub 'sp 'sp (two? sb2 ? (<sb2 3 + 4) 4)]])
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
+             (pin g 'dlpm P, <fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
    ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
    ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
    ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
