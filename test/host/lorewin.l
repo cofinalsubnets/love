@@ -116,6 +116,45 @@
    _ (two? ea && #ea = 2 ? (mv (ea 0 2), world-mouse b 'press 1, mv (ea 1 2 - ea 0 2), world-mouse b 'release 1, mv (62 - ea 1 2)))
  (test (map (e \ [(e 0) (e 1)]) ea = ['(press 1) '(release 1)]) (ba 'held = 0) (ba 'p = b 'balls 0 'p) (ba 'v = b 'balls 0 'v) (ba 'p 2 > 4.0)
        (tp = ()) (dg = ()) (sk = ()) (em = ())))
+; a phone's touches where they lean: the base's ring walks by where the thumb is, at once, and past it
+; runs; one far from it looks; a short right tap hops on its lift with what it could as it came down, a
+; second finger there at once; a left tap is the level's tap; a drag, a long press are none. a corner is
+; no way out, and Back is one the second time
+(: gh {'split ()}
+   (run fs n) (: path ("/tmp/lorewin-ctl-" + show (getpid 0)) _ (unlink path) ls (listen ['unix path])
+      srv (twirl (_ \ (: _ (await ls) c (accept ls) (slurp c))) ()) line (connect ['unix path])
+      win {'how 'droid 's line 'w 640 'h 400 'H 400 'row 0 'held () 'paper (cask (640 * 400 * 4)) 'said (peep fs 0 ())}
+      st (view-walk {'new (w \ h \ {'w w 'h h 't 0 'win win 'gpu {'g gh} 'lg ()}) 'size (st \ w \ r \ pins st 'w w 'h (2 * r)) 'frame (_ \ "")
+                     'key (st \ a \ pin st 'lg ([a (st 't)] . st 'lg))
+                     'tick (st \ (pin win 'said (peep fs (st 't + 1) ()), (n < st 't ? (pin st 'done 1) st)))
+                     'look (st \ x \ y \ pin st 'lg ([ 'look (st 't)] . st 'lg)) 'leans (_ \ 1) 'lean (st \ x \ y \ r \ pin st 'lg ([ 'lean (st 't) x y r] . st 'lg))
+                     'poised (st \ 7) 'hop (st \ p \ pin st 'lg ([ 'hop (st 't) p] . st 'lg)) 'tap (st \ x \ y \ [101])
+                     'stick [119 115 97 100 87] 'binds (view-bind view-binds {101 'act}) 'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win})
+      _ (close line, catch srv, close ls, unlink path) [(rev (st 'lg)) (st 't)])
+   dn (i \ x \ y \ [['finger i 0 x y]]) up (i \ x \ y \ [['finger i 1 x y]]) mv (i \ x \ y \ [['finger i 2 x y]])
+   b (view-base 640 400) kinds (r \ map (q \ q 0) (r 0))
+   tap (run {2 (dn 1 500 200) 6 (up 1 500 200)} 30)
+   two (run {2 (dn 1 500 200) 8 (dn 2 560 200) 12 (up 2 560 200) 20 (mv 1 560 200) 24 (up 1 560 200)} 40)
+   drag (run {2 (dn 1 500 200) 4 (mv 1 540 200) 6 (up 1 540 200)} 30)
+   long (run {2 (dn 1 500 200) 50 (up 1 500 200)} 60)
+   left (run {2 (dn 1 (int (b 0)) (int (b 1))) 6 (up 1 (int (b 0)) (int (b 1)))} 30)
+   far (run {2 (dn 1 40 30) 4 (mv 1 80 30) 8 (up 1 80 30)} 30)
+   out (run {2 (dn 1 (int (b 0)) (int (b 1 - b 2 - 20))) 40 (up 1 (int (b 0)) (int (b 1 - b 2 - 20)))} 50)
+   in (run {2 (dn 1 (int (b 0)) (int (b 1 - 0.1 * 400))) 40 (up 1 (int (b 0)) (int (b 1 - 0.1 * 400)))} 50)
+   corner (run {2 (dn 1 630 10) 4 (up 1 630 10)} 30)
+   back (d \ run {2 [['down 362] ['up 362]] (2 + d) [['down 362] ['up 362]]} 300)
+   ; ..a helper's split of a slow frame is taken by the walk, the once
+   _ (pin gh 'split "uploads 1") _ (run {} 5) took (gh 'split = ())
+   leans (r \ filter (q \ q 0 = 'lean) (r 0)) last (r \ (leans r @ l (l (#l - 1))))
+ (test (kinds tap = ['hop]) (tap 0 0 2 = 7) (tap 0 0 1 >= 6)
+       (filter (q \ q != 'look) (kinds two) = ['hop]) (two 0 0 1 < 12)
+       !(elem 'hop (kinds drag)) (elem 'look (kinds drag)) !(elem 'hop (kinds long)) !(elem 'act (kinds long))
+       (elem 'act (kinds left)) !(elem 'hop (kinds left)) !(two? (leans left))
+       !(elem 'lean (kinds far)) (elem 'look (kinds far))
+       (two? (leans out)) (last out 4) (last out 3 > 0.9) (last out 2 * last out 2 < 0.01)
+       (two? (leans in)) !(last in 4) (last in 3 < 0.8) (0.3 < last in 3)
+       (30 < corner 1) (#(corner 0) = 1) (corner 0 0 0 = 'hop)
+       (back 400 1 > 290) (back 20 1 < 60) took))
 ; the panes: the scene over the console, a bar between, the screen all the scene's while it is
 ; away; ctrl-w m puts them side by side, x trades them, and the split is kept for the next time
 (: co (con-new ()) l0 (con-lay co 80 24) _ (con-up co 1) l1 (con-lay co 80 24)

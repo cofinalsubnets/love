@@ -724,7 +724,12 @@
               cs (map (i \ [(t (i + 3)) (v 7 (t i))]) (map (j \ I j) ^#I)) (filter (q \ q 0 <= -3) cs))
    (lensed q) (q 0 <= -3 - 16777216) (near s l) (all (q \ lensed q = (s * q 1 > 0.5)) l)
    a (tx dl) b (tx df) c (tx dn)
- (test (two? a && two? b && two? c) (near -1.0 a) (near 1.0 b) (!(any lensed c)) (any lensed a && any (! * lensed) a)
+   ; ..a sliding glass door's track: a thin band on each inner face of its opening, across the wall's
+   ; middle, within it and no deeper than the leaf, its middle clear
+   ps (world-new 8 8 dl "" 'sc 'fences) pt (ps 0 'pk 'cols) lo (map (amin * pt) ^3) hi (map (amax * pt) ^3)
+   mid (any (i \ 1.2 < pt 0 i && pt 0 i < 2.8 && 0.1 < pt 1 i && pt 1 i < 2.1) ^#(pt 0))
+   nd (world-new 8 8 (world-read (dw + "(door [2 0 4] 1.8 2.2))")) "" 'sc 'fences)
+ (test (#ps = 1) (nd = ()) (mag (lo 0 - 1.1) < 0.001) (mag (hi 0 - 2.9) < 0.001) (mag (hi 1 - 2.2) < 0.001) (mag (lo 1) < 0.001) (hi 2 - lo 2 < 0.1) (mag (0.5 * (hi 2 + lo 2) - 4.0) < 0.001) !mid (two? a && two? b && two? c) (near -1.0 a) (near 1.0 b) (!(any lensed c)) (any lensed a && any (! * lensed) a)
        (has? (world-read (dw + "(lens [2 1 2] (door [2 0 4] 1.8 2.2)))")) "(lens [x y z] (window ..))")))
 ;; ..an opening with no skin takes the skin of what it cuts, so shows no plain texture; seams
 ;; finds one with nothing to take
@@ -1258,10 +1263,17 @@
  (test (#kf = 1) (os h1 = ["o3.scene" "o4.scene" "o5.scene"]) (#h1 = 10) (os h2 = ["o5.scene"]) (h3 = ["z0.scene"]) (scene-bound () 5 = 1073741824) (scene-bound 5000000000 1000 = 500000100) (scene-bound 50000000000 0 = 1073741824) (scene-bound 0 0 = 0) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
        (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
        (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
-; a phone's tap: the bottom's middle third jumps, its sides and the scene act, a top corner leaves
+; a phone's tap acts wherever it is, its corners and its bottom too
 (: t (world-tap {'win {'w 900 'h 400}})
- (test (t 450 390 = [32]) (t 310 390 = [32]) (t 290 390 = [101]) (t 610 390 = [101]) (t 450 340 = [101]) (t 450 200 = [101])
-       (t 10 10 = [113]) (t 890 10 = [113])))
+ (test (all (q \ t (q 0) (q 1) = [101]) [[450 390] [10 10] [890 10] [450 200]])))
+; a jump by a touch: what it could be as the touch came down holds though a ledge was run off since, but
+; not once jumped since, and one come down in the air is kept for the landing
+(: (lvl _) (: s (world-new 160 100 (world-read "(level \"t\" (room [0 0 0] [10 9 14]) (start [5 0 1.5] 0 0))") "") _ (each ^3 (_ \ (pin s 'dt 0.05, world-move s))) s)
+   a (lvl 0) p (world-poised a) _ (world-hop a p) v (a 'fv)
+   b (lvl 0) p2 (world-poised b) _ (pins b 'mt (b 'mt + 1.0) 'fv -1.0) q (world-poised b) _ (world-hop b p2) v2 (b 'fv)
+   c (lvl 0) p3 (world-poised c) _ (world-hop c p3) _ (pin c 'fv 1.0) _ (world-hop c p3) v3 (c 'fv)
+   d (lvl 0) _ (pins d 'mt (d 'mt + 1.0) 'fv -1.0) _ (world-hop d 0) v4 (d 'fv)
+ (test p p2 p3 (v > 4.0) !q (v2 > 4.0) (v3 = 1.0) (v4 = -1.0) (d 'jq = d 'mt)))
 ; a scene's key: the same for the same level whatever the order its tablets keep or where it is
 ; come to, but on a surface; another level's, another file's and another maker's are others
 (: kd (cwd 0 + "/out/.world-key-" + show (getpid 0) + "/") _ (mkdir kd 448)
