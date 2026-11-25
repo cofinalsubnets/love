@@ -13,7 +13,7 @@
 ; off as the stars, not a deck over the eye, and the sky all round, below the eye's
 ; horizon too: sky-lit's csun then sky-orb-cloud's
 (module (sky thick-n thick-t air-earth air-of air-at air-base air-amb air-sunc air-hue air-own sky-sun sky-body sky-light sky-lit sky-orb-cloud sky-maps sky-weather turns lap sky-cover sky-cloud sky-colour-of sky-colour-at sky-ends sky-near sky-rays sky-colour-rays sky-thick-rays sky-colour-thick sky-tone
-         sky-irr sky-gpu sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops bil cloud-n day-secs rgb)
+         sky-irr sky-gpu sky-stars sky-stars! sky-covers sky-says sky-falls sky-fall sky-drops sky-round sky-rest bil cloud-n day-secs rgb)
 (borrow '(view vec starmap lore))      ; lore: air.c's tables, in C
 (:
  (day-secs s) (s - 86400.0 * floor (s / 86400.0))
@@ -42,8 +42,9 @@
  ; the share of the sky that is cloud: each cover's own, breathing a little with the hours
  shares [0.03 0.22 0.55 0.97]
  (sky-cover wx sim) (: c (wx 'cover) b (shares c)
-   (c = 0 || c = 3 ? b (b + 0.04 * sin (sim * turns wx 'per (1.0 / 7300.0))
-                          + 0.02 * sin (sim * turns wx 'per (1.0 / 2900.0)))))
+   (c = 0 || c = 3 ? b (b + 0.04 * sin (breath wx (turns wx 'per (1.0 / 7300.0)) sim)
+                          + 0.02 * sin (breath wx (turns wx 'per (1.0 / 2900.0)) sim))))
+ (breath wx w sim) (: p (peep wx 'base 0.0 * w) (p - tau * floor (p / tau) + sim * w))
  ; --- the maps ---
  cloud-n 128
  ; a loop: 'per on the weather is its length in sim seconds and 'tper in frames, and each of
@@ -84,6 +85,11 @@
                     lo (g (z0 + x0) @ q (q + ux * (g (z0 + x1) - q)))
                     hi (g (z1 + x0) @ q (q + ux * (g (z1 + x1) - q)))
                     (lo + uz * (hi - lo)))
+ ; ..a drift is whole thousandths of a texel a second, so the clouds come round each sky-round
+ ; seconds: a day's and second's rest of that, small enough to move by in single precision. the
+ ; weather's 'base is what the rest left out, for the cover's breathing
+ sky-round 128000.0
+ (sky-rest day s) (: x (86400.0 * (day % 40) + s) (x - sky-round * floor (x / sky-round)))   ; 40 days: 27 rounds
  ; --- the clouds: a deck over the eye, two layers on two winds and a swell; deck-at
  ; answers where a ray crosses it, in map tiles. under three degrees the deck recedes
  ; ever slower, so each row by the horizon reaches a little further ---

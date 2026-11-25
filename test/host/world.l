@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix bough gesture))
+(borrow '(world mesh neon posix bough gesture sky))
 ; a nest that is not there, so no scene is kept in the user's or read from it
 (setenv "LOVE_NEST" (cwd 0 + "/out/.world-nest-" + show (getpid 0)))
 (borrow 'view)     ; pi
@@ -797,6 +797,16 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; a level's clouds move by the frame in single precision too: from any time of theirs a frame on
+; they go a thirtieth of what a second does, and their clock comes round with no step
+(: sk (world-new 8 8 (lv "(void [-20 -2 -20] [40 20 40]) (sky 12 'partly)") "" 'sc 'sky) wx (sk 'wx) sim (sk 'sim)
+   ux (iota 2000 * 0.0137 - 13.0) uz (iota 2000 * 0.0071 + 3.0) uy (ux * 0.0 + 0.6)
+   (of w t) (sky-cloud w ux uy uz 0.0 0.0 t) (cl t) (of wx t)
+   next (pin (foldl (\ t k (pin t k (wx k))) {} (keys wx)) 'base (wx 'base - sky-round)) (gone a b) (net (max (a - b) (b - a)))
+   dm (map (t \ [(gone (cl t) (cl (t + 1.0 / 30.0))) (gone (cl t) (cl (t + 1.0)))]) [sim 100.0 (sky-round - 30.0)])
+ (test (0.0 <= sim < sky-round) (sky-rest 20716 43200.0 = 81600.0) (sky-rest 40 0.0 = 0.0) (sky-rest 41 0.0 = 86400.0)
+       (all (d \ 0.0 < d 0 && d 0 < 0.08 * d 1 && 0.015 * d 1 < d 0) dm)
+       (gone (cl 10.0) (of next (10.0 + sky-round)) < 0.5) (gone (cl 10.0) (of next (10.0 + sky-round + 400.0)) > 5.0)))
 ; the desert's wind under a roof: whole out on it, dulled at once, but along a lull dying away
 ; evenly from its first x to its second, and dulled past it
 (: src "(void [-20 -2 -20] [40 20 40]) (sky 12 'clear) (room [0 0 0] [8 3 8]) (hum 'wind [-20 -2 -20] [40 20 40]) "
