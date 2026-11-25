@@ -23,6 +23,7 @@ praw=${2:?bakerep.sh OUTDIR PROFRAW}
 w=$(mktemp -d)
 trap 'rm -rf "$w"' EXIT
 fail() { echo "FAIL test_bakerep: $*" >&2; exit 1; }
+. test/gate/skip.sh
 
 [ -x "$ho/love" ] || fail "no $ho/love"
 cp "$ho/love" "$w/seed" || fail "cannot copy $ho/love"
@@ -103,6 +104,21 @@ if [ "$praw" != "$ho/love.raw" ]; then
   { head -c 7 "$w/ir"; printf 7; tail -c +9 "$w/ir"; } > "$w/ix"
   out=$("$praw" wake "$w/ix" -e '(puts "woke")' 2>&1)
   case $out in *"another format"*) ;; *) fail "an ..07 image wakes or says the wrong thing: [$out]" ;; esac
+fi
+
+# ..and the bake WORD in an ordinary run, the road the build's compiler image takes (love0, the
+# moon cat, then `image bake`): no main's bake branch runs there, so whatever a boot leaves in a
+# global rides in. two to one path are the same bytes
+if [ -x "$ho/love0" ] && [ -f "$ho/.mooncc-cat.l" ]; then
+  for i in 1 2; do
+    "$ho/love0" -l "$ho/.mooncc-cat.l" -e "(? ((cite (quote image) (quote bake) \"$w/mi\") = 1) (quit 0) (quit 1))" < /dev/null > "$w/mi.log" 2>&1 \
+      || { cat "$w/mi.log"; fail "love0 could not bake the compiler image"; }
+    mv "$w/mi" "$w/m$i" || fail "the compiler image bake $i produced nothing"
+  done
+  cmp -s "$w/m1" "$w/m2" \
+    || fail "the bake word is not reproducible: two compiler images differ in $(cmp -l "$w/m1" "$w/m2" | wc -l) bytes -- something of the boot is in a global"
+else
+  gate_partly "  (the compiler image leg skipped: no $ho/love0 or its cat)"
 fi
 
 # ..and the thing still has to WAKE: a bake that is reproducible and dead passes everything

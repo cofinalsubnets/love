@@ -184,7 +184,6 @@ void love_init(void) {
   // wake the pdx's baked image first: the on-device bake outlasts the watchdog. a refusal
   // (the 64-bit simulator's, always) answers NULL and bakes from source
   struct g *g0 = NULL;
-  uintptr_t t0 = love_clock();
   { int imgcap = pdg_file_size("love-pd.img");
     void *ib = imgcap > 0 ? pdg_realloc(NULL, (size_t) imgcap) : NULL;
     int n = ib ? pdg_file_read("love-pd.img", ib, (unsigned) imgcap) : -1;
@@ -199,10 +198,6 @@ void love_init(void) {
   struct g *g = defn(woke ? g0 : ini(), defs, countof(defs));
   // and the LvNif section, as main.c drains it: horn.c's rows ride it
   g = defn(g, __start_love_nifs, __stop_love_nifs - __start_love_nifs);
-  // born: this wake's cost, as main.c defines it; the egg lane's egg.l pins its own
-  if (woke && ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {
-    g = defv(g, "born");
-    if (ok(g)) g->sp++; }
   pdg_log(ok(g) ? "love: core up" : "love: core FAILED");
   // the stones live at 3 MB: most of the device, and a major at once so the woken pool is
   // sized under that rather than as the image left it. counted in device words, so the
