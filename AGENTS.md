@@ -205,10 +205,10 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
 - `src/love/boot/glaze.l` -> `test_inle`, whose kernels run the glaze too
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
-- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_libc` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
 - what `-g` lays, `src/apps/moon/{gen,lo,nm,ra,moon}.l`, `src/love/holo/{obj,link}.l`, `test/gate/dwarf.sh`, `test/gate/dwarfcode.sh` -> `test_dwarf` `test_dwarfcode`
-- what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_libc` `test_inle`
 - `src/love/holo/a64.l` -> `test_moon` `test_cca64`
 - `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64` `test_ccrv32`
 - `src/love/holo/i386.l` -> `test_moon` `test_cci386` `test_cci386m16`

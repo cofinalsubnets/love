@@ -219,6 +219,10 @@
    _ (gpu-send {'w (openfd fw-n 1) 'room 0 'to fw-l} 2 2 (1.5 * iota 16) [7 -9] [-1 0.5 0.0 0.0 0.0 0.0 0.0 0]) _ (close fw-l)
    (all n) (: q (open n "r") t (slurp q) (close q, unlink n, t))
    fw-b (all fw-n) fw-s (all (fw-n + ".l")) (wd i) (map (k \ fw-b (4 * i + k)) ^4))
+; a face that is refused: no gpu, from the baked image alone
+(: gf ("/tmp/gpu-refused-" + show (getpid 0) + ".l") _ (uwrite gf "(puts (show ((cite 'mesh 'mesh-gpu) {})))") _ (setenv "LOVE_GPU_FACE" "/tmp/gpu-no-such-face")
+   r (hark ["out/love" gf]) _ (setenv "LOVE_GPU_FACE" ()) _ (unlink gf)
+ (test (<r = 0) (>r = "off")))
 (test (fw-s = "frame 2 2 0 26 0\n") (104 <= #fw-b) (wd 1 = [0 0 0 63]) (wd 23 = [0 0 180 65]) (wd 24 = [0 0 224 64]) (wd 25 = [0 0 16 193]))
 (test_fin ())
 (puts "gpu: ok\n")
