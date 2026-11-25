@@ -1,6 +1,6 @@
 // src/love/audio/mp3.c -- mpeg audio layer iii (iso 11172-3, 13818-3, and mpeg 2.5), decoded.
 // (mp3-new 0)        -> a fresh decoder's state
-// (mp3-head s o)     -> the header at s[o]: bytes | ch << 12 | rate << 16, a charm, bytes 0 for
+// (mp3-head s o)     -> the header at s[o]: bytes | ch << 12 | rate / 25 << 16, a charm of any width, bytes 0 for
 //                       free format (the frame ends where the next begins); 0 for no frame
 //                       there, -1 for one this can't read (layers i and ii)
 // (mp3-frame b s o f) -> (pcm . next): the frame at s[o] decoded on state b, its samples
@@ -677,7 +677,7 @@ static lvm(lvm_mp3_head) {
   intptr_t o = getcharm(Sp[1]);
   int ver, rate, nch, n;
   if (o >= 0 && (uintptr_t) o + 4 <= s->len && (n = mp3_head((const uint8_t*) s->bytes + o, &ver, &rate, &nch)))
-   r = putcharm(n == -1 ? -1 : (intptr_t) (n < 0 ? 0 : n) | (intptr_t) nch << 12 | (intptr_t) rate << 16); }
+   r = putcharm(n == -1 ? -1 : (intptr_t) (n < 0 ? 0 : n) | (intptr_t) nch << 12 | (intptr_t) (rate / 25) << 16); }
  love_musttail return Answerp(1, r); }
 love_noinline static struct g *host_mp3_frame(struct g *g) {
  struct mst *m = mp3_st(g->sp[0]);

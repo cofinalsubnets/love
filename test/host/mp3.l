@@ -42,9 +42,11 @@
    _ (test (<mv-r = 0) (has? >mv-r "same") !(has? >mv-r "not the same"))
    want "816cd0c08947870ba80a1ddfcbd2a349b0e43586fbe13226b7e1be8bbcfee8a9"
    tm (mp3-meta tiny)
-   _ (test (mp3-head tiny 0 = (72 | (1 << 12) | (16000 << 16))) (mp3-head "abcd" 0 = 0) (mp3-head tiny 1 = 0)
+   _ (test (mp3-head tiny 0 = (72 | (1 << 12) | (640 << 16))) (mp3-head "abcd" 0 = 0) (mp3-head tiny 1 = 0)
            (mp-all tiny 0 @ pcm (string? pcm && #pcm = 12672 && sha256 pcm = want) _ 0)
            (mp-all tiny 1 @ pcm (string? pcm && #pcm = 25344) _ 0)
+           (all ([v i r] \ mp3-head (string [255 (227 | v << 3) (64 | i << 2) 0]) 0 @ h (27 < h && h >> 16 = r // 25 && h >> 12 & 15 = 2))   ; every rate
+                [[3 0 44100] [3 1 48000] [3 2 32000] [2 0 22050] [2 1 24000] [2 2 16000] [0 0 11025] [0 1 12000] [0 2 8000]])
            (mp3-frame (mp3-new 0) (snip tiny 0 50) 0 0 = 2)
            (mp3-frame (mp3-new 0) tiny 1 0 = 1)
            (mp3-frame (cask 10) tiny 0 0 = 3)
