@@ -97,7 +97,9 @@
                 k (ana c (feel c x lo) (k0 c) 0 0)
                 _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling
                 k)
-  (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {}}
+  (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {} 'row (!p ? {} (p 'row))}
+  ; row: each free name's value as the bytecode folds it; one read at run time is not in it. the hook compiles from it
+  (rowpin c x v) (: r (c 'row) (pin r x v, v))
   (rootc c) (: p (c 'par) (!p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam) ---
   ; ana emits through curried emitters (\ k n ..): k = the continuation emitter, n = the current
@@ -191,7 +193,7 @@
               ns (ln bs)
               (letc . rows . wxb bs (ns + bnd) [rows #bnd #ns])))   ; a let's names all shadow throughout
      ; no macro lane: cprop's output is macro-free
-     (fold (mapi (e \ wx e bnd) x) bnd)))
+     (fold c (mapi (e \ wx e bnd) x) bnd)))
    ; census: one walk of the defs answers boxfix's read graph and, per lambda sibling, the names
    ; it captures, resolved as ana will. an enclosing let's lambda sibling, seen from inside one of
    ; that let's lambda defs, is rebuilt at each reference from its imports, so its row reads there
@@ -304,7 +306,7 @@
                     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
   ; fold: un-shadowed global head -> ap (fold/iop/apx); else an apx node (apx n head . args)
   ; carrying the strategy: n > 1 = the leading n-ary apply's width, 0 = the l2r chain.
-  (fold x bnd) (: h <x
+  (fold c x bnd) (: h <x
    (? (atom? >x) x                          ; (f): ana's (atom? b) handles it
       ; a value head (opfix's glued lane, a macro splice): no binding reaches a value, so it
       ; takes feels' lane
@@ -313,7 +315,7 @@
       (: v (gv h ())
        (? (v == () && !(feels v)) (apx . 0 . x)    ; no global to shadow: the local lane either way
           (elem h bnd) (apx . 0 . x)                ; a shadowed name: local head
-          (: hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
+          (: _ (rowpin c h v) hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
            (? (two? n) (apx . napof v >x . ['\ (jnum? <n bnd (jotfuse 'ops) ? (jf 3) (jf 2))] . jotsub >x <jf <n)   ; a walker over jot: its twin, a number's own
               hd (hd x)
               (apx . napof v >x . x)))))))
@@ -876,7 +878,7 @@
    (tablet? far && 0 <= peep far x -1 && sat (d 'par) x < 0))
   (avw c d x)
    (!d ?
-    (: y (gv x gone) (y == gone ? (em2 lvm_index x) (kim y)))   ; ==, not the pin: see gv
+    (: y (gv x gone) (y == gone ? (em2 lvm_index x) (rowpin c x y, kim y)))   ; ==, not the pin: see gv
     (: lfd (assq x (d 'lam)) home (d == c)
      (? (two? lfd) (lz c lfd d)
         (!home && shadowed? c d x)
