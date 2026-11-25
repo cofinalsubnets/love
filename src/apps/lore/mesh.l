@@ -536,7 +536,11 @@
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    (cells t) (map (r \ (t r) @ bd [(8 * bd 0) (16 * r) (min W (8 * (bd 0 + #(bd 1)))) (min H (16 * r + 16))]) (sort (keys t)))
    rs (filter (q \ q 0 < q 2 && q 1 < q 3) (cells bands + cells ov))
-   (pin gp 'keep 1, gpu-show (gp 'g) f w h W H (peep st 'slide [0 0]) rs P, ""))
+   (pin gp 'keep 1, gpu-show (gp 'g) f w h W H (peep st 'slide [0 0]) (rs + mesh-marks st P W H) P, ""))
+ ; ..st 'dots, boxes [x0 y0 x1 y1] of the window's pixels laid gray on the paper, those inside it
+ (mesh-marks st P W H) (: ds (filter (q \ 0 <= q 0 && 0 <= q 1 && q 2 <= W && q 3 <= H) (peep st 'dots ()))
+   T (cask (4 * W)) _ (two? ds ? (frame-paint (iota W * 0 + 10526880) W 1 T W))
+   (each ds (q \ each ^(q 3 - q 1) (j \ pour P (4 * ((q 1 + j) * W + q 0)) T 0 (4 * (q 2 - q 0)))), ds))
  (mesh-blit st f bands w h W H P) (: win (st 'win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
@@ -545,7 +549,7 @@
    _ (up ? (each rs (mesh-under f w h P W H)) (mesh-paint f w h P W H))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
-   _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
+   _ (up ? 0 (mesh-marks st P W H)) _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
    "")
  ; ..the picture f w by h on the paper P, W by H, at the largest whole scale that fits; the
  ; paper past it black, so nothing laid there before stays

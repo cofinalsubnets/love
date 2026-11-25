@@ -9,7 +9,7 @@
 ; met or a bed slept in, and world-run walks on there in the same window.
 (module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
-         world-move near-bs column-at world-mouse world-winds? world-walks? world-lean world-frame world-whole? world-pens world-opts world-read world-reading world-load
+         world-move near-bs column-at world-mouse world-winds? world-walks? world-lean world-hop world-poised world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
@@ -249,6 +249,15 @@
  ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle,
  ; the one facing its lens's point a lens
  door-fr 0.05
+ ; ..a glazed sliding door's track: a black band across the middle of each of its opening's four inner
+ ; faces, as deep as the leaf's frame, which shut hides it; it stays as the door slides
+ casing-in 0.006 casing-slip 0.002
+ (casing-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) t (door-t - casing-slip) l0 (d 'c - 0.5 * d 'w) l1 (l0 + d 'w) y0 (d 'y) y1 (y0 + d 'h)
+   e casing-in i (tix tt 'door)
+   (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - t)) q (P ax a1 b1 (m + t))
+                        (slab (map (k \ min (p k) (q k)) ^3) (map (k \ max (p k) (q k)) ^3) (_ \ [0.0 0.0]) i [0.05 0.05 0.055]))
+   (mesh-join [(bar l0 (l0 + e) y0 y1) (bar (l1 - e) l1 y0 y1) (bar l0 l1 (y1 - e) y1) (bar l0 l1 y0 (y0 + e))]))
+ (cased? d) (d 'glass != () && d 'hand != 1)
  (glazed-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h) y0 (d 'y) e door-fr
    i (tix tt 'door) (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - door-t)) q (P ax a1 b1 (m + door-t))
                         (slab (map (k \ min (p k) (q k)) ^3) (map (k \ max (p k) (q k)) ^3) (_ \ [0.0 0.0]) i white))
@@ -1258,9 +1267,11 @@
                      (pins (pack 'body lift-mesh) 'leaves (map (q \ pack ['leaf q] (\ c tt (lift-leaf c tt q))) lift-leaves) 'fix (pack 'fix lift-tether))))
               (lv 'lifts))
    gates (map (g \ (: k ['gate (vals g) tt] pk (kept k (_ \ mesh-pack (gate-mesh g tt))) {'pk pk 'lit (lit-of k pk)})) (lv 'gates))
-   fences (catmap (f \ map (i \ (: k ['fence (vals f) i tt] pk (kept k (_ \ mesh-pack (fence-mesh f i tt))) (balled {'pk pk 'lit (lit-of k pk)})))
+   fences ((catmap (f \ map (i \ (: k ['fence (vals f) i tt] pk (kept k (_ \ mesh-pack (fence-mesh f i tt))) (balled {'pk pk 'lit (lit-of k pk)})))
                              ^(#(f 'pts) - 1))
                      (lv 'fences))
+           + map (d \ (: k ['casing (vals d) tt] pk (kept k (_ \ mesh-pack (casing-mesh d tt))) (balled {'pk pk 'lit (lit-of k pk)})))
+                 (filter cased? (lv 'doors)))
    vines (filter tablet? (map (i \ (: t (lv 'trees i)
                                       (t 'vine = 1 ? (: k ['vine (vals t)] q (kept k (_ \ (: m (vine-mesh t) [(mesh-pack (m 0)) (gem-tray [#(m 1)] (m 1))])))
                                                        (balled {'pk (q 0) 'ts (q 1) 'end (amax (q 1)) 'tree i 'lit (lit-of k (q 0))}))
@@ -2253,6 +2264,12 @@
  ; ..on foot, the stick as it leans: x right and y ahead, 1 a key's; past its rim a sprint
  (world-walks? st) (!(two? (st 'cut)) && !(charm? (st 'dlg)) && peep st 'eye 'walk = 'walk)
  (world-lean st x y run) (pins st 'mf (peep st 'mf 0 + y) 'ms (peep st 'ms 0 + x), run ? (pin st 'run-at (st 'mt)) st)
+ ; ..whether a jump may be had now, and a touch's: p what that said as it came down, good yet though a ledge
+ ; was run off since, but for a jump made since
+ (world-poised st) (can-jump? st)
+ (world-hop st p) (? (two? (st 'cut) || flying? st || !(world-walks? st)) (world-step st 'jump)
+                     (p && !(hoisting? st) && peep st 'gv 0.0 = 0.0 && peep st 'gt -9.0 > -9.0) (jump! st)
+                     (world-step st 'jump))
  ; ..whether a held touch is the button: a thing in hand, and the walk's
  (world-winds? st) (any (b \ peep b 'held 0 = 1) (st 'balls) && world-walks? st)
  ; ..the nearest ball the eye's line passes within a hand of, no further than reach; a wisp
@@ -2717,7 +2734,7 @@
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
  (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom's middle to jump  ·  a top corner leaves, the top's middle the console"
+ thumb-text "the ring walks, past it runs  ·  right thumb looks  ·  a right tap or a second finger jumps, a left tap acts  ·  Back twice leaves, the top's middle the console"
  ; the console's words here: those of any walk, and the loop's where the level has a deck
  (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
                     ["at" "where you stand" (where st)]
@@ -2727,11 +2744,7 @@
    + (two? (st 'lvl 'decks) ? [["loop-end" "loop-end (): the loop worn all away, begun if it is not" (con-loop st)]] ()))
  (world-console st ln) (con-eval world-words st ln)
  (con-loop st _) (: _ (tablet? (st 'music) ? 0 (play! st)) m (st 'music) _ (pin m 'n (int (song-rate * m 'd 'gone) + 1)) (world-loop st))
- (world-tap st x y) (? (view-corner? st x y) [113]
-                       (world-foot? st x y) [32]
-                       [101])
- ; ..along the bottom, its middle third, a jump
- (world-foot? st x y) (: s (window-size (st 'win)) u (x / (s 0)) (0.88 * (s 1) < y && 1 / 3 < u && u < 2 / 3))
+ (world-tap st x y) [101]
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ; ..the reading's tick going on for the first making, so its screen runs on
@@ -2742,7 +2755,7 @@
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                _ (mesh-gpu st)         ; its helper built while loading, not in a frame
                                (world-watch (world-size st w (h // 2)))))
-               'stick [119 115 97 100 87] 'tap world-tap 'winds world-winds? 'leans world-walks? 'lean world-lean
+               'stick [119 115 97 100 87] 'tap world-tap 'winds world-winds? 'leans world-walks? 'lean world-lean 'hop world-hop 'poised world-poised
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
                'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser 'auto 'console])
                'words world-words

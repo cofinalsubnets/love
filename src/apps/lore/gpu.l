@@ -115,6 +115,10 @@
            (? (moon? ()) [mb] (cc? ()) [cb] 'no-compiler))))
  ; ..a line from the helper, its newline gone; () once it has gone
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
+ ; ..LOVE_GPU_TIME, the ms past which a frame's helper says where it went, time-on when not set, () never
+ time-on ()
+ (time-at _) (getenv "LOVE_GPU_TIME" @ t (string? t && 0 < #t ? (read t) time-on))
+ (timed g) (tablet? g && charm? (time-at ()) ? (post g "time \(show (time-at ()))", g) g)
  (answer g) (line (g 'from) @ () "the helper has gone" "ok" () r r)
  ; ..a line answered at once; or posted, its answer owed and read when the next frame's is
  (ask g s) (: _ (settle g) e (due g) _ (say (g 'to) (s + "\n")) r (answer g) (string? e ? e r))
@@ -134,7 +138,7 @@
       (: w (openfd f 1) r (openfd f 0) _ (say s (f + "\n")) hi (line s) _ (unlink f)
          (hello hi ? {'to s 'from s 'pid () 'w w 'r r 'room 0 'how (snip hi 6 #hi) 'face 1}
             (close s, close w, close r, ['no-gpu (string? hi ? hi "the bridge's gpu said nothing")])))))
- (gpu-open x) (getenv "LOVE_GPU_FACE" @ fc (string? fc ? (face-open fc) (spawned x)))
+ (gpu-open x) (timed (getenv "LOVE_GPU_FACE" @ fc (string? fc ? (face-open fc) (spawned x))))
  (spawned x)
   (: argv (helper-argv ()) f (bulk-file ())
      (? !(two? argv) ['no-helper argv] !(string? f) ['no-helper 'no-file]
@@ -221,7 +225,9 @@
  (gpu-send g w h mat ids o)
   (: l (o + map (i \ mat i) ^16 + ids) c (cask (4 * #l)) _ ((cite 'guts 'pinf) c 0 4 (gem-tray [#l] (map (* 1.0) l)))
    (put! g c @ o (room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) \(show o)\n", ())))
- (gpu-take g w h) (: e (due g) f (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r) (string? e ? e f))
+ ; ..a frame's answer, the helper's split of its time off its end into g's 'split
+ (gpu-split g l) (l @ "\(a) split \(t)" (pin g 'split t, a) l)
+ (gpu-take g w h) (: e (due g) _ (pin g 'split ()) f (gpu-split g (line (g 'from)) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r) (string? e ? e f))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)
  (gpu-state g) {'g g 'bufs {} 'used {} 'n 0 'fr 0 'texs () 'wt {} 'once {} 'lamped {} 'held {} 'placed {}}
  ; ..a batch's buf, by the name k its maker gave it, else by its sizes and its sums weighed by
