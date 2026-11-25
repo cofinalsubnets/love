@@ -1612,7 +1612,7 @@
        ok (foldl (a \ w \ one w a) 1 as)
        (flush out, ok ? 0 1))
 
-   ; -- xargs: stdin's words onto the command's tail. 123 a run failed, 127 one could not exec.
+   ; -- xargs: stdin's words onto the command's tail. 123 a run failed, 126 or 127 one could not exec.
    ; the command's own flags follow it, so the walk stops at the command's name --
    (xwords s)
     (: n #s
@@ -1650,7 +1650,7 @@
                (batch (xwords txt)))
        ; no input still runs once, as GNU's, unless -r or -I
        runs2 (? (two? runs) runs (t 114 || rs) () [cmd])
-       (upd bad w) (? (w = 127) 127 (w && !(bad = 127)) 123 bad)
+       (upd bad w) (? (w = 126 || w = 127) w (w && !(bad = 126 || bad = 127)) 123 bad)
        (go rs live bad)
         (? (atom? rs) (foldl (b \ p \ upd b (wait p)) bad live)
            (pp <= #live) (go rs >live (upd bad (wait <live)))

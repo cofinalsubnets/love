@@ -290,6 +290,14 @@ love_noinline static struct g *host_spawnk(struct g *g, char **cav, int const io
  posix_spawn_file_actions_destroy(&fa), posix_spawnattr_destroy(&at);
  return push(g, 1, e ? love_err(g, e) : putcharm(pid)); }
 
+// a child whose exec was refused: POSIX's 127 for a word not there, 126 and its reason for one there and not run
+static _Noreturn void spawn_refused(char const *w, int e) {
+ if (e == ENOENT || e == ENOTDIR) _exit(127);
+ char b[512];
+ int n = snprintf(b, sizeof b, "%s: %s\n", w, strerror(e));
+ if (n > 0) (void) !write(2, b, n < (int) sizeof b ? (size_t) n : sizeof b - 1);
+ _exit(126); }
+
 // the one fork + exec: argv at sp[0]; in/out/err -1 to leave; fdmap ((childfd . srcfd) ..)
 // and closes are stack slots read after the marshal, -1 for none. pg >= 0 joins (0 leads) a group
 love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err,
@@ -330,7 +338,7 @@ love_noinline static struct g *host_spawnx(struct g *g, int in, int out, int err
    if (fd > 2) close((int) fd); }
   sig_dfl_job();
   execvp(argv_file(cav), cav);
-  _exit(127); }
+  spawn_refused(cav[0], errno); }
  if (pg >= 0) setpgid(pid, (pid_t) (pg ? pg : pid));   // parent side too: no race window
  return push(g, 1, putcharm(pid)); }
 
