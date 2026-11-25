@@ -305,7 +305,7 @@
    dj-op (dj-run ["open" "ab:x"])
    dj-ox (dj-run ["open" "ab:throw"])
    dj-of (dj-run ["open" "notes.txt"])
-   _ ((cite 'said 'said) "lore: a line") _ (dj-idle 500) dj-sd (dj-got 'ops)
+   dj-f (dj-path + ".l") _ (uwrite dj-f "(cite 'said 'said \"lore: a line\")(puts \"on\")") dj-sd (dj-run [dj-f]) _ (unlink dj-f)
    _ (landed? dj-srv ? 0 (freeze dj-srv))
    (dj-z l) (map (w \ cats (map (c \ c = 0 ? "|" (string c)) (chars w))) l))
 (test
@@ -315,7 +315,7 @@
                     "n5|(Ljava/lang/String;Landroid/net/Uri;)V|6|2" "d6" "d5" "d2" "a"
                     "m11|startActivity|(Landroid/content/Intent;)V|7" "d7" "d11"])
  (<dj-ox = 1) (dj-z (dj-ox 2) = ["candroid/net/Uri" "sab:throw" "d0"])
- (dj-z dj-sd = ["candroid/util/Log" "slove" "slore: a line" "k0|i|(Ljava/lang/String;Ljava/lang/String;)I|1|2" "d1" "d2"])   ; lore's line for the log
+ (dj-sd 0 = 0) (dj-sd 1 = "on") (dj-z (dj-sd 2) = ["candroid/util/Log" "slove" "slore: a line" "k0|i|(Ljava/lang/String;Ljava/lang/String;)I|1|2" "d1" "d2"])   ; lore's line for the log, from the baked image alone
  (<dj-of = 1) (dj-of 2 = ())                                  ; a file never reaches the door
  (open-link? "https://x") (open-link? "ab:x") !(open-link? "u:x") !(open-link? "c:x") !(open-link? "notes.txt") !(open-link? "a/b:c"))
 (: _ (close dj-l) _ (unlink dj-path) _ (setenv "LOVE_DROID" ()) 0)
