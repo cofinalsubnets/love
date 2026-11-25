@@ -121,9 +121,9 @@
                (? (r 1 <= z <= r 3) (filter (w \ mag (w - x) < 0.5) [(r 0) (r 2)]) ())]
  (doors-of lv) (: (place d) (: x (d 0) z (d 1) hs (map (r \ hits r x z) (lv 'rooms))
                                  zs (catmap cap hs) xs (catmap caup hs)
-                                 hd (#d > 5 ? (d 5) 0) gl (#d > 6 ? (d 6) ())
-                                 (? (#zs = 2) {'ax 'z 'c x 'a (min (zs 0) (zs 1)) 'b (max (zs 0) (zs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
-                                    (#xs = 2) {'ax 'x 'c z 'a (min (xs 0) (xs 1)) 'b (max (xs 0) (xs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl}
+                                 hd (#d > 5 ? (d 5) 0) gl (#d > 6 ? (d 6) ()) ln (#d > 7 ? (d 7) ())
+                                 (? (#zs = 2) {'ax 'z 'c x 'a (min (zs 0) (zs 1)) 'b (max (zs 0) (zs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl 'lens ln}
+                                    (#xs = 2) {'ax 'x 'c z 'a (min (xs 0) (xs 1)) 'b (max (xs 0) (xs 1)) 'w (d 2) 'h (d 3) 'y (d 4) 'hand hd 'glass gl 'lens ln}
                                     "a door must sit in the wall between two rooms: \(show ('door . d))"))
    ps (map (q \ string? q ? q (pin q 'out (outward lv q))) (map place (lv 'doors)))
    (any string? ps ? <(filter string? ps) ps))
@@ -246,7 +246,8 @@
    leaf (slab p q (s \ [(t 1 / w * ((s $ ax @ 'z 0 2) - l0)) (t 2 / h * (y0 + h - s 1))]) i white)
    (knob s) (nub (P ax (l0 + w - 0.07) (y0 + 0.95) (m + s * (door-t + 0.03))) 0.025 [0.78 0.62 0.3])
    (? (d 'glass != ()) (glazed-mesh d tt) (d 'hand = 1) (mesh-join [leaf (knob 1.0) (knob -1.0)]) leaf))
- ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle
+ ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle,
+ ; the one facing its lens's point a lens
  door-fr 0.05
  (glazed-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h) y0 (d 'y) e door-fr
    i (tix tt 'door) (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - door-t)) q (P ax a1 b1 (m + door-t))
@@ -254,9 +255,10 @@
    gi (tix tt (d 'glass)) t (tt gi) g0 (-3 - gi) o (P ax (l0 + e) (y0 + e) m) W (w - 2.0 * e) H (h - 2.0 * e)
    U (P ax W 0.0 0.0) V [0.0 H 0.0] n (P ax 0.0 0.0 1.0) al (ax @ 'z 0 2)
    (uv s) [(t 1 / W * (s al - (l0 + e))) (t 2 / H * (y0 + h - e - s 1))] g [0.14 0.15 0.15]
+   L (peep d 'lens ()) (face s) (two? L && s * (L (2 - al) - m) > 0.0 ? (g0 - 16777216) g0)
    (mesh-join [(bar l0 (l0 + w) y0 (y0 + e)) (bar l0 (l0 + w) (y0 + h - e) (y0 + h))
                (bar l0 (l0 + e) y0 (y0 + h)) (bar (l0 + w - e) (l0 + w) y0 (y0 + h))
-               (sheets o V U n uv g0 g) (sheets o V U (c* -1.0 n) uv g0 g)]))
+               (sheets o V U n uv (face 1.0) g) (sheets o V U (c* -1.0 n) uv (face -1.0) g)]))
  ; ..a car: a floor, a waist a little wider and longer a hand over it, a roof smaller than
  ; the floor, faces between them, so it is a hexagon along and across; glass above the
  ; waist on every side, the door set back in its long side as deep as the glass at its head
@@ -1153,9 +1155,10 @@
    ; them, so the light falls off from a wall the same way all along it
    sv (filter (b \ b 'air = 0 && b 'land = () && all (pl \ abs (pl 0 1) < 1e-9 || abs (pl 0 1) > 1.0 - 1e-9) (b 'planes)) bs)
    sk (map (b \ [(b 'lo) (b 'hi)]) sv) foot-w 0.4
+   (tab l) (foldl (\ t x (pin t #t x)) {} l)
    (foot-cut m) (? (atom? sv) m
-     (: vs (m 0) ts (m 1) n #ts
-        (co k j) (gem-tray [n] (map (t \ 1.0 * vs (t j) k) ts))
+     (: n #(m 1) vs (tab (m 0)) ts (tab (m 1))
+        (co k j) (gem-tray [n] (map (t \ 1.0 * vs (t j) k) (m 1)))
         mn (map (k \ min (co k 0) (min (co k 1) (co k 2))) ^3) mx (map (k \ max (co k 0) (max (co k 1) (co k 2))) ^3)
         hit (foldl (\ h j (: lo (sk j 0) hi (sk j 1)
                              I (iota ((mx 0 > lo 0 - foot-w) * (mn 0 < hi 0 + foot-w) * (mx 2 > lo 2 - foot-w) * (mn 2 < hi 2 + foot-w)
@@ -1177,8 +1180,8 @@
         ; ..a piece [poly under] by a solid: its band and what is under it
         (pieces b pc) (: r1 (cut-by b foot-w (pc 0)) o1 (map (p \ [p (pc 1)]) (r1 0))
           (#(r1 1) < 3 ? o1 (: r2 (cut-by b 0.0 (r1 1)) (o1 + map (p \ [p (pc 1)]) (r2 0) + (#(r2 1) >= 3 ? [[(r2 1) 1]] ())))))
-        ks (sort (keys hit))
-        res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (sv j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
+        ks (sort (keys hit)) st (tab sv)
+        res (catmap (i \ (: t (ts i) pcs (foldl (\ a j (catmap (pieces (st j)) a)) [[[(vs (t 0)) (vs (t 1)) (vs (t 2))] 0]] (rev (hit i)))
                             (map (pc \ [(pc 0) (t 3)]) pcs)))
                     ks)
         ; ..and every edge, the pieces' and the whole triangles' beside them, taking the corners
@@ -1200,11 +1203,11 @@
         (whole P) (: k #P (catmap (i \ (P i . on-edge (P i) (P ((i + 1) % k)))) ^k))
         un (map (i \ (: t (ts i) Q (whole [(vs (t 0)) (vs (t 1)) (vs (t 2))]) [i Q])) (filter (i \ peep hit i () = ()) ^n))
         ps (map (q \ [(whole (q 0)) (q 1)]) res + map (u \ [(u 1) (ts (u 0) 3)]) (filter (u \ #(u 1) > 3) un))
-        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#vs ()] ps)
-        (mesh (vs + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
+        tr (foldl (\ a q (: b (a 0) k #(q 0) [(b + k) (a 1 + map (j \ [b (b + j + 1) (b + j + 2) (q 1)]) ^(k - 2))])) [#(m 0) ()] ps)
+        (mesh (m 0 + catmap (q \ q 0) ps) (map (u \ ts (u 0)) (filter (u \ #(u 1) = 3) un) + tr 1))))
    (ground-cut m0 d) (: m (peep d 'land 0 ? (foot-cut m0) m0) (? (!(peep d 'land 0) || atom? cv) m
-     (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) ts (m 1) n #ts
-        (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) ts))
+     (: P (map (k \ gem-tray [#(m 0)] (map (v \ 1.0 * v k) (m 0))) ^3) n #(m 1) ts (tab (m 1))
+        (mid k) (gem-tray [n] (map (t \ (P k (t 0) + P k (t 1) + P k (t 2)) / 3.0) (m 1)))
         X (mid 0) Y (mid 1 - 0.05) Z (mid 2)
         I (iota (foldl (\ a b (a + (b 'lo 0 < X) * (X < b 'hi 0) * (b 'lo 1 < Y) * (Y < b 'hi 1) * (b 'lo 2 < Z) * (Z < b 'hi 2))) (X * 0) cv > 0))
         gone (foldl (\ t j (: i (I j) (brush-medium bs [(X i) (Y i) (Z i)] @ 1 (pin t i 1) t))) {} ^#I)
