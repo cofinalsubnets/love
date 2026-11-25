@@ -47,4 +47,4 @@
            (nil? (yescrypt-kdf (cask 64) "pw" "" [0 16 1 1 0]))  ; a cask too small
            (all (k \ (: _ (map (j \ j) ^k) (kdf "" "" [0 16 1 1 0] = hex2b "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442"))) ^40)   ; wherever its cask lies
            (all (k \ (: _ (map (j \ j) ^k) (crypt-check "pleaseletmein" "$y$.75$abcd$6pIrSV1uZArvzUpjI2qvCJpArYP2n.h0hFDzjAA0j43"))) ^40))
-   (puts "crypt: ok\n"))
+   (test_fin (), puts "crypt: ok\n"))
