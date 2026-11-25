@@ -879,9 +879,9 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (lv 'sky @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0))
-        lt (sky-light (sky-sun sim 0.0 lat) wx sim)
-        {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
+   s (: at (sky-day * 86400.0 + 3600.0 * s 'hour) sim (sky-rest (int sky-day) (3600.0 * s 'hour)) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0) 'base (at - sim))
+        lt (sky-light (sky-sun at 0.0 lat) wx sim)
+        {'sim sim 'wx wx 'lt lt 'ss (sky-stars at 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under
  ; the level's sun a hole where it stands, each piece of its wood cast down along the sun: a
  ; thick one's to a slot hole-d deep, over a dark shaft deep enough to fall through, a thin
