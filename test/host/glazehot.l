@@ -16,7 +16,13 @@
    glb "book (6 8 15 24 9 8 8) (6 9 15 24 9 9 9)\nword (1000 1000 (mine 7) (1 mine 7))\n"
    (glr v) (hark ["env" v "out/love" "test/host/glazebook.l"])
    _ (test (all (v \ (glr v @ r (two? r && <r = 0 && >r = glb)))
-                '("LOVE_NO_GLAZE=1" "LOVE_GLAZE_HOT=" "LOVE_GLAZE_HOT=2" "LOVE_GLAZE_HOT=eager" "LOVE_LAZY_GLAZE=1")))
+                '("LOVE_NO_GLAZE=1" "LOVE_GLAZE_HOT=" "LOVE_GLAZE_HOT=2" "LOVE_GLAZE_HOT=eager" "LOVE_GLAZE_HOT=off" "LOVE_LAZY_GLAZE=1")))
+   ; off compiles nothing made past the bake
+   glh-n "((: a0 (peep fires () 0) _ (ev '(: (f x) (x * x + 1))) (putx (peep fires () 0 - a0))), (quit 0))"
+   glh-o (hark ["env" "LOVE_GLAZE_HOT=off" "out/love" "-e" glh-n])
+   glh-p (hark ["env" "LOVE_GLAZE_HOT=eager" "out/love" "-e" glh-n])
+   _ (test (two? glh-o) (<glh-o = 0) (>glh-o = "0")
+           (two? glh-p) (<glh-p = 0) (>glh-p = "1"))
    ; a hot cell in a saved image keeps its names past a rebinding in the woken session
    glm (show (getpid 0))  gli ("out/.glazehot-" + glm + ".image")  gls ("out/.glazehot-" + glm + ".l")
    (glw x) (open gls "w" @ p (say p x, close p))
