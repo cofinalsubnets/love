@@ -36,7 +36,7 @@
                  lanes-covers lanes-plan lanes-held lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccmips" "test_ccwasm"
-               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
+               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_libc" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l" "src/apps/hosts.l"] ["test_hostnif"] ""]
@@ -83,7 +83,7 @@
      ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
-   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
+   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730 "test_libc" 190
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
