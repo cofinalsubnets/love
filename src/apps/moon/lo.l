@@ -2264,7 +2264,7 @@
             !(ilp32? g && !(lot32sig g (rt . map (p \ <>p) params))))
        ; a returned aggregate of the memory class: its address comes in rdi and goes back in rax
        (: sret (losr? g rt)
-          _ (pins g 'lon 0 'dlb () 'dlis () 'dlik () 'dlsc () 'dltw () 'dlal () 'dlst () 'dlfd [0 0])
+          _ (pins g 'lon 0 'dlb () 'dlis () 'dlik () 'dlsc () 'dltw () 'dlal () 'dlst () 'dlfd [0 0] 'dlpm 0)
           ; riscv's saves ride csframe here, so every exit restores at its marker
           _ (rvx? g || v6m? g ? (pin g 'epi ('((rests)) + peep g 'epi epi)))
           sr (sret ? (lomk g))

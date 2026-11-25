@@ -54,9 +54,10 @@ for t in x64 a64 rv64 rv32; do
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
 # .debug_frame under -g, an fde for each function: raster.c's, past jump tables, restores and d29
-for t in x64 a64 rv64 rv32; do
-  [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; }
-  mc -t $t -os linux -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
+for t in x64 a64 rv64 rv32 thumb2 thumb2sp; do
+  case $t in thumb*) os=;; *) os='-os linux'
+    [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; };; esac
+  mc -t $t $os -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
   if [ -n "$dd" ]; then
     "$dd" --debug-info "$d/raster.o" | awk '/DW_TAG/ {f = /subprogram/} f && /low_pc/ {gsub(/[^0-9a-fx]/, "", $2); print substr($2, 3)}' | sed 's/^0*//' | sort -u > "$d/r.fns"
     "$dd" --debug-frame "$d/raster.o" | sed -n 's/.* FDE .*pc=0*\([0-9a-f]*\)\.\.\..*/\1/p' | sort -u > "$d/r.fdes"
@@ -281,4 +282,65 @@ for t in a64 rv64 rv32 mips; do
   l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.$t" | tr '\n' ' '`
   [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.$t"; echo "FAIL $name: $t's gdb's locals: $l"; exit 1; }
 done
-echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; every function of raster.c has an fde"
+# the thumbs, on a board under qemu-system-arm: by line, bt, finish and the locals, and d8-d15 given back to the caller
+cat > "$d/fd.c" <<'EOF'
+__attribute__((noinline)) int lf(int x) { return x + 1; }
+int (*volatile lp)(int) = lf;
+__attribute__((noinline)) double mid(double a, double b, int n) {
+  volatile int q[3] = {11, 22, 33};
+  int u = n + 1, v = n * 3, w = n ^ 5, x = n - 7, y = n | 64, z = n << 2;
+  double s = a, t = b;
+  for (int i = 0; i < 2; i++) { s += lp((int)t); t += s * b; u += lp(v); v += lp(w); w += x; x += lp(y); y += z; z += lp(u); }
+  return s + t + u + v + w + x + y + z + q[n & 1]; }
+__attribute__((noinline)) double top(double a, int n) {
+  int u = lp(n), v = lp(u * 3), w = lp(v * 5), x = lp(w + 7), y = lp(x + u), z = lp(y + v);
+  double k = a * lp(2), j = k * 5, r = mid(a, 2, n);
+  return r + k + j + lp(u) + v + lp(w) + x + lp(y) + z + u + w + y; }
+int run(void) { return (int)top(1.5, 9); }
+EOF
+have() { command -v $1 > /dev/null 2>&1; }
+fail() { echo "FAIL $name: $*"; exit 1; }
+. test/gate/thumbrt.sh
+if [ -n "$gdb" ] && have arm-none-eabi-gcc && have arm-none-eabi-ld && have qemu-system-arm \
+   && "$gdb" -q -batch -nx -ex 'set architecture armv7e-m' 2>&1 | grep -q 'set to "armv7e-m"'; then
+  for t in thumb1 thumb2 thumb2sp; do
+    b=$d/$t; mkdir -p "$b"; thumb_board $t "$b"
+    for p in two l fd; do
+      case $p in two) c="$d/t.c $d/u.c";; *) c=$d/$p.c;; esac
+      o=
+      for f in $c; do x=$b/`basename $f .c`.o; mc -t $t -g -Dmain=run -c $f -o $x; o="$o $x"; done
+      arm-none-eabi-ld -T "$b/link.ld" "$b/start.o" $o "$lg" -o "$b/$p.elf" || fail "$t's $p links"
+    done
+    # board PROGRAM OUT gdb-args..
+    board() {
+      sp=$1; so=$2; shift 2
+      ( cd "$b" && rm -f q.sock && { qemu-system-arm -M $mach -semihosting -nographic -S -gdb unix:q.sock,server=on,wait=off -kernel $sp.elf > /dev/null 2>&1 < /dev/null & }
+        n=0; while [ ! -S q.sock ] && [ $n -lt 50 ]; do sleep 0.1; n=`expr $n + 1`; done
+        $tmo ${tmo:+60} "$gdb" -q -batch -nx -ex "file $sp.elf" -ex 'target remote q.sock' "$@" -ex kill ) > "$b/$so" 2>&1 < /dev/null
+    }
+    board two gdbt -ex 'break *twice' -ex 'break t.c:6' -ex continue -ex bt -ex continue -ex bt -ex finish
+    grep -q 'Breakpoint 2, dist (p=.*, k=.*) at .*t.c:6' "$b/gdbt" && grep -q 'Breakpoint 1, twice (v=1) at .*u.c:[12]' "$b/gdbt" \
+      && grep -q '^#1  0x[0-9a-f]* in run () at .*t.c:' "$b/gdbt" && grep -q '^0x[0-9a-f]* in run () at .*t.c:' "$b/gdbt" \
+      || { cat "$b/gdbt"; fail "$t's gdb, by line, bt and finish"; }
+    board l gdbl -ex 'break l.c:9' -ex 'break l.c:11' -ex 'break l.c:14' -ex continue \
+      -ex 'echo A\n' -ex 'print x' -ex 'print z' -ex 'print by.b' -ex 'print n' -ex 'print k' -ex 'print i' -ex continue -ex 'echo B\n' -ex 'print x' -ex 'print cnt' -ex 'print n' \
+      -ex continue -ex 'echo C\n' -ex 'print x' -ex 'print v[0]' -ex 'up' -ex 'print s.b' \
+      -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p'
+    l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$b/gdbl" | tr '\n' ' '`
+    [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$b/gdbl"; fail "$t's gdb's locals: $l"; }
+    # in lf, under mid: top's callee-saved registers are those at mid's entry
+    [ $t = thumb1 ] && r='r4 r5 r6 r7' || r='r4 r5 r6 r7 r8 r9 r10 d8 d9 d10 d11 d12 d13 d14 d15'
+    pr=; for x in $r; do pr="$pr -ex p/x\$$x"; done
+    board fd gdbd -ex 'break *mid' -ex continue -ex 'delete' -ex 'echo A\n' $pr -ex 'break *lf' -ex continue -ex 'up' -ex 'echo Q\n' -ex 'print q[1]' -ex 'up' -ex 'echo B\n' $pr -ex 'info symbol $pc'
+    sed -n '/^A$/,/^Q$/ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/ra"; sed -n '/^B$/,$ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/rb"
+    l=`sed -n '/^Q$/,/^B$/ s/^\$[0-9]* = //p' "$b/gdbd"`
+    [ "$l" = 22 ] || { cat "$b/gdbd"; fail "$t's local in a frame that saves registers: $l"; }
+    n=`sort -u "$b/ra" | wc -l`
+    [ $n -ge 4 ] || { cat "$b/gdbd"; fail "$t's callee-saved registers are alike, $n values"; }
+    [ `wc -l < "$b/ra"` = `echo $r | wc -w` ] && cmp -s "$b/ra" "$b/rb" && grep -q '^top + ' "$b/gdbd" \
+      || { cat "$b/gdbd"; fail "$t's callee-saved registers through mid's frame"; }
+  done
+else
+  gate_partly "$name: no gdb for arm, arm-none-eabi toolchain or qemu-system-arm, the thumbs' sessions skipped"
+fi
+echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; on mips and the thumbs' boards too, less the copies; every function of raster.c has an fde"

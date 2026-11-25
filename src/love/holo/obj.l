@@ -223,7 +223,8 @@
        ; -g's sections: their words reach a section and an offset, so a function's has no thumb bit
        lanes (lanes0 + (5 < #ax && two? (ax 5) ?
                           (map ([nm t f al bs rs lb] \ [nm t f al bs (map ([o k l a p] \ [o 'dabs32 l a p]) rs) lb])
-                               (o-dwarf lanes0 (ax 5) (funcnames + loc0) funcnames target))
+                               ((elem target '(thumb1 thumb2 thumb2sp) ? (o-eh lanes0 (funcnames + loc0) target 1 @ e (two? e ? [e] ())) ())
+                                + o-dwarf lanes0 (ax 5) (funcnames + loc0) funcnames target))
                           ()))
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
@@ -788,16 +789,19 @@
                0x73 (w = 0x100073 || w = 0xC0001073 ? ['trap] ['wr d])
                _ ['wr d])))))
    (mips-cs? r) (16 <= r <= 23 || r = 30 || r = 31)
-   ; an instruction's effect, it as read; mp: mips's registers, else rv's: sp, fp, the scratch and what a callee saves
+   ; an instruction's effect, it as read; mp: whose registers, 0 rv's 1 mips's 2 thumb2's 3 thumb1's: sp, fp, the scratch and what a callee saves
    (rv-ehst mp st it nm)
     (@ st [cb co sd fd sv _ (t6 . pw)]
-       (: sp (mp ? 29 2) fp (mp ? 30 8) sc (mp ? 1 31)
-          (cs? r) (mp ? (mips-cs? r) (rv-cs? r))
+       (: sp ([2 29 13 13] mp) fp ([8 30 11 7] mp) sc ([31 1 12 4] mp)
+          (cs? r) (mp = 0 ? (rv-cs? r) (mp = 1) (mips-cs? r) (t-cs? r))
           pro (pw != 'body)
           (mk cb co sd fd sv t6 pw) [cb co sd fd sv 0 (t6 . pw)]
           (neg v) (v = () ? () (0 - v))
-          (at r) (? (r = sp) (neg sd) (r = fp) (neg fd) (r = sc) (t6 @ ['a n] n _ ()) ())
-          (konst r) (? (r = 0) 0 (r = sc) (t6 @ ['k n] n _ ()) ())
+          ; what a scratch register holds: an address ['a n] or a constant ['k n]. thumb1's are the low ones, by register
+          (sc? r) (mp = 3 ? (r < 7) (r = sc))
+          (val r) (? (!(sc? r)) () (mp = 3) (filter (p \ <p = r) t6 @ (p . _) (p 1) _ ()) t6)
+          (at r) (? (r = sp) (neg sd) (r = fp) (neg fd) (val r @ ['a n] n _ ()))
+          (konst r) (? (mp < 2 && r = 0) 0 (val r @ ['k n] n _ ()))
           (wrote st r) (@ st [cb co sd fd sv _ (t6 . pw)] (mk cb co sd fd sv t6 (pro ? (r . pw) pw)))
           (fpw st f)
            (@ st [cb co sd fd sv _ (t6 . pw)]
@@ -811,30 +815,32 @@
                  (? (cb != sp) (mk cb co d fd sv t6 pw)
                     (d = ()) (scare 'obj-eh-sp nm)
                     (mk sp d d fd sv t6 pw))))
-          (t6w st v) (@ st [cb co sd fd sv _ (_ . pw)] (mk cb co sd fd sv v pw))
-          (wr st r) (? (r = 0) st (wrote (? (r = fp) (fpw st ()) (r = sp) (spw st ()) (r = sc) (t6w st ()) st) r))
+          (t6w st r v) (@ st [cb co sd fd sv _ (t6 . pw)]
+             (mk cb co sd fd sv (mp = 3 ? ((v = () ? () [[r v]]) + filter (p \ <p != r) t6) v) pw))
+          (wr st r) (? (mp < 2 && r = 0) st (wrote (? (r = fp) (fpw st ()) (r = sp) (spw st ()) (sc? r) (t6w st r ()) st) r))
           (sav st r a)
            (@ st [cb co sd fd sv _ (t6 . pw)]
               (? (pro && a != () && cs? r && nelem r pw && !(any (p \ <p = r) sv))
                  (mk cb co sd fd (sort ([r a] . sv)) t6 pw)
                  st))
           (rst st r a) (@ st [cb co sd fd sv _ (t6 . pw)] (wr (mk cb co sd fd (filter (p \ p != [r a]) sv) t6 pw) r))
-          (body st) (@ st [cb co sd fd sv _ _] (mk cb co sd fd sv () 'body))
+          (body st) (@ st [cb co sd fd sv _ (t6 . _)] (mk cb co sd fd sv (mp = 3 ? (filter (p \ <p = 4) t6) ()) 'body))
           ; rd = a cfa-relative address, or () for one unknown; mv s0, sp over the saved s0: the cfa rides s0
           (aset rd a)
            (? (rd = sp) (spw st (neg a))
               (rd = fp) (: s2 (wrote (fpw st (neg a)) fp)
                           (@ s2 [cb co sd fd sv _ (t6 . pw)]
                              (cb = sp && fd != () && any (p \ <p = fp) sv ? (mk fp fd sd fd sv t6 pw) s2)))
-              (rd = sc && a != ()) (wrote (t6w st ['a a]) sc)
+              (sc? rd && a != ()) (wrote (t6w st rd ['a a]) rd)
               (wr st rd))
           (plus a k) (a = () || k = () ? () (a + k))
-          (it @ ['addi d a i] (d = sc && konst a != () ? (wrote (t6w st ['k (konst a + i)]) sc) (aset d (plus (at a) i)))
-                ['addiw d a i] (d = sc && konst a != () ? (wrote (t6w st ['k (o-sx ((konst a + i) & 0xFFFFFFFF) 32)]) sc) (wr st d))
-                ['ori d a i] (d = sc && konst a != () ? (wrote (t6w st ['k (konst a | i)]) sc) (wr st d))
-                ['lui d v] (d = sc ? (wrote (t6w st ['k v]) sc) (wr st d))
+          (it @ ['addi d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (konst a + i)]) d) (aset d (plus (at a) i)))
+                ['addiw d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (o-sx ((konst a + i) & 0xFFFFFFFF) 32)]) d) (wr st d))
+                ['ori d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (konst a | i)]) d) (wr st d))
+                ['lui d v] (sc? d ? (wrote (t6w st d ['k v]) d) (wr st d))
                 ['add d a b] (at a = () ? (aset d (plus (at b) (konst a))) (aset d (plus (at a) (konst b))))
                 ['sub d a b] (aset d (plus (at a) (neg (konst b))))
+                ['shl d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k ((konst a << i) & 0xFFFFFFFF)]) d) (wr st d))
                 ['sd r a i] (sav st r (plus (at a) i))
                 ['ld r a i] (rst st r (plus (at a) i))
                 ['wr r] (wr st r)
@@ -890,6 +896,126 @@
               ['trap] ()
               _ nx)
         (it @ ['jalr 0 a] (a != 31) _ 0)])
+   ; -- thumb's, the same effects: ra r14, sp r13, fp r11 (thumb2) or r7 (thumb1, whose r4 holds the frame's
+   ; low end). a reading: (bytes items to), items the effects in order, to a branch's target --
+   t-dcie [12 0 0 0 255 255 255 255 1 0 1 124 14 12 13 0]
+   t-st0 [13 0 0 () () 0 '(() . ())]
+   (t-cs? r) (4 <= r && r <= 11 || r = 14 || 264 <= r && r <= 271)
+   (t-list m) (filter (r \ m >> r & 1) ^16)
+   ; a register list at an address: stores, or loads with r13's own move after
+   (t-push rs n) (['addi 13 13 (0 - n)] . map (i \ ['sd (rs i) 13 (4 * i)]) ^#rs)
+   (t-pop rs n) (map (i \ ['ld (rs i) 13 (4 * i)]) ^#rs + [['addi 13 13 n]] + (elem 15 rs ? [['ret]] ()))
+   (t-wrs rs) (map (r \ ['wr r]) rs)
+   ; a modified immediate
+   (t-mimm v) (: b (v & 255) k (v >> 8 & 15)
+                 (? (k = 0) b (k = 1) (b << 16 | b) (k = 2) (b << 24 | b << 8) (k = 3) (b << 24 | b << 16 | b << 8 | b)
+                    (: x (128 | (v & 127)) r (v >> 7) ((x >> r | x << (32 - r)) & 0xFFFFFFFF))))
+   (t-dec16 h)
+    (: a (h & 7) b (h >> 3 & 7) d (h >> 8 & 7) i5 ((h >> 6 & 31) * 4) i8 ((h & 255) * 4)
+       (one it) [2 [it] ()]
+       (? (h < 0x1C00 || 0x1E00 <= h && h < 0x2000) (one (? (h < 0x0800) (h & 0xFFC0 = 0 ? ['addi a b 0] ['shl a b (h >> 6 & 31)])
+                                                                   (h & 0xFE00 = 0x1800) ['add a b (h >> 6 & 7)] ['wr a]))
+          (h < 0x1E00) (one (h < 0x1C00 ? ['wr a] ['addi a b (h >> 6 & 7)]))
+          (h < 0x2800) (one ['lui d (h & 255)])
+          (h < 0x3000) (one ['no])
+          (h < 0x4000) (one ['addi d d (h < 0x3800 ? (h & 255) (0 - (h & 255)))])
+          (h < 0x4400) (one (elem (h >> 6 & 15) '(8 10 11) ? ['no] ['wr a]))
+          (h < 0x4800) (: rd (a | (h >> 4 & 8)) rm (h >> 3 & 15) k (h >> 8 & 3)
+                          (? (k = 1) (one ['no])
+                             (k = 3) (one (h & 128 ? ['call] rm = 14 ? ['ret] ['jump]))
+                             (rd = 15) (one ['jump])
+                             (one (k = 2 ? ['addi rd rm 0] ['add rd rd rm]))))
+          (h < 0x5000) (one ['wr d])
+          (h < 0x6000) (one (3 <= (h >> 9 & 7) ? ['wr a] ['no]))
+          (h < 0x6800) (one ['sd a b i5])
+          (h < 0x7000) (one ['ld a b i5])
+          (h < 0x9000) (one (h & 0x0800 ? ['wr a] ['no]))
+          (h < 0x9800) (one ['sd d 13 i8])
+          (h < 0xA000) (one ['ld d 13 i8])
+          (h < 0xA800) (one ['wr d])
+          (h < 0xB000) (one ['addi d 13 i8])
+          (h < 0xB080) (one ['addi 13 13 ((h & 127) * 4)])
+          (h < 0xB100) (one ['addi 13 13 (0 - (h & 127) * 4)])
+          (h & 0xF500 = 0xB100) [2 [['br]] (4 + ((h >> 9 & 1) << 6 | (h >> 3 & 31) << 1))]
+          (h & 0xFE00 = 0xB400) (: rs (t-list (h & 255 | (h & 256) << 6)) [2 (t-push rs (4 * #rs)) ()])
+          (h & 0xFE00 = 0xBC00) (: rs (t-list (h & 255 | (h & 256) << 7)) [2 (t-pop rs (4 * #rs)) ()])
+          (h < 0xBB00) (one (h & 0xF600 = 0xB600 ? ['no] ['wr a]))
+          (h < 0xC000) (one ['no])
+          (h < 0xC800) (one ['wr d])
+          (h < 0xD000) [2 (t-wrs (d . t-list (h & 255))) ()]
+          (h < 0xDE00) [2 [['br]] (4 + o-sx (h & 255) 8 * 2)]
+          (h < 0xDF00) (one ['trap])
+          (h < 0xE000) (one ['no])
+          [2 [['jmp]] (4 + o-sx (h & 2047) 11 * 2)]))
+   (t-dec32 h k)
+    (: a (h & 15) rt (k >> 12) rd (k >> 8 & 15) i12 (k & 4095) i8 (k & 255)
+       (all its) [4 its ()]
+       (one it) (all [it])
+       (sgn u) (u ? i8 (0 - i8))
+       (? (k & 0x8000 && h & 0xF800 = 0xF000)
+           (: s (h >> 10 & 1) j1 (k >> 13 & 1) j2 (k >> 11 & 1)
+              (? (k & 0x9000 = 0x9000)
+                  [4 [[(k & 0x4000 ? 'bl 'jmp)]] (4 + o-sx (s << 24 | (1 - (j1 ^ s)) << 23 | (1 - (j2 ^ s)) << 22 | (h & 1023) << 12 | (k & 2047) << 1) 25)]
+                 (h & 0x0380 != 0x0380)
+                  [4 [['br]] (4 + o-sx (s << 20 | j2 << 19 | j1 << 18 | (h & 63) << 12 | (k & 2047) << 1) 21)]
+                 (h & 0xFFF0 = 0xF7F0) (one ['trap])
+                 (one (h & 0xFFE0 = 0xF3E0 ? ['wr rd] ['no]))))
+          (h = 0xE92D) (: rs (t-list k) (all (t-push rs (4 * #rs))))
+          (h = 0xE8BD) (: rs (t-list k) (all (t-pop rs (4 * #rs))))
+          (h & 0xFFF0 = 0xE8D0 && k & 0xFFE0 = 0xF000) (one ['jump])
+          (h & 0xFF70 = 0xE940) (all [['sd rt a (4 * sgn (h & 128))] ['sd rd a (4 * sgn (h & 128))]])
+          (h & 0xFE00 = 0xE800)
+           (? (h & 0x0040 = 0) (h & 16 ? (all (t-wrs (t-list k + (h & 32 ? [a] ()))))
+                                  (one (h & 32 ? ['wr a] ['no])))
+              ; a pair or an exclusive: what it may write
+              (h & 16) (all (t-wrs [rt rd] + (h & 32 ? [['wr a]] ())))
+              (all (t-wrs ((h & 32 ? [a] ()) + (h & 0xFFF0 = 0xE840 ? [rd] h & 0xFFF0 = 0xE8C0 ? [(k & 15)] ())))))
+          (h & 0xFFEF = 0xEA4F && k & 0x70F0 = 0) (one ['addi rd (k & 15) 0])
+          (h & 0xFE00 = 0xEA00)
+           (? (rd = 15) (one ['no])
+              (elem (h >> 5 & 15) '(8 13) && k & 0x70F0 = 0) (one [(h >> 5 & 15 = 8 ? 'add 'sub) rd a (k & 15)])
+              (one ['wr rd]))
+          (h & 0xFF30 = 0xED00 && k & 0x0F00 = 0x0B00) (one ['sd (256 + (rt | (h >> 2 & 16))) a (4 * sgn (h & 128))])
+          (h & 0xFF30 = 0xED10 && k & 0x0F00 = 0x0B00) (one ['ld (256 + (rt | (h >> 2 & 16))) a (4 * sgn (h & 128))])
+          (h & 0xFC00 = 0xEC00)
+           (? (h & 0xFFE0 = 0xEC40) (h & 16 ? (all (t-wrs [rt a])) (one ['no]))
+              (h & 0xFE00 = 0xEC00 || h & 0xFF00 = 0xED00) (one (h & 32 ? ['wr a] ['no]))
+              (h & 0xFF10 = 0xEE10 && k & 0x10 && rt != 15) (one ['wr rt])
+              (one ['no]))
+          ; add and sub of an immediate, plain and modified
+          (: m (h & 0xFBF0) v ((h >> 10 & 1) << 11 | (k >> 12 & 7) << 8 | i8)
+             (? (m = 0xF200) (one ['addi rd a v])
+                (m = 0xF2A0) (one ['addi rd a (0 - v)])
+                (h & 0xF800 = 0xF000)
+                 (? (rd = 15) (one ['no])
+                    (m & 0xFFEF = 0xF100) (one ['addi rd a (t-mimm v)])
+                    (m & 0xFFEF = 0xF1A0) (one ['addi rd a (0 - t-mimm v)])
+                    (one ['wr rd]))
+                (h & 0xFE00 = 0xF800)
+                 (: ld (h & 16) word (h & 0x0160 = 0x0040)
+                    off (? (h & 128) i12 (k & 0x0F00 = 0x0C00) (0 - i8) ())
+                    up (k & 0x0900 = 0x0900 && !(h & 128) ? 1)
+                    mv (k & 0x0200 ? i8 (0 - i8))
+                    ac (off @ () (ld ? ['wr rt] ['no]) (? (word && a != 15) [(ld ? 'ld 'sd) rt a off] ld ['wr rt] ['no]))
+                    (? (ld && rt = 15) (all (word && up && a = 13 ? (['ld 15 13 0] . [['addi 13 13 mv] ['ret]]) [['jump]]))
+                       (up && word && k & 0x0400) (all [['addi a a mv] [(ld ? 'ld 'sd) rt a 0]])
+                       (up && word) (all [[(ld ? 'ld 'sd) rt a 0] ['addi a a mv]])
+                       up (all ((ld ? [['wr rt]] ()) + [['wr a]]))
+                       (one ac)))
+                (h & 0xFF80 = 0xFB80) (all (t-wrs [rt rd]))
+                (one ['wr rd])))))
+   (t-ehstep mp s pc st nm lo hi rl)
+    (: h (s pc | s (pc + 1) << 8)
+       it (h < 0xE800 ? (t-dec16 h) (t-dec32 h (s (pc + 2) | s (pc + 3) << 8)))
+       (@ it [n is v]
+          (: nx (pc + n < hi ? [(pc + n)] ())
+             to (v = () || elem pc rl ? () (pc + v @ t (lo <= t && t < hi ? [t] ())))
+             ; thumb1's far jump is a bl, its target in the function and not its start
+             k (: c <(last is) (c != 'bl ? c mp = 3 && two? to && <to != lo ? 'jmp 'call))
+             (ef i) (i @ (('call || 'bl) . _) ['jal 14 ()] ['br] ['br 0] _ i)
+             [(foldl (\ st i (rv-ehst mp st (ef i) nm)) st is)
+              (? (elem k '(ret jump trap)) () (k = 'jmp) to (k = 'br) (nx + to) nx)
+              (k = 'jump ? 1 0)])))
    ; what a row shows of a state: the cfa, the saves, ra
    (o-ehvis st) [(st 0) (st 1) (st 4) (st 5)]
    ; a row's dwarf from the last one's; df the CIE's data factor, as a slot's size
@@ -911,6 +1037,8 @@
    ; whether it is an indirect jump. x: the isa
    (o-ehstep x s pc st nm lo hi rl)
     (? (x = 'x64) (x-ehstep s pc st nm lo hi rl)
+       (x = 'thumb2 || x = 'thumb2sp) (t-ehstep 2 s pc st nm lo hi rl)
+       (x = 'thumb1) (t-ehstep 3 s pc st nm lo hi rl)
        (x = 'mips) (mips-ehstep s pc st nm lo hi rl)
        (x = 'rv64 || x = 'rv32) (rv-ehstep (x = 'rv32) s pc st nm lo hi rl)
        (: w (o-w32 s pc) [(o-ehst st w nm) (o-ehnx w pc lo hi rl) ((w & 0xFFFFFC1F) = 0xD61F0000)]))
@@ -927,7 +1055,7 @@
    ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
    (o-ehrows x s lo hi rl labs nm)
     (: sts {}
-       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 'mips mips-st0 _ o-st0)
+       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 'mips mips-st0 ('thumb1 || 'thumb2 || 'thumb2sp) t-st0 _ o-st0)
        (s6 st) (take 6 st)
        ; jst: the state at a br that is no tail call, which a table's targets share
        (walk stk jst)
@@ -958,7 +1086,7 @@
    o-dcie [12 0 0 0 255 255 255 255 1 0 1 124 30 12 31 0]
    (o-eh lanes uw x df)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) 'mips '(mj26 mb16) _ '(b26 b19 b14))) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) 'mips '(mj26 mb16) ('thumb1 || 'thumb2 || 'thumb2sp) '(b bcc bl b16 b8 cbz) _ '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -979,7 +1107,7 @@
                           (: n (13 + #ins) pad ((4 - n % 4) % 4)
                              [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
                               ([(fo + 8) 'secrel32 k 0 0] . rs)])))))
-             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie 'mips mips-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
+             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie 'mips mips-dcie ('thumb1 || 'thumb2 || 'thumb2sp) t-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
              (? df [".debug_frame" 1 0 8 <r (rev <>r) {(name ".dbg.frame") 0}]
                 [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
@@ -1120,6 +1248,7 @@
        (dwreg r) (show r @ s (: i (read (snip s 1 #s))
                                 (? (isa = 'rv64 || isa = 'rv32) ((s 0 = 102 ? rv-dwf rv-dwr) i)
                                    (isa = 'mips) ([2 3 4 5 6 7 8 9 16 17 18 19] i)
+                                   (elem isa '(thumb1 thumb2 thumb2sp)) (? (s 0 = 102) (i < 16 ? (256 + i) (33 + 2 * i)) i)
                                    (s 0 = 102) (i + (isa = 'a64 ? 64 17))
                                    (isa = 'a64) i
                                    ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))
