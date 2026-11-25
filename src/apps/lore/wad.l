@@ -2,12 +2,13 @@
 ; each subsector a floor and ceiling fan cut by the nodes' lines and its segs; each side three
 ; quads; each thing a sprite turned to the eye. a sector is a batch, laid again alone when it moves
 ; run: love play wad FILE [MAP] [--kitty|--cells|-w|--window] [--scale 1|2|4|8]
-(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-look wad-mouse wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
+(module (wad wad-main wad-read wad-map wad-scene wad-new wad-pens wad-frame wad-step wad-tics wad-tick wad-look wad-mouse wad-tap wad-free? wad-size wad-sector wad-usage wad-mixer wad-open)
 (borrow '(posix rove cli))
 (borrow 'horn)                          ; pad, for the status row
 (borrow 'bytes)                         ; rdle
 (borrow 'lore)                          ; facets and lace, in C
 (borrow '(view mesh walk))
+(borrow 'window)                        ; window-size, for a tap
 (borrow 'vec)                           ; sq
 (borrow 'mixer)
 (borrow 'opl)                           ; the music's instruments
