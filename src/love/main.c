@@ -540,7 +540,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   // FIXME why pull from book here? that's mop's job
   // a bake pulls book past the crew, and bake-calls with it: the glaze's while the crew bakes
   g = evals_(g, bake
-    ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'born 0))"
+    ? "(: _ (pull book 'nif 0) (pull book 'nifx 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // snapshot the post-warm heap, then exit
@@ -691,13 +691,10 @@ int main(int argc, char const **argv) {
     ? (fprintf(stderr, "love: wake: %s: cannot open\n", image_load_path), 1)
     : (fprintf(stderr, "love: wake: %s: not an image this binary can wake (%s)\n", image_load_path, says[why]), 2); }
   char const *noimg = getenv("LOVE_NO_IMAGE");
-  uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uint64_t t0 = love_clock();
    uintptr_t blen = 0;
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
-    woke_ms = (uintptr_t) (love_clock() - t0),
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   char const *envimg = getenv("LOVE_IMAGE");
@@ -751,9 +748,6 @@ int main(int argc, char const **argv) {
         g = defv(g, "love-os");
         if (ok(g)) g->sp++; }
       if (ok(g = boot_env(g))) g->sp++; }
-    if (image_load_path && ok(g = push(g, 1, putcharm((intptr_t) woke_ms)))) {
-      g = defv(g, "born");
-      if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load, bake_out, bake_opt); }

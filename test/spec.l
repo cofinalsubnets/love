@@ -593,12 +593,7 @@
     ((th ()) = th () && 1 = peep c 0 0))            ; a promise forces once and remembers
  ('(mono (# (a))) = <(sound '(35 40 97 41))))       ; #(a) is the glued tally run
 
-; --- bootstrapping --- `born` is the start cost in ms (hatch or wake), unbound pre-egg. ask
-; presence (hatched), never born's net: a fast wake answers 0, which would read as pre-egg and pass
-; every law vacuously.
-(: hatched (elem 'born (names ())))
 (hear welp)
-(test (hatched ? (charm? born) 1))
 (hear test-strict)
 
 ; --- modules --- the runtime opens a layer around each module load and the session. (borrow 'x)
