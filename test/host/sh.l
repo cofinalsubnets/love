@@ -246,13 +246,11 @@
         (sh-match "a[bc" "a[bc")                                    ; unterminated [ is itself
         ('("src/apps/lush.l") = sh-glob "src/apps/l[t-v]sh.l" (sh-ones 19)))
 
-; completion: (insert . candidates); one candidate lands its tail and " " (a dir "/")
-(: r (sh-complete shS (sh-expl "cat src/apps/lus"))
-   (test (two? r) ("h.l " = slurp (tap <r)) ('("src/apps/lush.l") = >r)))
-(: r (sh-complete shS (sh-expl "cat src/apps/ko"))
-   (test ("re/" = slurp (tap <r))))
-(: r (sh-complete shS (sh-expl "cat src/apps/lu"))
-   (test ('("src/apps/lush.l" "src/apps/lux") = >r)))
+; completion: [n text choices], a choice [text suffix shown]; a lone one lands whole with " " (a dir "/")
+(test ([12 "src/apps/lush.l " [["src/apps/lush.l" " " "lush.l"]]] = sh-complete shS (sh-expl "cat src/apps/lus"))
+      ([11 "src/apps/kore/" [["src/apps/kore/" "" "kore/"]]] = sh-complete shS (sh-expl "cat src/apps/ko"))
+      ([11 "src/apps/lu" [["src/apps/lush.l" " " "lush.l"] ["src/apps/lux/" "" "lux/"]]] = sh-complete shS (sh-expl "cat src/apps/lu"))
+      (() = sh-complete shS (sh-expl "cat src/apps/no-such")))
 (test ("ab" = sh-common '("abc" "abd" "ab"))
         ("~" = sh-homely ("" + getenv "HOME")))
 
