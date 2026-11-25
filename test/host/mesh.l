@@ -139,6 +139,13 @@
    b3 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0) _ (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0)
    c3 (peep (b3 0) (mid * 8 + 5) 0.0) b4 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 5.0] 1.0) k4 (mesh-lit-ks fl2 [1.0 5.0]) l4 (fl2 'live 'ks)
    b5 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [2.0 5.0] 1.0)
+   ; ..its lamps' slots for a gpu: each slot's light where that lamp is, 0 past them and where none reaches
+   fl3 (mesh-pack (mesh-sheet [-2.0 0.0 -2.0] [4.0 0.0 0.0] [0.0 0.0 4.0] 4 4 [0.0 1.0 0.0] (p \ [(p 0) (3.0 + p 2)]) -1 [0.5 1.0 0.25]))
+   cd (mesh-lamp fl3 {'at [[-2.0 1.0 -2.0]] 'c [0.2 0.7 0.4] 'r 2.0}) cu (mesh-lamp fl3 {'at [[0.0 1.0 0.0]] 'c [1.0 0.5 0.3] 'r 1.5})
+   b6 (mesh-lamps! fl3 [0.1 0.2 0.3] [cu far cd] [1.0 1.0 1.0] 1.0) sl (mesh-lamp-slots fl3) ln (fl3 'n)
+   tint (j \ fl3 'cols (8 + j))
+   slot (k \ j \ c \ tint j * c j = peep (sl 2) (iota ln * 24 + 3 * k + j) 9.0)
+   bare (j \ peep (sl 0) (fl3 'live 'ix + 5 + j) 9.0 = peep (tint j * [0.1 0.2 0.3] j) (fl3 'live 'ix // 8) 8.0)
  (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)
        (map shape r2 = [[2 2] [1 1]]) (peep (r2 0) [1 1] 0 = -1) (peep (r2 0) [0 1] 0 = 65280) (peep (r1 0) [0 0] 0 = 5592405)
        (up? sa) (up? sb)
@@ -152,7 +159,12 @@
        (c1 = peep (lm 0) (mid * 8 + 5) 0.0 / 2.0) (peep (b2 0) (mid * 8 + 5) 0.0 = 3.0 * c1)
        (b2 0 = b1 0) (lm 0 = mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0 0)
        (l4 = [1.0]) (peep (b4 0) (mid * 8 + 5) 0.0 = c3) (k4 = [1.0]) (mesh-lit-ks fl [2.0] = [2.0])
-       (peep (b5 0) (mid * 8 + 5) 0.0 = 2.0 * c3)))
+       (peep (b5 0) (mid * 8 + 5) 0.0 = 2.0 * c3)
+       (shape (b6 0) = [(8 * ln)]) (all (k \ aall (fl3 'cols k = peep (b6 0) (iota ln * 8 + k) 9.0)) ^5)
+       (all (j \ aall (tint j * ([0.1 0.2 0.3] j + cu j + far j + cd j) = peep (b6 0) (iota ln * 8 + 5 + j) 9.0)) ^3)
+       (sl 1 = [0 2 0 0 0 0 0 0]) (#(sl 2) = 24 * ln) (0 < #(fl3 'live 'ix) < ln)
+       (all (j \ aall (slot 0 j cu) && aall (slot 1 j cd) && aall (bare j) && amax (cu j) > 0.0 && amax (cd j) > 0.0) ^3)
+       (amax (peep (sl 2) (iota (18 * ln) // 18 * 24 + 6 + iota (18 * ln) % 18) 1.0) = 0.0)))
 ; --- batches: each starts with no texture, whatever the batch before it last used
 (: W 40 H 24 white [1.0 1.0 1.0]
    v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
