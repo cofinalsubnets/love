@@ -2576,8 +2576,8 @@
    ns (filter (q \ q 0 <= i1 && i0 < q 0 + int (q 2 * tune-ring * song-rate) + 2) (notes (k0 - 1) + notes k0))
    vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain (q 3) 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
    y (foldl (\ a q (was (q 0) @ v (two? v ? (a + v 1 ix) a))) (t * 0.0) ns)
-   (wet m) (sp y y m tune-space @ r (? (charm? r) (wet (cask r)) (two? r) [r m] [(y . y) m]))
-   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
+   (wet m k) (sp y y m tune-space @ r (? (charm? r && k) (wet (cask r) 0) (two? r) [r m] [(y . y) m]))   ; asked twice, then dry
+   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) 1 @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
  ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
  ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
  ; glass, dulled under a roof or sealed in glass (a lens's panes, the box they span)

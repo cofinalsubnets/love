@@ -33,7 +33,7 @@ static struct g *host_biquads(struct g *g) {
  if (!ok(g = have(g, str_width(nout) + str_width(nst) + Width(struct chain)))) return g;
  struct str *out = ini_str(bump(g, str_width(nout)), nout), *st = ini_str(bump(g, str_width(nst)), nst);
  const uint8_t *in = (const uint8_t*) bytes_of(g->sp[0])->bytes, *co = (const uint8_t*) txt(g->sp[2]);
- double *m = (double*) st->bytes;
+ wdouble *m = (wdouble*) st->bytes;
  if (len(g->sp[3]) == nst) memcpy(m, txt(g->sp[3]), nst);
  else memset(m, 0, nst);
  uint8_t *o = (uint8_t*) out->bytes;
@@ -41,7 +41,7 @@ static struct g *host_biquads(struct g *g) {
   uintptr_t c = i % (uintptr_t) ch;
   double x = eq_s16(in, i);
   for (uintptr_t b = 0; b < nb; b++) {
-   double *z = m + 4 * (b * (uintptr_t) ch + c);   // x1 x2 y1 y2
+   wdouble *z = m + 4 * (b * (uintptr_t) ch + c);   // x1 x2 y1 y2
    uintptr_t k = 2 + 5 * b;
    double y = eq_q(co, k) * x + eq_q(co, k + 1) * z[0] + eq_q(co, k + 2) * z[1]
             - eq_q(co, k + 3) * z[2] - eq_q(co, k + 4) * z[3];
@@ -65,7 +65,7 @@ static struct g *host_spectrum(struct g *g) {
  const uint8_t *in = (const uint8_t*) bytes_of(g->sp[0])->bytes, *tw = (const uint8_t*) txt(g->sp[2]),
                *ed = (const uint8_t*) txt(g->sp[3]);
  uintptr_t nf = len(bytes_of(g->sp[0])) / 2 / (uintptr_t) ch, skip = nf > n ? nf - n : 0, pad = nf < n ? n - nf : 0;
- double *z = (double*) work->bytes, *tc = z + 2 * n, *ts = tc + n / 2;
+ wdouble *z = (wdouble*) work->bytes, *tc = z + 2 * n, *ts = tc + n / 2;
  for (uintptr_t i = 0; i < n; i++) {
   double s = 0;
   if (i >= pad) {

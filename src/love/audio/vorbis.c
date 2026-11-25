@@ -186,7 +186,7 @@ static int vb_codebook(struct va *a, struct vbit *b, struct vcb *c, uint8_t *len
   c->vq = va_get(a, 8 * c->entries * c->dims);
   if (a->b && !a->bad) {
    const uint32_t *mu = (const uint32_t*) (a->b + mo);
-   double *vq = (double*) (a->b + c->vq);
+   wdouble *vq = (wdouble*) (a->b + c->vq);
    for (uint32_t e = 0; e < c->entries; e++) {
     double last = 0; uint32_t div = 1;
     for (uint32_t i = 0; i < c->dims; i++) {
@@ -254,7 +254,7 @@ static void vb_tables(struct va *a, struct vh *h, int k) {
  h->tw[k] = va_get(a, 8 * (uint32_t) q), h->rev[k] = va_get(a, 4 * (uint32_t) q);
  if (!a->b || a->bad) return;
  uint8_t *base = a->b;
- double *w = AT(double, h->win[k]), *pr = AT(double, h->pre[k]), *po = AT(double, h->post[k]), *tw = AT(double, h->tw[k]);
+ wdouble *w = AT(wdouble, h->win[k]), *pr = AT(wdouble, h->pre[k]), *po = AT(wdouble, h->post[k]), *tw = AT(wdouble, h->tw[k]);
  uint32_t *rv = AT(uint32_t, h->rev[k]);
  for (int i = 0; i < m; i++) {                 // sin(pi/2 sin^2((i + 1/2)/m pi/2))
   double s, c;
@@ -403,15 +403,15 @@ static int vb_floor1(const uint8_t *base, const struct vh *h, const struct vfl *
  return 1; }
 
 // a residue's partitions into the vectors v (n each) of the channels not left out
-static void vb_resid(uint8_t *base, struct vh *h, struct vres *r, struct vbit *b, double **v, int nv, const int *dnd, int n) {
+static void vb_resid(uint8_t *base, struct vh *h, struct vres *r, struct vbit *b, wdouble **v, int nv, const int *dnd, int n) {
  int type = r->type, ch = nv, n0 = n;
- double *one[1], **v0 = v;
+ wdouble *one[1], **v0 = v;
  int dnd1 = 0;
  if (type == 2) {
   int any = 0;
   for (int c = 0; c < nv; c++) any |= !dnd[c];
   if (!any) return;
-  one[0] = AT(double, h->zr);
+  one[0] = AT(wdouble, h->zr);
   for (int i = 0; i < n * nv; i++) one[0][i] = 0;
   v = one, dnd = &dnd1, n *= nv, ch = 1; }
  uint32_t beg = r->begin < (uint32_t) n ? r->begin : (uint32_t) n, end = r->end < (uint32_t) n ? r->end : (uint32_t) n;
@@ -436,7 +436,7 @@ static void vb_resid(uint8_t *base, struct vh *h, struct vres *r, struct vbit *b
      if (bk < 0) continue;
      const struct vcb *vb = AT(const struct vcb, h->cb) + bk;
      if (!vb->vq) goto out;
-     const double *vq = AT(const double, vb->vq);
+     const wdouble *vq = AT(const wdouble, vb->vq);
      uint32_t off = beg + (uint32_t) pc * r->psize, dim = vb->dims;
      if (type == 0) {
       uint32_t stp = r->psize / dim;
@@ -456,9 +456,9 @@ static void vb_resid(uint8_t *base, struct vh *h, struct vres *r, struct vbit *b
    for (int c = 0; c < nv; c++) v0[c][i] = one[0][i * nv + c]; }
 
 // the dct-iv of m points, x into c, through an m/4-point complex fft in z, laid bit-reversed
-static void vb_dct4(const uint8_t *base, const struct vh *h, int k, const double *x, double *c, double *z) {
+static void vb_dct4(const uint8_t *base, const struct vh *h, int k, const wdouble *x, wdouble *c, wdouble *z) {
  int m = h->bs[k] / 2, q = m / 2;
- const double *pr = AT(const double, h->pre[k]), *po = AT(const double, h->post[k]), *tw = AT(const double, h->tw[k]);
+ const wdouble *pr = AT(const wdouble, h->pre[k]), *po = AT(const wdouble, h->post[k]), *tw = AT(const wdouble, h->tw[k]);
  const uint32_t *rv = AT(const uint32_t, h->rev[k]);
  for (int i = 0; i < q; i++) {
   double a = x[2 * i], b = x[m - 1 - 2 * i];
@@ -481,7 +481,7 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
  const struct vmap *mp = AT(const struct vmap, h->map) + md->map;
  int fz[256], dnd[256];
  int32_t *fb = AT(int32_t, h->fbuf);
- double *cur = AT(double, h->cur);
+ wdouble *cur = AT(wdouble, h->cur);
  for (int c = 0; c < ch; c++) {
   const struct vfl *f = AT(const struct vfl, h->fl) + mp->fl[mp->mux[c]];
   fz[c] = vb_floor1(base, h, f, &b, fb + (size_t) c * (size_t) hn, half);
@@ -490,18 +490,18 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
  for (int s = 0; s < mp->steps; s++)
   if (!dnd[mp->mag[s]] || !dnd[mp->ang[s]]) dnd[mp->mag[s]] = dnd[mp->ang[s]] = 0;
  for (int s = 0; s < mp->submaps; s++) {
-  double *v[256]; int d[256], nv = 0;
+  wdouble *v[256]; int d[256], nv = 0;
   for (int c = 0; c < ch; c++)
    if (mp->mux[c] == s) v[nv] = cur + (size_t) c * 2 * (size_t) hn, d[nv++] = dnd[c];
   vb_resid(base, h, AT(struct vres, h->res) + mp->res[s], &b, v, nv, d, half); }
  for (int s = mp->steps - 1; s >= 0; s--) {
-  double *mg = cur + (size_t) mp->mag[s] * 2 * (size_t) hn, *an = cur + (size_t) mp->ang[s] * 2 * (size_t) hn;
+  wdouble *mg = cur + (size_t) mp->mag[s] * 2 * (size_t) hn, *an = cur + (size_t) mp->ang[s] * 2 * (size_t) hn;
   for (int i = 0; i < half; i++) {
    double m = mg[i], a = an[i];
    if (m > 0) { if (a > 0) an[i] = m - a; else an[i] = m, mg[i] = m + a; }
    else { if (a > 0) an[i] = m + a; else an[i] = m, mg[i] = m - a; } } }
- double *z = AT(double, h->zr), *cc = z + half, *pv = AT(double, h->prev);
- const double *wk = AT(const double, h->win[blk]), *w0 = AT(const double, h->win[0]);
+ wdouble *z = AT(wdouble, h->zr), *cc = z + half, *pv = AT(wdouble, h->prev);
+ const wdouble *wk = AT(const wdouble, h->win[blk]), *w0 = AT(const wdouble, h->win[0]);
  int out = h->primed ? h->pn / 4 + n / 4 : 0;
  float *o = AT(float, h->out);
  // vorbis's channel order to wav's (front left, right, centre, lfe, back, side)
@@ -509,7 +509,7 @@ static int vb_audio(uint8_t *base, struct vh *h, const uint8_t *p, uint32_t len)
   {0, 2, 1, 4, 5, 3}, {0, 2, 1, 5, 6, 4, 3}, {0, 2, 1, 6, 7, 4, 5, 3}};
  for (int c = 0; c < ch; c++) {
   int oc = ch <= 8 ? ord[ch][c] : c;
-  double *x = cur + (size_t) c * 2 * (size_t) hn, *pc = pv + (size_t) c * (size_t) hn;
+  wdouble *x = cur + (size_t) c * 2 * (size_t) hn, *pc = pv + (size_t) c * (size_t) hn;
   const int32_t *fc = fb + (size_t) c * (size_t) hn;
   for (int i = 0; i < half; i++) {
    int k = fc[i];
