@@ -66,7 +66,7 @@
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
 ;   (gpu-state g)                s for a helper g: the bufs it holds, each by what it holds
-(module (gpu gpu-said gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-suns gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
+(module (gpu unwords gpu-said gpu-open gpu-win gpu-show gpu-tex gpu-buf gpu-verts gpu-lamps gpu-suns gpu-scene gpu-vis gpu-sun gpu-drop gpu-place gpu-under gpu-frame gpu-send gpu-take gpu-close gpu-how gpu-state gpu-facets)
 (borrow '(posix hashes))
 (:
  (dir? p) (stat p @ s (two? s && 16384 = 61440 & <>>s))
