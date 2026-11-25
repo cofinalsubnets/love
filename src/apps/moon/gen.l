@@ -175,6 +175,7 @@
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
+   (t2c? g) (elem (g 'tgt) '(thumb2 thumb2sp arm))   ; thumb2's code, linux's arm with it: the list frame, q4, the literal's respill
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
    (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family
@@ -1679,7 +1680,7 @@
    ; with pc. the saves sit just under fp (a free one pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
    (t2pm g fs)
-    (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
+    (cz g 't2pm fs (? (!(t2c? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
                       !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
        (: r0 (drop 4 fs)
           cs '(r4 r5 r6 r7 r8 r9 r10)
@@ -2015,7 +2016,7 @@
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
    (fcalld g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                  (sp64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15 f16 f17 f18 f19 f20 f21 f22 f23 f31)
-                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 moon's own scratch
+                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 the scratch its user saves
                  fregs16)
    (fnm? g x) (nom? x && elem x fall9)
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
@@ -2122,10 +2123,12 @@
         (: (mark? f) (f = '(saves) || f = '(rests))
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
-           fcs (? (a64? g) '(f8 f9 f10 f11 f12 f13 f14 f15) (t32? g && !(v6m? g)) '(f8 f9 f10 f11 f12 f13 f14) ())
+           fcs (? (a64? g || t32f? g) '(f8 f9 f10 f11 f12 f13 f14 f15) ())
            ; wasm's registers are the function's own locals: a call leaves them, none is saved
            ; thumb2sp: an odd single's d is saved whole, by its even name
-           (named? r f) (names r f || sp64? g && elem r fcs && names (rafo g r) f)
+           ; t32's float to int converters go through s30, which no form names: they name f15 here
+           (named? r f) (names r f || sp64? g && elem r fcs && names (rafo g r) f
+                         || r = 'f15 && t32f? g && two? f && elem <f '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui))
            nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && named? r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
