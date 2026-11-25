@@ -484,7 +484,9 @@
  (test (#(gl 'gravs) = 2) (gl 'gravs 0 'dir = 'up) (has? (lv "(room [0 0 0] [1 1 1]) (grav [0 0 0] [1 1 1] 'sideways)") "(grav [x y z] [x y z] DIR)")
        (0.5 < fu < 6.0) (mag (ft - 6.0) < 1e-6) (fo = ft) (oz > 6.6)
        (mag (feet dn) < 1e-6) (#ms = 2)
-       (#(m0 0) = 8 * 12 * grav-n) (#(m0 1) = 4 * 4 * 3 * grav-n) (peep (m0 1) 3 0 = -2)
+       (#(m0 0) = 8 * 4 * grav-n) (#(m0 1) = 4 * 2 * grav-n) (all (t \ peep (m0 1) (4 * t + 3) 0 = 4194364) ^(2 * grav-n))
+       ; ..each a square round its middle, as wide as the round glow it is
+       (: (g k) (peep (m0 0) (iota (4 * grav-n) * 8 + k) 0.0) (all (k \ amax (g k) = 0.06 && amin (g k) = -0.06 && net (g k > 0.0) = 2 * grav-n) [3 4]))
        (net (ys m1 > ys m0) > grav-n // 2) (net (ys m2 < ys (motes-at (ms 1) 0.0)) > grav-n // 2)))
 ;; a street: no face over it, the sky drawn there and none under a ceiling; its walls lit by
 ; the sun on the side it shines on; the sky's hour and cover, a wrong cover refused

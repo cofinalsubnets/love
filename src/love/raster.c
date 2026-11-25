@@ -11,7 +11,8 @@
 //         pixel kept as -1 less its colour, and added to what is drawn under it), -3 - t
 //         glass of texture t (what is behind times its texel, its colour added, hiding nothing;
 //         on a bare pixel its tint and sheen kept as -2^25 less tint + 2^24 sheen / 4, the sheen
-//         a grey to 252, and what is drawn under it seen through them);
+//         a grey to 252, and what is drawn under it seen through them), 2^22 + n a round glow:
+//         a glow falling from its middle to none n mm out, by its u v as metres from it;
 //         verts and tris may be lists of batches, pairwise
 //  texs   a list of textures, each an [h w] tray of colours (one below 0 is a hole) or a
 //         list of them, each level half the last
@@ -36,7 +37,7 @@
 //         sun, 16 numbers, and depth, a depth answer through sun, say it sees past
 #include "love.h"
 
-enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_edge = 256, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_lv = 8 * sizeof(word), rz_tn = 256,
+enum { rz_affine = 1, rz_snap = 2, rz_dither = 4, rz_cull = 8, rz_depth = 16, rz_under = 32, rz_flat = 64, rz_seen = 128, rz_edge = 256, rz_cb = 1 << 24, rz_vb = 1 << 25, rz_rg = 1 << 22, rz_lv = 8 * sizeof(word), rz_tn = 256,
        rz_na = 11,   // the riders: u v, r g b, the sun's r g b, and the place as the sun sees it
        rz_par = 32768, rz_band = 32, rz_pv = 9, rz_bk = 32768 };   // a frame big enough to share, in bands of rows;
                        // rz_bk: past any frame's count of bands, rz_side_max / rz_band
@@ -46,6 +47,7 @@ struct rz_v { flo_t x, y, z, w, a[rz_na]; };
 struct rz_tex { intptr_t const *px; intptr_t w, h, mw, mh; };   // m: a side less one, when a power of two
 struct rz {
  intptr_t W, H, flags, stride, add, glass;
+ flo_t rq;             // a round glow's one over its radius squared, 0 none
  flo_t const *m;
  flo_t lm[16], bias;     // the sun's view, when there is one, and its depth answer
  flo_t const *sm;
@@ -278,6 +280,9 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
      flo_t f = (2 * n * fa / (fa + n - ndc * (fa - n)) - w + e[8]) / e[9];
      f = f < 0 ? 0 : f > 1 ? 1 : f;
      for (int k = 0; k < 3; k++) c[k] *= f; }
+    if (r->rq > 0) {   // ..and a round one falls from its middle to none at its rim
+     flo_t const u = a[2] * s, v = a[3] * s, q = 1 - (u * u + v * v) * r->rq, f = q > 0 ? q * q * q * q : 0;
+     for (int k = 0; k < 3; k++) c[k] *= f; }
     rz_glow(o + x, c); }
    else {   // ..and drawn under, onto a glow kept there, or through a tint
     int32_t const q = o[x], g = under && q < -1 && q > -rz_vb ? -1 - q : 0;
@@ -496,7 +501,7 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
  uintptr_t const nt = tray_nelem(tt) / 4;
  intptr_t ct = -1;   // the texture the last triangle used, its levels still in r->lv
  intptr_t const *ti = tt->type == love_R ? 0 : tray_data(tt);   // ..the triangles as words, but a float tray's
- r->nlv = 0, r->add = 0, r->glass = 0, r->cls = 0;   // not the last batch's
+ r->nlv = 0, r->add = 0, r->glass = 0, r->cls = 0, r->rq = 0;   // not the last batch's
  intptr_t const me = r->ylo / rz_band;
  for (uintptr_t i = 0; i < nt; i++) {
   if (r->bk && (r->bk[i] < 0 || r->bk[i] / rz_bk > me || r->bk[i] % rz_bk < me)) continue;   // none of this band's
@@ -505,8 +510,10 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
                  t = lens ? t0 + rz_cb : c ? (t0 + 1) % rz_cb - 1 : t0;
   if (ix[0] < 0 || ix[1] < 0 || ix[2] < 0 || ix[0] >= nv || ix[1] >= nv || ix[2] >= nv) continue;
   if (r->gzp && !lens) continue;   // the lens pass: only the lenses
-  if (t0 != ct) ct = t0, r->cls = (int) c, r->glass = t <= -3, r->add = t == -2,
-                r->nlv = r->gzp ? 0 : rz_levels(texs, r->glass ? -3 - t : t, r->lv);
+  int const rg = t > rz_rg && t < rz_rg + 1000000;
+  if (t0 != ct) ct = t0, r->cls = (int) c, r->glass = t <= -3, r->add = t == -2 || rg,
+                r->rq = rg ? (flo_t) 1e6 / (flo_t) ((t - rz_rg) * (t - rz_rg)) : 0,
+                r->nlv = r->gzp || rg ? 0 : rz_levels(texs, r->glass ? -3 - t : t, r->lv);
   rz_draw(r, vt, ix, r->lv, r->nlv);
   if ((i & 255) == 255) rz_tiles(r); }
  rz_tiles(r); }
@@ -515,7 +522,7 @@ static void rz_batch(struct rz *r, struct tray *vt, struct tray *tt, word texs) 
 static int rz_faces(struct rz const *r, struct tray *tt) {
  uintptr_t const nt = tray_nelem(tt) / 4;
  if (!(r->eye[7] > r->eye[6]) || !nt) return 0;
- for (uintptr_t i = 0; i < nt; i++) if (tray_get_int(tt, 4 * i + 3) != -2) return 0;
+ for (uintptr_t i = 0; i < nt; i++) { intptr_t const t = tray_get_int(tt, 4 * i + 3); if (t != -2 && !(t > rz_rg && t < rz_rg + 1000000)) return 0; }
  return 1; }
 
 // each batch's vertices put through, one after another in pv

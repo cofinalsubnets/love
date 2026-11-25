@@ -1447,27 +1447,26 @@
       lt (pins (sky-lit up (sk 'wx) (sk 'sim) cs) 'sun s 'turn (sf 'axes x y z))
       {'lt lt 'wx (sk 'wx) 'sim (sk 'sim) 'k (0.75 * lt 'expo)
        'ss (pins (foldl (\ t k (pin t k (ss k))) {} (keys ss)) 'x (w 0) 'y (w 1) 'z (w 2) 'b (ss 'b0))}))
- ; --- a grav shaft's motes: each a speck of three crossed squares, both ways round, a glow;
- ;     its own height, speed, and turn about the middle, from its number ---
+ ; --- a grav shaft's motes: each a round glow turned to face the eye, a square round it that
+ ;     facets lights as a bell from its middle; its own height, speed, and turn about the
+ ;     middle, from its number ---
  (hash01 i) (: h (sin (i * 12.9898 + 78.233) * 43758.5453) (h - floor h))
- mote-s 0.03
- (motes-of g) (: s mote-s o 0.0 n grav-n
-   cs [[-s -s o] [s -s o] [s s o] [-s s o]
-       [o -s -s] [o -s s] [o s s] [o s -s]
-       [-s o -s] [s o -s] [s o s] [-s o s]] I (iota n) lo (g 'lo) hi (g 'hi) R (0.4 * min (hi 0 - lo 0) (hi 2 - lo 2))
+ mote-r 0.06                               ; a mote's radius
+ (motes-of g) (: n grav-n
+   vs [[-1.0 -1.0] [1.0 -1.0] [1.0 1.0] [-1.0 1.0]] m #vs rg (4194304 + int (1000 * mote-r))   ; a round glow, its radius in mm
+   I (iota n) lo (g 'lo) hi (g 'hi) R (0.4 * min (hi 0 - lo 0) (hi 2 - lo 2))
    (r k) (gem-tray [n] (map (i \ hash01 (i + 101 * k)) ^n))
-   C (iota (12 * n)) ci (C // n)
-   (cor k) (gem-tray [12] (map (c \ c k) cs) ci)
-   ts (catmap (q \ (: (v c) ((4 * q + c) * n) (catmap (i \ [[(v 0 + i) (v 1 + i) (v 2 + i) -2] [(v 0 + i) (v 2 + i) (v 1 + i) -2]
-                                                                     [(v 0 + i) (v 2 + i) (v 3 + i) -2] [(v 0 + i) (v 3 + i) (v 2 + i) -2]]) ^n))) ^3)
+   C (iota (m * n)) ci (C // n)
+   (cor k) (gem-tray [m] (map (c \ c k) vs) ci)
+   ts (catmap (t \ map (i \ [(t 0 * n + i) (t 1 * n + i) (t 2 * n + i) rg]) ^n) [[0 1 2] [0 2 3]])
    {'x (0.5 * (lo 0 + hi 0)) 'z (0.5 * (lo 2 + hi 2)) 'y0 (lo 1) 'H (hi 1 + 2.8 - lo 1) 'up (g 'dir @ 'up 1.0 -1.0)
     'h (r 0) 'rad (R * sqrt (r 1)) 'a (tau * r 2) 'sp (0.6 + 0.8 * r 3) 'w (0.3 + 0.6 * r 4)
-    'ix (C % n) 'ox (cor 0) 'oy (cor 1) 'oz (cor 2) 'tris (star-tray [(4 * #ts)] (cats ts))})
+    'ix (C % n) 'u (mote-r * cor 0) 'v (mote-r * cor 1) 'tris (star-tray [(4 * #ts)] (cats ts))})
  ; ..where they have got to at mt: [verts tris], brightest midway along the shaft
  (motes-at m mt) (: u (m 'h + m 'up * m 'sp * grav-v * mt / m 'H) f (u - floor u)
    an (m 'a + m 'w * mt) X (m 'x + m 'rad * cos an) Z (m 'z + m 'rad * sin an) Y (m 'y0 + m 'H * f)
-   b (0.9 * sin (pi * f)) ix (m 'ix) (g t) (t ix) B (g b)
-   [(lace [(g X + m 'ox) (g Y + m 'oy) (g Z + m 'oz) 0.0 0.0 (0.45 * B) (0.75 * B) B]) (m 'tris)])
+   b (2.2 * sin (pi * f)) ix (m 'ix) (g t) (t ix) B (g b)
+   [(lace [(g X) (g Y) (g Z) (m 'u) (m 'v) (0.45 * B) (0.75 * B) B]) (m 'tris)])
  ; --- the frame: the rooms and doors lit by the lights as bright as they are now, then
  ;     what shines, then the glows; out as half blocks or kitty's pixels ---
  fov 1.5
