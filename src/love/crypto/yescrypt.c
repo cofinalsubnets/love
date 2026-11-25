@@ -168,7 +168,7 @@ static void smix(uint32_t *b, uintptr_t r, uint64_t n, uint32_t p, uint32_t t, u
   smix2(bp, r, p2floor(np), rw, fl, vp, xy, ci); }
  for (uint32_t i = 0; i < p; i++) smix2(b + i * s, r, n, all - rw, fl & ~YRw, v, xy, (fl & YRw) ? &c[i] : 0); }
 
-// the bytes a body over N r p takes: V, B, XY, the sboxes, each 8-aligned by its size
+// the bytes a body over N r p takes: V, B, XY, the sboxes, all 32-bit words
 static uint64_t yroom(uint64_t n, uint64_t r, uint64_t p) { return 128 * r * n + 128 * r * p + 256 * r + (uint64_t) SBytes * p; }
 
 static int ybody(uint8_t *room, uint8_t const *pw, uintptr_t pn, uint8_t const *salt, uintptr_t sn,

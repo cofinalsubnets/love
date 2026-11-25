@@ -866,7 +866,9 @@ struct str *nom_str(struct g *g, word x);   // a nom's name, else 0
 static love_inline struct str *bytes_of(word x) { return caskp(x) ? cask(x)->str : str(x); }
 // a cask's str, or NULL for anything else
 static love_inline struct str *cask_str(word x) { return caskp(x) ? cask(x)->str : NULL; }
-// a cask's bytes, 8-aligned to hold a C state, and their count; NULL for anything else
+// a cask's bytes, word-aligned as every str's are, and their count; NULL for anything else. a C
+// state in them keeps a 64-bit integer as words and a double as a wdouble: on 32-bit the bytes may
+// lie at 4 mod 8, and a collection may move them there
 uint8_t *cask_bytes(word x, uintptr_t *n);
 // a state: a port with no door, holding a nif's bytes. only the nifs that made it read or write them
 struct state { struct io io; struct str *str; };
@@ -874,7 +876,9 @@ static love_inline struct str *state_str(word x) {
  return evenp(x) && cell(x)->ap == lvm_port_io && ((struct io*) x)->vt == &state_vt ? ((struct state*) x)->str : NULL; }
 static love_inline uint8_t *state_bytes(word x, uintptr_t *n) {
  struct str *s = state_str(x);
- return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+ return s ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+// a double a word's alignment holds, where a state's bytes are read as doubles
+typedef double wdouble __attribute__((aligned(sizeof(uintptr_t))));
 
 // --- numbers ---
 #define isnum(x) (charmp(x) || gemp(x) || bigp(x))

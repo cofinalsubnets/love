@@ -6,7 +6,7 @@
 #include "fft.h"
 
 
-void love_fft_rev(double *z, uintptr_t n) {
+void love_fft_rev(wdouble *z, uintptr_t n) {
  for (uintptr_t i = 1, j = 0; i < n; i++) {
   uintptr_t b = n >> 1;
   for (; j & b; b >>= 1) j ^= b;
@@ -15,7 +15,7 @@ void love_fft_rev(double *z, uintptr_t n) {
    double r = z[2 * i], m = z[2 * i + 1];
    z[2 * i] = z[2 * j], z[2 * i + 1] = z[2 * j + 1], z[2 * j] = r, z[2 * j + 1] = m; } } }
 
-void love_fft_bf(double *z, uintptr_t n, const double *tc, const double *ts, int inv) {
+void love_fft_bf(wdouble *z, uintptr_t n, const wdouble *tc, const wdouble *ts, int inv) {
  double sg = inv ? 1 : -1;
  for (uintptr_t h = 1; h < n; h <<= 1)              // butterflies, twiddle e^(-+2 pi i k / 2h)
   for (uintptr_t a = 0; a < n; a += 2 * h)
@@ -25,7 +25,7 @@ void love_fft_bf(double *z, uintptr_t n, const double *tc, const double *ts, int
            xr = v[0] * c - v[1] * s, xi = v[0] * s + v[1] * c;
     v[0] = u[0] - xr, v[1] = u[1] - xi, u[0] += xr, u[1] += xi; } }
 
-void love_fft(double *z, uintptr_t n, const double *tc, const double *ts, int inv) {
+void love_fft(wdouble *z, uintptr_t n, const wdouble *tc, const wdouble *ts, int inv) {
  love_fft_rev(z, n), love_fft_bf(z, n, tc, ts, inv); }
 
 static struct g *host_fft(struct g *g, int inv) {
@@ -39,7 +39,7 @@ static struct g *host_fft(struct g *g, int inv) {
  struct tray *v = tray(g->sp[0]), *r = ini_tray(bump(g, b2w(bytes)), love_C, 1);
  struct str *work = ini_str(bump(g, str_width(nw)), nw);
  r->shape[0] = n;
- double *z = (double*) work->bytes, *tc = z + 2 * n, *ts = tc + n / 2;
+ wdouble *z = (wdouble*) work->bytes, *tc = z + 2 * n, *ts = tc + n / 2;
  for (uintptr_t i = 0; i < n; i++)
   if (i >= m) z[2 * i] = z[2 * i + 1] = 0;
   else if (v->type == love_C) z[2 * i] = ((flo_t*) tray_data(v))[2 * i], z[2 * i + 1] = ((flo_t*) tray_data(v))[2 * i + 1];

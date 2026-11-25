@@ -31,6 +31,15 @@
                    (go o acc) (? (o >= #s) (cats (rev acc))
                                  (mp3-frame st s o f @ (pcm . nx) (go nx (pcm . acc)) 2 (cats (rev acc)) w w))
                    (go 0 ()))
+   ; a state a collection moves, at any word's alignment, plays the same frames; in a child, so a crash is a red
+   mv-src ("(borrow '(posix mp3)) (: q (uread \"" + dir + "/mv.mp3\") s <>q "
+           + "(pad k) (map (j \\ j) ^k) (one f) (: st (mp3-new 0) (map (n \\ (: _ (f n) (mp3-frame st s (72 * (n % 10)) 0))) ^40)) "
+           + "a (one (\\ 0)) b (one (i \\ (pad (i % 5), please 1))) (puts (#s = 792 && all (i \\ two? (b i) && a i = b i) ^40 ? \"same\" \"not the same\")))")
+   mv-q (open (dir + "/mv.mp3") "w") _ (say mv-q tiny, close mv-q)
+   mv-cmd (getenv "CASK_LOVE" @ c (string? c ? ["sh" "-c" (c + " -e \"$1\"") "x" mv-src] ["out/love" "-e" mv-src]))
+   mv-r (hark mv-cmd)
+   _ (? (<mv-r = 0 && has? >mv-r "same" && !(has? >mv-r "not the same")) 0 (puts "mp3: moved state: \(show mv-r)\n"))
+   _ (test (<mv-r = 0) (has? >mv-r "same") !(has? >mv-r "not the same"))
    want "816cd0c08947870ba80a1ddfcbd2a349b0e43586fbe13226b7e1be8bbcfee8a9"
    tm (mp3-meta tiny)
    _ (test (mp3-head tiny 0 = (72 | (1 << 12) | (16000 << 16))) (mp3-head "abcd" 0 = 0) (mp3-head tiny 1 = 0)

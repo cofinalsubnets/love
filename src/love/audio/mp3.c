@@ -299,17 +299,17 @@ static uint8_t const mp3_parts[3][28] = {
 // between frames, the tables from its first; the rest is work room kept off the stack
 #define MP3_MAGIC 0x6d703363
 struct mst {
- double nik[64 * 32];       // the synthesis matrix, cos((16 + i)(2k + 1) pi / 64)
- double c36[36 * 18];       // the long imdct's cosines
- double c12[12 * 6];        // the short one's
- double win[4][36];         // the windows of the four block types
- double cs[8], ca[8];       // alias reduction's butterflies
- double isl[7], isr[7];     // mpeg 1 intensity stereo's split
+ wdouble nik[64 * 32];       // the synthesis matrix, cos((16 + i)(2k + 1) pi / 64)
+ wdouble c36[36 * 18];       // the long imdct's cosines
+ wdouble c12[12 * 6];        // the short one's
+ wdouble win[4][36];         // the windows of the four block types
+ wdouble cs[8], ca[8];       // alias reduction's butterflies
+ wdouble isl[7], isr[7];     // mpeg 1 intensity stereo's split
  int32_t ready;             // the tables laid
- double ov[2][576];         // the imdct's second halves, 32 subbands x 18
- double v[2][1024];         // the synthesis fifo
- double xr[2][576];         // a granule's lines, then its subband samples
- double tb[2][576];         // the hybrid filter's output, subband-major
+ wdouble ov[2][576];         // the imdct's second halves, 32 subbands x 18
+ wdouble v[2][1024];         // the synthesis fifo
+ wdouble xr[2][576];         // a granule's lines, then its subband samples
+ wdouble tb[2][576];         // the hybrid filter's output, subband-major
  uint32_t magic;
  int32_t vo[2], reslen;
  uint8_t res[1024];         // the last main data bytes
@@ -460,7 +460,7 @@ out:                                             // a granule cut short is silen
  return n; }
 
 // the lines requantized: |x|^4/3 times the band's gain, short bands their window's
-static void mp3_requant(struct gri *g, const uint8_t *scf, const int *x, double *xr) {
+static void mp3_requant(struct gri *g, const uint8_t *scf, const int *x, wdouble *xr) {
  static uint8_t const pretab[22] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0};
  int i = 0, sh = g->scale ? 4 : 2;
  for (int k = 0; g->tab[k] && i < 576; k++) {
@@ -475,7 +475,7 @@ static void mp3_requant(struct gri *g, const uint8_t *scf, const int *x, double 
 // joint stereo on the coded order: intensity where the right channel has gone quiet and its
 // position is legal, mid/side elsewhere
 static void mp3_stereo(struct mst *m, struct gri *g, int ver, int ms, int is) {
- double *l = m->xr[0], *r = m->xr[1];
+ wdouble *l = m->xr[0], *r = m->xr[1];
  if (is) {
   int lsf = ver != 2, i = 0, top[3] = {0, 0, 0}, ltop = 0;
   // where each window of the right channel last holds a line, and the long part's
@@ -506,7 +506,7 @@ static void mp3_stereo(struct mst *m, struct gri *g, int ver, int ms, int is) {
   for (int i = 0; i < 576; i++) { double a = l[i], c = r[i]; l[i] = (a + c) * SQRT_HALF, r[i] = (a - c) * SQRT_HALF; } }
 
 // short bands from the coded order (band, window, line) to the imdct's (subband, line, window)
-static void mp3_reorder(struct gri *g, double *xr, double *t) {
+static void mp3_reorder(struct gri *g, wdouble *xr, wdouble *t) {
  int i = 0, k = 0;
  for (; k < g->nl; k++) i += g->tab[k];
  int base = i;
@@ -523,7 +523,7 @@ static void mp3_reorder(struct gri *g, double *xr, double *t) {
 // alias reduction across each long subband boundary, then the imdct, overlap and the odd
 // subbands' odd samples turned over
 static void mp3_hybrid(struct mst *m, struct gri *g, int ch) {
- double *x = m->xr[ch], *ov = m->ov[ch], *t = m->tb[ch];
+ wdouble *x = m->xr[ch], *ov = m->ov[ch], *t = m->tb[ch];
  int sbl = g->bt != 2 ? 32 : g->mixed ? 2 : 0;
  for (int sb = 1; sb < sbl; sb++)
   for (int i = 0; i < 8; i++) {
@@ -531,7 +531,8 @@ static void mp3_hybrid(struct mst *m, struct gri *g, int ch) {
    x[18 * sb - 1 - i] = a * m->cs[i] - b * m->ca[i];
    x[18 * sb + i] = b * m->cs[i] + a * m->ca[i]; }
  for (int sb = 0; sb < 32; sb++) {
-  double y[36], *in = x + 18 * sb;
+  double y[36];
+  wdouble *in = x + 18 * sb;
   int bt = sb >= sbl ? 2 : g->bt == 2 || (g->mixed && sb < 2) ? 0 : g->bt;   // a mixed flag puts the two lowest on the plain window, whatever the type
   if (bt != 2)
    for (int i = 0; i < 36; i++) {
@@ -552,7 +553,7 @@ static void mp3_hybrid(struct mst *m, struct gri *g, int ch) {
 
 // the polyphase synthesis of 18 slots of 32 subbands into pcm (stride nch)
 static void mp3_synth(struct mst *m, int ch, int nch, float *pcm) {
- double *t = m->tb[ch], *v = m->v[ch];
+ wdouble *t = m->tb[ch], *v = m->v[ch];
  for (int s = 0; s < 18; s++) {
   int o = m->vo[ch] = (m->vo[ch] - 64) & 1023;
   for (int i = 0; i < 64; i++) {
