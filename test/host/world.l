@@ -797,6 +797,16 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; the desert's wind under a roof: whole out on it, dulled at once, but along a lull dying away
+; evenly from its first x to its second, and dulled past it
+(: src "(void [-20 -2 -20] [40 20 40]) (sky 12 'clear) (room [0 0 0] [8 3 8]) (hum 'wind [-20 -2 -20] [40 20 40]) "
+   (at l x) (: st (world-new 8 8 l "") _ (pins st 'px x 'py 1.6 'pz 4.0) _ (hum-bus st 480) (amax (abs <(hum-bus st 480))))
+   lu (lv (src + "(lull [8 -1 0] [0 4 8])")) no (lv src) o (at no 20.0)
+   near? (a \ b \ a - b < 0.01 * o && b - a < 0.01 * o)
+   rs (map (x \ at lu x / o) [7.9 6.0 4.0 2.0 0.1])
+ (test (0.0 < o) (near? (at lu 20.0) o) (near? (at no 4.0) (0.15 * o)) (near? (at lu 4.0) (0.575 * o))
+       (rs 0 > rs 1 > rs 2 > rs 3 > rs 4) (near? (at lu 7.9) (0.99 * o)) (near? (at lu 0.1) (0.16 * o))
+       (has? (world-read "(level \"t\" (lull [1 0 0] [1 4 8]))") "(lull [x y z] [x y z])")))
 ; the street's traffic and a music box: each heard, under the clip, keeping its memory from
 ; one chunk to the next; the box's reverb left from right
 (: (sw nm) (: st (world-new 8 8 (lv ("(room [0 0 0] [8 3 8]) (hum '" + nm + " [0 0 0] [8 3 8])")) "") _ (pins st 'px 4 'py 1.6 'pz 4)

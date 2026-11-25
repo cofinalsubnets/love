@@ -2624,7 +2624,8 @@
    (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
  ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
  ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
- ; glass, dulled under a roof or sealed in glass (a lens's panes, the box they span)
+ ; glass, dulled under a roof, by its lull where it has one, or sealed in glass (a lens's panes,
+ ; the box they span)
  (open-at sc e) (: sk (sky-here (sc 'surf) (sc 'sky) e) (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
    (roomy b) (b 'hi 0 - b 'lo 0 > 2.0 * body-r && b 'hi 2 - b 'lo 2 > 2.0 * body-r && b 'hi 1 - b 'lo 1 > eye-h)
    (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
@@ -2633,8 +2634,14 @@
    (in L) (: qs (filter (p \ p 'lens = L) ps)
             (all (k \ foldl (\ a p (min a (p 'lo k))) 1e9 qs < e k && e k < foldl (\ a p (max a (p 'hi k))) -1e9 qs) ^3))
    (any (p \ in (p 'lens)) ps))
+ desert-dull 0.15
+ ; ..a lull's loudness at e, dying away along it
+ (lulled l e) (? (any (k \ e k < l 'lo k || l 'hi k < e k) ^3) 0.0
+   (1.0 + (desert-dull - 1.0) * (e 0 - l 'from) / (l 'to - l 'from)))
  (desert-near st xz) (: e [(st 'px) (st 'py) (st 'pz)]   ; 'py is the eye's height already
-   (open-at (st 'sc) e && !(glassed (st 'lvl) e) ? 1.0 0.15))
+   (? (glassed (st 'lvl) e) desert-dull
+      (open-at (st 'sc) e) 1.0
+      (foldl (\ g l (max g (lulled l e))) desert-dull (peep (st 'lvl) 'lulls ()))))
  ; ..each [at near], at a sound's samples at the times t; or [at near 'kept], at answering its
  ; samples, or a pair of them left and right, and what it keeps for the next chunk, given it
  hum-voices {'fluorescent [buzz-at buzz-near] 'wind [wind-at desert-near] 'bells [bells-at desert-near]
