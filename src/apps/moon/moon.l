@@ -623,7 +623,7 @@
                     (elf32? tgt)
                     (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                        (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
-                          (objsecs32n tgt s32 fns gns wks anames)))
+                          (objsecs32x tgt s32 fns gns wks anames (dbg ? locs ()) [() () () () () (asmax 5)])))
                     (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
                               fns gns wks locs anames asmax
                               ; the functions C laid, not the asm's, under unwind tables or -g
