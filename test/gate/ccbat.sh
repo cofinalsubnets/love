@@ -396,6 +396,14 @@ if [ $tgt = a64 ]; then
   moonrun -t a64 -o "$r/abi128.t" test/cc/abi128/host.c "$d/peer128.o" > "$d/abi128.log" 2>&1 \
     || { cat "$d/abi128.log" >&2; fail "abi128: mooncc could not build or link host.c"; }
   a64_job abi128.t "timeout 60 \$RUN ./abi128.t"
+  clang --target=aarch64-linux-gnu -std=gnu17 -O2 -w -ffreestanding -fno-stack-protector -c -o "$d/peerfn.o" test/cc/fnptr/peer.c 2> "$d/peerfn.log" \
+    || { cat "$d/peerfn.log" >&2; fail "fnptr: clang could not build peer.c"; }
+  for os in t s; do
+    fl=; [ $os = s ] && fl=-Os
+    moonrun -t a64 $fl -o "$r/fnptr.$os" test/cc/fnptr/host.c "$d/peerfn.o" > "$d/fnptr.log" 2>&1 \
+      || { cat "$d/fnptr.log" >&2; fail "fnptr: mooncc -t a64 $fl could not build or link host.c"; }
+    a64_job fnptr.$os "timeout 60 \$RUN ./fnptr.$os"
+  done
   # thread-locals: clang's at -O0 and -O2 under mooncc's link and moonlibc's threads, a
   # program calling no libc, and every load and store width's offset (ldst64.s)
   clang --target=aarch64-linux-gnu -fno-pie -c -o "$d/tlsd.o" test/cc/tls/defs.c 2> "$d/tls.log" \
@@ -523,6 +531,10 @@ if [ $tgt = a64 ]; then
   tail -1 "$r/res/abi64.t.out"
   [ "$(cat "$r/res/abi128.t.rc")" -eq 0 ] || { cat "$r/res/abi128.t.out" >&2; fail "abi128: mooncc and clang disagree on AAPCS64's __int128"; }
   tail -1 "$r/res/abi128.t.out"
+  for os in t s; do
+    [ "$(cat "$r/res/fnptr.$os.rc")" -eq 42 ] || fail "fnptr: mooncc and clang disagree on a64 ($os, check $(cat "$r/res/fnptr.$os.rc"))"
+  done
+  echo "fnptr: ours call clang's through every function type"
   for t in tls0 tls2 tlsb ldst64; do
     [ "$(cat "$r/res/$t.t.rc")" -eq 0 ] || { cat "$r/res/$t.t.out" >&2; fail "tls: $t answers $(cat "$r/res/$t.t.rc") $where"; }
   done
@@ -719,11 +731,24 @@ EOF
   done
   echo "cs file: r4-r11 and d8-d15 come back from 16 shapes under ${scc%% *}'s stub, -O0 -O2 -Os -fpic"
 }
+# a call through a function's type reaches the other's callee: its named parameters converted, its
+# `...` placed as variadic, a callee of no prototype as fixed. fn_pair CC FLAGS..
+fn_pair() {
+  vcc=$1; shift
+  $vcc -std=gnu17 -c -O2 -w -ffreestanding -fno-stack-protector -fno-pic -fno-asynchronous-unwind-tables -fno-unwind-tables -o "$d/fp.o" test/cc/fnptr/peer.c || fail "fnptr: ${vcc%% *} could not build the peer"
+  for o in "" -O2 -Os; do
+    moonrun -t $tgt $o "$@" -o "$d/fpp" test/cc/fnptr/host.c "$d/fp.o" > "$d/fp.log" 2>&1 || { cat "$d/fp.log" >&2; fail "fnptr: mooncc -t $tgt $o"; }
+    timeout 60 $a64_qemu "$d/fpp"; a=$?
+    [ $a -eq 42 ] || fail "fnptr: $o against ${vcc%% *}'s object (check $a)"
+  done
+  echo "fnptr: ours call ${vcc%% *}'s through every function type, -O0 -O2 -Os"
+}
 case $tgt in
-  i386) va_pair "gcc -m32" ;;
-  rv64) [ -z "$GCC" ] || va_pair "$GCC -mno-relax" ;;
-  rv32) va_pair "clang $rvf" ;;
-  mips) va_pair "clang $mpf" -os linux ;;
+  i386) va_pair "gcc -m32"; fn_pair "gcc -m32" ;;
+  rv64) [ -z "$GCC" ] || { va_pair "$GCC -mno-relax"; fn_pair "$GCC -mno-relax"; } ;;
+  rv32) va_pair "clang $rvf"; fn_pair "clang $rvf -DSOFT" -DSOFT ;;
+  mips) va_pair "clang $mpf" -os linux; fn_pair "clang $mpf -DSOFT" -os linux -DSOFT ;;
+  arm) ! command -v arm-none-eabi-gcc > /dev/null 2>&1 || fn_pair "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard" -nostdlib ;;
 esac
 [ $tgt != arm ] || cs_file "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard -Wa,-mimplicit-it=thumb"
 # arm's __int128 has no place past the named parameters: the va_arg and the call refuse by name;

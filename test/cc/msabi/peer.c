@@ -20,3 +20,12 @@ long peer_calls(void)
 	}
 	return r;
 }
+long MS peer_va(char n, ...)
+{
+	__builtin_ms_va_list a;
+	__builtin_ms_va_start(a, n);
+	long t = n;
+	for (int i = 0; i < 5; i++) t += __builtin_va_arg(a, long);
+	__builtin_ms_va_end(a);
+	return t;
+}
