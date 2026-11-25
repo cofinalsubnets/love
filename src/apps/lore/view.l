@@ -169,15 +169,15 @@
  (view-lean dx dy s) (: d (sqrt (2 (1.0 * dx) + 2 (1.0 * dy))) u (d / max 1.0 s)
    k (min 1.0 (max 0.0 ((u - view-lean-still) / (view-lean-full - view-lean-still))))
    (k <= 0.0 ? [0.0 0.0 0] [(k * dx / d) (k * -dy / d) (view-lean-run < u)]))
- ; ..the stick's base in a window W by H: [x y r], r its ring, past which it runs; a touch further
- ; than twice that from it is no stick
- (view-base W H) (: s (1.0 * min W H) r (view-lean-run * s) [(0.34 * s) (H - 0.36 * s) r])
+ ; ..the stick's base in a window W by H, halfway up one that is wide: [x y r], past r it runs; a
+ ; touch further than twice that from it is no stick
+ (view-base W H) (: s (1.0 * min W H) [(0.34 * s) (H < W ? (0.5 * H) (H - 0.36 * s)) (view-lean-run * s)])
  view-base-ramp 120                       ; ms a landing takes to lean in full
  view-tap-ms 250                          ; a still touch no longer than this is a tap
  view-back-ms 2000                        ; how long Back asks before it is taken back
  ; ..a thumb's pixels before it counts as moved, how long still before it is held, and how much
  ; further its drag looks than a mouse
- view-thumb-still 10 view-thumb-hold 300 view-thumb-look 2 view-thumb-run 50
+ view-thumb-still 10 view-thumb-hold 300 view-thumb-look 4 view-thumb-run 50
  view-walking ['forward 'back 'turn-left 'turn-right 'look-up 'look-down]
  ; a key in a window, by its place -> its code where it types nothing: space, esc, enter,
  ; the arrows; the rest come by what they type
@@ -229,7 +229,7 @@
 ; thumbs, 'tap (st x y) the keys a tap at pixel x y is, view-tap unless said, and 'winds (st)
 ; whether a looking thumb held still is the left button, down till it lifts; 'lean (st x y run),
 ; where 'leans (st), the stick as it leans instead of its keys: view-lean's, each frame, from a
-; base of its own with a ring of 'dots, its landing already leaning; 'hop (st p) a jump by a right tap,
+; base of its own, its landing already leaning; 'hop (st p) a jump by a right tap,
 ; where 'leans: p what 'poised (st) said as it came down, or by a second finger there at once.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
  ; held. in a window the frame paints itself (mesh-show) and a cell is 8 by 16 pixels
@@ -288,7 +288,7 @@
    (base _) (window-size win @ s (view-base (s 0) (s 1)))
    hop (peep lv 'hop ()) poised (peep lv 'poised (_ \ 0))
    (based? x y) (: b (base ()) (sqrt (2 (x - b 0) + 2 (y - b 1)) <= 2.0 * b 2))
-   (leaning now) (: on (leans st) _ (pin st 'dots (? (on && !(con 'on)) (: b (base ()) (map (k \ (: a (k * tau / 24.0) x (int (b 0 + b 2 * cos a)) y (int (b 1 + b 2 * sin a)) [(x - 1) (y - 1) (x + 2) (y + 2)])) ^24)) ()))
+   (leaning now) (: on (leans st)
      (on ? (each (filter (i \ tablet? (fg i) && fg i 'walk) (keys fg) @ () () l [<l])
        (i \ (: f (fg i) b (base ()) _ (pins held 'stick-x () 'stick-y ())
                 v (view-lean (f 'x - b 0) (f 'y - b 1) (window-size win @ s (min (s 0) (s 1)))) g (min 1.0 ((now - f 't) / (1.0 * view-base-ramp)))
@@ -400,7 +400,7 @@
              _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
              _ (phone-con ())
              _ (resize ())
-             _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) (pc 'back && clock (pc 'back) <= view-back-ms) (view-band st " Back again to leave " (max 1 (st 'h // 4)) [22 17 14 233]) {}))
+             _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) (pc 'back && clock (pc 'back) <= view-back-ms) (view-band st (snip (pad " Back again to leave" (st 'w) " ") 0 (st 'w)) (st 'h // 2) [20 20 20 233]) {}))
              _ (win ? (lv 'frame st)
                     (lv 'frame st @ f (say out (esc + "[H" + (? (two? (pn 'con)) (view-synced (con-shift f (pn 'at 0) (pn 'at 1)) (view-box-say st (con-box con (pn 'con)))) (hs 'on) (view-synced f (view-help-say st hl)) f)), flush out)))
              _ (slow-said (clock 0 - t1))

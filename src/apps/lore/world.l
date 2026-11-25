@@ -2734,7 +2734,7 @@
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
  (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
- thumb-text "the ring walks, past it runs  ·  right thumb looks  ·  a right tap or a second finger jumps, a left tap acts  ·  Back twice leaves, the top's middle the console"
+ thumb-text "left thumb walks, further runs  ·  right thumb looks  ·  a right tap or a second finger jumps, a left tap acts  ·  Back twice leaves, the top's middle the console"
  ; the console's words here: those of any walk, and the loop's where the level has a deck
  (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
                     ["at" "where you stand" (where st)]
