@@ -6,8 +6,6 @@
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.png")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (rd p) (: q (open p "r") s (slurp q) (close q, s))
-   (put p s) (open p "w" @ q (say q s, close q))
    (bytes l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
 
    ; -- the nif
@@ -34,7 +32,7 @@
    (has p) (open p "r" @ q (hot? q ? (close q, 1) 0))
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
    ok? (pil? && has "/usr/bin/magick")
-   _ (put (dir + "/mk.py") "import sys
+   _ (uwrite (dir + "/mk.py") "import sys
 from PIL import Image
 d = sys.argv[1]
 w, h = 37, 23
@@ -74,7 +72,7 @@ for n in (2, 4, 16, 256):
            _ (sh (m + "magick p16.png -interlace PNG ip16.png"))
            (one n) (: f (dir + "/" + n + ".png")
                       want (sh ("magick " + f + " -depth 8 rgba:-"))
-                      got (png-decode (rd f))
+                      got (png-decode (fget f))
                       (? (two? want && <want = 0 && two? got && got 0 = 37 && got 1 = 23
                           && got 2 = >want)
                          1 (puts ("png: " + n + " differs from magick\n"), 0)))
@@ -85,10 +83,7 @@ for n in (2, 4, 16, 256):
    ; apng
    ; muxed by hand, 24x16: five palette frames under one PLTE and tRNS, each composed frame by
    ; its sha-256 per the spec's rule (written out below); a delay num/den in ms, a den of 0 is 100
-   (nib c) (? (c < 58) (c - 48) (c - 87))
-   (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
-                               string c))
-   hand (unx (cats [
+   hand (hexbytes (cats [
      "89504e470d0a1a0a0000000d4948445200000018000000100403000000fe0aa2a6000000086163544c000000"
      "050000000041ad4f6000000030504c5445000000ffffffe61e1e1ec83c283cdcfadc00000810182028303840"
      "4850586068707880889098a0a8b0b8c0c8d0d8e0e8cdb7e3960000001074524e530080ffffffffffffffffff"
@@ -117,7 +112,7 @@ for n in (2, 4, 16, 256):
            (#(png-frames hand 2 2) = 2)
            ; the first frame is the default image, png-decode's
            (hf 2 0 0 = png-decode hand 2))
-   _ (put (dir + "/an.py") """
+   _ (uwrite (dir + "/an.py") """
     # apngs PIL wrote, each composed by the apng spec's rule written out here, every frame
     # decoded alone by PIL; where alpha is all or none, the frames as drawn, composed whole, must agree
     import sys, os, io, zlib, struct
@@ -191,21 +186,20 @@ for n in (2, 4, 16, 256):
     """)
    (anim-same l)
     (: ws (split " " l) nm (ws 0) n <(sound (ws 3)) ds (map (t \ <(sound t)) (drop 4 ws))
-       r (png-frames (rd (dir + "/" + nm + ".png")) 1000)
+       r (png-frames (fget (dir + "/" + nm + ".png")) 1000)
        (two? r && r 0 = <(sound (ws 1)) && r 1 = <(sound (ws 2)) && #(r 2) = n
-        && atom? (filter (k \ !(r 2 k 0 = rd (dir + "/" + nm + "." + show k + ".rgba") && r 2 k 1 = ds k)) (jot n))))
+        && atom? (filter (k \ !(r 2 k 0 = fget (dir + "/" + nm + "." + show k + ".rgba") && r 2 k 1 = ds k)) (jot n))))
    _ (pil? ? (: r (hark ["python3" (dir + "/an.py") dir])
-                ls (filter (l \ 0 < #l) (split "\n" (rd (dir + "/anims"))))
+                ls (filter (l \ 0 < #l) (split "\n" (fget (dir + "/anims"))))
                 (test (<r = 0) (#ls = 7) (atom? (filter (l \ !(anim-same l)) ls))))
         (gate-partly "png: no python3 PIL, its animations skipped"))
 
    ; refusals
-   good (ok? ? (rd (dir + "/c8.png")) "")
-   (flip s i) (cask #s @ c (pour c 0 s 0 #s, pin c i (255 - s i), string c))
+   good (ok? ? (fget (dir + "/c8.png")) "")
    _ (test (png-decode "GIF89a" = "not a png")
            (ok? ? (png-decode (snip good 0 (#good - 20)) = "truncated") 1)
-           (ok? ? (png-decode (flip good (#good - 30)) = "bad crc in IDAT") 1)
-           (ok? ? (png-decode (flip good 20) = "bad crc in IHDR") 1))
+           (ok? ? (png-decode (flipb good (#good - 30)) = "bad crc in IDAT") 1)
+           (ok? ? (png-decode (flipb good 20) = "bad crc in IHDR") 1))
    ; refused before allocating: a header past 2^28 pixels, data too short for its header
    wrbe (cite 'bytes 'wrbe) zb (cite 'bytes 'zbytes)
    (chunk ty b) (wrbe #b 4 + ty + b + wrbe (crc32 (ty + b)) 4)
@@ -230,7 +224,7 @@ for n in (2, 4, 16, 256):
          (png-frames (mkapng 1) 10 = "a frame past the canvas")
          (png-frames "GIF89a" 10 = "not a png")
          (png-frames (anim 16383 16383 (zb 64) 0) 10 = "short image data")   ; before its 1 GiB canvas
-         (atom? (filter (i \ !(png-frames (recrc (flip hand i)) 10 @ d (string? d || two? d))) (jot #hand)))
+         (atom? (filter (i \ !(png-frames (recrc (flipb hand i)) 10 @ d (string? d || two? d))) (jot #hand)))
          (png-decode (mkpng 100000 100000 (zb 64)) = "too big")
          (png-decode (mkpng 16385 16384 (zb 64)) = "too big")
          (png-decode (mkpng 16384 16384 (zb 64)) = "too big")       ; 2^28, but a filter byte per row past inflate's 1 GiB

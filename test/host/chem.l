@@ -7,7 +7,6 @@
    love (cwd 0 + "/out/love")
    dir (cwd 0 + "/out/.chemtest-" + show (getpid 0))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
 
    ; the manual's alkyl chain
    c1 (chem "a\n.cstart\nCH3\nbond\nC\ndouble bond up\nO\nbond right from C\nCH3\n.cend\nb\n.cstart\n.cend\n")
@@ -34,7 +33,7 @@
 
    ; the command
    f (dir + "/c.ms")
-   _ (put f ".cstart\nbenzene\nbond 30 ; OH\n.cend\n")
+   _ (uwrite f ".cstart\nbenzene\nbond 30 ; OH\n.cend\n")
    r1 (hark [love "chem" f])
    r2 (hark [love "chem" (dir + "/none.chem")])
    (test (<r1 = 0) (has? >r1 "#bond 30 ; OH\nLast: bond(0.2, 30, from Last.V1.ne )\n")

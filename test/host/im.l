@@ -10,7 +10,6 @@
    dir (cwd 0 + "/out/.im")
    love (cwd 0 + "/out/love")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
    (bytes l) (foldl (a \ b \ (a + string b)) "" l)
    red [255 0 0 255] blue [0 0 255 255]
 
@@ -93,8 +92,8 @@
    _ (K 'im-heard "\e[6;20;10t\e[?62;22c" @ h (test !(h 'kitty) !(h 'sixel) (h 'cw = 10) (h 'ch = 20)))
 
    ; im as a command
-   _ (put (dir + "/a.gif") gf, put (dir + "/b.jpg") jp, put (dir + "/n.txt") "hello")
-   _ (put (dir + "/anim.gif") anim)
+   _ (uwrite (dir + "/a.gif") gf, uwrite (dir + "/b.jpg") jp, uwrite (dir + "/n.txt") "hello")
+   _ (uwrite (dir + "/anim.gif") anim)
    r1 (hark [love "im" "-w" "8" (dir + "/a.gif")])
    r2 (hark [love "jpegcat" "-w" "8" (dir + "/a.gif") (dir + "/b.jpg")])
    r3 (hark [love "im" "cat" (dir + "/n.txt") (dir + "/none.png")])
@@ -235,7 +234,7 @@
            (<(hark [love "im" "less" "-g" "neon" (dir + "/a.gif")]) = 2))
 
    ; markdown and html2text on a terminal: a local picture under its image's line
-   _ (put (dir + "/sub.gif") gf)
+   _ (uwrite (dir + "/sub.gif") gf)
    md (cite 'lapiz 'mdread "# t\n\nsee ![it](sub.gif) here\n\n![gone](nope.png) and ![w](http://x/y.png)\n")
    lp (K 'lens-pics md 40 (dir + "/doc.md"))
    ll (: (go i st acc) (? (#lp <= i) (rev acc) (lp i = 10) (go (i + 1) (i + 1) (snip lp st i . acc)) (go (i + 1) st acc))

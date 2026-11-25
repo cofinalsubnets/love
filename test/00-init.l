@@ -16,6 +16,12 @@
    (gate-partly m) (gate-strict? 0 ? (puts (m + " -- REFUSED: a strict box runs every leg\n"), quit 1)
                     (puts (m + "\n"))))
 
+; what many laws want of a file or a string: hex text as its bytes, a file whole, one byte inverted
+(: (hexbytes h) (: (nib c) (? (c < 58) (c - 48) (c - 87))
+                   (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)), string c)))
+   (fget p) (: q (open p "r") s (slurp q) (close q, s))
+   (flipb s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c)))
+
 ; the reader under test, for every print->read differential:
 ; (r text) answers the datum consed onto the rest, () at a clean end, `torn` if cut short
 (: rd-test sound)
