@@ -4564,38 +4564,71 @@
        (abl? g 'unroll ? f (walk f)))
    ; -- a small local array named only by constant-indexed elements becomes those elements as
    ; scalars, which the allocator may seat; a brace of plain items initializes them in order, the
-   ; rest zero. no decay, no &, no sizeof, no designator: any other mention leaves the array whole --
+   ; rest zero, and a constant memcpy of wide ones copies by element. no decay, no &, no sizeof, no
+   ; designator: any other mention leaves the array whole --
    (sra g f)
     (: tm (gtm g)
        (kv e) (cfold tm e @ v (cint? v ? v ()))
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
        cand {}                                      ; name -> (elty n)
        dcl {}
+       tys {} ps9 {'locals tys 'lqs {} 'globals {} 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
        (plain? p2 n) (p2 @ ('init is) (#is <= n && !(any (e \ two? e && elem <e '(dfield didx init)) is)) !(two? p2))
        (fit? x p) (<x = 'decl && dbare? p &&
                    (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16 && plain? (p 2) n) ()))
-       (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), pin tys <p <>p, fit? x p ? (pin cand <p >(<>p)) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
                   (map cen x))
        _ (cen f)
-       bad {}
+       bad {} use {} cpd {} tmps {'k 0}
+       (bare e) (e @ ['cast ('ptr _) x] (bare x) _ e)
+       ; an integer or pointer element of a word's half or more: a copy of it is its bits
+       (wide? et) (ptr? et || elem et '(int uint long ulong llong ullong))
+       (arrn e) (bare e @ ['var nm] (cand nm @ c (two? c && wide? <c ? nm)) _ ())
+       ; what the other side must be: such an array too, or a pointer whose loads may go by element
+       (mate et e) (arrn e @ nm (nm ? (<(cand nm) = et)
+                                    (ptype ps9 (bare e) @ ((('ptr || 'arr) . t . _) && t = et) 1
+                                                          _ (!(sal? g) && (x64? g || a64? g)))))
+       (room e k) (arrn e @ nm (!nm || k <= cand nm 1))
+       ; a constant memcpy to or from the front of such arrays, as a statement -> [d s k et]
+       (mcp x)
+        (x @ (['expr ['call ['var m] [d s e]]] && string? m && memnm? g m "memcpy" && m != <>f && !(dcl m) && !(two? (assoc m <>>f)))
+              (: da (arrn d) sa (arrn s) nm (da ? da sa)
+                 (? (!nm || da = sa) ()
+                    (: et <(cand nm) w (tsz g et) n (memk g e)
+                       (charm? n && 0 < n && n % w = 0 && room d (n // w) && room s (n // w) && mate et d && mate et s ?
+                          [d s (n // w) et]))))
+              _ ())
        (elt x) (x @ ('deref ('bin '+ ('var nm) ix)) (cand nm @ c (two? c ? (kv ix @ k (charm? k && 0 <= k < c 1 ? [nm k]))))
                     ())
        ; an element's address is the array's: pointer arithmetic may walk from it
+       (side e) (arrn e @ nm (nm ? (pin cpd nm 1) (scan e)))
        (scan x) (? (atom? x) 0
+                   (mcp x @ [d s _ _] (side d, side s, 1) _ ()) 0
                    (x @ ('addr e) (two? (elt e)) ()) (elt <>x @ [nm _] (pin bad nm 1))
-                   (two? (elt x)) 0
+                   (elt x @ [nm _] (pin use nm 1) _ ()) 0
                    (<x = 'var) (two? (cand <>x) ? (pin bad <>x 1) 0)
                    (map scan x))
-       _ (two? (keys cand) ? (scan f))
-       ok (filter (nm \ !(bad nm) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
+       _ (two? (keys cand) ? (map (p \ pin tys <p <>p) <>>f, scan f))
+       ok (filter (nm \ !(bad nm) && (use nm || !(cpd nm)) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
        (sn nm k) "\(nm)`s\(k)"
        (rd ps) (? !(two? ps) ()
                   (elem <<ps ok) (: is (<ps 2 @ ('init l) l ())
                                     (cand <<ps @ [et n] (map (k \ [(sn <<ps k) et (two? is ? (k < #is ? (rw (is k)) '(num 0)))]) ^n) + rd >ps))
                   (rw <ps . rd >ps))
+       (seat? e) (arrn e @ nm (nm && elem nm ok))
+       ; a copy by element: a side that is no seated array through a pointer taken once
+       (hold et e) (? (seat? e) [(arrn e) ()]
+                      (: k (tmps 'k) t "`a\(k)" _ (pin tmps 'k (k + 1)) [t [[t ['ptr et] ['cast ['ptr et] (rw e)]]]]))
+       (cpy d s k et)
+        (hold et d @ [dn dd] (hold et s @ [sn9 sd]
+           (: (at nm i) (rw ['deref ['bin '+ ['var nm] ['num i]]])
+              ds (dd + sd)
+              ['blk ((two? ds ? [['decl ds]] ()) + map (i \ ['expr ['asn (at dn i) (at sn9 i)]]) ^k)])))
        (rw x) (? (atom? x) x
+                 (mcp x @ [d s k et] (? (seat? d || seat? s) (cpy d s k et) (map rw x)) _ (rw1 x)))
+       (rw1 x)  (? (atom? x) x
                  (elt x @ e (? (two? e && elem <e ok) ['var (sn <e <>e)]
                                (<x = 'decl) ['decl (rd <>x)]
                                (map rw x))))

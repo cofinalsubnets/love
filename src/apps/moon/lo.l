@@ -503,6 +503,7 @@
            'complex "C99 complex arithmetic"
            'vla "this variable-length array"
            'igoto "a computed goto"
+           'vaw "a variadic __int128"
            'msabi "an ms_abi call with a float or struct in its signature"
            ('abi || ('abi _)) "this signature's wide values"
            ['arg t] "passing this \(tsz g t)-byte struct by value"
@@ -1530,7 +1531,11 @@
           (rvva i v) (v @ ([vt r fs] && rv64? g && va && two? ptys && #ptys <= i && lofl? vt)
                             (lomk g @ t ['long t (fs + [['movqrx t r]])]) _ v)
           (go l i acc)
-           (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @ 'bad 'bad v (go u (i + 1) (acc + [(rvva i v)])))
+           (l @ (e . u) (arg e (i < #ptys ? (ptys i) 'none) @
+                           'bad 'bad
+                           ; past a prototype's named ones the four-word pair's place is no va_arg's
+                           ([vt _ _] && va && t32w? g && 0 < #ptys <= i && d128? vt) (lono g 'vaw)
+                           v (go u (i + 1) (acc + [(rvva i v)])))
                 acc)
           ; a returned aggregate lands in a temp; in the memory class its address is the hidden first arg
           sret (losr? g rt)
@@ -1776,6 +1781,7 @@
              [gi 0 ov (odd + acc + post) env])))
    ; a variadic's next word: the cursor over the pushed registers and the caller's block
    (lo32vaarg g p fs ty)
+    (d128? ty ? (lono g 'vaw)
     (lomk g @ a (lomk g @ n
        (: sz (4 * lo32words g ty)
           af (fs + [['ld a p 0]] + (lo32al8 g ty ? (lomk g @ k [['add a a 7] ['li k -8] ['and a a k]]) ()) +
@@ -1783,7 +1789,7 @@
           (? (stru? ty) [ty a af]
              (pair? g ty) (lomk g @ l (lomk g @ h [ty [l h] (af + [['ld l a (plo g 0)] ['ld h a (phi g 0)]])]))
              (lofl? ty) (lomkf g @ d [ty d (af + [['ldsd d a 0]])])
-             (lomk g @ d [ty d (af + [[(ldop ty) d a 0]])])))))
+             (lomk g @ d [ty d (af + [[(ldop ty) d a 0]])]))))))
    ; eightbyte n bytes at a+off into a fresh vreg of class c -> [vreg forms]: exact widths, the
    ; odd ones by the old chunk arm
    (loeb g c a off n)

@@ -2,7 +2,8 @@
 // a polygon is a list of points going round, each [x y z]; a plane [n d] holds the points p
 // with dot n p <= d. a corner that comes through uncut is the same word it came in as.
 //  (poly-keep ps pls)  ps kept inside each plane in turn, till it is under three corners
-//  (poly-carve ps pls) ps in pieces, each plane through it cutting every piece it crosses
+//  (poly-carve ps pls) ps in pieces, each plane through it cutting every piece it crosses, or, of
+//                       [n d [lo hi]], those that reach into that box
 //  (poly-grid ps cell) ps cut at every multiple of cell, x then y then z
 //  (poly-beside ..)    each face's neighbours, for brush.l's sides
 // a carve's or a grid's pieces are those three or more corners round and over 1e-8 in area,
@@ -138,24 +139,45 @@ love_noinline static struct g *host_poly_keep(struct g *g) {
  if (pl) alloc(pl, 0);
  return bag_fin(&a), bag_fin(&c), g; }
 
+#define pl_gone ((flo_t) 1e30)
+// each plane's box in rows of lo and hi, all there is where it has none
+static flo_t *pl_boxes(word l, uintptr_t n, int *bad) {
+ uintptr_t cap = 0;
+ flo_t *b = pl_grow(NULL, 6 * n + 6, &cap, sizeof *b, bad);
+ if (*bad) return NULL;
+ for (uintptr_t i = 0; i < n; i++, l = B(l)) {
+  word const q = B(B(A(l)));
+  flo_t *o = b + 6 * i;
+  for (int k = 0; k < 3; k++) o[k] = -pl_gone, o[3 + k] = pl_gone;
+  if (chainp(q) && !(chainp(A(q)) && chainp(B(A(q))) && pl_num3(A(A(q)), o) && pl_num3(A(B(A(q))), o + 3))) return alloc(b, 0), *bad = 1, NULL; }
+ return b; }
+// whether a piece reaches into box o: past a shared edge along it, or onto it where it is flat
+static bool pl_reach(struct pv const *ps, uintptr_t n, flo_t const *o) {
+ for (int k = 0; k < 3; k++) {
+  flo_t lo = ps->p[k], hi = lo;
+  for (uintptr_t i = 1; i < n; i++) lo = ps[i].p[k] < lo ? ps[i].p[k] : lo, hi = ps[i].p[k] > hi ? ps[i].p[k] : hi;
+  flo_t const e = hi - lo > (flo_t) 2e-3 && o[3 + k] - o[k] > (flo_t) 2e-3 ? (flo_t) -2e-6 : (flo_t) 1e-3;
+  if (!(hi >= o[k] - e && lo <= o[3 + k] + e)) return 0; }
+ return 1; }
 love_noinline static struct g *host_poly_carve(struct g *g) {
  struct bag a, c;
  bag_ini(&a), bag_ini(&c);
  uintptr_t np = 0;
- flo_t *pl = pl_planes(g->sp[1], &np, &a.bad);
+ flo_t *pl = pl_planes(g->sp[1], &np, &a.bad), *bx = a.bad ? NULL : pl_boxes(g->sp[1], np, &a.bad);
  if (!a.bad && pl_read(g->sp[0], &a))
   for (uintptr_t j = 0; j < np && !a.bad && !c.bad; j++) {
    bag_reset(&c);
    for (uintptr_t i = 0; i < a.np; i++) {
     struct pv const *ps = bag_piece(&a, i);
     uintptr_t const n = bag_n(&a, i);
-    if (!pl_crosses(ps, n, pl + 4 * j)) { bag_copy(&c, ps, n); continue; }
+    if (!pl_crosses(ps, n, pl + 4 * j) || !pl_reach(ps, n, bx + 6 * j)) { bag_copy(&c, ps, n); continue; }
     for (int s = 0; s < 2; s++) {
      pl_split(ps, n, pl + 4 * j, s ? NULL : &c, s ? &c : NULL);
      if (pl_ok(c.v + c.at[c.np], c.nv - c.at[c.np])) bag_end(&c); else bag_drop(&c); } }
    struct bag t = a; a = c, c = t; }
  else a.bad = 1;
  g = a.bad || c.bad ? (g->sp[0] = ZeroPoint, g) : pl_emit(g, &a, 0);
+ if (bx) alloc(bx, 0);
  if (pl) alloc(pl, 0);
  return bag_fin(&a), bag_fin(&c), g; }
 
@@ -199,7 +221,6 @@ love_noinline static struct g *host_poly_grid(struct g *g) {
 // numbers, empty where the first is pl_gone. corners a millimetre apart are one; a corner
 // hashes by its bucket, 256 mm a side, so a bucket's corners lie between its hash and an
 // empty slot
-#define pl_gone ((flo_t) 1e30)
 struct seen { uint8_t *s; uint64_t cap; };
 static int64_t pl_mm(flo_t x) { return flo_i64(love_floor(x * (flo_t) 1000.0 + (flo_t) 0.5)); }
 static int64_t pl_bk(flo_t x) { int64_t const k = pl_mm(x); return k >= 0 ? k / 256 : -((255 - k) / 256); }
@@ -428,12 +449,14 @@ static void pl_get3(word l, uintptr_t n, flo_t *o) {   // three columns into row
 // numbers ci; the brushes' boxes bl bh. answers each face's list of the numbers of the faces
 // of brushes within 0.02 of its brush's box, brush by brush and face by face in order, whose
 // boxes come within 1e-3 of its own
-struct side { flo_t *f, *b; intptr_t *br, *id, *by, *at, *sp, *r; uintptr_t nf, nb, nr, cr; int bad; };
+// up: boxes about runs of sd_run8 of by, then of those, level by level from lv, ln to a level
+enum { sd_run8 = 8, sd_lvs = 24 };
+struct side { flo_t *f, *b, *up; intptr_t *br, *id, *by, *at, *sp, *near, *r; uintptr_t nf, nb, nr, cr, lv[sd_lvs], ln[sd_lvs]; int nl, bad; };
 static void sd_fin(struct side *s) {
- flo_t *fs[2] = {s->f, s->b};
- intptr_t *is[6] = {s->br, s->id, s->by, s->at, s->sp, s->r};
- for (int k = 0; k < 2; k++) if (fs[k]) alloc(fs[k], 0);
- for (int k = 0; k < 6; k++) if (is[k]) alloc(is[k], 0); }
+ flo_t *fs[3] = {s->f, s->b, s->up};
+ intptr_t *is[7] = {s->br, s->id, s->by, s->at, s->sp, s->near, s->r};
+ for (int k = 0; k < 3; k++) if (fs[k]) alloc(fs[k], 0);
+ for (int k = 0; k < 7; k++) if (is[k]) alloc(is[k], 0); }
 static void *sd_new(uintptr_t n, uintptr_t w, int *bad) { uintptr_t c = 0; return pl_grow(NULL, n + 1, &c, w, bad); }
 // the faces brush by brush, each brush's in order: by[at[c]] to by[at[c + 1]]
 static void sd_group(struct side *s) {
@@ -443,22 +466,46 @@ static void sd_group(struct side *s) {
  for (uintptr_t i = 0; i < s->nf; i++) s->by[s->at[s->br[i]]++] = (intptr_t) i;
  for (uintptr_t c = s->nb; c; c--) s->at[c] = s->at[c - 1];
  s->at[0] = 0; }
-static bool sd_meet(flo_t const *lo, flo_t const *hi, uintptr_t i, uintptr_t j, flo_t e) {
- for (int k = 0; k < 3; k++) if (!(hi[3 * j + k] >= lo[3 * i + k] - e && lo[3 * j + k] - e <= hi[3 * i + k])) return 0;
+// whether box bl bh comes within e of box al ah
+static bool sd_meet(flo_t const *al, flo_t const *ah, flo_t const *bl, flo_t const *bh, flo_t e) {
+ for (int k = 0; k < 3; k++) if (!(bh[k] >= al[k] - e && bl[k] - e <= ah[k])) return 0;
  return 1; }
+// the boxes about runs, a box no number bounds left out: it meets nothing
+static void sd_rise(struct side *s) {
+ uintptr_t at = 0, under = s->nf;
+ for (int l = 0; under > 1 && l < sd_lvs; l++, s->nl = l) {
+  uintptr_t const n = (under + sd_run8 - 1) / sd_run8;
+  s->lv[l] = at, s->ln[l] = n;
+  for (uintptr_t i = 0; i < n; i++) {
+   flo_t *o = s->up + 6 * (at + i);
+   for (int k = 0; k < 3; k++) o[k] = pl_gone, o[3 + k] = -pl_gone;
+   for (uintptr_t q = i * sd_run8; q < (i + 1) * sd_run8 && q < under; q++) {
+    flo_t const *c = l ? s->up + 6 * (s->lv[l - 1] + q) : NULL, *cl = l ? c : s->f + 3 * s->by[q], *ch = l ? c + 3 : s->f + 3 * (s->nf + (uintptr_t) s->by[q]);
+    for (int k = 0; k < 3; k++) o[k] = cl[k] < o[k] ? cl[k] : o[k], o[3 + k] = ch[k] > o[3 + k] ? ch[k] : o[3 + k]; } }
+  at += n, under = n; } }
+// the faces under box n of level l - 1 (a face at l 0) that are beside face i, onto r in by's order
+static void sd_walk(struct side *s, uintptr_t i, int l, uintptr_t n) {
+ flo_t const *al = s->f + 3 * i, *ah = s->f + 3 * (s->nf + i);
+ if (!l) {
+  uintptr_t const j = (uintptr_t) s->by[n];
+  if (!s->near[s->br[j]] || !sd_meet(al, ah, s->f + 3 * j, s->f + 3 * (s->nf + j), (flo_t) 1e-3)) return;
+  s->r = pl_grow(s->r, s->nr + 1, &s->cr, sizeof *s->r, &s->bad);
+  if (!s->bad) s->r[s->nr++] = s->id[j];
+  return; }
+ flo_t const *o = s->up + 6 * (s->lv[l - 1] + n);
+ if (!sd_meet(al, ah, o, o + 3, (flo_t) 1e-3)) return;
+ uintptr_t const e = l > 1 ? s->ln[l - 2] : s->nf;
+ for (uintptr_t q = n * sd_run8; q < (n + 1) * sd_run8 && q < e && !s->bad; q++) sd_walk(s, i, l - 1, q); }
 static void sd_run(struct side *s) {
- flo_t const *fl = s->f, *fh = s->f + 3 * s->nf, *bl = s->b, *bh = s->b + 3 * s->nb;
- for (uintptr_t i = 0; i < s->nf && !s->bad; i++) {
-  uintptr_t const c0 = (uintptr_t) s->br[i];
-  s->sp[2 * i] = (intptr_t) s->nr;
-  for (uintptr_t c = 0; c < s->nb && !s->bad; c++) {
-   if (!sd_meet(bl, bh, c0, c, (flo_t) 0.02)) continue;
-   for (intptr_t q = s->at[c]; q < s->at[c + 1] && !s->bad; q++) {
-    uintptr_t const j = (uintptr_t) s->by[q];
-    if (!sd_meet(fl, fh, i, j, (flo_t) 1e-3)) continue;
-    s->r = pl_grow(s->r, s->nr + 1, &s->cr, sizeof *s->r, &s->bad);
-    if (!s->bad) s->r[s->nr++] = s->id[j]; } }
-  s->sp[2 * i + 1] = (intptr_t) s->nr - s->sp[2 * i]; } }
+ flo_t const *bl = s->b, *bh = s->b + 3 * s->nb;
+ for (uintptr_t c0 = 0; c0 < s->nb && !s->bad; c0++) {
+  if (s->at[c0] == s->at[c0 + 1]) continue;
+  for (uintptr_t c = 0; c < s->nb; c++) s->near[c] = sd_meet(bl + 3 * c0, bh + 3 * c0, bl + 3 * c, bh + 3 * c, (flo_t) 0.02);
+  for (intptr_t p = s->at[c0]; p < s->at[c0 + 1] && !s->bad; p++) {
+   uintptr_t const i = (uintptr_t) s->by[p];
+   s->sp[2 * i] = (intptr_t) s->nr;
+   sd_walk(s, i, s->nl, 0);
+   s->sp[2 * i + 1] = (intptr_t) s->nr - s->sp[2 * i]; } } }
 love_noinline static struct g *host_poly_beside(struct g *g) {
  word const fb = g->sp[2], ci = g->sp[3], bl = g->sp[4];
  struct side s = {0};
@@ -467,13 +514,14 @@ love_noinline static struct g *host_poly_beside(struct g *g) {
   return g->sp[0] = ZeroPoint, g;
  s.f = sd_new(6 * s.nf, sizeof *s.f, &s.bad), s.b = sd_new(6 * s.nb, sizeof *s.b, &s.bad);
  s.br = sd_new(s.nf, sizeof *s.br, &s.bad), s.id = sd_new(s.nf, sizeof *s.id, &s.bad), s.by = sd_new(s.nf, sizeof *s.by, &s.bad);
- s.at = sd_new(s.nb + 1, sizeof *s.at, &s.bad), s.sp = sd_new(2 * s.nf, sizeof *s.sp, &s.bad);
+ s.at = sd_new(s.nb + 1, sizeof *s.at, &s.bad), s.sp = sd_new(2 * s.nf, sizeof *s.sp, &s.bad), s.near = sd_new(s.nb, sizeof *s.near, &s.bad);
+ s.up = sd_new(6 * (s.nf / (sd_run8 - 1) + sd_lvs), sizeof *s.up, &s.bad);
  if (!s.bad) {
   pl_get3(g->sp[0], s.nf, s.f), pl_get3(g->sp[1], s.nf, s.f + 3 * s.nf), pl_get3(bl, s.nb, s.b), pl_get3(g->sp[5], s.nb, s.b + 3 * s.nb);
   for (uintptr_t i = 0; i < s.nf; i++) {
    s.br[i] = tray_get_int(tray(fb), i), s.id[i] = tray_get_int(tray(ci), i);
    s.bad |= s.br[i] < 0 || (uintptr_t) s.br[i] >= s.nb; } }
- if (!s.bad) sd_group(&s), sd_run(&s);
+ if (!s.bad) sd_group(&s), sd_rise(&s), sd_run(&s);
  if (!s.bad && ok(g = have(g, (s.nf + s.nr) * chain_req))) {
   word l = ZeroPoint;
   for (uintptr_t i = s.nf; i--; ) {
