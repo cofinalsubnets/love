@@ -569,7 +569,7 @@
                                  (gt ? gt
                                     ; a bare function name: its 'sigs row as ('fn rty ptys)
                                     (peep (ps 'sigs) <>e () @ sg
-                                       (two? sg ? ['fn <sg <>sg]))))))
+                                       (two? sg ? (sg 2 ? ['fn <sg <>sg 'va] ['fn <sg <>sg])))))))
              (k = 'dot) (ptype ps <>e @ bt (stru? bt ? (fldty ps bt <>>e)))
              (k = 'deref) (ptype ps <>e @ it
                              (? (ptr? it) <>it (arr? it) <>it
@@ -622,6 +622,7 @@
                     ; two pointers meet with both pointees' masks: to compatible types, or one to void
                     (!(ptr? a && ptr? b)) ()
                     (tbare a = tbare b) (pmk <>a 0 (ptq a | ptq b))
+                    (fn? <>a && fn? <>b && (fnold? <>a || fnold? <>b)) (ptrjoin a b)
                     (<>a = 'void || <>b = 'void) (pmk 'void 0 (ptq a | ptq b))
                     ()))
              ; a truth value is an int (C11 6.5.3.3, 6.5.8, 6.5.13), whatever the operand
@@ -665,13 +666,12 @@
    ; the (params)/[dims] suffixes on a direct declarator -> ((name w dat bare) rest). w maps
    ; the eventual pointee to the declared type, so the type grows inside-out; dat is the
    ; name's own (params), which a fn def binds; bare: still a (paren-wrapped) name.
+   ; a function type off pparams' answer: the parameter types, names dropped, and 'va for a `...`
+   (fnof t rp) (: ts (map caup <rp) (rp 2 ? ['fn t ts 'va] ['fn t ts]))
    (psufs ps ts name w dat bare)
     (? (peekp ts "(")
         (: rp (pparams ps >ts ())
-           ; the parameter types, names dropped. a variadic prototype parks () like an
-           ; unprototyped one: no `...` rides the type, and AAPCS-VFP places variadics apart
-           pt9 (two? rp && !(rp 2) ? (map caup <rp))
-           (atom? rp ? () (psufs ps <>rp name (t \ w ['fn (qbare t) pt9]) (bare ? rp dat) ())))
+           (atom? rp ? () (psufs ps <>rp name (t \ w (fnof (qbare t) rp)) (bare ? rp dat) ())))
        (peekp ts "[")
         (adims ps ts () @ ar
            (atom? ar ? () (psufs ps <>ar name (t \ w (mkarr t <ar)) dat ())))
@@ -703,12 +703,12 @@
                             (qd? t) (illty? <>>t)
                             ()))
    (illblame _) (clblame "a function returning a function or an array, or an array of functions")
-   ; ms_abi anywhere in a declarator marks the first function its type reaches: ('fn ret params 'ms).
+   ; ms_abi anywhere in a declarator marks the first function its type reaches: ('fn ret params 'ms), 'msva past a `...`.
    ; x64's alone: gcc lets it go by elsewhere
    (pms? ps) (peep ps 'tgt 'x64 = 'x64)
    (pdtor ps ts base) (pdtor0 ps ts base @ dr (two? dr && pms? ps && msin? ts <>dr ? [(msent <dr) <>dr] dr))
    (msin? a b) (? (atom? a || a = b) () (tkk <a = 'id && elem (tkv <a) '("ms_abi" "__ms_abi__")) 1 (msin? >a b))
-   (msty t) (? (fn? t) [<t <>t (2 < #t ? (t 2)) 'ms]
+   (msty t) (? (fn? t) [<t <>t (2 < #t ? (t 2)) (3 < #t && elem (t 3) '(va msva) ? 'msva 'ms)]
                (two? t && elem <t '(ptr arr varr qual)) (qd? t ? ['qual <>t (msty <>>t)] (<t . (msty <>t . >>t)))
                t)
    (msent e) (<e . (msty <>e . >>e))
@@ -736,10 +736,9 @@
              (? (peekp ts3 "(")                       ; name(params): ('fn ty pts), as psufs lays a prototype's
                  (skipbal >ts3 1 @ t2
                     (? !(two? t2) () (illty? ['fn (qbare ty)]) (illblame 0)
-                       ; K&R heads and a variadic prototype park no types
+                       ; a K&R head parks no types
                        (: rp (krhead? ps >ts3 ? () (pparams ps >ts3 ()))
-                          pt9 (two? rp && !(rp 2) ? (map caup <rp))
-                          [[name (two? pt9 ? ['fn (qbare ty) pt9] ['fn (qbare ty)])] t2])))
+                          [[name (two? rp && two? <rp ? (fnof (qbare ty) rp) ['fn (qbare ty)])] t2])))
                 !(peekp ts3 "[") [[name ty] ts3]
                 (adims ps ts3 () @ dr
                    (atom? dr ? ()
