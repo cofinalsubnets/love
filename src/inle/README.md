@@ -32,9 +32,8 @@ Its image still bakes here, on mps2's baker (`make -C src/inle/mps2 imgpds`).
 
 ## teensy41/
 
-Bare-metal Teensy 4.1 (NXP i.MX RT1062, Cortex-M7 @ 600 MHz, ~1 MB SRAM):
-love LIVE ON SILICON -- all-mooncc `-t thumb2` build, XIP boot from the 8 MB
-FlexSPI NOR behind the config block + IVT, LPUART6 console on pins 0/1 at
-115200, image boot (a build-time qemu bake wakes in ~1 s where the on-device
-egg bake took ~55 s). `make` / `make flash` (teensy_loader_cli). See
-teensy41/README.md.
+The inle kernel on the Teensy 4.1 (NXP i.MX RT1062, Cortex-M7 @ 600 MHz): an all-mooncc
+`-t arm` (Thumb-2) build, XIP boot from the 8 MB FlexSPI NOR behind the config block and
+IVT, the shell on the usb cdc and LPUART6, the PSRAM as RAM, the microSD as the disk, the
+board's pins through the gpio words, and an image baked under qemu-arm. `make` / `make
+flash` (src/tools/halfkay.l). See teensy41/README.md.

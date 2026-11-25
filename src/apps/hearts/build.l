@@ -26,8 +26,10 @@
 ; $HEARTS_PKG_CONFIG  the pkg-config the host programs ask (`make HOSTPKG_CONFIG=`): objtool's libelf
 ; $HEARTS_KGZIP  the gzip the build runs (`make KGZIP=`): the reference is given the same one
 ; $HEARTS_CC, $HEARTS_LD, $HEARTS_AR  the kernel's compiler, linker and archiver (`make CC= LD= AR=`);
-;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a unit mooncc refuses is clang's, and
-;                named in .hearts/kcc.log), love's ld (but the arm32 compat vdso's, lld's) and love's ar
+;                unset, mooncc through .hearts/bin/hk-cc (kcc.l: a line mooncc refuses fails by name),
+;                love's ld, the arm32 compat vdso's too, and love's ar
+; $HEARTS_KCC_CLANG  1: a line mooncc refuses or never takes is clang's, each file it lays named in
+;                .hearts/kcc.log (a gate that compares against clang); unset, clang is never run
 ; $HEARTS_SH     a shell to run the commands with instead of lush (/bin/sh, for a differential)
 ; $HEARTS_CONFIG a config fragment laid over defconfig as merge_config.sh lays one: appended to
 ;                .config, then olddefconfig made (pi.config, the pi boards')
@@ -133,10 +135,10 @@
                 + "esac\nexec " + q (sd + "/bin/love") + " mooncc \"$@\"\n"),
         uwrite (hd + "/bin/xcert") (bang + "exec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/xcert.l") + " \"$@\"\n"),
         uwrite (hd + "/bin/hk-cc")
-               (bang + "# the kernel's compiler: mooncc, and clang where it refuses (kcc.l); a unit takes love's\n"
+               (bang + "# the kernel's compiler: mooncc (kcc.l), clang only under HEARTS_KCC_CLANG; a unit takes love's\n"
                 + "# own budget, not the driver's: one header-heavy unit's live set passes 800 MB\n"
-                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log")
-                + "\nexport HEARTS_CLANG_VERSION=" + q (hark ["clang" "-dumpversion"] @ r (two? r && <r = 0 ? (chomp >r) "")) + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
+                + "unset LOVE_BUDGET_MB\nexport HEARTS_KCC_LOG=" + q (hd + "/kcc.log") + " HEARTS_KCC_REFUSED=" + q (hd + "/kcc.refused")
+                + "\nexport HEARTS_CLANG_VERSION=" + q (getenv "HEARTS_KCC_CLANG" = "1" ? (hark ["clang" "-dumpversion"] @ r (two? r && <r = 0 ? (chomp >r) "")) "") + "\nexec " + q (sd + "/bin/love") + " " + q (dir (argv 1) + "/kcc.l") + " \"$@\"\n"),
         hark ["chmod" "+x" (hd + "/bin/hk-cc")],
         hark ["chmod" "+x" (hd + "/bin/xcert")],
         hark ["chmod" "+x" (hd + "/bin/hk-hostcc")],
@@ -163,6 +165,7 @@
     ? (: f (hk-envmake K sub sh run (made " prior")) (drain 0, quit (string? f ? 1 0)))
       (: t0 (clock 0)
          _ (hark ["mkdir" "-p" (hd + "/bin")])
+         _ (uwrite (hd + "/kcc.refused") "")
          _ (uwrite (hd + "/bin/hk-make") (bang + "HEARTS_JOBS=1 exec " + q (argv 0) + " " + q (argv 1) + " --sub \"$@\"\n"))
          _ (hark ["chmod" "+x" (hd + "/bin/hk-make")])
          _ (seat 0)
@@ -183,15 +186,15 @@
                        "CC" (hd + "/bin/hk-cc") "LD" (selfpath 0 + " ld") "AR" (selfpath 0 + " ar")
                        "OBJCOPY" (selfpath 0 + " objcopy") "STRIP" (selfpath 0 + " strip") "NM" (selfpath 0 + " nm")
                        "OBJDUMP" (selfpath 0 + " objdump") "READELF" (selfpath 0 + " readelf")
-                       ; the compat vdso is elf32 arm, which love's ld does not link: lld's
-                       "LD_COMPAT" "ld.lld"
+                       ; the compat vdso's, elf32 arm
+                       "LD_COMPAT" (selfpath 0 + " ld")
                        ; x86's objtool: tools/build links and archives with HOSTLD and HOSTAR
                        @ c (x86 ? (pins c "HOSTCFLAGS" ("-idirafter " + here + "/usr/include")
                                         "HOSTPKG_CONFIG" (hd + "/libelf/pkg-config")
                                         "HOSTLD" (selfpath 0 + " ld") "HOSTAR" (selfpath 0 + " ar")) c))
          cl (foldl (a \ kv \ (getenv (kv 0) @ v (string? v ? (pin a (kv 1) v) a))) cl1
                    [["HEARTS_LEX" "LEX"] ["HEARTS_YACC" "YACC"] ["HEARTS_KGZIP" "KGZIP"]
-                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_AR" "AR"] ["HEARTS_PKG_CONFIG" "HOSTPKG_CONFIG"]
+                    ["HEARTS_CC" "CC"] ["HEARTS_LD" "LD"] ["HEARTS_LD" "LD_COMPAT"] ["HEARTS_AR" "AR"] ["HEARTS_PKG_CONFIG" "HOSTPKG_CONFIG"]
                     ["HEARTS_OBJCOPY" "OBJCOPY"] ["HEARTS_STRIP" "STRIP"] ["HEARTS_NM" "NM"]
                     ["HEARTS_OBJDUMP" "OBJDUMP"] ["HEARTS_READELF" "READELF"]])
          goals (words (getenv "HEARTS_GOALS" || (x86 ? "defconfig syncconfig headers bzImage" "defconfig syncconfig Image")))
@@ -202,9 +205,14 @@
                    (appendf (here + "/.config") (s + (string? fw ? "CONFIG_EXTRA_FIRMWARE_DIR=\"\(fw)\"\n" "")
                                                   + (string? rt ? "CONFIG_INITRAMFS_SOURCE=\"\(rt)\"\n" "")))
                    (puts "hearts: cannot read HEARTS_CONFIG \(frag)\n", quit 1))
+         ; what kcc would not take, when a build fails: the count and the first line
+         (refused _) (uread (hd + "/kcc.refused") @ [1 s]
+                       (filter (l \ 0 < #l) (lines s) @ l
+                         (two? l ? "hearts: \(#l) compiler lines were not mooncc's and clang was not asked (HEARTS_KCC_CLANG=1), the first:\n  \(<l)\n" ""))
+                       "")
          (one g) (peep made " failed" 0 ? 0
                    (: top (hk-topgoal K here cl sh g)
                       (hk-make K top g made {} run, drain 0, puts ("made " + g + " in " + show (clock 0 - t0) + " ms\n"),
                        (g = "defconfig" && string? frag) ? (lay 0, one "olddefconfig") 0)))
          (each goals one,
-          peep made " failed" 0 @ f (string? f ? (puts ("FAILED at " + f + "\n"), quit 1) 0)))))
+          peep made " failed" 0 @ f (string? f ? (puts ("FAILED at " + f + "\n" + refused 0), quit 1) 0)))))

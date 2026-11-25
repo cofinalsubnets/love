@@ -9,6 +9,8 @@
 ;   lanes-alone     the lanes that rebuild love0 under another cc or run their own fleet: alone
 ;   lanes-early     the lanes that start before the others and run beside them, one at a time:
 ;                   the long ones whose scratch is their own and which only read out/
+;   lanes-byname    the lanes no path owes: each writes a board's flash or wants a person by it,
+;                   so it runs when a gate's list names it and never by a plan
 ;   lanes-place     lane -> where it may run: "source" or "exact" (one that reads love's own bytes),
 ;                   either on a lanes host of this box's isa running this box's build, then the
 ;                   isas it is held to, if any; unnamed is local, here only. a lane is named once
@@ -24,15 +26,17 @@
 ;                   why] ..]. light before heavy, cheap first, a lane another runs dropped, test
 ;                   always and test_slow last. why is the paths that owed it: a rule's, or a
 ;                   recipe's that names the path
+;   (lanes-held paths baked covers)  the by-name lanes that change would owe, left out of its
+;                   plan: [[lane why] ..] by name
 ;   (lanes-lines plan)  the plan as `lane light|heavy cost why` lines (love bee --lanes)
 ;
 ; a glob's `*` crosses `/`; "baked" is the crew roster ($(ho)/.dist.list), not a glob. every
 ; change owes `make test` besides, and test_slow runs last on the tree that lands
-(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-early lanes-place lanes-doc lanes-map
-                 lanes-covers lanes-plan lanes-lines)
+(module (lanemap lanes-rules lanes-heavy lanes-cost lanes-chains lanes-alone lanes-early lanes-byname lanes-place lanes-doc lanes-map
+                 lanes-covers lanes-plan lanes-held lanes-lines)
 
-(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccwasm"
-               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
+(: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccmips" "test_ccwasm"
+               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_libc" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l" "src/apps/hosts.l"] ["test_hostnif"] ""]
@@ -46,9 +50,9 @@
      ["" ["src/apps/tfm.l" "test/gate/tfm.sh" "test/gate/tfm.l"] ["test_tfm" "test_caja"] ", which caja borrows for its fonts"]
      ["" ["src/apps/pic/*" "test/gate/fzgen.l"] ["test_gpic" "test_grap" "test_chem"] ""]
      ["the rest of the core, `src/love/*.c` and `src/love/boot/*.l`" ["src/love/*.c" "src/love/boot/*.l"] ["test_core"] ""]
-     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk`"
-      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*" "Makefile" "common.mk"] ["test_gcstress"]
-      ", in the queue's union; a `.l`, doc, app or test diff never owes it"]
+     ["the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`"
+      ["src/love/*.c" "src/love/*.h" "src/apps/moon/lib/moonlibc/*"] ["test_gcstress"]
+      ", in the queue's union; a `Makefile` or `common.mk` change owes it only by judgment, when it changes how the C core compiles (name it in the row); a `.l`, doc, app or test diff never owes it"]
      ["what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze"
       ["src/love/gc.c" "src/love/snap.c" "src/love/image.c" "src/love/elfbake.c" "src/love/macho.c" "src/love/ev.c" "src/love/io.c" "src/love/love.c"
        "src/love/map.c" "src/love/tablet.c" "src/love/alloc.c" "src/love/boot/glaze.l"] ["test_gcstress_bake"]
@@ -58,8 +62,11 @@
       ", and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)"]
      ["" ["src/apps/moon/*"] moon-lanes ""]
      ["" ["src/love/holo/*"] ["test_holo" "test_as" "test_holofuzz" "test_inle"] ""]
-     ["what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l`"
-      ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/as.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
+     ["what `-g` lays, `src/apps/moon/{gen,lo,nm,ra,moon}.l`, `src/love/holo/{obj,link}.l`, `test/gate/dwarf.sh`, `test/gate/dwarfcode.sh`"
+      ["src/apps/moon/gen.l" "src/apps/moon/lo.l" "src/apps/moon/nm.l" "src/apps/moon/ra.l" "src/apps/moon/moon.l"
+       "src/love/holo/obj.l" "src/love/holo/link.l" "test/gate/dwarf.sh" "test/gate/dwarfcode.sh"] ["test_dwarf" "test_dwarfcode"] ""]
+     ["what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`"
+      ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]
      ["" ["src/love/holo/a64.l"] ["test_moon" "test_cca64"] ""]
      ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64" "test_ccrv32"] ""]
@@ -68,13 +75,15 @@
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]
      ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
+     ["" ["src/love/holo/avr.l" "src/love/holo/decode.l" "test/holo/avrrun.l" "test/holo/avrlaw.l" "test/holo/avrcodec.l" "test/holo/avrqemu.l" "test/gate/avr.sh"] ["test_avr"] ""]
+     ["" ["src/love/holo/mips.l" "src/love/holo/decode.l" "test/holo/mipsrun.l" "test/holo/mipscodec.l" "test/holo/mipslink.l" "test/holo/mipsrel.c" "test/holo/mipsrela.s" "test/holo/mipsrelg.s" "test/holo/mipsrelb.c" "test/holo/mipsrelm.c" "test/holo/mipstp.c" "test/gate/mips.sh"] ["test_mips" "test_ccmips"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
      ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool" "test_hearts_x64"] ""]
      ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "test_hearts_x64" "moon-flex" "moon-bison"]
-   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
+   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730 "test_libc" 190
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
@@ -83,26 +92,29 @@
      ["test_doomx" "test_doomwasm"]
      ["test_hearts" "test_hearts_boot"]
      ["test_elf32" "test_mps2_build" "test_virt_build" "test_mps2" "test_mps2_t1" "test_mps2_wake" "test_virt"
-       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32_board" "test_esp32c6" "test_esp32c6_board" "test_boards"
+       "test_nucleo446" "test_nucleo446_smoke" "test_nucleo446_board" "test_nrf52840" "test_microbit" "test_microbit_board" "test_teensy41" "test_teensy41_board" "test_playdate" "test_rp2040" "test_rp2040_board" "test_esp32" "test_esp32_board" "test_esp32s3_board" "test_esp32c6" "test_esp32c6_board" "test_ch32v203" "test_ch32v203_board" "test_boards"
       "test_objcopy" "test_links"]
      ["test_freebsd" "test_netbsd" "test_freebsd_a64" "test_netbsd_a64" "test_freebsd_rv64" "test_netbsd_rv64"]]
    ; test_inle's rv64 corpus nears its tcg ceiling beside any other boot; gcheck and tco0 build whole variant trees
    lanes-alone ["test_hdiff" "test_ccwarn" "test_gcheck" "test_tco0" "test_gcstress" "test_gcstress_full" "test_inle" "test_kernel_rv64"]
    lanes-early ["test_gcstress_bake"]
+   lanes-byname ["test_teensy41_board" "test_ch32v203_board" "test_mips_router"]
 
    lanes-place {"test_roster" "source" "test_holofuzz" "source" "test_moon" "source"
                 "test_ccarm" "source" "test_ccwasm" "source" "test_ccport" "source"
                 "test_cts_wasm" "source" "test_as" "source" "test_sb" "source"
                 "test_ccthumb1" "source" "test_ccthumb2" "source" "test_cca64" "source"
                 "test_ccrv64" "source" "test_tools" "source" "test_moonfuzz" "source"
-                "test_refuzz" "source" "test_clay" "source" "test_hostnif" "source"
+                "test_refuzz" "source" "test_clay" "source"
                 "test_bakerep" "exact" "test_envimage" "exact" "test_wake" "exact"}
+   ; test_hostnif stays local: its gpu.l holds gpu-facets to facets on the box's own gpu
 
    (lm-tick s) ("`" + s + "`")
    (lanes-doc _)
     (map (r \ r @ [label globs ls tail]
                 ("- " + (#label > 0 ? label (join ", " (map lm-tick globs))) + " -> " + join " " (map lm-tick ls) + tail))
-         lanes-rules)
+         lanes-rules
+     + [("- " + join " " (map lm-tick lanes-byname) + " run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them")])
    (lanes-map _)
     (map (c \ "chain " + join "," c) lanes-chains + [("alone " + join " " lanes-alone) ("early " + join " " lanes-early)]
      + map (l \ "place " + l + " " + lanes-place l) (sort (keys lanes-place))
@@ -177,15 +189,21 @@
            (elem <todo seen) (go >todo seen)
            (go (peep covers <todo () + >todo) (<todo . seen))))
    (lm-heavy? l) (any (h \ h = l || (ends? h "%" && starts? l (snip h 0 (#h - 1)))) lanes-heavy)
-   (lanes-plan paths baked covers)
-    (: owed (foldl (\ t p (foldl (\ t r (r @ [_ globs ls _]
+   ; lane -> the paths that owe it, by a rule or by a recipe that names the path
+   (lm-owed paths baked covers)
+    (foldl (\ t p (foldl (\ t r (r @ [_ globs ls _]
                                           (? (any (lm-hit? baked p) globs)
                                              (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t ls) t)))
                                  t lanes-rules))
                    (foldl (\ t p (foldl (\ t l (: o (peep t l ()) (pin t l (elem p o ? o (o + [p]))))) t (peep covers p ())))
                           {} paths)
-                   paths)
-       ls (filter (l \ l != "test" && l != "test_slow") (keys owed))
+           paths)
+   (lanes-held paths baked covers)
+    (: owed (lm-owed paths baked covers)
+       (map (l \ [l (owed l)]) (sort (filter (l \ elem l lanes-byname) (keys owed)))))
+   (lanes-plan paths baked covers)
+    (: owed (lm-owed paths baked covers)
+       ls (filter (l \ l != "test" && l != "test_slow" && !(elem l lanes-byname)) (keys owed))
        under (map (l \ [l (filter (m \ m != l) (lm-under covers l))]) ls)
        kept (filter (l \ !(any (u \ <u != l && elem l (u 1)) under)) ls)
        row (\ l why [l (lm-heavy? l) (peep lanes-cost l ()) why])

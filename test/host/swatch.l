@@ -21,6 +21,13 @@
             (checker 3 2 (noise 2 3 0.4)) (stripes 6 2 1 (shade 1.2)) (dots 4 4 1.2 hole)
             (patches 3 0.4 (rgb 1 1 0)) (cracks 4 5 1 1.5 (rgb 0.3 0.2 0.1)) (within 1 1 11 9 (within 2 0 8 20 (bevel 5 4 1 (grey 0.95) (grey 0.05)) (noise 3 0.2)))
             (poly 1 1 10 2 6 9 (rgb 0 0 1)) (rows 0 1 hole))
+ ; finer: lengths k times as long, ratios and seeds as they were; the old texels' corners the same
+ (test (swatch-fine 2 '((rows 1 2 (noise 3 4 0.1)) (stripes 4 2 1 hole) (poly 0 0 1 0 1 1 1) (oval 1 2 3 4 5 0.5) (patches 5 0.1 hole) (seed 7) (fbm 4 3 0.2) (stain 2 3 0.4 0.5 (shade 0.9)) (within 1 2 3 4 (fill 1) (disc 1 1 1 0)))
+         = '((rows 2 4 (noise 6 8 0.1)) (stripes 8 4 1 hole) (poly 0 0 2 0 2 2 1) (oval 2 4 6 8 5 0.5) (patches 10 0.1 hole) (seed 7) (fbm 8 3 0.2) (stain 4 3 0.4 0.5 (shade 0.9)) (within 2 4 6 8 (fill 1) (disc 2 2 2 0))))
+       (: l '((fill (rgb 0.9 0.7 0.1)) (stripes 12 6 1 (grey 0.1)) (grid 8 8 1 0.5) (noise 4 0.3) (fbm 8 3 0.2) (patches 5 0.4 hole))
+          p (swatch 16 8 l 0) q (swatch 64 32 (swatch-fine 4 l) 0)
+          (all (i \ peep p [(i // 16) (i % 16)] 0 = peep q [(4 * (i // 16)) (4 * (i % 16))] 9) ^128))
+       (swatch-fine 2 '((art drip 1)) = ()))
  ; starts grey; the later layer wins; a number is a grey
  (test (at () 0 0 = g 0.5) (at '((fill 0.2) (rows 0 1 0.7)) 3 0 = g 0.7) (at '((fill 0.2) (rows 0 1 0.7)) 3 1 = g 0.2)
        (at '((grey 0.3)) 0 0 = g 0.3) (at '((rgb 1 0 0)) 5 5 = red)
@@ -60,7 +67,10 @@
        (sw-same 5 5 ()) (sw-same 6 6 '((fill 1) (rows 1 (grey 2))))
        ; the plan not as it says, and sides out of reach
        (swatch-pic 4 4 '((() 12 () 0 (1 0.0 0.0 0.0 0.0) ())) = ()) (swatch-pic 4 4 '(junk) = ())
-       (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())))
+       (swatch-pic 0 4 () = ()) (swatch-pic 4 4.5 () = ())
+       ; a seed past a fixnum, its low 64 bits: none refused where words are 32
+       (two? (swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] 3450932619 [1 0.2 0.3 0.45 0.0] ()]]))
+       (swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] (64 2 + 5) [1 0.2 0.3 0.45 0.0] ()]] = swatch-pic 4 4 [[() 12 [3.0 3.0 1.0 2.0] 5 [1 0.2 0.3 0.45 0.0] ()]])))
 ; an oval and a ball painted in C as in love: the oval its turned shape, the ball brighter toward
 ; its light, only inside itself and over no hole
 (: (at l x y) (swatch-texel 32 32 l x y) red [1.0 0.0 0.0]
@@ -114,5 +124,14 @@
        (swatch-fault '((relief 0 2 1)) 1 = "(relief size octaves depth)")
        (swatch-fault '((stain 4 2 0.5 0 0.1)) 1 = "(stain size octaves cover soft PAINT)")
        (swatch-fault '((fill 1) (fbm 4 13 0.2)) 0 = '(fbm 4 13 0.2))))
+;; art from its templates: each kind a whole picture, no holes and more than one colour, the
+;; same within a run as painted and as read texel by texel; a kind it lacks refused
+(: (pic k) ((swatch 48 32 [['art k 3]]) 0 (iota (48 * 32)))
+   ps (map pic ['drip 'fields 'grid 'discs 'any])
+   (sw-same w h l) (show (swatch w h l) = show (mesh-pic w h (swatch-texel w h l)))
+ (test (all (p \ amin p >= 0 && amax p != amin p) ps) (show (pic 'any) = show (pic 'any))
+       (sw-same 24 16 '((art drip 5))) (sw-same 16 24 '((art fields 6)))
+       (swatch-fault '((art grid 1) (shade 0.9)) = ()) (swatch-fault '((art blob 1)) 0 = '(art blob 1))
+       (swatch-fault '((art drip x)) 0 = '(art drip x))))
 (test_fin ())
 (puts "swatch: ok\n")

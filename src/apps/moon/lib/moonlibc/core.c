@@ -28,9 +28,10 @@ static unsigned long __love_bias(void) {
   return 0; }
 
 /* -pie: the linker leaves each abs64 data pointer at its base-0 offset, its sites listed
- * in love_rela; add the bias to each. ET_EXEC links an empty table */
+ * in love_rela; add the bias to each. ET_EXEC links an empty table; dyld has made a mach-o's */
 extern long __start_love_rela[], __stop_love_rela[];
 static void __love_reloc(void) {
+  if (__love_osv == 4) return;
   unsigned long bias = __love_bias();
   for (long *p = __start_love_rela; p < __stop_love_rela; p++)
     *(unsigned long *) (bias + (unsigned long) *p) += bias; }
@@ -50,6 +51,9 @@ void __love_tlscopy(void *tp) {
 /* a program with a pt_tls gets the main thread's copy and its thread pointer; one without
  * keeps the main thread's at 0 */
 static void __love_tlsinit(void) {
+#ifdef __mips__
+  sc1(NR_set_thread_area, 0);                   /* exec keeps the parent's tp_value */
+#endif
 #if defined(__x86_64__) || defined(__aarch64__)
   unsigned long phdr = 0, phnum = 0;
   for (long *a = __auxv; a && (unsigned int) a[0]; a += 2) {

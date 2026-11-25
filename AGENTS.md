@@ -34,7 +34,11 @@ Instructions for any coding agent in this tree.
 ; guidelines for working in this tree:
 ; - keep comments short, calm lowercase, inline when possible, no paragraphs
 ; - comments should not log history, cite fixed bugs, or refer outside the present code
-; - C code may not use mutable globals/statics or directly call malloc/free (with rare exceptions)
+; - C code may not keep state that belongs to one love thread (a struct g) in a mutable global or
+;   static; truly per-process state, C runtime internals, and tables built once and never modified
+;   may be statics. a table built lazily publishes its ready flag with a release, read with an acquire
+; - C code may call malloc/free where it must, since moonlibc is ours; the love heap is preferred
+;   wherever it serves
 ; - makefiles must be compatible with our make (cook)
 ; - shell scripts must be compatible with our shell (lush)
 ; - `make test` is the fast gate to check if something works
@@ -46,7 +50,7 @@ Instructions for any coding agent in this tree.
 
 ; love artifact and build information:
 ; - love and inle are not separate builds. moon builds both with the same flags, and a
-;   kernel is projected out of the love binary that makes it: that binary's own bytes, plus
+;   kernel is transposed from the love binary that makes it: that binary's own bytes, plus
 ;   the kernel objects it compiles from the source it carries, so they share one copy of
 ;   almost everything. a given instance of the love artifact is linked for hosted or
 ;   freestanding use, but the translation is bidirectional and mechanical, and either
@@ -132,6 +136,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - (+ 2 3 4) = ((+ 2 3) 4) = (5 4) = 1024: no varargs, binary ops are binary
 ; - u + M u = (+ u (M u)): application binds tighter than infix -- and applying a
 ;   number is the tower (3 2 = 8), so write (u + M) u
+; - (p x ? x + 1 0) is (p x ? x + (1 0)), one arm and no else, with no error: parenthesize an
+;   infix arm, (p x ? (x + 1) 0)
 ; - (1 +) = (+ 1): no sections
 ; - (map < l) is (< map l): an infix operator by value is parenthesised, (<). the
 ;   accessor is cap -- and love orders across kinds, so the misread answers 0 in silence
@@ -195,13 +201,14 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/apps/tfm.l`, `test/gate/tfm.sh`, `test/gate/tfm.l` -> `test_tfm` `test_caja`, which caja borrows for its fonts
 - `src/apps/pic/*`, `test/gate/fzgen.l` -> `test_gpic` `test_grap` `test_chem`
 - the rest of the core, `src/love/*.c` and `src/love/boot/*.l` -> `test_core`
-- the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*`, the `Makefile` and `common.mk` -> `test_gcstress`, in the queue's union; a `.l`, doc, app or test diff never owes it
+- the C core, `src/love/*.c` `src/love/*.h` `src/apps/moon/lib/moonlibc/*` -> `test_gcstress`, in the queue's union; a `Makefile` or `common.mk` change owes it only by judgment, when it changes how the C core compiles (name it in the row); a `.l`, doc, app or test diff never owes it
 - what the bake runs, `src/love/{gc,snap,image,elfbake,macho,ev,io,love,map,tablet,alloc}.c` and the glaze -> `test_gcstress_bake`, which runs test_gcstress's shards as well: owing both runs it alone
 - `src/love/boot/glaze.l` -> `test_inle`, whose kernels run the glaze too
 - a crewfiles member, or anything else baked -> `test_fixpoint` `test_bakerep`, and `make hotprof` to write `src/tools/hot.prof` and `src/tools/hot.calls` again (bakerep fails while it is stale)
-- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- `src/apps/moon/*` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_libc` `test_inle`
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
-- what moon emits through, `src/love/holo/{x64,holo,as,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_inle`
+- what `-g` lays, `src/apps/moon/{gen,lo,nm,ra,moon}.l`, `src/love/holo/{obj,link}.l`, `test/gate/dwarf.sh`, `test/gate/dwarfcode.sh` -> `test_dwarf` `test_dwarfcode`
+- what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_libc` `test_inle`
 - `src/love/holo/a64.l` -> `test_moon` `test_cca64`
 - `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64` `test_ccrv32`
 - `src/love/holo/i386.l` -> `test_moon` `test_cci386` `test_cci386m16`
@@ -209,10 +216,13 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
 - `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
 - `src/love/holo/xtensa.l`, `test/holo/xtrun.l`, `test/holo/xtlink.l`, `test/holo/xtdata.c` -> `test_xtensa` `test_ccxtensa`
+- `src/love/holo/avr.l`, `src/love/holo/decode.l`, `test/holo/avrrun.l`, `test/holo/avrlaw.l`, `test/holo/avrcodec.l`, `test/holo/avrqemu.l`, `test/gate/avr.sh` -> `test_avr`
+- `src/love/holo/mips.l`, `src/love/holo/decode.l`, `test/holo/mipsrun.l`, `test/holo/mipscodec.l`, `test/holo/mipslink.l`, `test/holo/mipsrel.c`, `test/holo/mipsrela.s`, `test/holo/mipsrelg.s`, `test/holo/mipsrelb.c`, `test/holo/mipsrelm.c`, `test/holo/mipstp.c`, `test/gate/mips.sh` -> `test_mips` `test_ccmips`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
 - `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool` `test_hearts_x64`
 - `src/inle/a64/*`, `src/inle/mkboot.l`, `src/tools/kflat.l` -> `test_kernel_rpi3`
+- `test_teensy41_board` `test_ch32v203_board` `test_mips_router` run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them
 <!-- /lanes -->
 
 `test_slow` runs last, on the exact tree that lands. The `test_cc%` lanes are pattern rules in `test/test.mk`, so grepping for `^test_cc...:` misses them.

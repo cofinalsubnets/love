@@ -22,9 +22,12 @@
 (borrow 'posix)
 (: ;; LEB128: unsigned rides // and % so a u64 past the fixnum stays exact; signed stops
    ;; when the rest is the sign's extension and the byte's bit 6 agrees
-   (uleb n) (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r)))
-   (sleb n) (: m (n % 128) b (m < 0 ? (m + 128) m) r ((n - b) // 128)
-               (r = 0 && b < 64 || r = -1 && b >= 64 ? [b] (b + 128 . sleb r)))
+   ;; a value that is no integer scares at once, where it would never end
+   (uleb n) (charm? n || sun? n || scare 'leb-not-a-number n,
+             (: b (n % 128) r (n // 128) (r @ 0 [b] (b + 128 . uleb r))))
+   (sleb n) (charm? n || sun? n || scare 'leb-not-a-number n,
+             (: m (n % 128) b (m < 0 ? (m + 128) m) r ((n - b) // 128)
+                (r = 0 && b < 64 || r = -1 && b >= 64 ? [b] (b + 128 . sleb r))))
    (wrap32 n) (n > 2147483647 ? (n - 4294967296) n)
    (wbytes s) (map s ^#s)
    (wname s) (uleb #s + wbytes s)

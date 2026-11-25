@@ -114,10 +114,15 @@
           'rv64                        '("__riscv" "__riscv_xlen=64" "__CHAR_UNSIGNED__")
           'rv32                        '("__riscv" "__riscv_xlen=32" "__riscv_float_abi_soft" "__CHAR_UNSIGNED__" "__ILP32__")
           'xtensa                      '("__xtensa__" "__XTENSA__" "__XTENSA_EL__" "__XTENSA_CALL0_ABI__" "__XTENSA_SOFT_FLOAT__" "__CHAR_UNSIGNED__" "__ILP32__")
+          ; o32, big-endian, soft float: plain char signed
+          'mips                        '("__mips__" "__mips" "mips" "__mips=32" "__mips_isa_rev=2" "__MIPSEB__" "__MIPSEB" "_MIPSEB"
+                                         "_MIPS_ISA=_MIPS_ISA_MIPS32" "_MIPS_ISA_MIPS32=32" "_ABIO32=1" "_MIPS_SIM=_ABIO32" "__mips_o32"
+                                         "_MIPS_SZINT=32" "_MIPS_SZLONG=32" "_MIPS_SZPTR=32" "__mips_soft_float" "__ILP32__")
           'wasm                        '("__wasm__" "__wasm64__")   ; plain char signed, as wasm's C conventions (emcc)
-          ('thumb2 || 'thumb2sp)       '("__arm__" "__arm" "__CHAR_UNSIGNED__")
-          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__")
-          'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__")   ; gcc's for -mcpu=cortex-m0
+          'thumb2                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=14")   ; gcc's fpu bits: half, single, double
+          'thumb2sp                    '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_FP=6")    ; no double: it is soft
+          'arm                         '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ILP32__" "__ARM_EABI__" "__thumb__" "__thumb2__" "__ARM_FP=14")
+          'thumb1                      '("__arm__" "__arm" "__CHAR_UNSIGNED__" "__ARM_ARCH_6M__" "__ILP32__")   ; gcc's for -mcpu=cortex-m0
           ('i386 || 'i386m16)          '("__i386__" "__i386" "__ILP32__")
                                           '("__x86_64__" "__x86_64" "__amd64__" "__amd64"))
    ; __CHAR_UNSIGNED__ follows the target and -f[un]signed-char
@@ -153,14 +158,14 @@
    ; gcc's atomic predefines: a width's lock-free answer as gen lays it, 2 or 0 (rv64 has no
    ; sub-word rmw, thumb2 no doubleword, thumb1 no exclusives)
    (atomdefs tgt sw)
-    (: ws (tgt @ ('thumb1 || 'xtensa) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
-       lw (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa) ? 4 8)
+    (: ws (tgt @ ('thumb1 || 'xtensa || 'mips) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+       tm (tmof tgt)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
           "__ATOMIC_ACQ_REL=4" "__ATOMIC_SEQ_CST=5" "__GCC_ATOMIC_TEST_AND_SET_TRUEVAL=1")
         + map (p \ "__GCC_ATOMIC_\(<p)_LOCK_FREE=\(lf (p 1))")
                 [["BOOL" 1] ["CHAR" 1] ["CHAR16_T" 2] ["CHAR32_T" 4] ["WCHAR_T" (sw ? 2 4)]
-                 ["SHORT" 2] ["INT" 4] ["LONG" lw] ["LLONG" 8] ["POINTER" lw]]
+                 ["SHORT" 2] ["INT" (tmint tm)] ["LONG" (tmlong tm)] ["LLONG" (tmll tm)] ["POINTER" (tmptr tm)]]
         + map (n \ "__GCC_HAVE_SYNC_COMPARE_AND_SWAP_\(n)") ws))
    ; C11's conditional features (6.10.8.3), each absence target-true; u"" is utf-16, U"" utf-32
    (featdefs tgt)
@@ -174,7 +179,7 @@
     ; __mooncc__ says the compiler, __moonlibc__ the libc; __moon__ (cc-defs) the dialect
     '("__mooncc__=1" "__moonlibc__=1"
       "__CHAR_BIT__=8" "__SCHAR_MAX__=0x7f" "__SHRT_MAX__=0x7fff"
-      "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16" "__INT_WIDTH__=32"
+      "__SCHAR_WIDTH__=8" "__SHRT_WIDTH__=16"
       "__LONG_LONG_MAX__=0x7fffffffffffffffLL" "__LONG_LONG_WIDTH__=64"
       "__ORDER_LITTLE_ENDIAN__=1234" "__ORDER_BIG_ENDIAN__=4321" "__ORDER_PDP_ENDIAN__=3412"
       "__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" "__FLOAT_WORD_ORDER__=__ORDER_LITTLE_ENDIAN__"
@@ -192,8 +197,7 @@
       "__INT_LEAST32_TYPE__=int" "__UINT_LEAST32_TYPE__=unsigned int"
       "__INT_LEAST32_MAX__=0x7fffffff" "__UINT_LEAST32_MAX__=0xffffffffU" "__INT_LEAST32_WIDTH__=32"
       "__WINT_TYPE__=unsigned int" "__WINT_MAX__=0xffffffffU" "__WINT_MIN__=0U" "__WINT_WIDTH__=32"
-      "__SIZEOF_SHORT__=2" "__SIZEOF_INT__=4" "__SIZEOF_LONG_LONG__=8"
-      "__SIZEOF_FLOAT__=4" "__SIZEOF_DOUBLE__=8" "__SIZEOF_WINT_T__=4"
+      "__SIZEOF_SHORT__=2" "__SIZEOF_FLOAT__=4" "__SIZEOF_WINT_T__=4"
       "__FLT_RADIX__=2"
       "__FLT_MANT_DIG__=24" "__FLT_DIG__=6" "__FLT_DECIMAL_DIG__=9"
       "__FLT_MIN_EXP__=(-125)" "__FLT_MIN_10_EXP__=(-37)" "__FLT_MAX_EXP__=128" "__FLT_MAX_10_EXP__=38"
@@ -220,8 +224,6 @@
       "__DECIMAL_DIG__=17")
    stdlp64
     '("__LP64__=1" "_LP64=1"
-      "__LONG_MAX__=0x7fffffffffffffffL" "__LONG_WIDTH__=64"
-      "__SIZEOF_LONG__=8" "__SIZEOF_POINTER__=8" "__SIZEOF_SIZE_T__=8" "__SIZEOF_PTRDIFF_T__=8"
       "__INT64_TYPE__=long int" "__UINT64_TYPE__=long unsigned int"
       "__INT64_MAX__=0x7fffffffffffffffL" "__UINT64_MAX__=0xffffffffffffffffUL"
       "__INT64_C(c)=c ## L" "__UINT64_C(c)=c ## UL"
@@ -242,15 +244,9 @@
       "__INTMAX_TYPE__=long int" "__UINTMAX_TYPE__=long unsigned int"
       "__INTMAX_MAX__=0x7fffffffffffffffL" "__UINTMAX_MAX__=0xffffffffffffffffUL"
       "__INTMAX_C(c)=c ## L" "__UINTMAX_C(c)=c ## UL" "__INTMAX_WIDTH__=64"
-      "__INTPTR_TYPE__=long int" "__UINTPTR_TYPE__=long unsigned int"
-      "__INTPTR_MAX__=0x7fffffffffffffffL" "__UINTPTR_MAX__=0xffffffffffffffffUL" "__INTPTR_WIDTH__=64"
-      "__SIZE_TYPE__=long unsigned int" "__SIZE_MAX__=0xffffffffffffffffUL" "__SIZE_WIDTH__=64"
-      "__PTRDIFF_TYPE__=long int" "__PTRDIFF_MAX__=0x7fffffffffffffffL" "__PTRDIFF_WIDTH__=64"
       "__BIGGEST_ALIGNMENT__=16")                    ; the widest ask, and bare aligned
    stdt32
-    '("__LONG_MAX__=0x7fffffffL" "__LONG_WIDTH__=32"
-      "__SIZEOF_LONG__=4" "__SIZEOF_POINTER__=4" "__SIZEOF_SIZE_T__=4" "__SIZEOF_PTRDIFF_T__=4"
-      "__INT64_TYPE__=long long int" "__UINT64_TYPE__=long long unsigned int"
+    '("__INT64_TYPE__=long long int" "__UINT64_TYPE__=long long unsigned int"
       "__INT64_MAX__=0x7fffffffffffffffLL" "__UINT64_MAX__=0xffffffffffffffffULL"
       "__INT64_C(c)=c ## LL" "__UINT64_C(c)=c ## ULL"
       "__INT_LEAST64_TYPE__=long long int" "__UINT_LEAST64_TYPE__=long long unsigned int"
@@ -268,20 +264,40 @@
       "__INTMAX_TYPE__=long long int" "__UINTMAX_TYPE__=long long unsigned int"
       "__INTMAX_MAX__=0x7fffffffffffffffLL" "__UINTMAX_MAX__=0xffffffffffffffffULL"
       "__INTMAX_C(c)=c ## LL" "__UINTMAX_C(c)=c ## ULL" "__INTMAX_WIDTH__=64"
-      "__INTPTR_TYPE__=int" "__UINTPTR_TYPE__=unsigned int"
-      "__INTPTR_MAX__=0x7fffffff" "__UINTPTR_MAX__=0xffffffffU" "__INTPTR_WIDTH__=32"
-      "__SIZE_TYPE__=unsigned int" "__SIZE_MAX__=0xffffffffU" "__SIZE_WIDTH__=32"
-      "__PTRDIFF_TYPE__=int" "__PTRDIFF_MAX__=0x7fffffff" "__PTRDIFF_WIDTH__=32"
       "__BIGGEST_ALIGNMENT__=8")                     ; AAPCS's widest ask, and bare aligned
+   ; what the type model says: int's, long's and double's widths, and size_t, ptrdiff_t and intptr_t
+   ; as floor.l's tmsz spells them
+   (modeldefs tm)
+    (: l? (tmsz tm = 'ulong) n (tmptr tm) s (l? ? "long " "") w (show (8 * n))
+       (hex c n) ((c = 102 ? "f" "7") + cats (map (_ \ "f") ^(2 * n - 1)))
+       sm "0x\(hex 55 n)\(l? ? "L" "")" um "0x\(hex 102 n)\(l? ? "UL" "U")"
+       (sz t v) "__SIZEOF_\(t)__=\(show v)"
+       ["__INT_WIDTH__=\(show (8 * tmint tm))" "__LONG_WIDTH__=\(show (8 * tmlong tm))"
+        "__LONG_MAX__=0x\(hex 55 (tmlong tm))L"
+        (sz "INT" (tmint tm)) (sz "LONG" (tmlong tm)) (sz "LONG_LONG" (tmll tm)) (sz "DOUBLE" (tmdbl tm))
+        (sz "POINTER" n) (sz "SIZE_T" n) (sz "PTRDIFF_T" n)
+        "__SIZE_TYPE__=\(s)unsigned int" "__SIZE_MAX__=\(um)" "__SIZE_WIDTH__=\(w)"
+        "__PTRDIFF_TYPE__=\(s)int" "__PTRDIFF_MAX__=\(sm)" "__PTRDIFF_WIDTH__=\(w)"
+        "__INTPTR_TYPE__=\(s)int" "__UINTPTR_TYPE__=\(s)unsigned int"
+        "__INTPTR_MAX__=\(sm)" "__UINTPTR_MAX__=\(um)" "__INTPTR_WIDTH__=\(w)"])
    ; wchar_t forks by ABI: int on SysV, unsigned int on AAPCS; -fshort-wchar unsigned short
    (wchdefs tgt sw)
     (? sw '("__WCHAR_TYPE__=short unsigned int" "__WCHAR_MAX__=0xffff" "__WCHAR_MIN__=0" "__WCHAR_WIDTH__=16"
             "__SIZEOF_WCHAR_T__=2")
-       (tgt = 'a64 || arm32? tgt)
+       (wchu? tgt)
        '("__WCHAR_TYPE__=unsigned int" "__WCHAR_MAX__=0xffffffffU" "__WCHAR_MIN__=0U" "__WCHAR_WIDTH__=32"
          "__SIZEOF_WCHAR_T__=4")
        '("__WCHAR_TYPE__=int" "__WCHAR_MAX__=0x7fffffff" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)" "__WCHAR_WIDTH__=32"
          "__SIZEOF_WCHAR_T__=4"))
+   ; mips o32 as gcc and clang lay it: the fast-8 types a byte
+   stdmips
+    (: own '("__INT_FAST8_TYPE__=signed char" "__INT_FAST8_MAX__=0x7f" "__INT_FAST8_WIDTH__=8"
+             "__UINT_FAST8_TYPE__=unsigned char" "__UINT_FAST8_MAX__=0xff")
+       (key d) <(usplit 61 d)
+       (filter (d \ !(elem (key d) (map key own))) stdt32 + own))
+   ; a big-endian target's byte order
+   stdbe {"__BYTE_ORDER__=__ORDER_LITTLE_ENDIAN__" "__BYTE_ORDER__=__ORDER_BIG_ENDIAN__"
+          "__FLOAT_WORD_ORDER__=__ORDER_LITTLE_ENDIAN__" "__FLOAT_WORD_ORDER__=__ORDER_BIG_ENDIAN__"}
    ; i386 is the 32-bit table but where SysV i386 parts from AAPCS: the fast-8 types a
    ; byte, the widest alignment SSE's 16, and wchar_t a long
    stdi386
@@ -290,12 +306,14 @@
        (key d) <(usplit 61 d)
        (filter (d \ !(elem (key d) (map key own))) stdt32 + own))
    (stddefs tgt sw)
-    (? (i386? tgt)
+    (modeldefs (tmof tgt) +
+     (? (i386? tgt)
        (stdi386 + (sw ? (wchdefs tgt sw)
                       '("__WCHAR_TYPE__=long int" "__WCHAR_MAX__=0x7fffffffL" "__WCHAR_MIN__=(-__WCHAR_MAX__ - 1)"
                         "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
         + stdcommon)
-       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon))
+       (tgt = 'mips) (stdmips + wchdefs tgt sw + map (d \ peep stdbe d d) stdcommon)
+       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)))
    ; a gripe prints "cc: <file>:<line>:<col>: msg" (no file: the source; no line/col: elided);
    ; anything else prints plain. both exit 1
    (ccdie val src plain)
@@ -324,17 +342,27 @@
                             "\t.base64 \"\(b64s (snip <>r k (k + n)))\""))))
        ls (gsplit txt 10)
        (any (ln \ starts? (xa-trim ln) ".incbin") ls ? (xa-join "\n" (map one ls)) txt))
-   ; an assembly source as C: one file-scope asm holding its text, which gen hands gas-top
-   (asmwrap s) "__asm__(\"\(string (catmap (c \ (c @ 92 [92 92] 34 [92 34] 10 [92 110] 9 [92 116] 13 () [c])) (chars s)))\");\n"
+   ; an assembly source's text as gen hands it to gas-top, its carriage returns dropped
+   (asmtext s) (gsplit s 13 @ l (two? >l ? (cats l) s))
    ; a .S: the assembly lexed on its own terms, preprocessed as C is (includes, macros, #if),
-   ; spelled back into lines, and taken as a .s is
-   (asmcpp src s ds is vb)
+   ; spelled back into lines, and taken as a .s is. it goes a block of q bytes at a time, cut
+   ; at line ends, so the tokens alive are one block's
+   (asmcpp src s ds is vb) (asmcppk src s ds is vb 65536)
+   (asmcppk src s ds is vb q)
     (: d2 ("__ASSEMBLER__=1" . ds)
-       lx (clexasm (deftext d2 + s) (1 - #d2) (elem "__aarch64__" ds || elem "__arm__" ds))
-       _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
-       pp (cppasm <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src)
-       (okv? pp || ccdie pp src "cc: preprocessor error in \(src)",
-        asmwrap (incbins (asmspell <>pp) is src)))
+       txt (deftext d2 + s)
+       ar (elem "__aarch64__" ds || elem "__arm__" ds)
+       (incf name sys?) (incload vb is (cdir src) name sys?)
+       st (cppopen src)
+       sink (jug 0)
+       (lay pp) (okv? pp || ccdie pp src "cc: preprocessor error in \(src)", say sink (asmspell <>pp))
+       (go i ln)
+        (#txt <= i ? (lay (cppclose st), slurp sink)
+           (clexasmk txt i (i + q) ln ar @ lx
+              (okv? lx || ccdie lx src "cc: lex error in \(src)",
+               lay (cppfeed st <>lx incf),
+               go (lx 2) (lx 3))))
+       (go 0 (1 - #d2)))
    ; tokens back to assembly text: an unexpanded token from a later line opens a new one; a
    ; space where the source had one and between two words that would paste (v0.16b stays one)
    (asmspell ts)
@@ -349,7 +377,7 @@
            (<l @ t
               (? (<t = 'fspans) (go >l prev acc)                  ; cpp's file-span record, not text
                  (<t = 'p && <>t = "\n") (go >l () ([10] . acc))
-                 (: sep (? (atom? prev) () (spaced? prev || word? prev && word? t && pastes? (spell prev) (spell t)) [32] ())
+                 (: sep (? (atom? prev) () (spaced? prev || word? prev && word? t && pastes? () (spell prev) (spell t)) [32] ())
                     (go >l t (chars (spell t) . sep . acc))))))
        (go ts () ()))
    ; the -D lines a TU starts from: the machine's, the OS's, the libc's and the dialect's, then
@@ -358,15 +386,27 @@
    gnudefs '("__GNUC__=8" "__GNUC_MINOR__=1" "__GNUC_PATCHLEVEL__=0" "__GNUC_STDC_INLINE__=1")
    ; bool/true/false bare, as C23; an iso -std keeps them plain names
    (booldefs dia) (dia != 'c && '("bool=_Bool" "true=1" "false=0"))
-   (cc-defs {'ds ds 'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
-    (un ? (stddefs tgt sw + booldefs dia + ds) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
+   (cc-pre {'tgt tgt 'os os 'dia dia 'undef un 'swch sw 'bp bp 'uch uc 'cfb cf 'ssp sp})
+    (un ? (stddefs tgt sw + booldefs dia) (chdefs tgt uc + osdefs os + featdefs tgt + atomdefs tgt sw + bpdefs bp + (cf ? ["__CET__=\(cf)"]) + (sspdefs sp) + stddefs tgt sw
                  ; our libc carries its whole surface on every kernel: a source asks it, not the kernel
                  + '("LvMoonlibc=1")
                  + (dia = 'moon && '("__moon__=1"))       ; the dialect's own macro: extensions on
                  + booldefs dia
                  + gnudefs
                  +
-                 (elem tgt '(x64 a64 rv64 wasm) ? ("__SIZEOF_INT128__=16" . ds) ds)))      ; the wide pair (gen's d128 lane), as gcc's
+                 (elem tgt '(x64 a64 rv64 wasm) ? '("__SIZEOF_INT128__=16") ())))      ; the wide pair (gen's d128 lane), as gcc's
+   ; a define's name and body, a bare name's body 1
+   (dparts d) (d @ (n + "=" + b) [n b] _ [d "1"])
+   ; under -Werror a -D that gives a predefine another body is an error, as gcc's and clang's
+   ; redefinition warning is; a -U ahead of it says the change is meant
+   (redef pre ds us)
+    (? (atom? ds) 0
+       (string? <ds)
+        (: nb (dparts <ds) n (nb 0)
+           hit (filter (p \ dparts p @ q (q 0 = n && q 1 != nb 1)) pre)
+           (two? hit && !(elem n us) ? (udie 1 "cc: \(n) redefined on the command line (-Werror)") (redef pre >ds us)))
+       (redef pre >ds (<ds 1 . us)))
+   (cc-defs t) (: pre (cc-pre t) ds (t 'ds) _ (t 'werr ? (redef pre ds ()) 0) (pre + ds))
    ; -fmacro-prefix-map=OLD=NEW: __FILE__ and __BASE_FILE__ with a leading OLD spelled NEW, the
    ; last match winning (gcc's); laid as a -D over cpp's predefine
    (filedef src mp)
@@ -386,7 +426,10 @@
                   !vb ()
                   (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
-       txt (? (dotS? src) (asmcpp src <>r ds9 is vb) (dots? src) (asmwrap (incbins <>r is src)) <>r)
+       ; an assembly source is one file-scope asm of its whole text, and no C is read
+       asm (dotS? src || dots? src)
+       atx (asm && asmtext (incbins (dotS? src ? (asmcpp src <>r ds9 is vb) <>r) is src))
+       txt (asm ? "" <>r)
        lx (mprof 'lex (_ \ clexw (deftext ds9 + txt) (1 - #ds9)))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        pp (mprof 'cpp (_ \ cpp <>lx (name \ sys? \ incload vb is (cdir src) name sys?) src))
@@ -394,7 +437,7 @@
        ps (mprof 'parse (_ \ cparse-o <>pp tgt dia {'swch sw 'uch (uchar? tgt uc) 'ssp sp 'lazy 1 'dbg dbg}))   ; the target sizes pointers/longs at the ABI width; the dialect says what grammar
        (okv? ps || ccdie ps src "cc: parse error in \(src)",
         ; a file-scope asm's .incbin (kernel/configs.c) reads its file as a .s does
-        (ps 1 @ a (<ps . (<a . (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a) . >>a) . >>ps))))
+        (ps 1 @ a (<ps . (<a . (asm ? (<>a + [['tasm atx]]) (map (f \ (f @ ('tasm t) ['tasm (incbins t is src)] f)) <>a)) . >>a) . >>ps))))
    ; a relocatable object: the standard sections + symbols + relocations, plus one section per
    ; other section(NAME) the TU used, in declaration order (its address is the program's to fix).
    ; the wide tuples are named once, here; `[]` is strict, so a changed arity refuses
@@ -446,12 +489,24 @@
     (: wn (map name wu)
        (la? f) (two? f && <f = 'la && (elem (f 2) wu || elem (f 2) wn))
        (tgt != 'a64 || !(two? wu) ? fs (catall (map (f \ (la? f ? [['align 8] ['lia (f 1) (f 2)]] [f])) fs))))
-   ; arm under -fpic: an address is pc-relative, movw/movt from the pc an add reads
-   (picla tgt pc fs)
+   ; arm under -fpic: an address this unit lays is pc-relative, movw/movt from the pc an add
+   ; reads; any other is its got slot's word, pooled as R_ARM_GOT_PREL (-8 counts the word to
+   ; the add's pc) and loaded, which the link makes a nop where it lays the name itself
+   (picla tgt pc laid fs)
     (? !pc fs
-       (tgt = 'arm) (map (f \ (two? f && <f = 'la ? ('lap . >f) f)) fs)
+       (tgt = 'arm) (catall (map (f \ (? !(two? f && <f = 'la) [f]
+                                         (peep laid (lkey (f 2)) 0) [('lap . >f)]
+                                         [['align 4] ['lapool (f 1)] ['raw [['fix 4 'gotprel (f 2) -8]]]
+                                          ['addpc (f 1)] ['ld (f 1) (f 1) 0]]))
+                                 fs))
        (tgt = 'i386) (pic386 fs)
        fs)
+   (lkey x) (string? x ? (intern x) x)
+   ; the names a unit's forms lay, as picla asks them
+   (laidin ns fss)
+    (: t (foldl (\ t n (pin t (lkey n) 1)) {} ns)
+       (go x) (two? x ? (<x = 'label && two? >x ? (pin t (lkey <>x) 1) (each x go)))
+       (each fss go, t))
    ; i386 under -fpic: an address is lar's, pc-relative; a symbol's word reads through a register,
    ; the load's own or one pushed aside
    (pic386 fs)
@@ -476,9 +531,10 @@
    ; thumb2 (sp too) and arm, absolute: (la Rd L) becomes (lal Rd L P), P a word of L in its fn's pool, laid
    ; before the fn's end label, and so does an li that wants a movt; holo loads it pc-relative
    ; where it reaches, else lays movw/movt. thumb2's (fli f g k) becomes (flal f g k P) alike, and
-   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one
+   ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one. thumb2sp's la is (lalp Rd L
+   ; P), whose far form loads P from the pc: its loader moves abs32 words, never a movw/movt pair
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) fs
+    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) (tgt = 'thumb2sp ? (t16la fs) fs)
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -493,31 +549,64 @@
                              (go >l (pin ix (f 3) q) ((q . f 3) . ps) (n + 1) (['flal (f 1) (f 2) (f 3) q] . a)))))
                     (two? f && (<f = 'la && #f = 3 || big? f))
                     (peep ix (f 2) 0 @ p
-                       (p != 0 ? (go >l ix ps n (['lal (f 1) (f 2) p] . a))
-                          (name ".lp\(n)" @ q
-                             (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) (['lal (f 1) (f 2) q] . a)))))
+                       (: k (tgt = 'thumb2sp && <f = 'la ? 'lalp 'lal)
+                          (p != 0 ? (go >l ix ps n ([k (f 1) (f 2) p] . a))
+                             (name ".lp\(n)" @ q
+                                (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) ([k (f 1) (f 2) q] . a))))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
                     (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
+   ; -g's types for obj.l, the C left behind: (types vars sigs). types is a list each entry of
+   ; which names the others by index: (base name enc size) (ptr size j) (arr j n) (struct name size
+   ; members union?) (decl name) (fn j) (unspec name), j () for void; a member (name j off), a
+   ; bit-field's (name j off bitoff width). vars ((name j external?)..) the unit's globals, sigs a
+   ; function's (ret ((param j)..)) by name, lv its scopes (gen's dlfin) by name, the types by index
+   (dwtys w stag ast svars sigs lv)
+    (: tb (pin {} 'n 0)
+       base {'char ["char" 6 1] 'schar ["signed char" 6 1] 'cchar ["char" 8 1] 'uchar ["unsigned char" 8 1]
+             'bool ["_Bool" 2 1] 'short ["short" 5 2] 'ushort ["unsigned short" 7 2] 'int ["int" 5 4]
+             'uint ["unsigned int" 7 4] 'long ["long" 5 w] 'ulong ["unsigned long" 7 w] 'llong ["long long" 5 8]
+             'ullong ["unsigned long long" 7 8] 'float ["float" 4 4] 'double ["double" 4 8]
+             'i128 ["__int128" 5 16] 'u128 ["unsigned __int128" 7 16]}
+       ; an entry's index is taken before its parts are, so a struct may point at itself
+       (ix ty) (? (ty = 'void) ()
+                  (show ty @ k (peep tb k -1 @ i (? (0 <= i) i
+                                                    (: j (tb 'n) _ (pins tb 'n (j + 1) k j) (pin tb j (ent ty), j))))))
+       (mem m) (@ m (nm . off . mt . _) (bitf? mt ? [nm (ix (mt 1)) off (mt 2) (mt 3)] [nm (ix mt) off]))
+       (ent ty)
+        (? (ptr? ty) ['ptr w (ix (ty 1))]
+           (arr? ty) ['arr (ix (ty 1)) (ty 2)]
+           (two? ty && <ty = 'varr) ['arr (ix (ty 1)) ()]
+           (stru? ty) (peep stag (ty 1) () @ (fl . sz . _) ['struct (ty 1) sz (map mem fl) (1 < #fl && !(any (m \ m 1 != 0) fl))]
+                         _ ['decl (ty 1)])
+           (fn? ty) ['fn (? (two? >ty) (ix (ty 1)))]
+           (peep base ty () @ () ['unspec (show ty)] b ('base . b)))
+       fs (ast 1)
+       vs (catmap (f \ f @ ('gdecl ds) (map (d \ [<d (ix (d 1)) !(peep svars <d 0)]) (filter (d \ !(fn? (d 1))) ds)) _ ()) fs)
+       sg (foldl (\ t f (f @ ('fn . nm . ps . _) (pin t nm [(ix <(peep sigs nm ['void])) (map (p \ [<p (ix (p 1))]) ps)
+                                                          (f 3 @ ('blk (('loc . fl . ln . _) . _)) [fl ln] _ ())]) _ t)) {} fs)
+       lt (foldl (\ t f (pin t <f [(map ([k par bs in sp] \ [k par (map ([n h ty] \ [n h (ix ty)]) bs) in sp]) (f 1)) (f 2)])) {} lv)
+       [(map tb ^(tb 'n)) vs sg lt])
    (cc-objbytes src (t @ {'ni ni 'tgt tgt 'sal sal 'bp bp 'rp rp 'old old 'nofp nofp 'osz osz 'uch uc 'njt njt 'nbi nbi 'falg fa 'nsib ns 'avz av 'cfb cf 'wrapv wv 'pfe pfe 'sspg sg 'xk xk 'npic np 'pic pc 'uwa ua 'uws us 'dbg dbg}))
     (@ (cc-parse src t)
-       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro]
+       [_ ast stag sigs weaks sfns svars sects alias aligns ainl noinl consts gregs anames pfes nopro hids]
        ; wasm rides gen's rv64 lane and lays no ELF: its object is the gen tuple as text
        (: ob (mprof 'cgen (_ \ cgen-obj ast stag sigs weaks
                        [sfns svars sects alias aligns ainl noinl consts ni gregs [sal bp rp old osz nofp (uchar? tgt uc) njt nbi fa ns av (cf && cf & 1) wv pfe sg xk np] pfes nopro] tgt))
           (okv? ob || ccdie ob src "cc: codegen error in \(src)",
            ; -mno-sse and kin: a float register anywhere in the code is the refusal, by the file
            !(nofp && fpuse? (ob 1)) || udie 1 "cc: \(src): floating-point code, and -mno-sse (or its kin) rules it out",
-           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs]
+           (@ ob [_ tforms dforms fnames gnames nforms iforms lnames xsecs bforms rforms xfns asecs dlv]
               (: ; the file-scope asm's sections, and the names its .globl exports by where they landed
                  at (two? asecs ? asecs [() () () ()])
                  fns (fnames + filter (s \ !(elem s fnames)) (at 1))
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 tforms (lpool tgt pc (picla tgt pc (wkla tgt wu tforms)))
-                 xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc (wkla tgt wu forms))) al]) xfns)
+                 laid (tgt = 'arm && pc ? (laidin (fns + gns + lnames + hids + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
+                 tforms (lpool tgt pc (picla tgt pc laid (wkla tgt wu tforms)))
+                 xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc laid (wkla tgt wu forms))) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
                      + map ([nm forms al] \ objsec-code nm forms al) xfns   ; ..and the fns that named a section
                      + bpsecs bp + cfsecs cf tgt)
@@ -525,7 +614,8 @@
                  ; the asm's data names typed as gas types them, its absolute symbols and its sizes
                  asmax [(at 2 + asmlocs <at) (5 < #at ? (at 5) ()) (6 < #at ? (at 6) ())
                           (7 < #at && (dotS? src || dots? src) ? (at 7 0) ()) (7 < #at ? (at 7 1) ())
-                          (dbg ? [src (cwd 0)])]   ; -g: the unit and its dir, for obj.l's line tables
+                          ; -g: the unit, its dir, whether .eh_frame serves its unwind, and its types
+                          (dbg ? [src (cwd 0) (ua || us) (dwtys (elem tgt '(x64 a64 rv64) ? 8 4) stag ast svars sigs dlv)])]
                  ; arm32 has no local func symbols
                  (? (tgt = 'wasm)
                     (? (two? <at) (udie 1 "cc: a file-scope asm has no wasm lane, in \(src)")
@@ -533,26 +623,27 @@
                     (elf32? tgt)
                     (: s32 (objsec-merge ((i386? tgt && (dotS? src || dots? src) ? [[".text" 1 6 4 ()]] (objsecs3 tgt tforms dforms nforms iforms bforms rforms @ s3 (nofp ? (armsoft tgt s3) s3))) + xs) <at)
                        (i386? tgt ? (objsecs32x tgt s32 fns gns wks anames locs asmax)
-                          (objsecs32n tgt s32 fns gns wks anames)))
+                          (objsecs32x tgt s32 fns gns wks anames (dbg ? locs ()) [() () () () () (asmax 5)])))
                     (objsecsn tgt (objsec-merge ((dotS? src || dots? src ? [[".text" 1 6 4 ()]] (objsecs4 tforms dforms nforms iforms bforms rforms)) + xs) <at)
                               fns gns wks locs anames asmax
-                              ; the functions C laid, not the asm's, under unwind tables
-                              (ua || us ? (fnames + lnames + map cap xfns) ()))))
+                              ; the functions C laid, not the asm's, under unwind tables or -g
+                              (ua || us || dbg ? (fnames + lnames + map cap xfns) ()))))
               (udie 1 "cc: the code generator answered an unexpected shape for \(src)"))))
        (udie 1 "cc: the parser answered an unexpected shape for \(src)"))
    ; -E: the source preprocessed, to -o or stdout; a refusal exits as a compile's does, which is
    ; how a configure script tells a header that is there from one that is not
    ; a .S reads as -x assembler-with-cpp does, __ASSEMBLER__ defined
-   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp 'fis fi}))
+   (cc-pre src dst (t @ {'is is 'vb vb 'xasm xa 'mpm mp 'fis fi 'P np 'C kc}))
     (: xasm (xa || dotS? src)
        ds9 ((xasm ? ("__ASSEMBLER__=1" . cc-defs t) (cc-defs t)) + filedef src mp + fincs fi)
        r (src = "-" ? [1 (slurp in)]
             (uread src @ q (? (two? q) q !vb () (vb src @ h (string? h && [1 h])))))
        _ (two? r || udie 1 "cc: cannot open \(src)")
-       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 1) (clexw (deftext ds9 + <>r) (1 - #ds9)))
+       wm (kc ? 2 1)                                 ; -C keeps the comments as tokens
+       lx (xasm ? (clexm (deftext ds9 + <>r) (1 - #ds9) 2 wm) (clexm (deftext ds9 + <>r) (1 - #ds9) () wm))
        _ (okv? lx || ccdie lx src "cc: lex error in \(src)")
        _ (pin cppdeps 'l ())
-       pp (cpp-text <>lx (incload vb is (cdir src)) src)
+       pp (cpp-text <>lx (incload vb is (cdir src)) src np kc)
        _ (okv? pp || ccdie pp src "cc: preprocessor error in \(src)")
        _ (t 'md && cc-deps src dst t)                ; -E -MD writes the dependencies as a compile does
        (dst ? (open dst "w" @ q (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"), say q <>pp, close q))
@@ -564,10 +655,99 @@
        (sub x) (two? x ? (sub <x . sub >x) (peep t x x))
        (two? (filter (k \ an k != k) (keys an)) ? (sub ob) ob))
    ; a wasm object is text: write-bytes walks a byte list, and a string lands as an empty file
+   ; -- -S: the object -c lays, said as GNU assembly. a section's bytes are .byte rows, a symbol a
+   ; label with its .globl, .type and .size, a relocation a .reloc at its place (one on a
+   ; section through the label at its head); an inline asm
+   ; blob that bears no fix is the text it was written in. it assembles to the object again --
+   (obj-asm s tx)
+    (: w (s 4 = 2)                                   ; elf64
+       mach (rle16 s 18)
+       at (mach = 40 ? "%" "@")
+       shoff (w ? (rle64 s 40) (rle32 s 32))
+       shes (rle16 s (w ? 58 46)) shn (rle16 s (w ? 60 48)) shx (rle16 s (w ? 62 50))
+       ; a section: name type flags offset size link info align entsize
+       (sh k) (shoff + k * shes @ b
+                (w ? [(rle32 s b) (rle32 s (b + 4)) (rle64 s (b + 8)) (rle64 s (b + 24)) (rle64 s (b + 32))
+                      (rle32 s (b + 40)) (rle32 s (b + 44)) (rle64 s (b + 48)) (rle64 s (b + 56))]
+                     [(rle32 s b) (rle32 s (b + 4)) (rle32 s (b + 8)) (rle32 s (b + 16)) (rle32 s (b + 20))
+                      (rle32 s (b + 24)) (rle32 s (b + 28)) (rle32 s (b + 32)) (rle32 s (b + 36))]))
+       secs (map sh ^shn)
+       (cstr o) (: (e i) (s i = 0 ? i (e (i + 1))) (snip s o (e o)))
+       (sname h) (cstr ((secs shx) 3 + h 0))
+       symh (filter (h \ h 1 = 2) secs @ l (two? l ? <l ()))
+       strh (two? symh ? (secs (symh 5)) ())
+       sz (w ? 24 16)
+       ; a symbol: name info section value size
+       (sym k) (symh 3 + k * sz @ b
+                 (w ? [(cstr (strh 3 + rle32 s b)) (s (b + 4)) (rle16 s (b + 6)) (rle64 s (b + 8)) (rle64 s (b + 16))]
+                      [(cstr (strh 3 + rle32 s b)) (s (b + 12)) (rle16 s (b + 14)) (rle32 s (b + 4)) (rle32 s (b + 8))]))
+       syms (two? symh ? (map sym ^(symh 4 // sz)) ())
+       (symnm k) (syms k @ y (((y 1) & 15) = 3 ? ".Lsec\(y 2)" (y 0)))
+       (s64 v) (9223372036854775807 < v ? (v - 18446744073709551616) v)
+       (s32 v) (2147483647 < v ? (v - 4294967296) v)
+       ; a section's relocations: offset type symbol addend, the addend () where the field holds it
+       (rels i)
+        (catmap (h \ (? ((h 1 = 4 || h 1 = 9) && h 6 = i)
+                       (: rela (h 1 = 4) es (w ? (rela ? 24 16) (rela ? 12 8))
+                          (map (k \ h 3 + k * es @ b
+                                 (w ? (rle64 s (b + 8) @ inf [(rle64 s b) (inf & 4294967295) (symnm (inf >> 32)) (rela ? (s64 (rle64 s (b + 16))) ())])
+                                      (rle32 s (b + 4) @ inf [(rle32 s b) (inf & 255) (symnm (inf >> 8)) (rela ? (s32 (rle32 s (b + 8))) ())])))
+                               ^(h 4 // es)))
+                       ()))
+                secs)
+       (rname t) (peep (peep gf-relnames mach {}) t () @ n (string? n ? n (show t)))
+       (rline r) ("\t.reloc ., " + rname (r 1) + ", " + r 2
+                  + (r 3 @ a (? !(charm? a) "" (a = 0) "" (0 < a) ("+" + show a) (show a))) + "\n")
+       (sline y) (: n (y 0) b ((y 1) >> 4) t ((y 1) & 15)
+                    ((? (b = 1) "\t.globl \(n)\n" (b = 2) "\t.weak \(n)\n" "")
+                     + (? (t = 2) "\t.type \(n),\(at)function\n" (t = 1) "\t.type \(n),\(at)object\n" "")
+                     + (0 < y 4 ? "\t.size \(n),\(show (y 4))\n" "")
+                     + n + ":\n"))
+       (rows bs) (atom? bs ? "" ("\t.byte " + join "," (map show (take 16 bs)) + "\n" + rows (drop 16 bs)))
+       (log2 n) (n <= 1 ? 0 (1 + log2 (n >> 1)))
+       ; the blobs that may stand as text, by their first byte
+       blobs (foldl (t \ p \ (p 0 @ bs (all (x \ charm? x || string? x) bs ?
+                                       (elf-flat bs @ z (0 < #z ? (pin t (z 0) ([z (p 1)] . peep t (z 0) ())) t)) t)))
+                    {} tx)
+       (sect i)
+        (: h (secs i) nm (sname h) base (h 3) n (h 4) bits (h 1 != 8)
+           f (h 2)
+           (fb m c) (0 < (f & m) ? c "")
+           fl (fb 2 "a" + fb 1 "w" + fb 4 "x" + fb 16 "M" + fb 32 "S" + fb 1024 "T")
+           ty (h 1 @ 1 "progbits" 8 "nobits" 7 "note" 14 "init_array" 15 "fini_array" t (show t))
+           labs (foldl (t \ y \ (y 2 = i && ((y 1) & 15) != 3 && 0 < #(y 0) ? (pin t (y 3) (y . peep t (y 3) ())) t)) {} syms)
+           rs (foldl (t \ r \ pin t (r 0) r) {} (rels i))
+           (ev? o) (two? (peep labs o ()) || two? (peep rs o ()))
+           (nextev o) (? (n <= o) n (ev? o) o (nextev (o + 1)))
+           (clear? a b) (a = b ? 1 (ev? a ? 0 (clear? (a + 1) b)))
+           ; the longest blob standing at o, no symbol or relocation inside it
+           (blob o) (bits && o < n ? (filter (p \ o + #(p 0) <= n && snip s (base + o) (base + o + #(p 0)) = p 0
+                                                 && !(two? (peep rs o ())) && clear? (o + 1) (o + #(p 0)))
+                                            (peep blobs (s (base + o)) ()) @ l (two? l ? (foldl (a \ p \ (#(a 0) < #(p 0) ? p a)) <l >l) ()))
+                                     ())
+           (flush run) (? (two? run) (rows (rev run)) "")
+           (go o run acc)
+            (: here (map sline (rev (peep labs o ()))) rl (peep rs o () @ r (two? r ? [(rline r)] ()))
+               pre (two? here || two? rl ? (rev (here + rl) + [(flush run)] + acc) acc)
+               run1 (two? here || two? rl ? () run)
+               (? (n <= o) (rev ([(flush run1)] + pre))
+                  !bits (nextev (o + 1) @ e (go e () (["\t.zero \(show (e - o))\n"] + pre)))
+                  (blob o @ p (two? p ? (go (o + #(p 0)) () ([(p 1 + "\n") (flush run1)] + pre))
+                                         (go (o + 1) (s (base + o) . run1) pre)))))
+           ("\t.section \(nm),\"\(fl)\",\(at)\(ty)" + (0 < (f & 16) ? ",\(show (h 8))" "") + "\n"
+            + "\t.p2align \(show (log2 (h 7)))\n.Lsec\(i):\n" + join "" (go 0 () ())))
+       keep (filter (i \ (secs i) 1 @ t (!(elem t [0 2 3 4 9 17]) && sname (secs i) != ".shstrtab")) ^shn)
+       ; a weak name defined nowhere here is still weak
+       weak (catmap (y \ y 2 = 0 && ((y 1) >> 4) = 2 ? ["\t.weak \(y 0)\n"] ()) syms)
+       (join "" (weak + map sect keep)))
    (cc-obj src dst (t @ {'tgt tgt}))
-    (pin cppdeps 'l (),
+    (pin cppdeps 'l (), pin asmtx 'on (t 'S), pin asmtx 'l (),
      cc-objbytes src t @ b
-       (tgt != 'wasm ? (write-bytes dst b)
+       (? (t 'S && tgt != 'wasm) (open dst "w" @ q
+                                   (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
+                                    say q (obj-asm (elf-flat b) (rev (asmtx 'l))),
+                                    close q))
+          (tgt != 'wasm) (write-bytes dst b)
         (open dst "w" @ q
            (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
             say q b,
@@ -591,7 +771,8 @@
    ; ldlink binds the static exe. __love_start is weak here (calls main); moonlibc overrides it.
    ; x64's entry serves every kernel: linux zeroes rdi, freebsd hands the vector base there with
    ; a pad word maybe below argc, so zero says linux and freebsd pushes once to restore parity.
-   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits
+   ; netbsd rides the linux side, where 60 is umask: it returns, and 1 exits. dyld's exe enters
+   ; at __love_main (macho.l's lc_main), so an ELF and a mach-o carry the same code bytes
    crt0 '((cmp r6 0)
           (br ne c0-fb)
           (mov r6 sp)
@@ -605,6 +786,14 @@
           (li r5 0)
           (call __love_start)
           (mov r6 r0) (li r0 1) (sys)
+          ;; main(argc, argv, envp, apple) on an aligned stack; argv still points into the
+          ;; kernel's block, so argc is the word below it. one kernel: 4 says which
+          (label __love_main)
+          (lea r6 r5 -8)
+          (and sp sp -16)
+          (li r5 4)
+          (call __love_start)
+          (mov r6 r0) (li r0 33554433) (sys)
           (label __love_start)
           (push r6)
           (lea r5 r6 8)
@@ -626,20 +815,6 @@
                 (call main)
                 (pop r6)
                 (ret))
-   ; dyld's exe enters by lc_main as main(argc, argv, envp, apple) on an aligned stack;
-   ; argv still points into the kernel's block, so argc is the word below it
-   crt0-macmain '((lea r6 r5 -8)
-                  (and sp sp -16)
-                  (li r5 4)
-                  (call __love_start)
-                  (mov r6 r0) (li r0 33554433) (sys)
-                  (label __love_start)
-                  (push r6)
-                  (lea r5 r6 8)
-                  (ld r6 r6 0)
-                  (call main)
-                  (pop r6)
-                  (ret))
    ; the i386 entry: argc at [esp], the vector's address and what ebx says of the kernel handed to
    ; __love_start as cdecl arguments with esp 16-aligned at the call, then exit_group 252 (exit 1,
    ; a BSD's, if it returns)
@@ -731,7 +906,8 @@
                     (call __libc_start_main))
    ; ..and atexit, weak: glibc keeps it out of libc.so (libc_nonshared's) and bionic in its crt,
    ; both as __cxa_atexit(f, 0, the exe's handle 0); the push keeps x64's stack aligned
-   (crt-atexit tgt) (tgt = 'x64 ? '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
+   (crt-atexit tgt) (? (tgt = 'x64) '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
+                       (tgt = 'arm) '((label atexit) (push lr) (push r4) (li r1 0) (li r2 0) (call __cxa_atexit) (pop r4) (pop lr) (ret))
                        '((label atexit) (push lr) (li r1 0) (li r2 0) (call __cxa_atexit) (pop lr) (ret)))
    crt0-glibc-rv '((mov r5 r0)
                    (ld r1 sp 0)
@@ -750,7 +926,7 @@
                     (call __libc_start_main))
    ; ..bionic's __libc_init takes the kernel's block, main, and the exe's structors, here three
    ; empty slots on the stack (it never returns). bionic's loader runs an exe's init array but
-   ; not its fini array, so a walker of it is registered first, to run after every atexit. a64 alone
+   ; not its fini array, so a walker of it is registered first, to run after every atexit
    crt0-bionic-a64 '((lea r0 sp 0)
                      (mov r19 r0)
                      (la r0 c0b-fini) (li r1 0) (li r2 0)
@@ -775,6 +951,30 @@
                      (label c0b-done)
                      (pop r20) (pop r19) (pop lr)
                      (ret))
+   ; ..arm's the same, its addresses pc-relative (a pie), its stack kept 8-aligned
+   crt0-bionic-arm '((mov r4 sp)
+                     (lap r0 c0ba-fini) (li r1 0) (li r2 0)
+                     (call __cxa_atexit)
+                     (mov r0 r4)
+                     (sub sp sp 16)
+                     (li r3 0) (st sp 0 r3) (st sp 4 r3) (st sp 8 r3)
+                     (mov r3 sp)
+                     (li r1 0)
+                     (lap r2 main)
+                     (call __libc_init)
+                     (label c0ba-fini)
+                     (push lr) (push r4) (push r5) (push r6)
+                     (lap r4 __fini_array_start) (lap r5 __fini_array_end)
+                     (label c0ba-next)
+                     (cmp r5 r4)
+                     (br eq c0ba-done)
+                     (sub r5 r5 4)
+                     (ld r6 r5 0)
+                     (callr r6)
+                     (jmp c0ba-next)
+                     (label c0ba-done)
+                     (pop r6) (pop r5) (pop r4) (pop lr)
+                     (ret))
    ; the riscv entry: a non-zero a0 is freebsd's vector, handed down as 2; linux and netbsd
    ; are asked. linux exits by 94 in a7, netbsd 1 in t6 (holo's scratch, set raw), freebsd 1 in t0
    crt0-rv '((cmp r0 0)
@@ -798,6 +998,24 @@
              (ret))
    ; ..rv32's: argv a word past argc
    crt0-rv32 (map (f \ f = '(lea r1 r0 8) ? '(lea r1 r0 4) f) crt0-rv)
+   ; mips o32: linux alone, the vector at sp. each call leaves its callee 16 home bytes
+   ; below the frame, so the frames are made by hand
+   crt0-mips '((mov r2 sp)
+               (li r3 0)
+               (lea sp sp -32)
+               (call __love_start)
+               (mov r2 r0)
+               (li r0 4246)             ; exit_group
+               (sys)
+               (label __love_start)
+               (lea sp sp -32)
+               (st sp 28 lr)
+               (lea r3 r2 4)
+               (ld r2 r2 0)
+               (call main)
+               (ld lr sp 28)
+               (lea sp sp 32)
+               (ret))
    ; the driver's libc: a link still owing strong symbols pulls moonlibc + lm + sys, compiled
    ; from the sources beside us, member by need. -nostdlib leaves it off. noms still owed are
    ; said at once (a misspelling, an undefined function, a goto label gen spells main.<lbl>)
@@ -934,18 +1152,38 @@
      (_ \ sha256 "moon-rtc 1\n\(mcsrctext home)"))
    ; the carried runtime: each ISA's compiled archive beside the source blob (runtime-ar), served
    ; only when the home hashes to the stamped id. cut under -os linux: impl.h parts the kernels
-   ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error)
+   ; at run time. i386 and arm have no translation tables, so their BSDs owe a compile (#error);
+   ; a hosted isa under -os none owes one too, whose door answers ENOSYS. a bare isa's archive
+   ; speaks no kernel under any os
+   (rtcut? tgt os) (? (os = 'none && !(rtbare? tgt)) 1 (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)))
    (rtcarried home tgt os)
-    (? (os = 'none) ()                                     ; freestanding owes no runtime
-       (elem tgt '(i386 arm rv32) && elem os '(freebsd netbsd)) ()
-       (elem tgt '(x64 a64 rv64 i386 arm rv32 wasm) && string tgt @ nm
-          (!(string? nm) || string? home && rtcid home != runtime-ar "id" ? ()
+    (? (rtcut? tgt os) ()
+       (string tgt @ nm
+          (string? home && rtcid home != runtime-ar "id" ? ()
              (runtime-ar nm @ a
                 (string? a && 8 <= #a && snip a 0 8 = "!<arch>\n" ? a ())))))
-   ; the carried archive first; the cache key is cut only on the lane it refused
-   (rtarch home tgt os vb)
+   ; the isas no kernel runs on, whose leaves are nosys.c's
+   (rtbare? tgt) (elem tgt '(thumb1 thumb2 thumb2sp xtensa))
+   ; the built runtime: -rt DIR names group archives as make lays them, DIR/<isa>/<group>.a
+   ; (mkrt.l -m), cut under linux like the carried ones and refused where those are. served
+   ; only whole, in roster order; a roster member short, and the cache answers, said once.
+   ; the directory is trusted to be this compiler's over these sources: make's order says so
+   (rtbuilt dir home tgt os vb)
+    (? (!(string? dir) || rtcut? tgt os) ()
+       (: d "\(dir)/\(tgt)/"
+          (add t f) (uread (d + f) @ r
+                       (dota? f && two? r && ld-ar? <>r ? (foldl (t \ m \ pin t <m <>m) t (rt-armems <>r)) t))
+          t (foldl add {} (stat d @ st (sdir? st ? (sort (readdir d)) ())))
+          want (map cap (rtplan home tgt 'linux vb))
+          lack (filter (n \ !(string? (peep t n ()))) want)
+          (two? lack ? (say err "cc: -rt \(dir): \(tgt) lacks \(#lack) of \(#want) members (\(mfew lack)); compiling the runtime\n", ())
+             (arbytes (map (n \ [n (t n)]) want)))))
+   ; the carried archive first, then the built one; the cache key is cut only on the lane they refused
+   (rtarch home tgt os vb rtd)
     (rtcarried home tgt os @ cr
        (string? cr ? cr
+        (rtbuilt rtd home tgt os vb @ bl
+         (string? bl ? bl
           ; the key carries the OS: two kernels' archives can share a target name
           (: id (string? home && mcid home)
              cd (string? id && mcdir ())        ; no identity, no cache, no directory made
@@ -957,7 +1195,7 @@
                       (string? k && mcput cd "\(k).a" b,
                        b)))
              (string? cd && mcsweep cd,
-              bs))))
+              bs))))))
    ; the roster: [name source includes] per member, an empty source naming one laid, not
    ; compiled. moonlibc's .c files and one level down, flattened with _ (an archive resolves by
    ; name alone; time.c and sys/time.c share a basename)
@@ -982,33 +1220,35 @@
            (foldl (a \ k \ snip k #d #k @ sub
                              (dotc? sub ? (a + [[(dotobj (swap47 sub)) k]]) a))
                   () (sort (filter (k \ starts? k d) (keys vb)))))
-       ; i386, arm32 and rv32 have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
-       (map ((a b) \ [a b [inc]]) (nlmems ndir + (elem tgt '(i386 arm rv32) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
-        + (elem tgt '(x64 a64 rv64 i386 arm rv32) ? [["mksys.o" "" ()]] ())))
+       ; the 32-bit isas have no 64-bit divide: gen calls rt.c's __udivdi3 and kin
+       (map ((a b) \ [a b [inc]]) (nlmems ndir + (!(elem tgt '(x64 a64 rv64 wasm)) ? [["rt.o" (disk ? "\(home)lib/rt.c" "lib/rt.c")]] ()))
+        + (elem tgt '(x64 a64 rv64 i386 arm rv32 mips thumb1 thumb2 thumb2sp xtensa) ? [["mksys.o" "" ()]] ())))
    ; the members compile under the link's os (impl.h's table opens on it)
    (rtflags tgt os vb is) (pins (fseed tgt 'moon) 'os os 'is is 'vb vb)
    ; one roster member, compiled -> [name bytes]
    (rtmem1 tgt os vb e)
     (: nm (e 0) src (e 1) is (e 2)
-       [nm (!#src ? (string (mksys-bytes tgt))
-                    (string (cc-objbytes src (rtflags tgt os vb is))))])
+       [nm (!#src ? (elf-flat (mksys-bytes tgt))
+                    (elf-flat (cc-objbytes src (rtflags tgt os vb is))))])
    ; every member compiled, ready to index -- our own sources reaching only our own headers.
    (rtmems home tgt os vb) (map (rtmem1 tgt os vb) (rtplan home tgt os vb))
-   (rtpull srcs tgt os nostd vb imp? bare)
+   (rtpull srcs tgt os nostd vb imp? bare rtd)
     (: mach (peep elf-machines tgt 0)
-       ; crt0's __love_start is weak, so a runtime in reach owes its own outright: nothing else
-       ; pulls it. a bare link has no crt0 to call it. a thread template owes it regardless,
-       ; for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
+       ; crt0's __love_start is weak, so a runtime in reach owes its own outright when the set owes
+       ; the runtime anything or lays a constructor: nothing else pulls it. a set that owes nothing
+       ; runs crt0's tail alone. a bare link has no crt0 to call it. a thread template owes it
+       ; regardless, for the first thread's copy. a set with a strong one of its own (a board's startup) owes none
        lg (ldledger srcs mach) dt <lg
        home (!nostd && mhome ())
-       owed (!(lg 3 "__love_start") && (lg 2 || !bare && !nostd && (string? home || vb)) ? ("__love_start" . <>lg) <>lg)
+       owed (!(lg 3 "__love_start") && (lg 2 || (two? <>lg || lg 4) && !bare && !nostd && (string? home || vb))
+             ? ("__love_start" . <>lg) <>lg)
        ; -nostdlib: no runtime, so an owed nom is undefined
        _ (nostd && two? owed && undie owed)
        ; owed and no runtime in reach: the certain fact first
        (two? owed && !(string? home) && !vb
         && udie 1 "cc: undefined reference to \(qfew owed); no runtime in reach to supply it either (looked in \(mfew (mroots ()))) -- check the spelling, then the nest",
         nostd || !(two? owed) || !(string? home) && !vb ? ()      ; nothing owed compiles nothing
-          (arpull "moon-runtime" (rtarch home tgt os vb) dt owed mach @ pr
+          (arpull "moon-runtime" (rtarch home tgt os vb rtd) dt owed mach @ pr
              ; the owe left at the end is exactly what nothing defines, said whole
              (two? <>pr && !imp? && undie <>pr,
               <pr))))
@@ -1022,9 +1262,19 @@
                                            0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
                 (label __love_argv0) (raw (97 46 111 117 116 0)))
                ("_start" "__love_start") ("__love_osstack") () () () () () () () ("__love_start"))
-   ; the runtime for wasm: rtmems' members under the wasm target (text objects), cached
-   ; whole as one text under the same key law as the ELF archives -> ((name text) ..)
-   (wasm-rt home os vb)
+   ; the runtime for wasm: rtmems' members under the wasm target (text objects) -> ((name
+   ; text) ..), off the carried archive when it answers, else cached whole as one text under
+   ; the same key law as the ELF archives
+   (wasm-rt home os vb) (rtcarried home 'wasm os @ cr (string? cr ? (rt-armems cr) (wasm-rt1 home os vb)))
+   ; an archive's members [name bytes], past the index and the long-name table
+   (rt-armems s)
+    (: fld (cite 'holo 'ld-arfld) next (cite 'holo 'ld-arnext) mem (cite 'holo 'ld-armem)
+       lt ((cite 'holo 'ld-arlong) s)
+       (go off acc) (? (#s < off + 60) (rev acc)
+                       (elem (fld s off 16) '("/" "//")) (go (next s off) acc)
+                       (go (next s off) (mem s off lt . acc)))
+       (go 8 ()))
+   (wasm-rt1 home os vb)
     (: id (string? home && mcid home)
        cd (string? id && mcdir ())
        k (string? cd && string? id && sha256 "\(id)\nwasm\n\(os)")
@@ -1037,6 +1287,10 @@
        <(sound txt))
    ; the inputs stay TEXT until the link reads them, and what is held of each here is its
    ; ledger alone: the link's live set is one copy of the program, not three
+   ; what a program's module shows when nothing is asked: its entry both ways (the loader's
+   ; _start, a process's __love_start), the heap door the loader marshals strings through, and
+   ; the wake it calls where a module has one
+   wasm-face '("_start" "__love_start" "malloc" "free" "wake")
    (cc-wasm ins dst (t @ {'tgt tgt 'os os 'nostd nostd 'vb vb}))
     (: os9 (!os ? 'linux os)                          ; the loader speaks linux's numbers
        t9 (pin t 'os os9)
@@ -1058,7 +1312,13 @@
        bsyms (entry? ? (wasm-tu-syms crt0-wasm . tsyms) tsyms)
        ; crt0's __love_start is weak, so a runtime in reach owes its own outright, as on elf
        home (!nostd && mhome ())
-       owed0 (ledger bsyms @ l (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
+       ; a module with no main shows every function, as --export-all asks: its exports are its
+       ; face. else the named exports, which the runtime owes like any reference
+       wx (map nom (rev (t 'wx)))
+       whole? (t 'wxall || !entry?)
+       bdefs (catmap cap bsyms)
+       owed0 (ledger bsyms @ l0 (l0 + filter (x \ nelem x l0 && nelem x bdefs) wx) @ l
+                (entry? && !nostd && (string? home || vb) ? ('__love_start . l) l))
        rt (two? owed0 && !nostd && wasm-rt home os9 vb)
        mems (map (m \ [(m 0) (m 1) (wasm-tu-syms (wasm-tu (m 1)))]) rt)   ; name, text, ledger
        (pull set owed)
@@ -1069,9 +1329,13 @@
        picked (pull () owed0)
        all (base + map (m \ m 1) picked)
        ; a name nothing answers is the program's refusal, not an internal one
-       m (trap (a \ wasm-link a {'imports '("__love_sys") 'exports 'all}) all
+       m (trap (a \ wasm-link a (whole? ? {'imports '("__love_sys") 'exports 'all}
+                                           {'imports '("__love_sys") 'exports (map show wx) 'exports? wasm-face}))
+               all
                (a \ b \ a @ 'wasm-undefined
                           (udie 1 "cc: no wasm lane for \(join " " (map show b)), wanted by \(join " " ins)")
+                          'wasm-unresolved
+                          (udie 1 "cc: nothing defines \(show b), wanted by the wasm link of \(join " " ins)")
                           (scare a b)))
        q (open dst "w")
        (!(hot? q) ? (udie 1 "cc: cannot write \(dst)"),
@@ -1080,7 +1344,7 @@
         0))
    (cc-link ins dst t) (t 'tgt @ 'wasm (cc-wasm ins dst t) (cc-link-elf ins dst t))
    (cc-link-elf ins dst (t @ {'is is 'ds ds 'tgt tgt 'os os 'pie pie 'org org 'dorg dorg
-                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static 'ip ip}))
+                          'nostd nostd 'vb vb 'ni ni 'rdme rdme 'relo relo 'so so 'libs libs 'fws fws 'static static 'ip ip 'xk xk}))
     ; a BSD links where mksys lays the translation tail (impl.h's LvOsTranslate):
     ; x64, a64 and rv64. elsewhere os.c has no tables for it, so it is refused here
     (: _ (elem os '(freebsd netbsd) && !(elem tgt '(x64 a64 rv64))
@@ -1097,7 +1361,7 @@
        ; a mach-o is an executable at a fixed base
        _ (mac? && (so || charm? org) && udie 2 "cc: -os macos lays an executable: no -shared or -Ttext")
        ars (filter dota? ins)
-       srcs (map (f \ (? (dotsrc? f) [f (string (cc-objbytes f t))]
+       srcs (map (f \ (? (dotsrc? f) [f (elf-flat (cc-objbytes f t))]
                          (doto? f) (uread f @ r
                                       (two? r ? [f <>r]
                                                 (udie 1 "cc: cannot open \(f)")))
@@ -1105,9 +1369,9 @@
                  (filter (f \ !(dota? f)) ins))
        ; a thumb link is a board's: the image lays at the address the core boots from, and
        ; no crt0 rides first: the first text byte is the vector table. -t arm is linux's,
-       ; hosted as i386 is. rv32 under -os none is a board's too, entered at _start; xtensa links
+       ; hosted as i386 is. rv32 and mips under -os none are a board's too, entered at _start; xtensa links
        ; only so, moonlibc not yet speaking its syscalls
-       arm? (arm32? tgt && tgt != 'arm || tgt = 'rv32 && os = 'none || tgt = 'xtensa)
+       arm? (rtbare? tgt || elem tgt '(rv32 mips) && os = 'none)
        _ (arm? && pie && udie 2 "cc: -pie needs an MMU; a bare link is bare metal")
        _ (mac? && pie && !dyld? && udie 2 "cc: -pie on macos is dyld's: -static lays a fixed base")
        _ (so && (pie || arm?) && udie 2 "cc: -shared lays a shared object alone, on a hosted target")
@@ -1116,8 +1380,8 @@
        ; (android's under /system), what it lacks imported from the -l libraries
        dx (string? ip)
        _ (dx && (so || static || mac? || arm?) && udie 2 "cc: -dynamic-linker lays a hosted executable: no -shared, -static or bare link")
-       _ (dx && !(elem tgt '(x64 a64 rv64)) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64")
        bionic (dx && starts? ip "/system/")
+       _ (dx && !(elem tgt '(x64 a64 rv64) || bionic && tgt = 'arm) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64, and arm under /system")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
@@ -1128,27 +1392,29 @@
        runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
                (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
                [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
-       _ (bionic && tgt != 'a64 && udie 1 "cc: -dynamic-linker under /system links on a64")
-       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'rv64 crt0-glibc-rv crt0-glibc-x64)
-             mac? (dyld? ? crt0-macmain crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
-       ent (dx ? ["_start" "atexit"] '("__love_start"))
+       _ (bionic && !(elem tgt '(a64 arm)) && udie 1 "cc: -dynamic-linker under /system links on a64 and arm")
+       ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
+       _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
+       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
+             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       ent (? dx ["_start" "atexit"] (tgt = 'x64 && !(mac? && !dyld?)) '("__love_start" "__love_main") '("__love_start"))
        all (arm? || so ? srcs
-                   (["crt0" (string (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
+                   (["crt0" (elf-flat (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
        ; the archives first, then whatever the runtime still owes: a library the
        ; line named is what the link meant, and the implicit one is the fallback.
        lib (all + arload all ars tgt)
        ; a shared object pulls no runtime: what it owes it imports, from the -l libraries
-       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm?))
+       set (so || dx ? lib (lib + rtpull lib tgt os nostd vb dyld? arm? (t 'rtd)))
        prod "love \(<(usplit 43 love-version))"
        ps (? arm? (ldbare32 tgt runs set () relo)
-             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)))
-             (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()))
-             (ldlink tgt pie org set prod rdme))
+             mac? (macholink tgt set dyld? dylibs pie (last (usplit 47 dst)) prod)
+             (so || dx) (ldshared tgt (last (usplit 47 dst)) (map (l \ l @ (":" + f) f "lib\(l).so") libs) set prod (dx ? ip ()) (elem 'sfp xk))
+             (ldlink tgt pie org set prod rdme (elem 'sfp xk)))
        ; the ei_osabi brand is ldlink's, so kore's `ld` and this driver agree
        nw (ld-write dst ps)
        (nom? nw && udie 1 "cc: cannot write \(dst) -- \(nw)",
         chmod dst 493))
-   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-x c] [-t x64|a64|rv64|rv32|xtensa|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
+   usage "usage: mooncc [-c] [-pie] [-shared] [-dynamic-linker path] [--emit-relocs] [-rt dir] [-Wl,--export=name] [-Wl,--export-all] [-x c] [-t x64|a64|rv64|rv32|xtensa|mips|arm] [-os linux|none|freebsd|netbsd|macos] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-U name] [-lname] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)
    (tonum s)
     (: n #s
@@ -1216,6 +1482,7 @@
            "-fconserve-stack" "-fno-inline-functions-called-once" "-fno-partial-inlining"
            "-fno-tree-vectorize" "-fno-unroll-loops" "-fno-reorder-blocks" "-fno-gcse"
            "-fno-var-tracking" "-fno-var-tracking-assignments" "-fcolor-diagnostics"
+           "-fverbose-asm" "-fno-verbose-asm"                    ; -S's comments, of which it lays none
            "-fno-color-diagnostics" "-fno-caret-diagnostics" "-fno-diagnostics-show-caret")
    (fok? a) (elem a fsound || elem a fhint || starts? a "-fstrict-flex-arrays=" ||
              starts? a "-falign-loops" || starts? a "-falign-jumps" || starts? a "-falign-labels" ||
@@ -1239,7 +1506,7 @@
    ; every key seeded: a map pattern matches on presence, so a key pinned only with its flag
    ; would fail the consumers' destructure exactly when the flag is absent
    (fseed tgt dia) {'c () 'is () 'ds () 'o () 'ins () 'tgt tgt 'os () 'pie () 'org () 'dorg ()
-                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'xasm () 'undef () 'fis ()
+                    'nostd () 'vb () 'ni () 'rdme () 'relo () 'so () 'libs () 'fws () 'static () 'ip () 'dia dia 'md () 'mmd () 'mf () 'mt () 'mp () 'E () 'P () 'C () 'xasm () 'undef () 'fis ()
                     'swch () 'mpm () 'fx18 () 'sal () 'bp () 'rp () 'old () 'nofp () 'osz () 'uch () 'njt () 'nbi () 'falg () 'nsib () 'kfp () 'pic () 'senum () 'avz () 'cfb () 'wrapv () 'pfe ()
                    'uwa () 'uws () 'cmt () 'ssp () 'sspm () 'sspr () 'ssps () 'sspo () 'sspg () 'xk () 'x6f () 'npic () 'a32 () 'isy () 'ia () 'dbg () 'dl ()}
    ; one arm per flag, matched on the line itself: a flag that takes a word binds it in its
@@ -1253,11 +1520,17 @@
                   'ins (rev (t 'ins)) 'fis (rev (t 'fis))
                   'libs (rev (t 'libs)) 'fws (rev (t 'fws))))
           ("-c" . r) (flags r (pin t 'c 1))
+          ; -S: -c's object, said as assembly
+          ("-S" . r) (flags r (pin (pin t 'c 1) 'S 1))
           ; -g lays line tables (.debug_line under a bare compile unit); -g0 none. every other
           ; -g form rides through tol?
           ("-g0" . r) (flags r (pin t 'dbg ()))
           ((a . r) && dbgon? a) (flags r (pin t 'dbg 1))
           ("-E" . r) (flags r (pin t 'E 1))
+          ; -P: -E without its line markers
+          ("-P" . r) (flags r (pin t 'P 1))
+          ; -C: -E keeping the comments, those in directives and macro arguments aside
+          ("-C" . r) (flags r (pin t 'C 1))
           ; love's own version: mooncc is a verb on the love binary
           (("--version" || "-v") . _)
            (puts (uvers "mooncc"), putc 10, flush out, uleave 0)
@@ -1271,6 +1544,10 @@
           ("-Wl,--fatal-warnings" . r) (flags r t)
           ; the exports and run path only a loader reads: nothing to a static link, refused
           ; at the end of the line on a dynamic one
+          ; the wasm link's face: a named export is a root of its drop, --export-all lays and
+          ; exports every function. nothing to an elf
+          ("-Wl,--export-all" . r) (flags r (pin t 'wxall 1))
+          (("-Wl,--export=" + n) . r) (flags r (fpush t 'wx n))
           ((a . r) && elem a '("-rdynamic" "-Wl,-E" "-Wl,--export-dynamic")) (flags r (fpush t 'dl a))
           ((a . d . r) && elem a '("-Wl,-rpath" "-Wl,--rpath") && starts? d "-Wl,") (flags r (fpush t 'dl a))
           ((a . r) && any (starts? a) '("-Wl,-rpath," "-Wl,-rpath=" "-Wl,--rpath," "-Wl,--rpath=")) (flags r (fpush t 'dl a))
@@ -1301,6 +1578,9 @@
           ("-o" . o . r) (flags r (pin t 'o o))
           ("-t" . w . r) (flags r (pin t 'tgt (totgt w)))
           ("-os" . w . r) (flags r (pin t 'os (toos w)))
+          ; -rt DIR: the runtime's group archives as make built them, ahead of the cache. DIR is
+          ; trusted: nothing ties its groups to this compiler or these sources, so an old one links old code
+          ("-rt" . d . r) (flags r (pin t 'rtd d))
           ("-Ttext" . w . r) (flags r (pin t 'org (tonum w)))
           ; -Tdata: .data runs there, stored after the code (xip)
           ("-Tdata" . w . r) (flags r (pin t 'dorg (tonum w)))
@@ -1381,7 +1661,10 @@
           (("-Wp,-MQ," + w) . r) (flags r (pin t 'mt w))
           ((("-I" + d) . r) && #d) (flags r (fpush t 'is d))
           ((("-D" + d) . r) && #d) (flags r (fpush t 'ds d))
+          ((("-U" + d) . r) && #d) (flags r (fpush t 'ds ['u d]))
           ((("-t" + w) . r) && #w) (flags r (pin t 'tgt (totgt w)))
+          ; --target=TRIPLE (clang's): its head names the machine, as uname's would
+          ((("--target=" + w) . r) && #w) (flags r (pin t 'tgt (totgt <(split "-" w))))
           ; -nostdinc: our headers are the only standard set already
           ("-nostdinc" . r) (flags r t)
           ; -ffreestanding also defines __STDC_HOSTED__ 0 (cpp applies -D after its predefines)
@@ -1403,6 +1686,10 @@
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
           ("-m64" . r) (flags r (pin t 'tgt 'x64))
           (("-mbranch-protection=" + w) . r) (flags r (pin t 'bp (bpof w)))
+          ; its older spelling: non-leaf is pac-ret, all would sign a leaf
+          (("-msign-return-address=" + w) . r)
+           (flags r (pin t 'bp (w @ "non-leaf" (bpof "pac-ret") "none" ()
+                                   _ (udie 2 "cc: -msign-return-address=\(w) -- mooncc lays: none non-leaf"))))
           ; the x86 cpu named: one before the 686 has no cmov, so a select branches instead
           (("-march=" + w) . r) (flags r (pin t 'old (elem w ["i386" "i486" "i586" "pentium" "pentium-mmx" "lakemont"])))
           ; the float file refused: code that would touch an xmm or x87 register is a refusal
@@ -1410,6 +1697,8 @@
           ; arm's asks: thumb-2 is what it lays, aapcs-linux the arm target's own abi, and a soft
           ; float abi refuses the float file as -msoft-float does
           ("-mfloat-abi=soft" . r) (flags r (pin (fpush t 'a32 "-mfloat-abi=soft") 'nofp 1))
+          ; ..softfp the float file computing, every float at a call in the words
+          ("-mfloat-abi=softfp" . r) (flags r (xkon (fpush t 'a32 "-mfloat-abi=softfp") 'sfp))
           ((a . r) && elem a ["-mthumb" "-mabi=aapcs-linux"]) (flags r (fpush t 'a32 a))
           ; no lane of ours would use these, so asking for none of them asks nothing
           ((a . r) && elem a ["-mno-mmx" "-mno-3dnow" "-mno-avx" "-mno-sse4a"]) (flags r t)
@@ -1456,6 +1745,7 @@
           ("-mindirect-branch-cs-prefix" . r) (flags r (fpush (xkon t 'cs) 'x6f "-mindirect-branch-cs-prefix"))
           ; -Os/-Oz ask for size: returns share one epilogue. any other -O asks it back off
           ((a . r) && starts? a "-O") (flags r (pin t 'osz (elem a ["-Os" "-Oz"])))
+          ("-Werror" . r) (flags r (pin t 'werr 1))
           ((a . r) && tol? a) (flags r t)
           ((a . r) && (fok? a || mok? a)) (flags r t)
           ; a bare `-` is an input, the source on stdin
@@ -1479,7 +1769,7 @@
     (: sd (std-take as)
        dia <sd
        as9 <>sd                                    ; the line with -std= lifted off it
-       ntv (elem love-arch '(x64 a64 rv64) ? love-arch 'x64)     ; unknown grounds keep x64
+       ntv (elem love-arch '(x64 a64 rv64 arm) ? love-arch 'x64)     ; unknown grounds keep x64
        f (flags as9 (fseed ntv dia))       ; the flag set, seeded whole
        ; -I dirs want a trailing slash: normalised in the tablet, before anything reads
        _ (pin f 'is (map dirn (f 'is + f 'isy) + (two? (f 'ia) ? (oursinc () + map dirn (f 'ia)) ())))
@@ -1512,6 +1802,11 @@
        _ (elem 'thki (f 'xk) && !(elem (f 'tgt) '(x64 i386)) && udie 2 "cc: -mretpoline lays on x86 only")
        _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        _ (f 'pic && f 'tgt = 'i386 && pin f 'njt 1)                       ; ..and i386's table holds absolute words
+       ; an arm exe under a system loader is a pie: absolute movw/movt in its text could not slide
+       _ (string? (f 'ip) && f 'tgt = 'arm && !(f 'pic) &&
+          (f 'npic ? (udie 2 "cc: -dynamic-linker on arm lays a pie: drop -fno-pic") (pin f 'pic "-fpie")))
+       ; ..and android's arm abi is softfp: its libraries take a float in the words
+       _ (string? (f 'ip) && starts? (f 'ip) "/system/" && f 'tgt = 'arm && !(f 'nofp) && xkon f 'sfp)
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)
@@ -1532,7 +1827,9 @@
                              ; stdin has no name to derive an .o from
                              (<l = "-") (udie 2 "cc: a source on stdin needs -o")
                              !(dotsrc? <l) (udie 2 "cc: not a .c or .s input: \(<l)")
-                             (cc-obj <l (obase <l) f, go >l))
+                             ; -S lays x.s, and never over its own source
+                             (f 'S && !(ends? <l ".c")) (udie 2 "cc: -S of \(<l) needs -o")
+                             (cc-obj <l (obase <l @ b (f 'S ? "\(snip b 0 (#b - 1))s" b)) f, go >l))
                    (go ins))
                 (cc-link ins "a.out" f, 0)))))
 

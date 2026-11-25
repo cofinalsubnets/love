@@ -475,8 +475,10 @@
     (: h (text @ ("wo1 " + _) (wo-head text) ())
        r (sound (two? h ? (snip text <>h (<>h + <<h)) text))
        (? !(two? r && two? <r) () (two? h) (wo-fill <r (wo-blobs text >(<h) (<>h + <<h))) <r))
-   ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all;
-   ;; 'stack bytes; 'base addr. an input is a tu, or its text -- read here, so the link holds
+   ;; opts: 'imports (name ..) the functions the environment supplies; 'exports (name ..) | 'all,
+   ;; and under a list 'exports? (name ..), exported where defined; a list drops what it cannot reach;
+   ;; 'stack bytes; 'base addr; 'marker the drop's marker, reach unless a law hands another: the
+   ;; laws' door. an input is a tu, or its text -- read here, so the link holds
    ;; one copy of the program
    (wasm-link tus0 opts)
     (: ntu #tus0
@@ -518,11 +520,26 @@
        (rd i forms) (map (f \ (two? f && <f = 'label ? (w-symap f (ren2 i)) f)) forms)   ; the definition alone
        (r2 i x) (peep (ren2 i) x x)
        ;; 3. the functions, in tu order and stream order
-       fns (catmap (i \ (map (fn \ ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
+       fns0 (catmap (i \ (map (fn \ ((r2 i <fn) . >fn)) (parts i 0))) ^ntu)
        als (catmap (i \ (map (a \ [(r2 i (a 0)) (r2 i (a 1))]) (parts i 10))) ^ntu)   ; (alias . name) pairs
        (dl k) (map (i \ (rd i (parts i k))) ^ntu)                 ; one data lane across the tus
        d1 (dl 4)  d4 (dl 5)  d5 (dl 6)  d8 (dl 8)  d9 (dl 9)
        d7 (map (i \ (map (x \ [(x 0) (rd i (x 1)) (x 2)]) (parts i 7))) ^ntu)
+       ;; 3b. the drop: under a named export list a function is laid only if the exports or the
+       ;;     data reach it -- by a call or a jump, by its address taken in code (la, a pool
+       ;;     word), or by a pointer in a data lane. data stays whole, so whatever it names is a
+       ;;     root. a name is its function's: an alias its target's, a label inside one the one
+       ;;     it is in. 'all lays every function
+       want (peep opts 'exports 'all)
+       fns (want = 'all ? fns0
+              (: own {}
+                 _ (map (fn \ (map (l \ pin own l <fn) (keys (w-labels <>fn)))) fns0)
+                 _ (map (a \ pin own (a 0) (peep own (a 1) (a 1))) (als + als))
+                 (of x) (peep own x x)
+                 units (map (fn \ (<fn . map of (keys (w-refs <>fn {})))) fns0)
+                 dref ({} @ t (map (d \ (w-refs d t)) (d1 + d4 + d5 + d8 + d9 + catmap (xs \ map (x \ x 1) xs) d7), t))
+                 roots (map of (map nom (want + peep opts 'exports? ()) + keys dref))
+                 (reach-keep fns0 ((peep opts 'marker reach) units roots))))
        ;; 4. the data, section-major across the tus: rodata, data, love_nifs, .love.image, then
        ;;    the named sections grouped by name, then every bss. a lane the ELF linker brackets
        ;;    (love_nifs, love_rela, every named section) gets its __start_/__stop_ pair here.
@@ -564,6 +581,10 @@
                      t))
        refs (keys ({} @ t (map (fn \ (w-refs <>fn t)) fns, map (d \ (w-refs d t)) dlanes, t)))
        owed0 (filter (x \ !(peep defd x 0) && atom? (syms x)) refs)   ; a bracket is the link's
+       ;; a name the drop took while what it kept still names it is the drop's own error, never a null
+       def0 ({} @ t (want = 'all ? 0 (map (fn \ (pin t <fn 1, w-labels-into t <>fn)) fns0), t))
+       lost (filter (x \ peep def0 x 0) owed0)
+       _ (two? lost ? (scare 'wasm-dropped lost) 0)
        ;; a weak reference nothing defines is null, as at a static link; the rest are imports
        wkall (foldl (\ a p (map (s \ pin a (nom s) 1) (p 3), a)) {} parts)
        _ (pin wkall 'main 1)                            ; a module with its own exports has no main
@@ -601,7 +622,9 @@
        exports (: e (peep opts 'exports 'all)
                   seen {}                                 ; a weak twin names the same export once
                   (ff s) (seen s @ () (pin seen s 1, two? (syms (nom s))))
-                  (e = 'all ? (catmap (p \ filter ff (p 1)) parts) e))
+                  ; a named list: each must stand; an 'exports? name rides only where defined
+                  (e = 'all ? (catmap (p \ filter ff (p 1)) parts)
+                     (e + filter (s \ two? (syms (nom s))) (peep opts 'exports? ()))))
        _ (pin w-st 'tag (two? (syms '__love_wthrow)))
        ;; each function lowered and encoded as it comes, a body a string from here on
        funcs (map (f \ (wasm-fn (f 1) 'uni syms @ r [0 (wentry <r >r)])) fns)

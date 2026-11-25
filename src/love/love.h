@@ -106,6 +106,7 @@ static love_inline size_t b2w(size_t b) {
 #ifndef love_budget
 # define love_budget 0
 #endif
+extern uintptr_t love_budget_boot;
 // the C stack bytes c0 may take where the seat says no more: inle's boot stack is a MiB over
 // the page tables; a host takes three quarters of its rlimit
 #ifndef love_cstack
@@ -539,8 +540,11 @@ size_t host_selfpath(char*, size_t);
 // ..image.c..
 struct image_opt;
 int bake_move(int src, int dst, uint64_t soff, uint64_t doff, uint64_t n, char *win);
-// ..elfbake.c or macho.c, one per link: 0 laid, >0 not laid for growth, <0 failed
-int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win);
+// ..elfbake.c and macho.c, each declining (>0) a container not its own: 0 laid, >0 not laid
+// for growth, <0 failed
+int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win),
+    image_lay_elf(int src, int dst, void const *buf, uintptr_t len, char *win),
+    image_lay_macho(int src, int dst, void const *buf, uintptr_t len, char *win);
 int image_bake(struct g*, char const *out, int bare, struct image_opt const*), baked_pick(void const **blob, uintptr_t *blen);
 struct g *image_load(char const*, int*), *image_dump(struct g*, char const*, struct image_opt const*);
 extern uint64_t baked_image[];
@@ -583,7 +587,7 @@ extern unsigned char const rootfs[];          // src/inle/rootfs/ as a plain tar
 extern uintptr_t const rootfs_len;
 
 uint64_t love_clock(void);   // epoch ms, the scale of (clock t) and every mtime
-intptr_t nclock(void); // ns; the null seat degrades to ms
+int64_t nclock(void); // ns; the null seat degrades to ms
 // the kernel underneath (moonlibc's os.c): 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, <0 inle
 extern long __love_osv;
 void love_sleep(uintptr_t ticks); // at most ticks (0 forever), no input wakeup; default no-op
@@ -1019,6 +1023,33 @@ static love_inline flo_t love_trunc(flo_t x) {
  return (flo_t) (int64_t) x;
 #endif
 }
+static love_inline flo_t love_floor(flo_t x) { flo_t t = love_trunc(x); return t > x ? t - 1 : t; }
+// the math floor is ours on every frontend (moonlibc's math/lm.c); love_* is the word's width
+double lm_sin(double), lm_cos(double), lm_atan2(double, double), lm_asin(double), lm_acos(double),
+       lm_sqrt(double), lm_exp(double), lm_log(double), lm_pow(double, double);
+float lm_sinf(float), lm_cosf(float), lm_atan2f(float, float), lm_asinf(float), lm_acosf(float),
+      lm_sqrtf(float), lm_expf(float), lm_logf(float), lm_powf(float, float);
+#if Bits == 64
+#define love_sin   lm_sin
+#define love_cos   lm_cos
+#define love_atan2 lm_atan2
+#define love_asin  lm_asin
+#define love_acos  lm_acos
+#define love_sqrt  lm_sqrt
+#define love_exp   lm_exp
+#define love_log   lm_log
+#define love_pow   lm_pow
+#else
+#define love_sin   lm_sinf
+#define love_cos   lm_cosf
+#define love_atan2 lm_atan2f
+#define love_asin  lm_asinf
+#define love_acos  lm_acosf
+#define love_sqrt  lm_sqrtf
+#define love_exp   lm_expf
+#define love_log   lm_logf
+#define love_pow   lm_powf
+#endif
 // a float to int64: on a 32-bit word that goes through double, so a word's take the short way
 static love_noinline __attribute__((unused)) int64_t flo_i64(flo_t x) {
 #if Bits == 32
@@ -1211,8 +1242,10 @@ static love_inline size_t llen(word l) {
  size_t n = 0;
  while (chainp(l)) n++, l = B(l);
  return n; }
+// a failed g keeps its stack: a scare's words are what the exit face reads
 static love_inline struct g*pop(struct g*g, uintptr_t n) {
- return core_of(g)->sp += n, g; }
+ if (ok(g)) g->sp += n;
+ return g; }
 #define avm_unit(a, b) \
  if (mintp(a) || mintp(b)) love_musttail return Push(ZeroPoint)
 #define cmp_lt(nom, vop) lvm(nom) { \

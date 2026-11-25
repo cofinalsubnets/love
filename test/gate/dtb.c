@@ -14,8 +14,8 @@
 #include <stdio.h>
 #include <string.h>
 
-// the two symbols an arch door borrows: kmain owns kboot, and the projection patches
-// k_image_top into the file (src/tools/kproject.l).
+// the two symbols an arch door borrows: kmain owns kboot, and the transpose patches
+// k_image_top into the file (src/tools/transpose.l).
 struct k_boot kboot;
 uintptr_t const k_image_top = 0x80210000;
 #define k1 0x80210000ull                 // ..page-aligned already, so k_image_top is it
@@ -153,7 +153,7 @@ int main(void) {
     ck("bare.args", 0, (uint64_t) kboot.cmdline[0]); }
 
   { // a bootargs longer than the buffer is cut and terminated, never run past
-    char big[400]; unsigned i;
+    char big[sizeof kboot.cmdline + 100]; unsigned i;
     uint64_t reg[2] = { 0x80000000, 0x08000000 };
     for (i = 0; i < sizeof big - 1; i++) big[i] = 'x';
     big[sizeof big - 1] = 0;

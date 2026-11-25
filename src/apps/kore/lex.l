@@ -134,6 +134,7 @@
    (lex-defs ds) (foldl (acc \ d \ acc + [[<d (lex-ere acc <>d)]]) () ds)
    ; -- regcomp's program, read back: (op x y bytes) by pc. the block is a header, np instructions
    ; (op x y, and a pointer's room), then the sets: a byte map, then neg; byte mode keeps no ranges.
+   ; the layout is moonlibc's regex.c (prog, ins, rset), each padded to the word.
    ; regcomp leaves nul out of every set, its text never holding one; a scanner's does, and a
    ; negated set takes it, as flex's [^\n] does --
    (lex-i32 b o) (: v (b o + 256 * b (o + 1) + 65536 * b (o + 2) + 16777216 * b (o + 3))
@@ -142,11 +143,14 @@
     (: b <(regcomp e 1)
        _ (string? b ? () (lex-die ("regcomp refuses " + e)))
        np (lex-i32 b 0) ns (lex-i32 b 4)
-       _ (#b = 40 + 24 * np + 56 * ns ? () (lex-die "regcomp's program is not the block this reads"))
-       (set k) (: o (40 + 24 * np + 56 * k)
+       ; header, instruction and set sizes on a 64- and a 32-bit word: the block's size picks
+       z (filter ([h i r] \ #b = h + i * np + r * ns) [[64 24 56] [60 16 52]])
+       _ (two? z ? () (lex-die "regcomp's program is not the block this reads"))
+       h <<z i (<z 1) r (<z 2)
+       (set k) (: o (h + i * np + r * k)
                   (filter (c \ (c = 0 ? (lex-i32 b (o + 32) != 0) ((b (o + (c >> 3)) >> (c & 7)) & 1))) (jot 256)))
        sets (map set (jot ns))
-       (map (pc \ (: o (40 + 24 * pc) op (lex-i32 b o) x (lex-i32 b (o + 4)) y (lex-i32 b (o + 8))
+       (map (pc \ (: o (h + i * pc) op (lex-i32 b o) x (lex-i32 b (o + 4)) y (lex-i32 b (o + 8))
                     [op x y (op = 2 ? (sets x) ())]))
             (jot np)))
    ; -- the DFA: (classes S K trans accept rules); states 0 (dead) to S - 1, 1 the start; trans by

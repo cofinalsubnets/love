@@ -93,13 +93,15 @@
      + x-push
      + x-fsave
      ;; a fault from a process (cs's low bits, past the two frames) arrives on its gs:
-     ;; the kernel's comes back, and k_exception ends the process rather than the machine
+     ;; the kernel's comes back, and k_exception ends the process rather than the machine --
+     ;; or, a write to a page a fork shares, goes back to it on its own gs
      + '((ld r0 sp 656) (and r0 r0 3) (cmp r0 0) (br eq exc_kern) (swapgs) (label exc_kern)
-         (lea r6 sp 512) (call k_exception))
+         (lea r6 sp 512) (call k_exception)
+         (ld r0 sp 656) (and r0 r0 3) (cmp r0 0) (br eq exc_kback) (swapgs) (label exc_kback))
      + x-fload
      + x-pop
      + '((add sp sp 16)          ; discard the vector + error code
-         (iretq))                ; (the fatal handler never returns)
+         (iretq))                ; (a kernel's fault never returns)
      ;; the timer (IRQ0): bump kticks through two saved registers. a tick in a process (cs
      ;; past the two pushes) also counts down its turn, and k_proc_tick may switch from there
      + [['align 8] ['label 'timer_isr]]

@@ -14,14 +14,13 @@
 ; is gated by `(t >= 0)`. a module, so harp's names do not shadow the prel at top level.
 (module '(play harp-main harp-usage harp-wav harp-horn harp-print harp-read harp-run
          harp-scale harp-chunk mkvoice cyc-voices mixdown echoed pack song-out
-         twopi ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
+         ln2-12 venv vnum vnoise vphase instr vname mkvoice held-ops)
 (borrow ((cite 'harp) @ m (m ? m "src/apps/harp/harp.l")))
 (borrow '(bytes horn cli))
 (borrow 'ops)                           ; the voices' operators, run by tones
 (:
    ; the fs doors by value: a module layer does not see the posix splice; () where there is none
    open (cite 'posix 'open) close (cite 'posix 'close)
-   twopi tau
    ln2-12 0.05776226504666211               ; ln 2 / 12, one semitone
    ; white noise off the frame number, so any chunk renders the same sample
    (vnoise ix)
@@ -35,34 +34,11 @@
                         n0 (vnoise (a + sd))
                         (n0 + (vnoise (a + sd + 1) - n0) * e))
 
-   ; --- the kit. each takes trays (t ix ph): seconds since onset (clamped at 0), absolute
-   ;     frames, and the phase in cycles, so a shape never sees a frequency. ---
-   ; a kick is one falling sine, its phase the closed-form integral of 46 + 88e^(-34t)
-   (i-bd t ix ph) (sin ((t * 46.0 + 2.6 * (1.0 - exp (t * -34.0))) * tau)
-                  * exp (t * -8.0))
-   (i-sn t ix ph) ((vnoise ix * 0.75 + sin (t * tau * 190.0) * 0.5) * exp (t * -24.0))
-   (i-hh t ix ph) (vnoise ix * 0.5 * exp (t * -95.0))
-   (i-oh t ix ph) (vnoise ix * 0.4 * exp (t * -13.0))
-   ; a clap: a short chatter (a duty cycle on t) then a tail
-   (i-cp t ix ph) ((t * 220.0 % 1.0 < 0.45) * (t < 0.028) + (t >= 0.028) @ g
-                    (vnoise ix * 0.55 * g * exp (t * -17.0)))
-   (i-rim t ix ph) (sin (t * tau * 1650.0) * 0.7 * exp (t * -150.0))
-   (i-tom t ix ph) (sin ((t * 96.0 + 1.4 * (1.0 - exp (t * -22.0))) * tau)
-                   * exp (t * -11.0))
-   ; the pitched four, each with one attack-decay envelope
+   ; --- the kit: tones' operators (ops.l) for all but wind, which is a shape taking trays
+   ;     (t ix ph): seconds since onset (clamped at 0), absolute frames, and the phase in
+   ;     cycles, so it never sees a frequency. ---
+   ; the pitched ones' rise and fall (slop's voices take it too)
    (venv t d) ((1.0 - exp (t * -420.0)) * exp (t / d * -2.6))
-   (i-sin t ix ph) (sin (ph * tau))
-   (i-saw t ix ph) (ph % 1.0 * 2.0 - 1.0)
-   (i-sqr t ix ph) ((ph % 1.0 < 0.5) * 2.0 - 1.0)
-   (i-tri t ix ph) (: u (ph % 1.0)
-                     v (u * 4.0)
-                     ((u < 0.5) * (v - 1.0) + (u >= 0.5) * (3.0 - v)))
-   ; a music box's tine, an octave up, with two fast-dying partials
-   (i-box t ix ph) (ph * tau * 2.0 @ w
-                     (sin w + 0.3 * sin (w * 3.0) * exp (t * -6.0) + 0.15 * sin (w * 5.8) * exp (t * -9.0)))
-   ; a wind chime's tube, two octaves up: inharmonic partials over a long ring
-   (i-chime t ix ph) (ph * tau * 4.0 @ w
-                       (sin w + 0.5 * sin (w * 2.76) * exp (t * -2.0) + 0.25 * sin (w * 5.4) * exp (t * -4.0)))
    ; wind: smoothed noise in three bands, low to high, each swelling on slow sines of its own
    ; (seconds tens to a few), and a thin whistle an octave over the note wandering on the gusts
    (i-wind t ix ph) (: g1 (0.5 + 0.5 * sin (t * 0.37 + 0.4)) g2 (0.5 + 0.5 * sin (t * 0.23 + 2.1))
@@ -72,14 +48,11 @@
                         + 0.05 * g1 * g2 * sin (ph * tau * 2.0 + 2.5 * sin (t * 0.9))))
    ; a swell over the whole note, from nothing and back: for what has no attack
    (vswell t d) (sin (t / d * tau * 0.5) @ u (u * u))
-   ; name -> [default-duration pitched? shape]; pitched 2 swells over the note instead
+   ; name -> [default-duration pitched?], and wind's shape; pitched 2 swells over the note instead
    (instr nm) (nm @
-    "bd"  [0.55 0 i-bd]   "sn"  [0.35 0 i-sn]   "hh"  [0.09 0 i-hh]
-    "oh"  [0.35 0 i-oh]   "cp"  [0.35 0 i-cp]   "rim" [0.06 0 i-rim]
-    "tom" [0.45 0 i-tom]  "sin" [0.30 1 i-sin]  "saw" [0.30 1 i-saw] 
-    "sqr" [0.30 1 i-sqr]
-    "tri" [0.30 1 i-tri]  "box" [1.20 1 i-box]  "chime" [3.0 1 i-chime]
-    "wind" [12.0 2 i-wind])
+    "bd"  [0.55 0]   "sn"  [0.35 0]   "hh"  [0.09 0]   "oh"  [0.35 0]   "cp"  [0.35 0]
+    "rim" [0.06 0]   "tom" [0.45 0]   "sin" [0.30 1]   "saw" [0.30 1]   "sqr" [0.30 1]
+    "tri" [0.30 1]   "box" [1.20 1]   "chime" [3.0 1]  "wind" [12.0 2 i-wind])
 
    ; --- an event's value -> a voice ------------------------------------------
    ; the value is a tablet of control words, a string from `hit`, or a bare note number
@@ -89,14 +62,20 @@
                  (r @ 'none d r))
    ; the phase in cycles at t of a note at f gliding at k nepers/s: the integral of f e^(kt)
    (vphase t f k) (k = 0.0 ? (t * f) (f * (exp (t * k) - 1.0) / k))
-   ; --- the kit again as ops.l operators: each pitched timbre its partials [ratio level decay
-   ;     wave], each drum its operators; the clap stays the shape above ---
+   ; each pitched timbre its partials [ratio level decay wave]: a music box's tine is the note an
+   ; octave up, a partial an octave and a fifth over it dying fast, a bright one faster; a wind
+   ; chime's tube two octaves up, inharmonic partials over a long ring
    partials {"sin" [[1.0 1.0 0.0 0]] "saw" [[1.0 1.0 0.0 5]] "sqr" [[1.0 1.0 0.0 6]] "tri" [[1.0 1.0 0.0 4]]
              "box" [[2.0 1.0 0.0 0] [6.0 0.3 6.0 0] [11.6 0.15 9.0 0]]
              "chime" [[4.0 1.0 0.0 0] [11.04 0.5 2.0 0] [21.6 0.25 4.0 0]]}
+   ; each drum its operators, each dying at 'd a second: a kick one falling sine, 46 Hz and 2.6
+   ; cycles more falling in at 34 a second, a tom the same higher; a clap noise its level a pulse
+   ; 45% of each 220th of a second high for its first 28 ms ('until), then its tail ('from)
    kit {"bd" [{'f 46.0 'drop 2.6 'kappa 34.0 'd 8.0}] "sn" [{'wave 7 'lvl 0.75 'd 24.0} {'f 190.0 'lvl 0.5 'd 24.0}]
         "hh" [{'wave 7 'lvl 0.5 'd 95.0}] "oh" [{'wave 7 'lvl 0.4 'd 13.0}] "rim" [{'f 1650.0 'lvl 0.7 'd 150.0}]
-        "tom" [{'f 96.0 'drop 1.4 'kappa 22.0 'd 11.0}]}
+        "tom" [{'f 96.0 'drop 1.4 'kappa 22.0 'd 11.0}]
+        "cp" [{'wave 8 'f 220.0 'duty 0.45 'l 0.0} {'wave 7 'am 0 'lvl 0.55 'd 17.0 'until 0.028}
+              {'wave 7 'lvl 0.55 'd 17.0 'from 0.028}]}
    ; a held note's operators: venv's rise, half the level held and half dying over d
    (held-ops nm f d) (cats (map (p \ [{'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 (p 2 * ops-db) 0.0]]}
                                       {'f (f * p 0) 'wave (p 3) 'l (0.5 * p 1) 'segs [[0.0 2 420.0 ((2.6 / d + p 2) * ops-db) 0.0]]}])
@@ -118,45 +97,62 @@
                           tp (t * (t > 0.0))
                           e  (ins 1 @ 0 1.0 2 (vswell tp dur) (venv tp dur))
                           (sh tp ix (vphase tp f k) * e * (t >= 0.0) * (t < dur))))
-             ; as operators where the kit has them: speed scales every rate
+             ; as operators where the kit has them: speed scales every rate, and a drum's
+             ;   operator sounds from 'from to 'until, dying at 'd a second of its own time
              nm (vname v) pr (peep partials nm ()) dk (peep kit nm ())
              gate [[(dur / spd) 1 0.0 0.0 0.0]]
+             (drum o) (: d (peep o 'd 0.0) a (peep o 'from 0.0) u (peep o 'until ())
+                         {'f (peep o 'f 0.0 * spd) 'drop (peep o 'drop 0.0) 'kappa (peep o 'kappa 0.0 * spd)
+                          'wave (peep o 'wave 0) 'duty (peep o 'duty 0.5) 'am (peep o 'am -1) 'l (peep o 'l (peep o 'lvl 1.0))
+                          'segs ([[(a / spd) 0 (d * a * ops-db) (d * spd * ops-db) 0.0]] + (u @ () () [[(u / spd) 1 0.0 0.0 0.0]]) + gate)})
              os (? (two? pr) (map (p \ {'f (f * p 0 * spd) 'slide (k * spd) 'wave (p 3) 'l (p 1)
                                          'segs ([[0.0 2 (420.0 * spd) ((2.6 / dur + p 2) * spd * ops-db) 0.0]] + gate)}) pr)
-                   (two? dk) (map (o \ {'f (peep o 'f 0.0 * spd) 'drop (peep o 'drop 0.0) 'kappa (peep o 'kappa 0.0 * spd)
-                                         'wave (peep o 'wave 0) 'l (peep o 'lvl 1.0) 'segs ([[0.0 0 0.0 (o 'd * spd * ops-db) 0.0]] + gate)}) dk)
-                   ())
+                   (map drum dk))
              (two? os ? (ops-voice os st end (amp * (1.0 - pn)) (amp * pn) rate) [end fn (amp * (1.0 - pn)) (amp * pn)]))))
 
    ; --- mixing and packing ---------------------------------------------------
    ; every live voice is evaluated over the whole chunk and summed; a hard-panned voice
-   ; skips its far side. mixall sums the chunk in C in one call, left and right in one tray,
-   ; a voice's raw answer read in place; without it the trays sum in love, in the same order
+   ; skips its far side. tones-mix runs the chunk in C in one call, an ops voice by its twin
+   ; (ops.l's cv) and the rest as pieces their fns laid; mixall sums the pieces alone, and
+   ; without either the trays sum in love, all in the same order
    mixall (cite 'dsp 'mixall)
-   (mixdown vs base n)
-    (: ix (iota n + base)
-       z  (ix * 0.0)
+   tmix (cite 'dsp 'tones-mix)
+   techo (cite 'dsp 'tones-echo)
+   tws (cite 'dsp 'tones-ws)
+   ; ..g a number answers the packed bytes where tones-mix lays them, else left . right
+   (mixlay vs base n g ws)
+    (: c (tmix && n <= 4096)
+       (ixs _) (iota n + base)
+       (lr m) ((peep m (iota n) 0.0) . (peep m (iota n + n) 0.0))
        (side acc y g) (g = 0.0 ? acc (acc + y * g))
        (go l L R) (l @- (L . R)
-                   ((_ . f . yl . yr . _) . u) (f ix @ y            ; the wave, once: it is a C pass
+                   ((_ . f . yl . yr . _) . u) (f (ixs ()) @ y      ; the wave, once: it is a C pass
                                                   (go u (side L y yl) (side R y yr))))
        (pieces l) (l @- ()
-                   ([_ _ yl yr _ tp] . u) (map ([y o g] \ [y (yl * g) (yr * g) o]) (tp ix) + pieces u)
-                   ([_ _ yl yr r] . u) ([(r ix) yl yr 0] . pieces u)
-                   ((_ . f . yl . yr . _) . u) ((f ix @ y [(tray? y ? y (z + y)) yl yr 0]) . pieces u))
-       (mixall ? (mixall (pieces vs) n @ m ((peep m (iota n) 0.0) . (peep m (iota n + n) 0.0))) (go vs z z)))
+                   ([_ _ yl yr _ tp cv] . u) (c && cv ? ([cv yl yr] . pieces u)
+                                                (map ([y o g] \ [y (yl * g) (yr * g) o]) (tp (ixs ())) + pieces u))
+                   ([_ _ yl yr r cv] . u) ((c && cv ? [cv yl yr] [(r (ixs ())) yl yr 0]) . pieces u)
+                   ([_ _ yl yr r] . u) ([(r (ixs ())) yl yr 0] . pieces u)
+                   ((_ . f . yl . yr . _) . u) ((f (ixs ()) @ y [(tray? y ? y (y + 0.0 * ixs ())) yl yr 0]) . pieces u))
+       (? (c && (charm? g || gem? g)) (tmix (pieces vs) base n g ws)
+          c (lr (tmix (pieces vs) base n () ws))
+          mixall (lr (mixall (pieces vs) n))
+          (ixs () * 0.0 @ z (go vs z z))))
+   (mixdown vs base n) (mixlay vs base n () ())
    ; an ops voice heard again at each tap [frames-behind gain], from the chunks it already
-   ; laid rather than run again: [end fn gl gr () tp], tp the [tray offset gain] a chunk sums.
-   ; for a mixdown with mixall, whose chunks are all one length; fn is the voice unechoed
-   (echoed [end fn gl gr raw] taps)
-    (: mx (foldl max 0 (map cap taps)) box {'past ()}
+   ; laid rather than run again: [end fn gl gr () tp cv], tp the [tray offset gain] a chunk
+   ; sums and cv its twin echoed alike. for a mixdown with mixall or tones-mix, whose chunks
+   ; are all one length; fn is the voice unechoed
+   (echoed v taps)
+    (: end (v 0) fn (v 1) gl (v 2) gr (v 3) raw (v 4) cv (#v > 5 ? (v 5) ())
+       mx (foldl max 0 (map cap taps)) box {'past ()}
        (tp ix) (: f0 (peep ix 0 0) n #ix
                   r (f0 < end ? (raw ix))
                   past (filter (p \ p 0 + n > f0 - mx) (tray? r ? ([f0 r] . box 'past) (box 'past)))
                   _ (pin box 'past past)
                   (from d g) (map (p \ [(p 1) (f0 - d - p 0) g]) (filter (p \ p 0 < f0 - d + n && p 0 + n > f0 - d) past))
                   ((tray? r ? [[r 0 1.0]] ()) + catmap (t \ from (t 0) (t 1)) taps))
-       [(end + mx) fn gl gr () tp])
+       [(end + mx) fn gl gr () tp (techo && cv && techo cv taps)])
    ; one voice at full scale reaches 0.6 of the range; -g moves the mix under that ceiling
    harp-scale 20000.0
    (clip g x) (int (x * g) @ v (? (v > 32767) 32767 (v < -32768) -32768 (v & 65535)))
@@ -176,12 +172,15 @@
                  lay c 2 2 4 (clipv g R),
                  string c)
           (string (go 0))))
-   ; a song's next n frames out its port 'h at gain g; finished voices dropped, 'fpos moved on
+   ; a song's next n frames out its port 'h at gain g; finished voices dropped, 'fpos moved on.
+   ; the mixer's scratch is the song's: two sides, a voice's two, and 10 operators' 4096 each
    (song-out s n g) (: base (s 'fpos)
                        live (filter (p \ p 1 0 >= base) (s 'vs))
                        now (filter (p \ p 0 < base + n) live)
+                       ws (s 'mws || (tws && pin s 'mws (tws (14 * 4096)) 'mws))
+                       m (mixlay (map (p \ p 1) now) base n g ws)
                        (pins s 'vs live 'fpos (base + n),
-                        say (s 'h) (pack (mixdown (map (p \ p 1) now) base n) n g)))
+                        say (s 'h) (string? m ? m (pack m n g))))
 
    ; --- the run: cycles in, chunks out ---------------------------------------
    harp-chunk 2048

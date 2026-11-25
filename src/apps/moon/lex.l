@@ -67,20 +67,29 @@
    ; a token spelled as a one-char constant: 'c' or one escape; its value is the raw byte
    (chq? (_ . _ . _ . _ . s . _)) (: (bs i n) (i < #s ? (bs (i + 1) (s i = 92 ? (n + 1) n)) n)
                                      (string? s && 2 < #s && s 0 = 39 && (#s = 3 || s 1 = 92 && bs 1 0 = 1)))
-   ; for cpp: a token whitespace follows carries a 6th cell, so # can spell the gaps
+   ; for cpp: a token whitespace follows carries a 6th cell, so # can spell the gaps; wm 2
+   ; (-E -C) also keeps each comment as a ('cmt text line) token
    (clexw src ln0) (clexm src ln0 () 1)
    ; for a .S: 1b/2f is one word, $ @ \ ` are punctuators, `#` starts gas's comment (see go).
    ; each non-directive line opens with a ("\n") mark, so the text spelled back breaks as the source did
-   (clexasm src ln0 ar)
-    (: r (clexm src ln0 (ar ? 3 1) 1)
+   (clexasm src ln0 ar) (clexasmk src 0 () ln0 ar)
+   ; ..in blocks: from byte i0 through the first line end at or past lim (clexk's cut),
+   ; -> (1 toks next line), the next block's start and its line
+   (clexasmk src i0 lim ln0 ar)
+    (: r (clexk src i0 lim ln0 (ar ? 3 1) 1)
        (go l ln acc) (atom? l ? (rev acc)
                         (<l @ t
                            (? (<>>t = ln) (go >l ln (t . acc))
                               (<t = 'p && <>t = "#") (go >l <>>t (t . acc))
                               (go >l <>>t (t . ['p "\n" <>>t] . acc)))))
-       (okv? r ? [1 (go <>r (ln0 - 1) ())] r))
-   (clexm src ln0 asm wm)
+       (okv? r ? (1 . go <>r (ln0 - 1) () . >>r) r))
+   (clexm src ln0 asm wm) (clexk src 0 () ln0 asm wm)
+   ; the lexer from byte i0. a lim stops it at the first line end at or past that byte, where
+   ; no splice, comment or literal is open, answering (1 toks next line); none, (1 toks)
+   (clexk src i0 lim ln0 asm wm)
     (: n #src
+       (done i line acc) (lim ? [1 (rev acc) i line] [1 (rev acc)])
+       (eol j line acc) (lim && lim <= j ? [1 (rev acc) j line] (go j line acc))
        ; newlines held inside one logical line (splices, a directive's block comment): the line
        ; number stands still across them and catches up at the logical line's end
        pend {}
@@ -227,7 +236,7 @@
        (digend j) (j < n && dig? (src j) ? (digend (j + 1)) j)
        ; does the last token, a number, end flush at i?
        (numat? i acc) (0 < i && !(ws? (src (i - 1))) && two? acc &&
-                       elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo) &&
+                       elem <(<acc) '(num unum lnum ulnum llnum ullnum flo flof iflo ppnum) &&
                        4 < #(<acc) && string? ((<acc) 4) && 0 < #((<acc) 4) &&
                        ((<acc) 4 @ sp (#sp <= i && snip src (i - #sp) i = sp)))
        ; is the line being lexed a directive (its first token `#`)? there a `#` is # or ##
@@ -315,21 +324,22 @@
        ; c.lex's tables say the shape at i: the common ones are laid here, the hand lexer's own
        ; way; a shape they do not name (rule 0), or one a guard turns back, runs the hand lexer
        (go i line acc)
-        (? (n <= i) [1 (rev acc)]
-           asm (slow i line acc)
+        (? (n <= i) (done i line acc)
+           (asm && src i = 35) (slow i line acc)                 ; gas's comment or a directive: the hand lexer's
            (clex-run ctab src i @ m
               (: r (m & 65535) j (m >> 16)
                  (? (r = 4) (snip src i j @ t (idback? t i j acc ? (slow i line acc) (go j line (idtok t line . acc))))
+                    (r = 5 && wm = 2) (slow i line acc)                ; -C keeps the comment
                     (r = 2 || r = 5) (go j line (spc acc))            ; blanks, a // comment
                     (r = 7) (src i @ c (p1back? c j ? (slow i line acc) (go j line (p1tok c i line . acc))))
                     (r = 6) (go j line (['p (ptab (snip src i j)) line] . acc))
-                    (r = 1) (go j (nl line) (spc acc))
+                    (r = 1) (eol j (nl line) (spc acc))
                     (r = 3) (pend1 1, go j line acc)                  ; a splice: one logical line
                     (slow i line acc)))))
        (slow i line acc)
-        (n <= i ? [1 (rev acc)]
+        (n <= i ? (done i line acc)
            (src i @ c
-              (? (c = 10) (go (i + 1) (nl line) (spc acc))
+              (? (c = 10) (eol (i + 1) (nl line) (spc acc))
                  (c = 92 && i + 1 < n && src (i + 1) = 10)         ; \<nl> splice: one logical line
                   (pend1 1, go (i + 2) line acc)                           ; (line unadvanced so a directive stays grouped)
                  (c = 92 && i + 2 < n && src (i + 1) = 13 && src (i + 2) = 10)          ; \<cr><nl>
@@ -346,7 +356,7 @@
                  (asm && elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                  (c = 47 && at? i "//")
                   (: (eat j) (n <= j || src j = 10 ? j (eat (j + 1)))
-                     (go (eat i) line (spc acc)))
+                     (go (eat i) line (wm = 2 ? (['cmt (snip src i (eat i)) line] . acc) (spc acc))))
                  (c = 47 && at? i "/*")
                   (: ; a \<nl> in a comment is a splice (phase 2 precedes comments): same logical line
                      (spliced? j) (0 < j && (src (j - 1) = 92 ||
@@ -356,9 +366,11 @@
                                               (eat (j + 1) (src j = 10 && !(spliced? j) ? (l2 + 1) l2)))
                                 r (eat (i + 2) line)
                                 k (charm? <r ? (nls i <r 0) 0)
+                                ; -C: the comment a token of its own, at the line it opens on
+                                cm (wm = 2 && charm? <r ? (['cmt (snip src i <r) line] . acc) (spc acc))
                                 (? !(charm? <r) ()
-                                   (0 < k && dirline? acc line) (pend1 k, go <r line (spc acc))
-                                   (go <r (line + k) (spc acc))))
+                                   (0 < k && dirline? acc line) (pend1 k, go <r line cm)
+                                   (go <r (line + k) cm)))
                  ; a quote that opens no literal is its own pp-token (C11 6.4p3), for skipped groups
                  (c = 34) (strbody (i + 1) 34 () @ r          ; a string literal
                              (two? r ? (go <>r line (['str <r line () (snip src i <>r)] . acc))
@@ -380,10 +392,10 @@
                                          (0 < w & 2147483648 ? (w - 4294967296) w)))
                                  (go j line (['num v line () (snip src i j)] . acc)))
                               (go (i + 1) line (['p "'" line] . acc))))
-                 ; a pp-number runs on through identifier chars (C11 6.4.8): a number flush
-                 ; against an identifier run, or digits past its suffix (7ef00000), becomes
-                 ; ('ppnum spelling), no number to the parser
-                 ((idh? c || dig? c) && numat? i acc)
+                 ; a pp-number runs on through identifier chars and dots (C11 6.4.8): a number flush
+                 ; against an identifier run, digits past its suffix (7ef00000) or a dot (2.6.39)
+                 ; becomes ('ppnum spelling), no number to the parser
+                 ((idh? c || dig? c || c = 46) && numat? i acc)
                   (: (pr j) (? (j < n && (idc? (src j) || src j = 46)) (pr (j + 1)) j)
                      j0 (pr i)
                      sp ((<acc) 4 + snip src i j0)
@@ -452,5 +464,5 @@
                        ; $ @ ` \ are pp-tokens too (C11 6.4), for skipped groups and #error text
                        (asm || elem c '(36 64 92 96)) (go (i + 1) line (['p (string c) line] . acc))
                        ())))))
-       (go 0 ln0 ())))
+       (go i0 ln0 ())))
 ) ; module 'moon

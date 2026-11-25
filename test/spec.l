@@ -343,6 +343,8 @@
  (@(240 19) = (@(255 16) ^ @(15 3))) (@(15 0) = (@(255 16) & @(15 3))) (@(12 6) = (@(8 4) | @(4 2)))
  (@(8 16 24) = (@(1 2 3) << 3)) (@(4 -4) = (@(8 -8) >> 1))       ; >> stays arithmetic per cell
  (@(240 252) = (255 ^ @(15 3))) (@(2 16) = (@(1 1) << @(1 4)))   ; a star broadcasts; counts can be per-cell
+ (@(10 -1 0 0) = (@(5 -5 1 -1) >> @(-1 70 70 -70))) (@(0 -1 0) = (@(1 -1 3) << @(70 -1 -2)))   ; a count past the
+ (@(-2 2) = (@(-8 8) >> 2)) (@(5 6) = (@(6 5) ^ @(3 3))) (@(2 1) = (@(6 5) & 3)) (@(13 14) = (12 | @(1 2)))  ; word empties; < 0 turns
  !(@(5 6) | ())                                                  ; ..and () is absent here too
  (() = (@(1.5 2.5) ^ @(1 1)))                                    ; a gem tray is not the word lane
  (() = ((galaxy '(2) [(200 2) (200 2)]) & @(255 255)))              ; ..nor an object tray
@@ -591,12 +593,7 @@
     ((th ()) = th () && 1 = peep c 0 0))            ; a promise forces once and remembers
  ('(mono (# (a))) = <(sound '(35 40 97 41))))       ; #(a) is the glued tally run
 
-; --- bootstrapping --- `born` is the start cost in ms (hatch or wake), unbound pre-egg. ask
-; presence (hatched), never born's net: a fast wake answers 0, which would read as pre-egg and pass
-; every law vacuously.
-(: hatched (elem 'born (names ())))
 (hear welp)
-(test (hatched ? (charm? born) 1))
 (hear test-strict)
 
 ; --- modules --- the runtime opens a layer around each module load and the session. (borrow 'x)

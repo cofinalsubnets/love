@@ -76,8 +76,10 @@
    ; qemu loads -initrd only for a linux kernel: the virts' elf takes it over fw_cfg
    media (? img? (: d (iso + ".dtb")
                     _ (uwrite d (fdt 0x20000000))
+                    ; the pi's firmware leads the line with its own k=v words (~230 bytes): more here
                     ["-kernel" iso "-dtb" d "-append"
-                     (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))])
+                     (join " " (map (k \ "bcm2709.k\(show k)=0x\(show (k * 1234567))") ^16)
+                      + " " + (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l")))])
             elf? (["-kernel" iso "-append" (env-of "KTEST_CORPUS" @ c (string? c ? c "test/kernel/all.l"))]
                   + (env-of "KTEST_INITRD" @ f
                       (!(string? f) ? ()
@@ -91,9 +93,9 @@
    kvm  (? far (arch = "x64" ? ["-enable-kvm" "-cpu" "host"] ["-enable-kvm"])   ; -cpu host hands the guest VT-x
            (two? (stat "/dev/kvm") && arch = "x64" && has? >mach? "x86_64") ["-enable-kvm" "-cpu" "host"]
            ())
-   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg nears 900s loaded, the
+   ; tcg on a shared box runs ~300s quiet, past 420s loaded; rv64 tcg ~950s, past 1200s loaded, the
    ; pi's raspi3b ~800s quiet. KTEST_CEIL: a lane's own, for one that bakes inside the boot
-   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" (arch = "rv64" ? "1200" (pi? ? "1800" "900")))))
+   ceil (env-of "KTEST_CEIL" @ c (string? c ? c (two? kvm ? "420" ((arch = "rv64" || pi?) ? "1800" "900"))))
    ; the scratch disk: truncate leaves an existing image's bytes alone, so the
    ; persistence gate's two boots share it (test/kernel/disk.l). force-legacy=false
    ; makes virtio-mmio speak version 2, the one blk.c drives.
@@ -105,8 +107,9 @@
                      "-global" "virtio-mmio.force-legacy=false"])
                (d + ["-device" "virtio-blk-pci,drive=d0"])))
    ; raspi3b: the zero 2 w's bcm2837 with 1G, since the corpus outgrows 512M. its console is
-   ; the mini uart, serial1
-   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" (pi? ? "1G" "1536M")]
+   ; the mini uart, serial1. KTEST_MEM: a lane's own
+   mem  (env-of "KTEST_MEM" @ m (string? m ? m (pi? ? "1G" "1536M")))
+   qemu (["timeout" ceil ("qemu-system-" + arch-mach (intern (pi? ? "a64" arch))) "-m" mem]
          + mach + kvm + (pi? ? () dargs)               ; the pi has no virtio: its card is rung 6's
          + (pi? ? ["-serial" "null" "-serial" "stdio"] ["-serial" "stdio"])
          + ["-display" "none" "-no-reboot"] + media)

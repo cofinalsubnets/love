@@ -101,7 +101,7 @@ carried and not baked).
 | less.l, the pager | less / more |
 | bc.l, the calculators | bc (-l, -q), dc (GNU's, on bc's numbers) |
 | wget.l, over the tls stack | wget |
-| openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 3's spelling) |
+| openssl.l, over the tls stack | openssl (x509, s_client, verify, dgst, rand, base64: the read-only half, openssl 4's spelling) |
 | src/apps/ssh/, over the tls stack | ssh (the client), sshd (the server, for the user it runs as), scp (rcp's protocol over either), ssh-keygen, ssh-copy-id, ssh-keyscan |
 | src/apps/gz.l, src/apps/xz.l, src/apps/bz2.l, src/apps/zstd.l, src/apps/tar.l, src/apps/cpio.l | gzip gunzip zcat, xz unxz xzcat unlzma lzcat (src/love/compress/xz.c is the LZMA2 codec), bzip2 bunzip2 bzcat (src/love/compress/bz2.c), zstd unzstd zstdcat (src/love/compress/zstd.c), tar, cpio |
 | man.l, the pages | man (a page found, decompressed, read as roff and laid out for a terminal) |

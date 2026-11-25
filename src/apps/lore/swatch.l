@@ -14,12 +14,14 @@
 ; paints: (rgb r g b), (grey g) or a number, 0 to 1; (shade k) and (tint rgb) multiply what is
 ; there, (mix rgb t) goes t of the way to a colour, (noise size [sy] amount) multiplies by 1 less
 ; up to amount, smooth over size texels, (fbm size octaves amount) as much by fbm. hole leaves the texel undrawn; a later colour fills it, shading keeps it a hole.
+; (swatch-fine k l) is l for a picture k times as wide and high, () where it has art.
 ; (swatch-fault l) is () or [Q USAGE]; (swatch-texel w h l) is (\ x y colour-or-()).
-(module (swatch swatch swatch-fault swatch-texel swatch-plan)
+(module (swatch swatch swatch-fault swatch-fine swatch-texel swatch-plan)
 (borrow 'vec)                           ; vn, cmix, c*
 (borrow 'mesh)                          ; mesh-pic
 (borrow 'view)                          ; throw
 (borrow 'lore)                          ; swatch-pic, in C
+(borrow 'posix)                         ; getpid, art's seed for the run
 (:
  (num? v) (charm? v || gem? v)
  (f v) (1.0 * v)
@@ -143,10 +145,59 @@
  (layers l s z) (: ls (map (p \ layer (p 0) (p 1) z) (seeded l s)) (all two? ls ? (map cap ls)))
  (run ls c x y) (foldl (\ c g (g c x y)) c ls)
  ; ..the first layer not understood, a within's inner ones searched, and what it takes
+ ; ..art from a template: (art KIND n) the layers of a picture of that kind, thrown anew each
+ ; run under its pid and n, KIND one of arts or any for one of them
+ arts ['drip 'fields 'grid 'discs]
+ (art? q) (two? q && <q = 'art)
+ (art-ok? q) (#q = 3 && (elem (q 1) arts || q 1 = 'any) && charm? (q 2))
+ (unart l w h) (catmap (q \ art? q ? (art-layers (q 1) (q 2) w h) [q]) l)
+ (art-layers k n w h) (: s (throw n 7 (getpid 0) 1000003)
+   (rn i) (throw i n s 1000003 / 1000003.0) (ri i a b) (a + int (rn i * (b - a + 1))) (one l i) (l (int (rn i * #l)))
+   (c3 v) ['rgb (v 0) (v 1) (v 2)] (mixc a b t) (map (j \ a j + t * (b j - a j)) ^3) (sd i) ['seed (ri i 1 999999)]
+   vivid [[0.86 0.44 0.13] [0.72 0.2 0.15] [0.3 0.35 0.6] [0.85 0.72 0.3] [0.2 0.42 0.35] [0.52 0.15 0.33] [0.1 0.1 0.12] [0.9 0.88 0.82]]
+   ((k = 'any ? (arts (ri 99 0 (#arts - 1))) k) @
+    'drip (: gr (one [[0.82 0.77 0.66] [0.18 0.18 0.2] [0.9 0.88 0.84] [0.5 0.46 0.4]] 1)
+            pal [[0.08 0.08 0.08] [0.95 0.95 0.93] [0.78 0.58 0.22] [0.45 0.47 0.5] [0.7 0.24 0.12] [0.2 0.3 0.45]]
+            ([['fill (c3 gr)] '(noise 1 0.05) '(fbm 24 3 0.06)]
+             + catmap (j \ [(sd (10 + j)) ['cracks (ri (20 + j) 12 24) (ri (30 + j) 12 24) (ri (40 + j) 1 2) (ri (50 + j) 8 16) (c3 (one pal (60 + j)))]]) ^(ri 2 3 5)
+             + catmap (j \ [(sd (70 + j)) ['patches (ri (80 + j) 1 2) (0.008 + 0.02 * rn (90 + j)) (c3 (one pal (95 + j)))]]) ^2))
+    ; ..fields of colour stacked on a darker ground, each over a band halfway to it, soft
+    'fields (: gr (c* (0.3 + 0.25 * rn 1) (one vivid 2)) nb (ri 3 2 3) m (max 2 (w // 12)) gp (max 2 (h // 16))
+              ws (map (j \ 0.5 + rn (10 + j)) ^nb) tw (foldl (+) 0.0 ws) av (h - 2 * m - (nb - 1) * gp)
+              hs (map (x \ max 3 (int (av * x / tw))) ws) (y0 j) (m + j * gp + foldl (+) 0 (take j hs))
+              ([['fill (c3 gr)] '(fbm 16 3 0.08)]
+               + catmap (j \ (: c (one vivid (20 + j)) a (y0 j) b (a + hs j)
+                               [['rect (m - 1) (a - 1) (w - m + 1) (b + 1) (c3 (mixc c gr 0.5))] ['rect m a (w - m) b (c3 c)]])) ^nb
+               + [(sd 30) '(fbm 12 4 0.16) '(stain 8 3 0.2 0.6 (shade 1.08)) '(noise 1 0.04)]))
+    ; ..a grid of black lines across a pale ground, a few of its cells filled with primaries
+    'grid (: t (max 1 (w // 40)) nx (ri 3 2 4) ny (ri 4 2 4)
+            xs (sort (map (j \ ri (10 + j) (w // 8) (w - w // 8)) ^nx)) ys (sort (map (j \ ri (20 + j) (h // 8) (h - h // 8)) ^ny))
+            bx ([0] + xs + [w]) by ([0] + ys + [h]) prim [[0.8 0.12 0.1] [0.1 0.2 0.6] [0.95 0.8 0.15] [0.1 0.1 0.1]]
+            ([['fill (c3 [0.93 0.92 0.88])] '(noise 1 0.03)]
+             + map (j \ (: i (ri (30 + j) 0 nx) k (ri (40 + j) 0 ny) ['rect (bx i) (by k) (bx (i + 1)) (by (k + 1)) (c3 (one prim (50 + j)))])) ^(ri 5 3 5)
+             + map (x \ ['cols x (x + t) (c3 [0.06 0.06 0.06])]) xs + map (y \ ['rows y (y + t) (c3 [0.06 0.06 0.06])]) ys))
+    ; ..discs and rings over a pale ground, lines flung across them
+    'discs (: gr (one [[0.9 0.86 0.76] [0.85 0.82 0.7] [0.2 0.22 0.3]] 1) lo (max 2 (h // 14)) hi (max 4 (h // 4))
+             ([['fill (c3 gr)] '(fbm 24 3 0.07)]
+              + catmap (j \ (: x (ri (10 + j) 0 w) y (ri (20 + j) 0 h) r (ri (30 + j) lo hi)
+                              [['disc x y r (c3 (one vivid (40 + j)))] (rn (50 + j) < 0.4 ? ['disc x y (r * 0.6) (c3 (one vivid (60 + j)))] '(noise 1 0.0))]))
+                       ^(ri 4 5 8)
+              + map (j \ (: x0 (1.0 * ri (70 + j) 0 w) y0 (1.0 * ri (75 + j) 0 h) x1 (1.0 * ri (80 + j) 0 w) y1 (1.0 * ri (85 + j) 0 h)
+                            dx (x1 - x0) dy (y1 - y0) l (max 1.0 (sqrt (dx * dx + dy * dy))) ox (0.0 - dy / l) oy (dx / l)
+                            ['poly x0 y0 x1 y1 (x1 + ox) (y1 + oy) (x0 + ox) (y0 + oy) (c3 [0.08 0.08 0.1])]))
+                    ^3))))
+ ; ..a recipe k times finer: every length in it k times as long, no ratio, angle or count
+ lengths {'rows 2 'cols 2 'rect 4 'disc 3 'grid 3 'checker 2 'stripes 2 'dots 3 'bevel 3 'patches 1
+          'cracks 4 'grain 4 'cells 1 'oval 4 'ball 4 'relief 1 'stain 1 'fbm 1 'within 4}
+ (fine-of k q) (? (!(two? q) || <q = 'seed) q
+   (: n (<q @ 'poly (#q - 2) 'noise (#q - 2) h (peep lengths h 0))
+      (<q . map (i \ (: a (q (i + 1)) (i < n ? (k * a) two? a ? (fine-of k a) a))) ^(#q - 1))))
+ (swatch-fine k l) (any art? l ? () (map (fine-of k) l))
  (swatch-fault l) (? (atom? l) ()
+   (art? <l) (art-ok? <l ? (swatch-fault >l) [<l "(art KIND n), KIND drip fields grid discs or any"])
    (seed? <l || two? (layer <l 0 [1 1])) (swatch-fault >l)
    (: q <l (inner q @ () [q (hint q)] (swatch-fault (inner q) @ () [q (hint q)] e e))))
- (swatch-texel w h l) (: ls (layers l 211 [w h]) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
+ (swatch-texel w h l) (: ls (layers (unart l w h) 211 [w h]) g [0.5 0.5 0.5] (\ x y (run ls g (f x) (f y))))
  ; ..the same recipe as data for swatch-pic (src/love/swatch.c): each layer [boxes kind nums
  ; seed paint paint], a within's box laid on each of its layers; a paint [tag a b c d]
  shapes {'fill 0 'rows 1 'cols 2 'rect 3 'disc 4 'grid 5 'checker 6 'stripes 7 'dots 8 'patches 9 'cracks 12 'grain 13 'cells 14 'oval 15
@@ -169,5 +220,5 @@
    (<q = 'stain) (: a >q [[bx 18 (map f (take 4 a)) s (paint-plan (a 4) s) ()]])
    (: k <q a >q t (takes k) [[bx (shapes k) (map f (take t a) + map (_ \ 0.0) ^(4 - t)) s (paint-plan (a t) s) ()]]))
  (swatch-plan l) (? (two? (layers l 211 [1 1])) (catmap (p \ plan (p 0) (p 1) ()) (seeded l 211)))
- (swatch w h l) (swatch-pic w h (swatch-plan l)))
+ (swatch w h l) (swatch-pic w h (swatch-plan (unart l w h))))
 ) ; module swatch

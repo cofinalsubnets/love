@@ -2321,6 +2321,18 @@
  ('rejected = rejects (z \ defn uu-bad4 (coprod nat bool) (ii1 true)))
  ('rejected = rejects (z \ defn uu-bad5 nat (let x (lam y y) x)))
  ('rejected = rejects (z \ defn uu-bad6 (pi x nat 5) (lam x x)))
+ ; a name is pinned once: rebinding one under a sealed type's binder would prove empty
+ (defn uu-once nat 0)
+ (defq uu-once-q (pi x nat (paths nat uu-once 0)) (lam x (idpath 0)))
+ ('rejected = rejects (z \ defn uu-once nat 1))
+ ('rejected = rejects (z \ defq uu-once-bad (paths nat 1 0) (uu-once-q 0)))
+ ('rejected = rejects (z \ defq uu-once nat 1))
+ ('rejected = rejects (z \ defvc uu-once nat 1))
+ ('rejected = rejects (z \ axm uu-once empty))
+ ; nor does a refusal change what the name is
+ ('rejected = rejects (z \ defn uu-once (pi A UU (pi a A A)) (lam A (lam a a))))
+ ('rejected = rejects (z \ defn uu-once-fn nat (uu-once nat 3)))
+ ('accepted = rejects (z \ defn uu-once-nat (paths nat uu-once 0) (idpath 0)))
  ; an argument whose value no codomain reads is still checked
  ('rejected = rejects (z \ defn uu-skip-bad nat (uu-skip (idpath 1))))
  ('rejected = rejects (z \ defn uu-skip-badp (total2 x nat bool) (tpair 0 7)))

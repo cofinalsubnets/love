@@ -6,6 +6,8 @@ vgcore.*
 .claude/*
 !.claude/settings.json
 /out/
+# a build's own choices (Makefile), carried by selfpack but never tracked
+/config.mk
 /web/wasm/*.gz
 # the build stamp, written by selfpack into the archive and read back by an unpacked release
 /STAMP
@@ -14,12 +16,9 @@ vgcore.*
 /dl/
 # test/proof/rocq/coqc build artifacts (test/proof/rocq/spec.v is checked by `make test_proof`).
 # test/proof/rocq/gen.v is GENERATED and TEST-ONLY: test_gen lays it from test/spec.l and checks it in
-# the same recipe, so a copy in the tree proves nothing the run does not. test/proof/rocq/uugen.v and
-# test/proof/lean/uugen.lean are still checked in -- they regen + re-check in seconds and the diff is
-# the drift signal. Only the compiled outputs below are ignored.
+# the same recipe, so a copy in the tree proves nothing the run does not.
 test/proof/rocq/gen.v
 # (Benches are the exception -- regenerated manually, too slow for per-commit.)
-test/proof/lean/*.olean
 *.vo
 *.vok
 *.vos
@@ -50,8 +49,7 @@ __pycache__/
 
 # the engineering narratives: read through and purged locally, never shipped
 
-# the two generated proof terms: test_uugen and test_uulean write them from the uu
-# corpus on EVERY run, so a committed copy is 810 KB nothing ever reads
+# the generated proof terms: test_uugen and test_mx write them on EVERY run, so a
+# committed copy is 810 KB nothing ever reads
 test/proof/rocq/uugen.v
 test/proof/rocq/mx.v
-test/proof/lean/uugen.lean

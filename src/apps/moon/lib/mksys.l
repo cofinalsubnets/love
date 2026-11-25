@@ -12,6 +12,7 @@
    (mksys-a64 dst) (mksys-as 'a64 dst)
    (mksys-rv64 dst) (mksys-as 'rv64 dst)
    (mksys-rv32 dst) (mksys-as 'rv32 dst)
+   (mksys-mips dst) (mksys-as 'mips dst)
    (mksys-i386 dst) (mksys-as 'i386 dst)
    (mksys-arm dst) (mksys-as 'arm dst)
    (mksys-freebsd dst) (mksys-as 'x64 dst)   ; one object serves both kernels
@@ -433,6 +434,92 @@
          (br eq tp-none)
          (raw (101 161 0 0 0 0))     ; mov eax, gs:[0]
          (label tp-none)
+         (ret))
+
+         ; -- the bare isas: no kernel, so no mask; the jump alone, the rest nosys.c's.
+         ;    thumb2 (and its sp fpu, whose d8-d15 are s16-s31) as arm's jmp_buf, with CONTROL
+         ;    where the mask was: d8-d15 go only when FPCA says an fp instruction ran here, so
+         ;    a core whose fpu is off (or absent) never meets one
+         (elem arch '(thumb2 thumb2sp))
+         '(
+         (label __sigsetjmp)
+         (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
+         (st r0 16 r8) (st r0 20 r9) (st r0 24 r10) (st r0 28 r11)
+         (mov r12 sp)
+         (st r0 32 r12)
+         (st r0 36 lr)
+         (raw (239 243 20 140))      ; mrs r12, CONTROL
+         (st r0 104 r12)
+         (test r12 4)                ; FPCA
+         (br eq sj-nofp)
+         (lea r12 r0 40)
+         (raw (140 236 16 139))      ; vstmia r12, {d8-d15}
+         (label sj-nofp)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld r12 r0 104)
+         (test r12 4)
+         (br eq lj-nofp)
+         (lea r12 r0 40)
+         (raw (156 236 16 139))      ; vldmia r12, {d8-d15}
+         (label lj-nofp)
+         (ld r4 r0 0) (ld r5 r0 4) (ld r6 r0 8) (ld r7 r0 12)
+         (ld r8 r0 16) (ld r9 r0 20) (ld r10 r0 24) (ld r11 r0 28)
+         (ld r12 r0 32)
+         (mov sp r12)
+         (ld lr r0 36)
+         (mov r0 r1)
+         (jmpr lr))
+
+         ; v6-m stores low registers alone: r8-r11, sp and lr pass through r1
+         (arch = 'thumb1)
+         '(
+         (label __sigsetjmp)
+         (st r0 0 r4) (st r0 4 r5) (st r0 8 r6) (st r0 12 r7)
+         (mov r1 r8) (st r0 16 r1)
+         (mov r1 r9) (st r0 20 r1)
+         (mov r1 r10) (st r0 24 r1)
+         (mov r1 r11) (st r0 28 r1)
+         (mov r1 sp) (st r0 32 r1)
+         (mov r1 lr) (st r0 36 r1)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld r2 r0 16) (mov r8 r2)
+         (ld r2 r0 20) (mov r9 r2)
+         (ld r2 r0 24) (mov r10 r2)
+         (ld r2 r0 28) (mov r11 r2)
+         (ld r2 r0 32) (mov sp r2)
+         (ld r2 r0 36) (mov lr r2)
+         (ld r4 r0 0) (ld r5 r0 4) (ld r6 r0 8) (ld r7 r0 12)
+         (mov r0 r1)
+         (jmpr lr))
+
+         ; xtensa call0: a0 the return, a1 sp, a12-a15 callee-saved (holo's r9 r10 r11 fp)
+         (arch = 'xtensa)
+         '(
+         (label __sigsetjmp)
+         (st r0 0 lr) (st r0 4 sp)
+         (st r0 8 r9) (st r0 12 r10) (st r0 16 r11) (st r0 20 fp)
+         (li r0 0)
+         (ret)
+         (label siglongjmp)
+         (cmp r1 0)
+         (br ne lj-live)
+         (li r1 1)
+         (label lj-live)
+         (ld lr r0 0) (ld sp r0 4)
+         (ld r9 r0 8) (ld r10 r0 12) (ld r11 r0 16) (ld fp r0 20)
+         (mov r0 r1)
          (ret))
 
          (arch = 'arm)
@@ -902,6 +989,114 @@
          (label __love_nbsvc))
           + nb-tab 511 ())       ; 512 stubs: 0 .. 511
 
+         (arch = 'mips)
+         ; mips o32: linux alone. the number in v0, a0..a3 and the fifth and sixth at 16 and 20
+         ; up the stack; a3 set says v0 is the errno. holo names v0 v1 a0..a3 t0 t1 s0..s3 fp sp
+         ; ra (r0..r11), so s4..s7 and gp ride raw. jmp_buf: [0] ra, [1] sp, [2..9] s0..s7,
+         ; [10] fp, [11] gp, the 16-byte mask at byte 48; soft float, so no fp file
+         '(
+         (label __love_sys)
+         (mov r0 r2)                 ; v0 <- n
+         (mov r2 r3)                 ; a0 <- a
+         (mov r3 r4)
+         (mov r4 r5)
+         (ld r5 sp 16)               ; a3 <- d
+         (ld r6 sp 20)               ; e and f, to the kernel's stack slots
+         (ld r7 sp 24)
+         (lea sp sp -32)
+         (st sp 16 r6)
+         (st sp 20 r7)
+         (sys)
+         (lea sp sp 32)
+         (cmp r5 0)
+         (br eq sys-ok)
+         (neg r0)                    ; -errno, as C wraps it
+         (label sys-ok)
+         (ret)
+
+         (label __sigsetjmp)
+         (st r2 0  lr)
+         (st r2 4  sp)
+         (st r2 8  r8)
+         (st r2 12 r9)
+         (st r2 16 r10)
+         (st r2 20 r11)
+         (raw (172 148 0 24))        ; sw s4, 24(a0)
+         (raw (172 149 0 28))        ; sw s5, 28(a0)
+         (raw (172 150 0 32))        ; sw s6, 32(a0)
+         (raw (172 151 0 36))        ; sw s7, 36(a0)
+         (st r2 40 fp)
+         (raw (172 156 0 44))        ; sw gp, 44(a0)
+         (lea r4 r2 48)              ; a2 = the mask (oldset)
+         (li r3 0)
+         (li r5 16)
+         (li r2 1)                   ; SIG_BLOCK
+         (li r0 4195)                ; rt_sigprocmask
+         (sys)
+         (li r0 0)
+         (ret)
+
+         (label siglongjmp)
+         (mov r8 r2)                 ; s0 <- buf, s1 <- val: linux's syscall clobbers the t file
+         (mov r9 r3)
+         (lea r3 r8 48)
+         (li r4 0)
+         (li r5 16)
+         (li r2 3)                   ; SIG_SETMASK
+         (li r0 4195)
+         (sys)
+         (ld r10 r8 16)
+         (ld r11 r8 20)
+         (raw (142 20 0 24))         ; lw s4, 24(s0)
+         (raw (142 21 0 28))         ; lw s5, 28(s0)
+         (raw (142 22 0 32))         ; lw s6, 32(s0)
+         (raw (142 23 0 36))         ; lw s7, 36(s0)
+         (ld fp  r8 40)
+         (raw (142 28 0 44))         ; lw gp, 44(s0)
+         (mov r0 r9)
+         (cmp r0 0)
+         (br ne lj-live)
+         (li r0 1)
+         (label lj-live)
+         (ld sp r8 4)
+         (ld lr r8 0)
+         (ld r9 r8 12)               ; s1 back, then s0 off itself
+         (ld r8 r8 8)
+         (ret)
+
+         (label __love_sigret)
+         (li r0 4193)                ; rt_sigreturn
+         (sys)
+
+         ; clone's fourth is tls and its fifth ctid, on the stack
+         (label __love_clone)
+         (ld r6 sp 16)               ; t0 <- tls
+         (lea sp sp -32)
+         (st sp 16 r5)               ; ctid
+         (mov r5 r6)                 ; a3 <- tls
+         (li r0 4120)                ; clone
+         (sys)
+         (cmp r0 0)
+         (br ne clone-out)
+         (cmp r5 0)
+         (br ne clone-out)
+         (ld r6 sp 0)                ; the child, on its own stack: sp[0](sp[1])
+         (ld r2 sp 4)
+         (callr r6)
+         (li r2 0)
+         (li r0 4001)                ; exit
+         (sys)
+         (label clone-out)
+         (lea sp sp 32)
+         (cmp r5 0)
+         (br eq clone-ok)
+         (neg r0)
+         (label clone-ok)
+         (ret)
+         (label __love_tp)
+         (raw (124 2 232 59))        ; rdhwr v0, $29: the tls clone set
+         (ret))
+
          (arch = 'rv32)
          ; rv32: linux alone, rv64's lanes at a 4-byte word. jmp_buf: [0] ra, [1] sp, [2..13]
          ; s0..s11, the mask at byte 56; soft float, so no fp file
@@ -1248,6 +1443,10 @@
                   '("__love_sys" "__love_sysw" "__love_sys8" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_sigret0" "__love_nb_sigtramp" "__love_clone" "__love_tp")
                   (arch = 'rv32)
                   '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp" "__love_fencei")
+                  (arch = 'mips)
+                  '("__love_sys" "__sigsetjmp" "siglongjmp" "__love_sigret" "__love_clone" "__love_tp")
+                  (elem arch '(thumb1 thumb2 thumb2sp xtensa))
+                  '("__sigsetjmp" "siglongjmp")
                   '("__love_sys" "__love_sys7" "__sigsetjmp" "siglongjmp" "__love_sigret"
                     "__love_nb_sigtramp" "__love_nbp20" "__love_nbp202" "__love_clone" "__love_tp" "__love_fencei"))
                () () () () () () ())))

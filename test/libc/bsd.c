@@ -30,7 +30,7 @@ int main(void) {
   P(PRIdMAX, INTMAX_MIN); P(PRIuMAX, UINTMAX_MAX); P(PRIxPTR, (uintptr_t) 0x1000); P(PRIdPTR, (intptr_t) -1);
   say_n("EX_OK", EX_OK); say_n("EX_USAGE", EX_USAGE); say_n("EX_DATAERR", EX_DATAERR); say_n("EX_NOINPUT", EX_NOINPUT);
   say_n("EX_SOFTWARE", EX_SOFTWARE); say_n("EX_IOERR", EX_IOERR); say_n("EX_CONFIG", EX_CONFIG); say_n("EX__MAX", EX__MAX);
-  say_n("O_LARGEFILE", O_LARGEFILE);
+  say_n("O_LARGEFILE", O_LARGEFILE != 0);   /* its bit is the isa's */
   /* err.h: stderr to a file, the four voices, then each line past its "name: " */
   fflush(stderr);
   FILE *t = tmpfile(); int keep = dup(2); dup2(fileno(t), 2);

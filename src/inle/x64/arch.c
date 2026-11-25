@@ -19,11 +19,12 @@ static char const *const exc_name[32] = {
   [17] = "#AC", [18] = "#MC", [19] = "#XM", [20] = "#VE", [21] = "#CP", };
 
 
-// vectors 0..31; a __builtin_trap is #UD with rip at its ud2. never resumed: it would only
-// fault again. one from ring 3 ends its process instead of the machine
-void k_proc_fault(uint64_t vector);   // x64/proc.c
+// vectors 0..31; a __builtin_trap is #UD with rip at its ud2. the kernel's never resumed: it
+// would only fault again. one from ring 3 goes to its process, which a write to a page a fork
+// shares resumes
+void k_proc_fault(uint64_t vector, uint64_t error);   // x64/proc.c
 void k_exception(struct k_frame *fr) {
-  if (fr->cs & 3) k_proc_fault(fr->vector);
+  if (fr->cs & 3) { k_proc_fault(fr->vector, fr->error); return; }
   k_cli();                             // no interrupts while reporting
   static int nested;
   if (nested) k_halt();                // faulted while reporting
@@ -95,13 +96,11 @@ void serial_putc(int c) {
   k_outb(COM1, (uint8_t) c); }
 
 // IRQ4, from uart_isr: one interrupt can cover several bytes, so drain the FIFO
-void kq(uint8_t);
 void k_uart(void) {
   while (k_inb(COM1 + 5) & 0x01)        // LSR bit 0: receive data ready
     kq(k_inb(COM1)); }
 
 // a guest of the firmware runs no timer of its own: the ticks follow the tsc
-extern uint64_t kticks;
 void k_tick_sync(void) {
   if (kboot.efi_st && kboot.tsc_khz)
     kticks = (k_rdtsc() - kboot.tsc0) / (kboot.tsc_khz * 10); }   // k_tick_ms

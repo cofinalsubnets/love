@@ -70,14 +70,18 @@
    (le16 n)  [(byte n) (byte (n >> 8))]
    (le32 n)  [(byte n) (byte (n >> 8)) (byte (n >> 16)) (byte (n >> 24))]
    (le64 n)  (u64 n @ u (map (i \ (u // i 256) % 256) ^8))
+   (be16 n)  [(byte (n >> 8)) (byte n)]
+   (be32 n)  [(byte (n >> 24)) (byte (n >> 16)) (byte (n >> 8)) (byte n)]
    (u64 n) (n < 0 ? (n + 18446744073709551616) n)                     ; two's-complement into [0,2^64)
    (s64 n) (n > 9223372036854775807 ? (n - 18446744073709551616) n)   ; a u64 pattern as the signed value it encodes
    ;; a 32-bit thumb instruction: two halfwords, the high one first, each little-endian
    (t32 w) (le16 (w >> 16) + le16 (w & 65535))
    ;; the wide thumb branch, byte offset o: S:J1:J2:imm10:imm11 with i1=~(J1^S), i2=~(J2^S);
-   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W
+   ;; hw2's base says which -- 0xd000 BL, 0x9000 B.W; it reaches +-16 MiB
+   (tbw-reach? o) (-16777216 <= o && o <= 16777214)
    (tbw o base)
-      (: imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
+      (: _ (tbw-reach? o ? 0 (scare 'thumb-branch-reach o))
+         imm11 (o >> 1 & 2047)  imm10 (o >> 12 & 1023)
          i2 (o >> 22 & 1)  i1 (o >> 23 & 1)  s (o >> 24 & 1)
          j1 (((i1 ^ 1) ^ s) & 1)  j2 (((i2 ^ 1) ^ s) & 1)
          (t32 ((0xF000 | (s << 10 | imm10)) << 16 | (base | (j1 << 13 | (j2 << 11 | imm11))))))
@@ -120,7 +124,7 @@
 
    ;; -- the IR's operand counts. a backend's emitter rows take exactly these operands (an
    ;; arity-0 row is its chunk), and its 'lower is lower-via over them. --
-   ir-arity {'ret 0 'sys 0 'nop 0 'trap 0 'udivll 0 'uremll 0
+   ir-arity {'ret 0 'sys 0 'nop 0 'trap 0
               ; x86 port i/o, register-contracted (dx the port, al/ax/eax the datum). str, a
               ; string op by stem and width, walks rsi/rdi (by rcx under rep, a prefix like lock).
              'inb 0 'inw 0 'inl 0 'outb 0 'outw 0 'outl 0
@@ -159,9 +163,9 @@
              'tbr 3                          ; ..and tbz/tbnz: (tbr word reg label), the bit in the word
              'afix 4                         ; ..and gas's address fixes: (afix kind word label addend)
              'push 1 'pop 1 'neg 1 'not 1 'inc 1 'dec 1 'tp 1
-             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'l32r 2
+             'jmp 1 'jmp8 1 'jmpr 1 'jmpm 2 'jmpt 3 'callr 1 'callm 2 'call 1 'raw 1 'lapool 1 'addpc 1 'l32r 2
              'li 2 'lis 2 'li2 2 'mov 2 'cmp 2 'test 2 'testb 2 'zxl1 1 'zxl2 1 'zxml 3 'ldu1l 3 'ldu2l 3 'ldxbl 5 'ldxhl 5 'set 2 'set1 2 'br 2 'br8 2
-             'asis 1 'la 2 'lal 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
+             'asis 1 'la 2 'lal 3 'lalp 3 'lap 2 'laa 3 'lar 2 'lia 2 'ldseg 2 'pushl 1 'stseg 2 'segst 3 'segld 3 'pushseg 2 'popseg 2 'clz 2
              'shl 2 'shr 2 'sar 2 'rol 2 'ror 2 'ror4 2
              'lsl 3 'lsr 3 'asr 3 'mvn 2 'uxtb 2 'uxth 2 'uxtw 2 'sxtb 2 'sxth 2 'sxtw 2 'ubfx 4   ; the three-register twins, thumb2's ubfx
              'shlv 2 'shrv 2 'sarv 2 'rorv 2 'rorv4 2
@@ -293,7 +297,8 @@
          (<items @ x
             (fix? x ?
                (labels (fix-l x) @ tgt
-                  (? (imm? tgt)
+                  (? (two? (fix-k x)) (x . resolve-open >items labels be addr open)   ; a relocation by number stays one
+                     (imm? tgt)
                       (patch-with be (fix-k x) tgt addr (fix-w x) (fix-a x)
                        + resolve-open >items labels be (addr + fix-w x) open)
                      (peep open (fix-l x) 0) (x . resolve-open >items labels be (addr + fix-w x) open)
@@ -308,7 +313,7 @@
    ;; chunk and pessimistic distance, or () to keep it; any width (riscv drops a whole jal).
    ;; `longs` names labels that stay long (the object writer's weak set, kept as relocations).
    ;; (lal d l p) is la of l whose word sits at p, a pool ahead: the hook may load it from there,
-   ;; and (flal f g k p) a single's bits k.
+   ;; and so (lalp d l p), and (flal f g k p) a single's bits k.
    ;; its span may cross aligns, each counted at its widest pad on top of the distance.
    ;; 'fuse, (\ cmp br rel -> bytes | ()): one encoding of a cmp and the br right after it, asked
    ;; only where nothing on either path reads the flags the pair no longer sets.
@@ -347,12 +352,14 @@
                      (t + (peep grows (eras l) 0 - peep grows era 0))))
             ;; ..a cmp and its branch laid as one, from the hook, where the flags die with them
             fuse-with (peep be 'fuse 0)
-            (fuse-of ins rest era pa)
-               (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
+            ; -g's marks between the two go ahead of both
+            (past l) (two? l && dlmark? <l ? (past >l) l)
+            (fuse-of ins rest0 era pa)
+               (: rest (past rest0) (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
                   (tgt-of (<rest 2) era @ t
                      (? !(imm? t) ()
                         (fuse-with ins <rest (t - pa) @ sc
-                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ())))))
+                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ()))))))
             ;; pass two: pessimistic addresses (pa) decide, final ones (fa) pin labels and pads
             (stitch p cs pa fa era items)
                (atom? p ? (rev items . labels)
@@ -360,14 +367,15 @@
                      (? (<ins = 'label)
                         (pin labels (ins 1) (label-addr ins fa), stitch >p >cs pa fa era items)
                         (two? fu)
-                        (: r (revonto fu items 0)
-                           (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r))
+                        (dlmark? <>p ? (pin labels (<>p 1) fa, stitch (ins . >>p) (<cs . >>cs) pa fa era items)
+                           (: r (revonto fu items 0)
+                              (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r)))
                         (<ins = 'align)
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)
                                    (rev pad + items)))
-                        (elem <ins '(jmp br lal flal))
-                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) 'lal (pool-of (ins 3) era) (pool-of (ins 4) era))
+                        (elem <ins '(jmp br lal lalp flal))
+                        (: t (<ins @ 'jmp (tgt-of (ins 1) era) 'br (tgt-of (ins 2) era) ('lal || 'lalp) (pool-of (ins 3) era) (pool-of (ins 4) era))
                            sc (imm? t ? (short-of ins (rev c) (t - pa)))
                            (two? sc ?
                               (: r (revonto sc items 0)          ; <r counts bytes, not items

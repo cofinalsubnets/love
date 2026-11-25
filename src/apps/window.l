@@ -23,6 +23,7 @@
 ;   (window-thumbs win)       on a phone, the keyboard down and each finger's touch as ['finger
 ;                             id action x y] for the button's records, action 0 down 1 up 2 move: 1;
 ;                             elsewhere 0
+;   (window-back win on)      a phone's Back as key 362, its own, and not the app's end; off, esc's 1
 ;   (window-typing win on)    a phone's soft keyboard up or down, and a row of the keys it lacks
 ;   (window-wets sc)          the rows of quay screen sc dirty since the last asking (wet clears)
 ;
@@ -34,7 +35,7 @@
 ; a tablet of 'w 'h 'paper alone is a law's screenless window: it shows nothing and its
 ; events are its 'evq. off X a selection is the window's own.
 (module '(window window-here? window-open window-paper window-size window-sized window-show window-blit window-slides? window-hold window-warp window-events window-close
-          window-own window-ask window-typing window-thumbs window-wets)
+          window-own window-ask window-typing window-thumbs window-back window-wets)
 (borrow '(xwire posix bytes quay))
 (:
    (inle? _) (elem 'love-os (names ()) ? (elem (ev 'love-os) '(inle wasm)) 0)
@@ -174,7 +175,7 @@
                       (pin win 'dk ([a b c] . peep win 'dk ()), ()))
           (k = 80) (peep win 'pst "" @ t (a = 0 ? (pin win 'pst "", [['paste t]]) (pin win 'pst (t + b), ())))
           (k = 75 && b = 279) (a ? (droid-paste win) 0, ())   ; a keyboard's paste key
-          (k = 75) (: p (peep droid-set1 b ()) t (a && 32 <= c && c != 127 ? (utf8 c) "")
+          (k = 75) (: p (b = 4 && peep win 'back 0 ? 362 (peep droid-set1 b ())) t (a && 32 <= c && c != 127 ? (utf8 c) "")
                       (? !(charm? p) (0 < #t ? [['text t]] ())
                          (a && two? (win 'held)) (droid-key win p t)
                          ([[(a ? 'down 'up) p]] + (0 < #t ? [['text t]] ()))))
@@ -331,6 +332,7 @@
    ; on a phone the keyboard comes with the row, and the paper gives it room; put away by
    ; hand, the bridge's next size takes the row with it
    (window-thumbs win) (win 'how = 'droid ? (pin win 'thumbs 1, window-typing win 0, 1) 0)
+   (window-back win on) (win 'how = 'droid ? (: s (win 's) _ (say s ("B" + wrle (on ? 1 0) 1), flush s) (pin win 'back on, 1)) 0)
    (window-typing win on)
     (win 'how = 'droid ? (: s (win 's) _ (say s ("I" + wrle (on ? 1 0) 1), flush s)
                             (pins win 'typing on 'row (on ? droid-rowh 0) 'more [['size (win 'w) (win 'H - (on ? droid-rowh 0))]], 0))

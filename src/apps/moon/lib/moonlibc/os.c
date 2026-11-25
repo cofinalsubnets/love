@@ -5,6 +5,9 @@
 long __love_osv;         /* 0 unprobed, 1 linux, 2 freebsd, 3 netbsd, 4 macos, -1 inle */
 
 long __love_call(long n, long a, long b, long c, long d, long e, long f) {
+#ifdef LvOsNone
+  return -ENOSYS;                                     /* no kernel to ask */
+#endif
   long v = __love_osv;
   if (!v) v = __love_osv = __love_osdetect();
   if (v < 0) return __love_inle(n, a, b, c, d, e, f);   /* inle translates nothing, before the BSD read */
@@ -20,7 +23,7 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
       if (__love_macat(n, w)) a = w[0], b = w[1], c = w[2], d = w[3], e = w[4]; }
 #endif
     n = __love_nrfb(n);
-    if (n < 0) return -38;                            /* ENOSYS, canonically */
+    if (n < 0) return -ENOSYS;                        /* canonically */
 #ifdef LvMac
     if (v == 4) {
       long r = __love_door(n, a, b, c, d, e, f);
@@ -32,7 +35,7 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
 #endif
   long r = __love_sys(n, a, b, c, d, e, f);
 #ifdef __ARM_EABI__
-  if (r == -38 && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
+  if (r == -ENOSYS && v == 1 && __love_t64(n)) __love_t32k = 1, r = __love_t32(n, a, b, c, d, e, f);
 #endif
 #ifdef LvOsTranslate                                     /* a parked BSD answer */
   if (__love_parked(r)) r = -__love_errfb(-r - 4096);
@@ -45,6 +48,9 @@ long __love_call(long n, long a, long b, long c, long d, long e, long f) {
   }
   return r; }
 long __love_fb(long n, long a, long b, long c, long d, long e, long f) {
+#ifdef LvOsNone
+  return -ENOSYS;
+#endif
 #ifdef LvMac
   long r = __love_osv == 4 ? __love_door(n, a, b, c, d, e, f) : LvNoDoor;
   if (r == LvNoDoor) r = __love_sys(__love_osv == 4 ? n | LvMacUnix : n, a, b, c, d, e, f);
@@ -70,7 +76,7 @@ long __love_inle__host(long n, long a, long b, long c, long d, long e, long f) {
 __attribute__((weak))
 long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 #endif
-  return -38; }
+  return -ENOSYS; }
 
 /* a refused address the program can make good: 1 retries the call */
 __attribute__((weak))
@@ -119,11 +125,11 @@ long __love_t32(long n, long a, long b, long c, long d, long e, long f) {
       if ((r = nar(d, o, 1))) return r;
       d = (long) o; }
     return __love_sys(NR_futex_32, a, b, c, d, e, f); }
-  return -38; }
+  return -ENOSYS; }
 
 /* an android app's seccomp filter traps a call it does not list, new ones among them:
  * as on a kernel without it, the caller reads ENOSYS. 8 is r0 in arm's ucontext */
-static void refused(int sig, void *si, long *uc) { uc[8] = -38; }
+static void refused(int sig, void *si, long *uc) { uc[8] = -ENOSYS; }
 void __love_refusals(void) {
   struct __ksigaction ka = { (void *) refused, 4 };      /* SA_SIGINFO */
   __love_sys(NR_rt_sigaction, 31, (long) &ka, 0, 8, 0, 0); }
@@ -145,7 +151,7 @@ static void bwid(union __bts const *o, long p) {
 long __love_tbsd(long n, long a, long b, long c, long d, long e, long f) {
   union __bts o[2];
   long nr = __love_nrfb(n), r;
-  if (nr < 0) return -38;
+  if (nr < 0) return -ENOSYS;
   if (n == NR_clock_gettime) {
     r = __love_sys(nr, a, (long) o, 0, 0, 0, 0);
     if (!r) bwid(o, b);
@@ -181,7 +187,9 @@ unsigned long __love_selfpath(char *b, unsigned long n) {
   return 0; }
 
 long __love_osdetect(void) {
-#ifndef LvOsTranslate
+#ifdef LvOsNone
+  return 1;                       /* no kernel; the door answers ENOSYS before it asks */
+#elif !defined(LvOsTranslate)
   /* no tables on this arch: the kernel is whichever -os named */
 # if defined(__linux__)
   return 1;
@@ -359,10 +367,11 @@ int __love_macat(long n, long *w) {
   if (fl >= 0) w[fl] = (w[fl] & 0xf00) >> 4;
   return 1; }
 
-/* dyld's exe asks xnu through libSystem by name, a weak import each ("libsys." keeps it
- * apart from our own read; macho.l binds the bare name): 0 in a static link, where the raw
- * trap stays. -1 reads errno through __error() and parks as the trap's carry */
-#define LvLs(t, nm, sym, ...) extern t __ls_##nm(__VA_ARGS__) __asm__("libsys." sym) __attribute__((weak))
+/* dyld's exe asks xnu through libSystem by name, a word each that dyld binds weakly ("libsys."
+ * keeps it apart from our own read; macho.l binds the bare name). the code is the same in
+ * every container: 0 outside dyld, where the raw trap stays. -1 reads errno through __error()
+ * and parks as the trap's carry */
+#define LvLs(t, nm, sym, ...) t (*volatile __ls_##nm)(__VA_ARGS__) __asm__("libsys." sym)
 LvLs(int *, error, "__error", void);
 LvLs(void, exit, "_exit", int);
 LvLs(int, fork, "fork", void);
@@ -452,6 +461,8 @@ LvLs(int, kevent, "kevent", int, void const *, int, void *, int, void const *);
 LvLs(int, clock_gettime, "clock_gettime", int, void *);
 LvLs(int, usigaction, "sigaction", int, void const *, void *);
 LvLs(long, slide, "_dyld_get_image_vmaddr_slide", unsigned);
+LvLs(void *, dlopen, "dlopen", char const *, int);   /* horn.c's */
+LvLs(void *, dlsym, "dlsym", void *, char const *);
 
 /* sigaction by libSystem, its own tramp doing the sigreturn: the user's shape both ways */
 long __love_macsigact(long sig, struct __mac_osigact const *a, struct __mac_osigact *old) {

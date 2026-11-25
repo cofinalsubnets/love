@@ -492,13 +492,16 @@ static love_inline word host_fchdir(struct g *g, word fw) {
  return fchdir((int) getcharm(fw)) ? love_err(g, errno) : ZeroPoint; }
 LvmWord1(fchdir)
 
-love_noinline static struct g *host_cwd(struct g *g) {
- char buf[4096];
- if (!getcwd(buf, sizeof buf)) return g->sp[0] = love_err(g, errno), g;
- if (!ok(g = strof(g, buf))) return g;
- return g->sp[1] = g->sp[0], g->sp += 1, g; }           // over the dummy arg
 static lvm(lvm_cwd) {
- LvmCall(g, host_cwd) }
+ char buf[4096];
+ if (!getcwd(buf, sizeof buf)) love_musttail return Answer(love_err(g, errno));
+ uintptr_t const n = strlen(buf);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += req;
+ memcpy(txt(o), buf, n);
+ love_musttail return Answer(word(o)); }           // over the dummy arg
 
 // (selfpath _) -> the running binary's path, or (). no argv[0] fallback: baked code folds
 // `cmdline` to the bake's line. a ladder: macos's proc_info, linux's link, netbsd's, then
@@ -530,13 +533,16 @@ love_noinline size_t host_selfpath(char *b, size_t n) {
 #endif
  return 0; }
 
-love_noinline static struct g *host_selfpath_ap(struct g *g) {
- char buf[4096];
- if (!host_selfpath(buf, sizeof buf)) return g->sp[0] = ZeroPoint, g;
- if (!ok(g = strof(g, buf))) return g;
- return g->sp[1] = g->sp[0], g->sp += 1, g; }
 static lvm(lvm_selfpath) {
- LvmCall(g, host_selfpath_ap) }
+ char buf[4096];
+ if (!host_selfpath(buf, sizeof buf)) love_musttail return Answer(ZeroPoint);
+ uintptr_t const n = strlen(buf);
+ uintptr_t const req = str_width(n);
+ Have(req);
+ struct str *o = ini_str(str(Hp), n);
+ Hp += req;
+ memcpy(txt(o), buf, n);
+ love_musttail return Answer(word(o)); }
 
 // pipes and redirects. (spawnio argv in out err closes pg fg): a job in its own pgrp is what
 // makes ^Z real, since POSIX drops a stop sent to an orphaned group. (setpg pid pg) is that
@@ -683,15 +689,56 @@ static lvm(lvm_swapoff) {
   char const *p = str_c(Sp[0]);
   Sp[0] = !p ? badarg(g) : (swapoff(p) ? love_err(g, errno) : ZeroPoint);
   love_musttail return Next(1); }
+// (ioctl fd req s), s a string: the call fills a copy of s's bytes, the struct shape (gpio's
+// line requests); answers the copy after. the kernel writes what req says, not what s holds:
+// a size req encodes must fit s, and one it doesn't lands in a zeroed page past s's end
+love_noinline static struct g *host_ioctl_buf(struct g *g) {
+  unsigned char b[4096];
+  uintptr_t n = len(g->sp[2]);
+  intptr_t fd = charmp(g->sp[0]) ? getcharm(g->sp[0]) : port_fd(g->sp[0]);
+  unsigned long rq = charmp(g->sp[1]) ? (unsigned long) getcharm(g->sp[1]) : 0;
+  if (fd < 0 || !charmp(g->sp[1]) || n > sizeof b || (rq >> 30 && (rq >> 16 & 0x3fff) > n))
+   return g->sp[2] = badarg(g), g->sp += 2, g;
+  memset(b, 0, sizeof b), memcpy(b, txt(g->sp[2]), n);
+  if (ioctl((int) fd, rq, b) < 0) return g->sp[2] = love_err(g, errno), g->sp += 2, g;
+  if (!ok(g = str0(g, n))) return g;
+  memcpy(txt(g->sp[0]), b, n);
+  return g->sp[3] = g->sp[0], g->sp += 3, g; }
+static lvm(lvm_ioctl_buf) LvmCall(g, host_ioctl_buf)
 // (ioctl fd req n): linux's ioctl handed one 64-bit word holding n, BLKRRPART's and
 // EXT4_IOC_RESIZE_FS's shape; answers the word after. fd a raw fd or a port
 static lvm(lvm_ioctl) {
+  if (strp(Sp[2])) love_musttail return Ap(lvm_ioctl_buf, g);
   uint64_t w = charmp(Sp[2]) ? (uint64_t) getcharm(Sp[2]) : 0;
   intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : port_fd(Sp[0]);
   Sp[2] = fd < 0 || !charmp(Sp[1]) ? badarg(g)
         : ioctl((int) fd, (unsigned long) getcharm(Sp[1]), &w) < 0 ? love_err(g, errno)
         : putcharm((intptr_t) w);
   Sp += 2; love_musttail return Next(1); }
+// (usb-bulk fd ep buf ms): one bulk transfer through linux's usbfs, fd a /dev/bus/usb node;
+// ep's top bit the way in, buf then a cask filled, else a text or cask sent. answers the bytes
+// moved, or the errno. (usb-claim fd n) (usb-release fd n): interface n taken from its driver
+// and given back. the kernel's struct, as linux/usbdevice_fs.h lays it
+struct lv_usbbulk { unsigned ep, len, timeout; void *data; };
+#define LvUsbBulk  _IOWR('U', 2, struct lv_usbbulk)
+#define LvUsbClaim _IOR('U', 15, unsigned)
+#define LvUsbFree  _IOR('U', 16, unsigned)
+static word host_usb_bulk(struct g *g, word f, word e, word b, word t) {
+ intptr_t fd = charmp(f) ? getcharm(f) : port_fd(f), ep = charmp(e) ? getcharm(e) : -1, ms = charmp(t) ? getcharm(t) : -1;
+ struct str *s = ep & 0x80 ? cask_str(b) : bytes_of(b);
+ if (fd < 0 || ep < 0 || ep > 255 || ms < 0 || !s || s->len > 0x7fffffff) return badarg(g);
+ struct lv_usbbulk x = { (unsigned) ep, (unsigned) s->len, (unsigned) ms, s->bytes };
+ int n = ioctl((int) fd, LvUsbBulk, &x);
+ return n < 0 ? love_err(g, errno) : putcharm(n); }
+static lvm(lvm_usb_bulk) {
+  Sp[3] = host_usb_bulk(g, Sp[0], Sp[1], Sp[2], Sp[3]); Sp += 3; love_musttail return Next(1); }
+static word host_usb_iface(struct g *g, word f, word i, unsigned long req) {
+ intptr_t fd = charmp(f) ? getcharm(f) : port_fd(f);
+ if (fd < 0 || !charmp(i) || getcharm(i) < 0) return badarg(g);
+ unsigned n = (unsigned) getcharm(i);
+ return ioctl((int) fd, req, &n) < 0 ? love_err(g, errno) : ZeroPoint; }
+static lvm(lvm_usb_claim) { Sp[1] = host_usb_iface(g, Sp[0], Sp[1], LvUsbClaim); Sp += 1; love_musttail return Next(1); }
+static lvm(lvm_usb_release) { Sp[1] = host_usb_iface(g, Sp[0], Sp[1], LvUsbFree); Sp += 1; love_musttail return Next(1); }
 #if defined(__moonlibc__)
 static int restart2(char const *a) { return reboot2(a); }
 #else
@@ -713,6 +760,9 @@ static lvm(lvm_umount) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(
 static lvm(lvm_swapon) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_swapoff) { Sp[0] = love_err(g, ENOSYS); love_musttail return Next(1); }
 static lvm(lvm_ioctl) { Sp[2] = love_err(g, ENOSYS); Sp += 2; love_musttail return Next(1); }
+static lvm(lvm_usb_bulk) { Sp[3] = love_err(g, ENOSYS); Sp += 3; love_musttail return Next(1); }
+static lvm(lvm_usb_claim) { Sp[1] = love_err(g, ENOSYS); Sp += 1; love_musttail return Next(1); }
+static lvm(lvm_usb_release) { Sp[1] = love_err(g, ENOSYS); Sp += 1; love_musttail return Next(1); }
 #endif
 
 static lvm(lvm_chroot) {
@@ -856,20 +906,18 @@ static lvm(lvm_posix_birth) { Sp[1] = love_err(g, ENOSYS); love_musttail return 
 #endif
 
 // (rusage who) -> (user sys) in us; who 0 self, -1 the reaped children
-love_noinline static struct g *host_posix_rusage(struct g *g) {
- word x = g->sp[0];
- if (!charmp(x)) return g->sp[0] = badarg(g), g;
+static lvm(lvm_posix_rusage) {
+ word x = Sp[0];
+ if (!charmp(x)) love_musttail return Answer(badarg(g));
  struct rusage ru;
- if (getrusage((int) getcharm(x), &ru)) return g->sp[0] = love_err(g, errno), g;
+ if (getrusage((int) getcharm(x), &ru)) love_musttail return Answer(love_err(g, errno));
  intptr_t u = (intptr_t) ru.ru_utime.tv_sec * 1000000 + ru.ru_utime.tv_usec,
           s = (intptr_t) ru.ru_stime.tv_sec * 1000000 + ru.ru_stime.tv_usec;
- if (!ok(g = have(g, 2 * Width(struct chain)))) return g;
- size_t const C = Width(struct chain);
- struct chain *c = ini_chain(bump(g, C), putcharm(s), ZeroPoint);
- c = ini_chain(bump(g, C), putcharm(u), word(c));
- return g->sp[0] = word(c), g; }
-static lvm(lvm_posix_rusage) {
- LvmCall(g, host_posix_rusage) }
+ Have(2 * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += 2 * Width(struct chain);
+ ini_chain(c + 1, putcharm(s), ZeroPoint), ini_chain(c, putcharm(u), word(c + 1));
+ love_musttail return Answer(word(c)); }
 
 love_noinline static struct g *lovefs_readdir(struct g *g, char const *c, uintptr_t cn) {
  g->sp[0] = ZeroPoint;
@@ -1026,19 +1074,16 @@ static lvm(lvm_posix_uname) {
  LvmCall(g, host_posix_uname) }
 
 // (sysconf _) -> (pagesize cpus-conf cpus-online phys-pages avphys-pages), () where none
-love_noinline static struct g *host_posix_sysconf(struct g *g) {
- int const k[] = { _SC_AVPHYS_PAGES, _SC_PHYS_PAGES, _SC_NPROCESSORS_ONLN,
-                   _SC_NPROCESSORS_CONF, _SC_PAGESIZE };                   // last first
- g->sp[0] = ZeroPoint;
+static lvm(lvm_posix_sysconf) {
+ int const k[] = { _SC_PAGESIZE, _SC_NPROCESSORS_CONF, _SC_NPROCESSORS_ONLN,
+                   _SC_PHYS_PAGES, _SC_AVPHYS_PAGES };
+ Have(5 * Width(struct chain));
+ struct chain *c = (struct chain*) Hp;
+ Hp += 5 * Width(struct chain);
  for (int i = 0; i < 5; i++) {
   long v = sysconf(k[i]);
-  if (!ok(g = have(g, Width(struct chain)))) return g;
-  struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
-                                 v < 0 ? ZeroPoint : putcharm(v), g->sp[0]);
-  g->sp[0] = word(w); }
- return g; }
-static lvm(lvm_posix_sysconf) {
- LvmCall(g, host_posix_sysconf) }
+  ini_chain(c + i, v < 0 ? ZeroPoint : putcharm(v), i < 4 ? word(c + i + 1) : ZeroPoint); }
+ love_musttail return Answer(word(c)); }
 
 static love_inline word host_posix_lseek(struct g *g, word fdw, word offw, word whw) {
  if (!charmp(fdw) || !charmp(offw) || !charmp(whw)) return badarg(g);
@@ -1142,6 +1187,9 @@ LvDef("reboot", reboot, 1, "posix");
 LvDef("swapon", swapon, 1, "posix");
 LvDef("swapoff", swapoff, 1, "posix");
 LvDef("ioctl", ioctl, 3, "posix");
+LvDef("usb-bulk", usb_bulk, 4, "usb");
+LvDef("usb-claim", usb_claim, 2, "usb");
+LvDef("usb-release", usb_release, 2, "usb");
 LvDef("mknod", mknod, 3, "posix");
 LvDef("newns", newns, 1, "posix");
 LvDef("stat", posix_stat, 1, "posix");
@@ -1472,20 +1520,17 @@ static lvm(lvm_kill) {
  love_musttail return Nextp(1, 1); }
 
 // (tty fd) -> (rows . cols) | 'enotty: size and isatty are one question, so test with two?
-love_noinline static struct g *host_tty(struct g *g) {
- struct winsize ws;
- word x = g->sp[0];
- intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);   // a charm is a raw fd
- if (fd < 0) { g->sp[0] = badarg(g); return g; }
- if (ioctl((int) fd, TIOCGWINSZ, &ws) < 0) { g->sp[0] = love_err(g, errno); return g; }
- if (!ok(g = have(g, Width(struct chain)))) return g;
- struct chain *w = ini_chain((struct chain*) bump(g, Width(struct chain)),
-                                 putcharm(ws.ws_row), putcharm(ws.ws_col));
- g->sp[0] = word(w);
- return g; }
-
 static lvm(lvm_tty) {
- LvmCall(g, host_tty) }
+ struct winsize ws;
+ word x = Sp[0];
+ intptr_t fd = charmp(x) ? getcharm(x) : port_fd(x);   // a charm is a raw fd
+ if (fd < 0) love_musttail return Answer(badarg(g));
+ if (ioctl((int) fd, TIOCGWINSZ, &ws) < 0) love_musttail return Answer(love_err(g, errno));
+ Have(Width(struct chain));
+ struct chain *w = ini_chain((struct chain*) Hp, putcharm(ws.ws_row), putcharm(ws.ws_col));
+ Hp += Width(struct chain);
+ love_musttail return Answer(word(w)); }
+
 
 // (settty port rows cols): the kernel raises SIGWINCH on the slave's foreground group
 love_noinline static int host_settty(intptr_t fd, intptr_t row, intptr_t col) {

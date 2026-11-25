@@ -140,13 +140,25 @@
    (near fb) (: lo (fb 'lo) hi (fb 'hi)
      (on k) ((H k >= lo k - 0.01) * (L k - 0.01 <= hi k)) I (iota (on 0 * on 1 * on 2))
      (map I ^#I))
+   ; ..or among C, the brushes near a box holding fb: the same test, a brush at a time
+   (near-in fb C) (: lo (fb 'lo) hi (fb 'hi)
+     (filter (c \ all (k \ peep (H k) c 0 >= lo k - 0.01 && peep (L k) c 0 - 0.01 <= hi k) ^3) C))
+   ; ..a box holding all faces js of brush b
+   (ubox b js) (: bxs (map (j \ box-of (b 'faces j)) js)
+     {'lo (map (k \ foldl min 1e300 (map (x \ x 0 k) bxs)) ^3) 'hi (map (k \ foldl max -1e300 (map (x \ x 1 k) bxs)) ^3)})
+   ; ..each brush's planes for media, one across an axis [k sign d], one compare with side's answer
+   (ax q k) (all (j \ j = k || q j = 0) ^3 && mag (q k) = 1)
+   PD (tab (map (b \ map (pl \ (: q (pl 0) k (filter (ax q) ^3) (two? k ? [<k (q <k > 0 ? 1 -1) (pl 1)] pl))) (b 'planes)) bs))
    ; ..and the medium at points ps, a tray, of only those: a brush holding a place a hair off
-   ; the face is near it. the last brush holding a point says, each weighed over all at once
+   ; the face is near it. the last brush holding a point says, each weighed over all at once;
+   ; a land at the points hs instead, raised as high as a piece reaches to half a metre over
+   ; its middle, so a wall rising out of it stays whole; a carve's lowered so, as low as it
+   ; reaches to half a metre under, so a shaft up through it keeps its walls to its lip
    (xyz ps) (map (k \ gem-tray [#ps] (map (p \ 1.0 * p k) ps)) ^3)
-   (media ks ps) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
+   (media ks ps hs) (: n #ps V (xyz ps) X (V 0) Y (V 1) Z (V 2)
      (out pl) (pl @ [k 1 d] (V k <= d) [k -1 d] (V k >= 0.0 - d) [q d] (q 0 * X + q 1 * Y + q 2 * Z - d <= 0.0))
      (in i) (: b (bt i) (b 'land @ () (PD i @ () (X * 0.0 + 1.0) l (foldl (\ m pl (m * out pl)) (out <l) >l))
-                                   L (gem-tray [n] (map (p \ 1.0 * inside? b p) ps))))
+                                   L (gem-tray [n] (map (p \ 1.0 * inside? b p) hs))))
      (n = 0 ? () (foldl (\ m k (m + in k * (1.0 * bt k 'air - m))) (X * 0.0) ks)))
    ; ..and where a brush of ks has a face on points V facing n either way, a tray, as on-face?'s
    (sides V pl) (: q (pl 0) (q 0 * V 0 + q 1 * V 1 + q 2 * V 2 - pl 1))
@@ -155,16 +167,15 @@
                                       (: on (foldl (\ a p (: s (sides V p) (max a ((s < 1e-4) * (s > -1e-4))))) (V 0 * 0.0) par)
                                          (max m (foldl (\ a p (a * (sides V p <= 1e-4))) on pl))))))
                          (V 0 * 0.0) ks)
-   ; ..each brush's planes for media, one across an axis [k sign d], one compare with side's answer
-   (ax q k) (all (j \ j = k || q j = 0) ^3 && mag (q k) = 1)
-   PD (tab (map (b \ map (pl \ (: q (pl 0) k (filter (ax q) ^3) (two? k ? [<k (q <k > 0 ? 1 -1) (pl 1)] pl))) (b 'planes)) bs))
    ; ..a brush as a key says it, its planes all a face's pieces hang on, by number
    ft (tablet? kp ? (tab (map (b \ (kp 'id) [(b 'planes) (b 'air) (peep b 'open 0) (peep b 'sheer 0)]) bs)) ())
-   ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it
+   ; ..of a brush, the planes whose faces reach plane pl: only those draw a line on it, in the
+   ; brush's box
    (meets c pl) (catmap (k \ (: g (c 'faces k) s (map (side pl) g)
-                                  (#g >= 3 && foldl min 1e9 s <= 1e-6 && foldl max -1e9 s >= -1e-6 ? [(c 'planes k)] ())))
+                                  (#g >= 3 && foldl min 1e9 s <= 1e-4 && foldl max -1e9 s >= -1e-4 
+                                   ? [(c 'planes k + [[(c 'lo) (c 'hi)]])] ())))
                            ^#(c 'planes))
-   (piece i b j) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near fb)
+   (piece i b j C) (: f (b 'faces j) n (b 'planes j 0) fb (fbox f) ks (near-in fb C)
      (rel k) (? (k < i) -1 (k > i) 1 0)
      (key _) ['face j (ft i) (map (k \ [(rel k) (ft k)]) ks)]
      ky (tablet? kp ? (key ()) ()) fi (tablet? kp ? ((kp 'id) ky) ())
@@ -173,13 +184,17 @@
                             pls (catmap (k \ meets (bt k) (b 'planes j)) others)
                             ps (poly-carve f pls)
                             pt (tab ps) cs (tab (map mid ps)) np #ps
-                            M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np))
+                            (top i e) (: c (c+ (cs i) (c* e n)) ys (map (q \ q 1) (pt i))
+                                        [(c 0) ((b 'air = 1 ? (max (cs i 1 - 0.5) (foldl min 1e300 ys)) (min (cs i 1 + 0.5) (foldl max -1e300 ys))) + e * n 1) (c 2)])
+                            M (media ks (map (i \ c+ (cs i) (c* 1e-3 n)) ^np + map (i \ c+ (cs i) (c* -1e-3 n)) ^np)
+                                     (map (i \ top i 1e-3) ^np + map (i \ top i -1e-3) ^np))
                             F (np = 0 || atom? later ? () (flush later (xyz (map cs ^np)) n))
                             (catmap (i \ (: fr (M i) (fr = M (np + i) || (tray? F && F i > 0.5) ? () [[(pt i) (fr = 1 ? n (c* -1.0 n))]])))
                                     ^np))))
      qt (tab qs) (map (m \ (: q (qt m) (tablet? kp ? [(q 0) (q 1) i [fi m] j] [(q 0) (q 1) i]))) ^#qs))
    (ok? i j) (!(tablet? want) || peep want [i j] 0 > 0)
-   (catmap (i \ (: b (bt i) _ (tick 'faces (i / nb)) (catmap (j \ (#(b 'faces j) >= 3 && shut? b j && ok? i j ? (piece i b j) ())) ^#(b 'planes)))) ^nb))
+   (catmap (i \ (: b (bt i) _ (tick 'faces (i / nb)) js (filter (j \ #(b 'faces j) >= 3 && shut? b j && ok? i j) ^#(b 'planes))
+                  (atom? js ? () (: C (near (ubox b js)) (catmap (j \ piece i b j C) js))))) ^nb))
  ; ..or cut coarse and each piece again at half while (split? ps c) says it is too coarse,
  ; down to fine: every size a power of two of fine, so the lines are the fine grid's
  (grids ps c fine split?) (c <= fine ? (poly-grid ps fine)
@@ -257,7 +272,10 @@
                                  id (tablet? kp ? (fid i) ())
                                  (map (m \ [(m 0) (m 1) id]) ms))))
                       ^nf)
-     by (foldl (\ t pc (: _ (tick 'chunks ()) q (ck (pc 0)) (fresh? q ? (pin t q (pc . t q)) t))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
+     ; ..by a chunk's number, its name made once a chunk: a column's cell under 2^19 each way
+     (cn m) (: c (col m) (c 0 * 1048576 + c 1))
+     byn (foldl (\ t pc (: _ (tick 'chunks ()) n (cn (pc 0)) (pin t n (pc . t n)))) {} (items + map (m \ [(m 0) (part (m 1)) (m 2)]) more))
+     by (foldl (\ t n (: its (byn n) q (ck (<its 0)) (fresh? q ? (pin t q its) t))) {} (keys byn))
      made (map (q \ (: its (rev (by q)) ky [q (map (x \ x 2) its)]
                        [q ky (_ \ weave (map (x \ x 1) its))]))
                (keys by))

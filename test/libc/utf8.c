@@ -48,7 +48,7 @@ int main(void) {
   for (unsigned i = 0; i < sizeof ws / sizeof *ws; i++) {
     char b[8] = {0}; mbstate_t st; memset(&st, 0, sizeof st);
     errno = 0;
-    say_n("wide", (long) ws[i]); say_n("  wcrtomb", (long) wcrtomb(b, ws[i], &st)); say_n("  errno", errno);
+    say_n("wide", (long) (unsigned) ws[i]);   /* wchar_t's sign is the abi's */ say_n("  wcrtomb", (long) wcrtomb(b, ws[i], &st)); say_n("  errno", errno);
     say_n("  b0", (unsigned char) b[0]); say_n("  b3", (unsigned char) b[3]); say_n("  b5", (unsigned char) b[5]);
     say_n("  wctob", wctob((wint_t) ws[i])); say_n("  btowc", (long) btowc((int) ws[i])); }
   say_n("mblen", mblen("\xe2\x82\xac", 3)); say_n("mblen.short", mblen("\xe2\x82", 2));

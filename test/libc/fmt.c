@@ -4,6 +4,7 @@
  * the length it would have written, not what it did. */
 #include <stdio.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <string.h>
 #include "say.h"
 
@@ -34,11 +35,11 @@ int main(void) {
  F("o", snprintf(b, sizeof b, "%o", 493));
  F("pct", snprintf(b, sizeof b, "100%%"));
 
- /* --- the l and z widths --- */
- F("ld", snprintf(b, sizeof b, "%ld", 9223372036854775807L));
- F("ld.min", snprintf(b, sizeof b, "%ld", -9223372036854775807L - 1));
- F("lu", snprintf(b, sizeof b, "%lu", 18446744073709551615UL));
- F("lx", snprintf(b, sizeof b, "%lx", 11400714819323198485UL));
+ /* --- the l and z widths, a long's own reach, so ILP32 reads what it was passed --- */
+ F("ld", snprintf(b, sizeof b, "%ld", LONG_MAX));
+ F("ld.min", snprintf(b, sizeof b, "%ld", LONG_MIN));
+ F("lu", snprintf(b, sizeof b, "%lu", ULONG_MAX));
+ F("lx", snprintf(b, sizeof b, "%lx", (unsigned long) 11400714819323198485ULL));
  F("zu", snprintf(b, sizeof b, "%zu", (size_t) 1234));
 
  /* --- width, the zero flag and the left flag. zeros hug the digits and

@@ -6,12 +6,17 @@
 ;   love wake out/mooncc0.image src/tools/mkrt.l out.o ARCH GRP.a..   the join
 ;
 ; a group is a few members of one ISA (out/rt/<isa>/<grp>.a); the join reads every group,
-; the ISA off its directory. per name in {id, base, x64, a64, rv64, i386, arm, rv32, wasm}, 8-aligned:
+; the ISA off its directory, and lays one table, rtzst_tab (its length rtzst_tab_len), of
+; entries `id`, `base`, then each ISA the groups name, an empty name ending it:
 ;
-;   rtzst_<nm>_len   an 8-byte little-endian length
-;   rtzst_<nm>       the bytes behind it: `base` the build ISA's .a as one zstd frame, each ISA's
-;                    .a a frame against it, `id` moon.l's rtcid in plain text
+;   16 bytes   the name, zero-padded
+;   16 bytes   the reference the frame decodes against, zero-padded: empty for the base's
+;   8 bytes    the length, little-endian
+;   n bytes    the entry, zero-padded to 8 (a riscv core may trap unaligned): `base` the build
+;              ISA's .a as one zstd frame, each ISA's .a a frame against its reference's, `id`
+;              moon.l's rtcid
 ;
+; an ISA's reference is its nearest kin when the groups carry it (rt-refs), else the base
 ; a link with no runtime names src/love/noblob.c instead. arbytes and rtcid are pure of
 ; the machine, so the seed's fixpoint carries this object unchanged. arch names the
 ; object format; a cross backend joins from its tree text.
@@ -38,7 +43,10 @@
        want (map (f \ f = "mksys" ? "" f) srcs)
        es (filter (e \ elem (e 1) want) ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
        _ (#es < #want && rt-die (show tgt + ": a source outside the roster in " + show srcs))
-       (cite 'holo 'write-bytes dst [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))]))
+       ; laid beside and renamed onto: a link's -rt never reads a torn group
+       tmp (dst + "." + show (getpid 0))
+       (cite 'holo 'write-bytes tmp [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))],
+        rename tmp dst))
    ; a group archive's members, ((name bytes)..), past the index and long-name table
    (rt-armems s)
     (: fld (cite 'holo 'ld-arfld)
@@ -61,16 +69,20 @@
                ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
        ((cite 'holo 'arbytes) ms))
 
-   ; one member: label len, label bytes, zero-padded so the next len lands 8-aligned
-   ; (a riscv core may trap unaligned). the archive rides as one blob item.
-   (rt-forms nm s)
+   ; one entry: its name, its reference, its length, its bytes padded to 8; the bytes ride as
+   ; one blob item
+   (rt-forms nm ref s)
     (: n #s
        pad (8 - (n & 7) & 7)
-       [['label (name ("rtzst_" + nm + "_len"))]
+       [['raw [(nm + rt-zerostr (16 - #nm) "") (ref + rt-zerostr (16 - #ref) "")]]
         ['raw (rt-le8 n 0 ())]
-        ['label (name ("rtzst_" + nm))]
         ['raw [s (rt-zerostr pad "")]]])
+   ; the kin a frame shares most with, each a step past x64's: thumb2 is arm's code without
+   ; linux, thumb2sp thumb2's with its f64 softened
+   rt-refs {"thumb2" "arm" "thumb2sp" "thumb2"}
    (rt-zerostr k acc) (k < 1 ? acc (rt-zerostr (k - 1) (string 0 + acc)))
+   ; a raw item's byte count: a list of numbers, or of strings laid whole
+   (rt-rawlen r) (foldl (a \ x \ a + (string? x ? #x 1)) 0 r)
 
    (mkrt arch dst grps)
     (: _ (rt-be arch)
@@ -78,16 +90,24 @@
        cid ((cite 'moon 'rtcid) rt-home)
        _ (!(string? cid) ? (rt-die "no src/apps/moon/ slice to hash -- run from the tree root"))
        (z? tgt z) (string? z ? z (rt-die (show tgt + ": zstd refused the archive")))
-       ; the ISAs share most of their bytes, so each is a frame against the build ISA's archive,
-       ; and runtime-ar pays two decodes for the one it wants
+       ; the ISAs share most of their bytes, so each is a frame against the build ISA's archive
+       ; or a kin's, and runtime-ar pays a decode per step to the base
+       isas (foldl (a \ p \ rev (split "/" p) 1 @ i (elem i a ? a (a + [i]))) () grps)
+       _ (!(elem (string arch) isas) && rt-die (string arch + ": the build isa is the base, so rt_isas must name it"))
        base (rt-isa arch grps)
-       (one tgt) (z? tgt (zstde-by (tgt = arch ? base (rt-isa tgt grps)) base 19))
-       isas '(x64 a64 rv64 i386 arm rv32 wasm)
-       forms (rt-forms "id" cid
-              + rt-forms "base" (z? arch (zstde base 19))
-              + foldl (a \ t \ a + rt-forms (string t) (one t)) () isas)
-       xs (foldl (a \ nm \ a + ["rtzst_\(nm)" "rtzst_\(nm)_len"]) () ("id" . "base" . map string isas))
-       ob (objelf arch () () () xs () () () () () forms)
+       _ (foldl (a \ i \ a || 16 <= #i && rt-die (i + ": a name the table cannot hold")) 0 isas)
+       (ref i) (rt-refs i @ k (string? k && elem k isas ? k "base"))
+       (one i) (: a (string arch = i ? base (rt-isa (name i) grps))
+                  r (ref i @ k (k = "base" ? base (rt-isa (name k) grps)))
+                  (z? i (zstde-by a r 19)))
+       ents (rt-forms "id" "" cid
+             + rt-forms "base" "" (z? arch (zstde base 19))
+             + foldl (a \ i \ a + rt-forms i (ref i) (one i)) () isas
+             + [['raw [(rt-zerostr 40 "")]]])
+       ; the length rides after the table, which runtime-ar walks by it
+       forms ([['label 'rtzst_tab]] + ents
+              + [['label 'rtzst_tab_len] ['raw (rt-le8 (foldl (a \ f \ a + rt-rawlen (f 1)) 0 ents) 0 ())]])
+       ob (objelf arch () () () ["rtzst_tab" "rtzst_tab_len"] () () () () () forms)
        (cite 'holo 'write-bytes dst ob))        ; a byte list, not a string
 
    (mkrt-main av)

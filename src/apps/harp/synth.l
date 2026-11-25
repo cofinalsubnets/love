@@ -20,7 +20,7 @@
          synth-vols synth-vol0
          synth-pads synth-pad
          synth-prows synth-pwhite synth-pcols synth-pbtns synth-pat synth-finger synth-ppaint synth-wbuf?)
-(borrow '(horn quay harp play posix window opl ops cli))
+(borrow '(horn quay harp play posix window opl ops cli slip))
 (:
  esc (string 27)
  ; the pitched voices of harp's kit, each with how long a strike rings
@@ -40,11 +40,11 @@
 
  ; the loop's state: 'pat playing, 'nextp sent since, 'cyc the next cycle to pull and
  ; 'cstart its frame, 'due voices pulled but not begun as [start voice]. 'buf the loop's vi
- ; buffer, 'focus the window's pane, 'mods its held modifiers, 'tk the strip's touched key
+ ; buffer, 'ps the window's panes, 'mods its held modifiers, 'tk the strip's touched key
  (synth-new o) {'fm (tablet? o ? (peep o 'fm ()) ()) 'prog 0 'oct 0 'tim 0 'vs () 'due () 'fpos 0 'last () 'lk 0 'lt 0 'dirty 1
                 'pat () 'nextp () 'on 0 'cyc 0 'cstart 0 'cps synth-cps 'lmsg "" 'over 0 'hv ()
                 'rev 0 'rvw 2 'echo 0 'ecw 1 'cho 0 'chw 2 'shm 0 'shw 2 'fxm () 'fxt 0 'rls {} 'latch 0 'lim () 'vol synth-vol0
-                'buf () 'fc () 'focus 'keys 'mods {} 'cw 0 'tk () 'vd 0}
+                'buf () 'fc () 'ps (slip-new 'keys 'keys) 'mods {} 'cw 0 'tk () 'vd 0}
 
  (synth-name s) (: t (int s) n (s < t ? (t - 1) t)
                    o (n < 0 ? ((n - 11) // 12) (n // 12))
@@ -323,10 +323,10 @@
  (synth-lline st) (: ns (foldl (a \ s \ " " + synth-name s + a) "" (uniq (map (p \ p 1) (st 'hv))))
    (? (st 'latch) ("  latched" + ns) (two? (st 'hv)) ("  held" + ns) ""))
 
- ; --- the window's panes: the keys over the loop's buffer, a horizontal split. ctrl-w w goes
- ; between them, ctrl-w j to the buffer and k to the keys, or a click on one ---
+ ; --- the window's panes: the keys over the loop's buffer, at first. ctrl-w then slip's keys
+ ; goes between them and lays them otherwise, a click goes to one, a drag moves the bar ---
  synth-trows 14                         ; the keys' text rows, the strip under them
- synth-top 352                          ; the keys' pane, in pixels down
+ synth-top 352                          ; the keys' pane at first, in pixels down
  synth-ink 16756784
  synth-mods {42 'shift 54 'shift 29 'ctrl 285 'ctrl 56 'alt 312 'alt}
  ; the keys vi hears that type no text, as edkey answers them
@@ -335,20 +335,28 @@
  synth-ctl (foldl (t \ p \ pin t <p >p) {}
              (zip [16 17 18 19 20 21 22 23 24 25 30 31 32 33 34 35 36 37 38 44 45 46 47 48 49 50 26]
                   (map (c \ c - 96) (chars "qwertyuiopasdfghjklzxcvbnm") + [27])))
- ; the panes laid on a window w by h: the buffer's cells under the keys
- (synth-wlay st w h)
-  (: rows (max 0 ((h - synth-top) // 16)) cols (w // 8)
-     (pins st 'ww w 'wh h 'vrows rows 'vcols cols 'vd 1 'dirty 1
-              'scr (0 < rows ? (screen (cask (screen () rows cols)) rows cols) ())))
- ; the buffer vs under the keys, its ex door the loop's words
+ ; ..the panes' own keys, by place
+ synth-wkeys {17 119 35 104 36 106 37 107 38 108 50 109 45 120 12 45 13 61}
+ ; the panes laid on a window w by h, the buffer's screen its pane's
+ (synth-wlay st w h) (: ps (st 'ps) _ (slip-lay ps w h)
+   (pins st 'ww w 'wh h 'vd 2 'dirty 1 'scr (st 'fc ? (slip-screen ps 'vi) ())))
+ ; the buffer vs under the keys, its ex door the loop's words; the keys' share what their
+ ; rows and strip take
  (synth-wedit st vi vs w h)
-  (: _ (pin vs 'exmore '("send" "play" "stop" "cps"))
+  (: _ (pin vs 'exmore '("send" "play" "stop" "cps")) n (max 1 (h // 16 - 1))
+     _ (slip-plan (st 'ps) ['stack (max 10 (min 90 ((100 * (synth-top // 16) + n - 1) // n))) 'keys 'vi])
      (pins st 'buf vs 'fc (vi 'vi-face vs {'ex (synth-ex st)}), synth-wlay st w h))
- (wfocus st f) (st 'fc ? (pins st 'focus f 'vd 1 'dirty 1) st)
- (wfeed st cs) (: _ (each cs ((st 'fc) 1)) (pins st 'vd 1 'over (st 'buf 'quit ? 1 (st 'over))))
+ (synth-focus st) (st 'ps 'focus)
+ (wfocus st f) (st 'fc ? (pin (st 'ps) 'focus f, pins st 'vd 1 'dirty 1) st)
+ ; ..what moved the panes done, and all of it laid again
+ (wmoved st f) (: p (st 'ps 'plan) q (st 'ps 'focus) _ (f (st 'ps))
+   (? (p != st 'ps 'plan) (synth-wlay st (st 'ww) (st 'wh)) (q != st 'ps 'focus) (pins st 'vd 1 'dirty 1) st))
+ (wfeed st cs) (: _ (each cs ((st 'fc) 1)) (pins st 'vd (max 1 (st 'vd)) 'over (st 'buf 'quit ? 1 (st 'over))))
+ ; the keys' box, [x y w h] in pixels
+ (synth-keys st w h) (st 'fc ? (slip-box (st 'ps) 'keys) [0 0 w h])
  ; the strip's key at x y, its index of 32 from c an octave under middle c, else ()
  (synth-cell st w h x y)
-  (: cw (w // 32) y0 (min synth-trows (h // 16) * 16 + 16) kh (min 96 ((st 'fc ? synth-top h) - y0 - 8))
+  (: b (synth-keys st w h) w (b 2) x (x - b 0) y (y - b 1) cw (w // 32) y0 (min synth-trows (b 3 // 16) * 16 + 16) kh (min 96 (b 3 - y0 - 8))
      (? (x < 0 || 32 * cw <= x || y < y0 || y0 + kh <= y) () (x // cw)))
  ; a finger on the strip: down holds its key's note, a slide takes the next, up lets it go
  (wtouch st i) (: s (12.0 * st 'oct + i - 12)
@@ -362,19 +370,20 @@
         (e = 'size) (synth-wlay st (r 1) (r 2))
         (e = 'finger) (synth-finger st r)
         (e = 'up) (? (md != ()) (pin ms md ()) (st 'latch) st (synth-free st k))
-        (e = 'press) (? (st 'fc && synth-top <= r 3) (wfocus st 'vi)
+        (e = 'press) (? (st 'fc && (slip-over (st 'ps) (r 2) (r 3) != 'keys)) (wmoved st (ps \ slip-press ps (r 2) (r 3)))
                         (: _ (wfocus st 'keys) i (synth-cell st <wh (wh 1) (r 2) (r 3))
                            (k = 1 && charm? i ? (wtouch st i) st)))
+        (e = 'move && two? (st 'ps 'held)) (wmoved st (ps \ slip-drag ps (r 1) (r 2)))
         (e = 'move) (: i (synth-cell st <wh (wh 1) (r 1) (r 2))
                        (charm? (st 'tk) && charm? i && i != st 'tk && !(st 'latch) ? (wlift st, wtouch st i) st))
-        (e = 'release) (charm? (st 'tk) ? (wlift st) st)
-        (e = 'paste) (st 'focus = 'vi ? ((st 'fc) 3 k, pin st 'vd 1) st)
-        (e = 'text) (st 'focus = 'vi && !(ms 'ctrl) && !(ms 'alt) ? (wfeed st (chars k)) st)
+        (e = 'release) (slip-drop (st 'ps) ? st charm? (st 'tk) ? (wlift st) st)
+        (e = 'paste) (synth-focus st = 'vi ? ((st 'fc) 3 k, pin st 'vd 1) st)
+        (e = 'text) (synth-focus st = 'vi && !(ms 'ctrl) && !(ms 'alt) ? (wfeed st (chars k)) st)
         (e != 'down) st
         (md != ()) (pin ms md 1)
-        (st 'cw) (: _ (pin st 'cw 0) (k @ 17 (wfocus st (st 'focus = 'vi ? 'keys 'vi)) 36 (wfocus st 'vi) 37 (wfocus st 'keys) _ st))
-        (k = 17 && ms 'ctrl && st 'fc && (st 'focus = 'keys || st 'buf 'mode = 'n)) (pin st 'cw 1)
-        (st 'focus = 'vi) (? (ms 'ctrl) (peep synth-ctl k () @ c (charm? c ? (wfeed st [c]) st))
+        (st 'cw) (: _ (pin st 'cw 0) c (synth-wkeys k) (c = () ? st (wmoved st (ps \ slip-key ps c))))
+        (k = 17 && ms 'ctrl && st 'fc && (synth-focus st = 'keys || st 'buf 'mode = 'n)) (pin st 'cw 1)
+        (synth-focus st = 'vi) (? (ms 'ctrl) (peep synth-ctl k () @ c (charm? c ? (wfeed st [c]) st))
                              (peep synth-vis k () @ c (charm? c ? (wfeed st [c]) st)))
         (any (p \ <p = k) (st 'hv)) (st 'latch ? (synth-free st k) st)
         (k = 1) (pins st 'over 1)
@@ -386,37 +395,29 @@
         _ (pin row 0 (col & 255), pin row 1 ((col >> 8) & 255), pin row 2 ((col >> 16) & 255))
         (dbl k) (k < n ? (pour row k row 0 (min k (n - k)), dbl (2 * k)) 0)
         (dbl 4, each ^rh (j \ pour p (((y + j) * w + x) * 4) row 0 n))))
- ; a pixel's line round the pane w by h at x y
- (wrim p W x y w h) (: c synth-ink
-   (fill p W x y w 1 c, fill p W x (y + h - 1) w 1 c, fill p W x y 1 h c, fill p W (x + w - 1) y 1 h c))
  ; text cells over the top, under them the 32 keys' notes, a held one lit; under the keys
  ; the buffer, when there is one
  (synth-paint st win)
-  (: wh (window-size win) w <wh h (wh 1) p (window-paper win)
-     top (st 'fc ? (min h synth-top) h)
-     c (w // 8) r (min synth-trows (h // 16))
+  (: wh (window-size win) W <wh H (wh 1) P (window-paper win)
+     _ (st 'vd = 2 && st 'fc ? (slip-clear P W [0 0 W H]))
+     b (synth-keys st W H) w (b 2) h (b 3) p (cask (4 * max 1 (w * h)))
+     c (max 1 (w // 8)) r (max 1 (min synth-trows (h // 16)))
      sc (screen (cask (screen () r c)) r c)
      _ (scribe sc (synth-wframe st))
      _ (each ^r (y \ dye sc p w y -1 0))
-     _ (fill p w 0 (r * 16) w (top - r * 16) 0)
-     cw (w // 32) y0 (r * 16 + 16) kh (min 96 (top - y0 - 8))
+     cw (w // 32) y0 (r * 16 + 16) kh (min 96 (h - y0 - 8))
      lit (map (q \ int (q 1 - 12.0 * st 'oct)) (st 'hv))
      _ (each ^32 (i \ (: s (i - 12) sharp (elem ((s + 24) % 12) [1 3 6 8 10])
                          (fill p w (i * cw + 1) y0 (cw - 2) (sharp ? (kh * 3 // 5) kh)
                                (? (elem s lit) 16744448 sharp 3684408 13684944)))))
-     (st 'fc ? (synth-vpaint st p w, st 'focus = 'keys ? (wrim p w 0 0 w top)) 0))
- ; ..vi's frame scribed, its rows laid under the keys, and a line round it when it has the keys
- (synth-vpaint st p w)
-  (: rows (st 'vrows) cols (st 'vcols) scr (st 'scr) tw (8 * cols)
-     (? (rows < 1) 0
-        (: fr ((st 'fc) 0 cols rows)
-           (? (0 < #fr || st 'vd)
-              (: tb (cask (tw * rows * 16 * 4)) cur (gaze scr 0)
-                 _ (scribe scr fr)
-                 _ (each ^rows (y \ dye scr tb tw y (cur >= 0 && cur // cols = y ? cur -1) ()))
-                 _ (each ^(rows * 16) (y \ pour p (4 * ((synth-top + y) * w)) tb (4 * y * tw) (4 * tw)))
-                 (pin st 'vd 0, st 'focus = 'vi ? (wrim p w 0 synth-top tw (16 * rows))))
-              0))))
+     _ (each ^(min h (H - b 1)) (j \ pour P (4 * ((b 1 + j) * W + b 0)) p (4 * j * w) (4 * min w (W - b 0))))
+     (st 'fc ? (synth-vpaint st P W, synth-focus st = 'keys ? (slip-rim P W b synth-ink)) 0))
+ ; ..vi's frame scribed, its rows laid in its pane, and a line round it when it has the keys
+ (synth-vpaint st P W) (: ps (st 'ps) c (slip-cells ps 'vi)
+   (? (c 2 < 1 || c 3 < 1) 0
+      (slip-face ps 'vi (st 'scr) ((st 'fc) 0 (c 2) (c 3)) (0 < st 'vd) P W)
+        (pin st 'vd 0, synth-focus st = 'vi ? (slip-rim P W (slip-box ps 'vi) synth-ink))
+      0))
  ; --- a phone: held sideways, a row of status over two rows of buttons, the f keys' knobs,
  ; and under them a piano of two octaves, each finger its own note. quit sits top right, where
 ; grass and stones leave ---
@@ -500,9 +501,9 @@
                    st 'over ? () (rest 4, go ()))
            (mind go () (_ \ (hn ? (flush hn, close hn), window-close win, side ? (side 0))),
             0))))
- synth-usage "usage: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       on a phone the window is the default, --tty the terminal's\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
- ; --- the pier: the keys a stage over a vi stage on the loop's text. ctrl-w then w, j or k
- ; goes between them as the prefix and j and k do ---
+ synth-usage "usage: love synth [--fm FILE] [-w|--window|--tty] [LOOP]   (z to / and q to ] play, the rows above them the sharps; tab the timbre, up and down the octave, f1 f2 f3 f8 reverb echo chorus shimmer and f5 f6 f7 f9 wetter, f4 the latch, f10 the loop, f11 f12 the volume, enter sends the buffer, pgup pgdn the cps, ctrl-w w the buffer and back, ctrl-w m the two side by side or one over the other, x trades them, + - = size them, esc leaves)\n       in a window a note sounds while its key is held, or a finger on the strip of keys; on a tty a key is a strike\n       on a phone the window is the default, --tty the terminal's\n       --fm: an op2 bank or a wad's GENMIDI, its instruments a last timbre, left and right choosing"
+ ; --- the pier: the keys a stage over a vi stage on the loop's text. ctrl-w then a
+ ; key of wharf-wm's goes between them and lays them otherwise ---
  (synth-pier br vi f o) (: _ (synth-warm ()) st (synth-new o)
    hf (synth-horn st) hn <hf feed <>hf
    sz (br 'hsize 0) hb (br 'pier-up <sz <>sz)
@@ -510,13 +511,13 @@
    _ (pin buf 'exmore '("send" "play" "stop" "cps"))
    _ (pin st 'buf buf)
    face (vi 'vi-face buf {'ex (synth-ex st) 'reg (hb 'clip)})
-   (cw d k) (pin st 'cw 0, elem k [119 d] ? (br 'hsteer hb (d = 106 ? 'down 'up)) 0)
+   (cw k) (pin st 'cw 0, br 'hwm hb k)
    keys (br 'pier-stage (w \ h \ (pin st 'dirty 0, synth-frame st))
-                         (k \ (? (st 'cw) (cw 106 k) (k = 23) (pin st 'cw 1) (synth-step st k)))
+                         (k \ (? (st 'cw) (cw k) (k = 23) (pin st 'cw 1) (synth-step st k)))
                          (_ \ (st 'over)))
    _ (pins keys 'tick (_ \ (feed (), st 'dirty)) 'key synth-key)   ; an f key whole
    text (br 'pier-stage (face 0)
-                         (k \ (? (st 'cw) (cw 107 k) (k = 23 && buf 'mode = 'n) (pin st 'cw 1) (face 1 k)))
+                         (k \ (? (st 'cw) (cw k) (k = 23 && buf 'mode = 'n) (pin st 'cw 1) (face 1 k)))
                          (_ \ (buf 'quit || st 'over)))
    _ (pin text 'paste (face 3))
    share (min 90 ((100 * (synth-rows + 1) + <sz - 1) // <sz))   ; the keys' rows, and one over

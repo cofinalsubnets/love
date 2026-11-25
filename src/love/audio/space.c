@@ -23,13 +23,6 @@
 //   bytes mem wants | () as space. prm, a float tray: 0 rate  1 ceiling  2 knee, its share of
 //   the ceiling  3 release, seconds
 #include "love.h"
-#if Bits == 64
-double lm_exp(double);
-#define sp_exp lm_exp
-#else
-float lm_expf(float);
-#define sp_exp lm_expf
-#endif
 
 enum { sp_nprm = 16, sp_lines = 8, sp_aps = 4, sp_ramps = 7 };
 // the lines' and diffusers' lengths in frames at 44100: mutually prime, so no echo lines up
@@ -108,7 +101,7 @@ love_noinline static struct g *host_space(struct g *g) {
  uint64_t len[sp_lines], apl[sp_aps];
  flo_t gain[sp_lines];
  for (int i = 0; i < sp_lines; i++)   // each line loses 60 dB in t60 seconds, whatever its length
-  len[i] = (uint64_t) (sp_fdn[i] * sz * k), gain[i] = sp_exp((flo_t) -6.907755278982137 * (flo_t) len[i] / (rate * t60));
+  len[i] = (uint64_t) (sp_fdn[i] * sz * k), gain[i] = love_exp((flo_t) -6.907755278982137 * (flo_t) len[i] / (rate * t60));
  for (int i = 0; i < sp_aps; i++) apl[i] = (uint64_t) (sp_ap[i] * k);
  // the shimmer gives back a share of what the lines lose a pass: at 1 a tail rings some four
  // times its t60, and a longer t60 stays as stable as a short one
@@ -170,7 +163,7 @@ static lvm(lvm_space) { LvmCallp(g, 3, host_space) }
 enum { sw_nprm = 8 };
 // the filter's g = tan(pi c / rate) at frame f
 static flo_t sw_g(flo_t const *p, int64_t f) {
- flo_t const l = p[5] + p[4] * (flo_t) f / p[0], c = sp_clamp(p[2] * sp_exp((flo_t) 0.6931471805599453 * p[3] * sp_sin(l)), 10, (flo_t) 0.45 * p[0]),
+ flo_t const l = p[5] + p[4] * (flo_t) f / p[0], c = sp_clamp(p[2] * love_exp((flo_t) 0.6931471805599453 * p[3] * sp_sin(l)), 10, (flo_t) 0.45 * p[0]),
              t = c / (2 * p[0]);
  return sp_sin(t) / sp_sin(t + (flo_t) 0.25); }
 
@@ -226,7 +219,7 @@ love_noinline static struct g *host_limit(struct g *g) {
  tl->shape[0] = tr->shape[0] = n;
  flo_t *L = tray_data(tl), *R = tray_data(tr), *e = (flo_t*) cask_bytes(a[2], &nb);
  flo_t const c = p[1], k = sp_clamp(p[2], 0, (flo_t) 0.95) * c, span = c - k,
-             fall = sp_exp(-1 / (p[0] * p[3]));
+             fall = love_exp(-1 / (p[0] * p[3]));
  for (uintptr_t i = 0; i < n; i++) {
   flo_t const x = tray_get_flo(tray(a[0]), i), y = tray_get_flo(tray(a[1]), i),
               m = x < 0 ? -x : x, q = y < 0 ? -y : y, pk = m > q ? m : q;

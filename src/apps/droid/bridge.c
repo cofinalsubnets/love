@@ -1,11 +1,13 @@
 /* src/apps/droid/bridge.c -- the native activity an apk's love runs behind. built with
    `mooncc -t a64 -shared` against the phone's own libraries, it owns what only the app
    process may: the window, the input queue, logcat. love is the static binary shipped as
-   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here.
+   lib/ABI/liblove.so, started as a child with LOVE_FACE naming a unix socket here, and
+   LOVE_GLHELP naming lib/ABI/libglhelp.so, the gpu's helper, where the apk ships one.
    the wire, little-endian:
      love -> bridge  'F' u16 w u16 h u16 y u16 n, then n*w words 0x00rrggbb: rows y.. of a
                      w by h frame, each pixel the whole number of the window's that fit
                      'I' u8 on: the soft keyboard up, then toggled at each touch, or down
+                     'B' u8 on: Back is love's, from the bottom of a stack, where it else backs out
                      'C' u32 n, then n bytes: a selection's text for the clipboard
                      'V': the clipboard's text asked for, as 'P' records
                      'D': the decks asked for, as 'D' records
@@ -24,7 +26,9 @@
    sound is a second socket: love's horn (HORN=sock:PATH) says the rate as a u32, then
    s16 stereo frames, which a thread of their own plays through AAudio. the mic is a
    third (HORN_IN=sock:PATH): the rate word's top byte asks the channels, and an AAudio
-   input stream's s16 frames go back. the framework is a fourth (LOVE_DROID=PATH), a session
+   input stream's s16 frames go back. the gpu is a fifth (LOVE_GPU_FACE=PATH): glhelp (glhelp.c,
+   built in) on a thread a connection, its first line the file it shares, drawing on the window
+   while its love has the top of the deck on the screen. the framework is a fourth (LOVE_DROID=PATH), a session
    per connection, each op a record (u32 n, then n bytes: its letter, then words NUL-separated):
      'c' NAME            a class by the boot loader (android.*, java.*)
      'l' NAME            a class by the app's own loader, NAME dotted
@@ -39,7 +43,8 @@
    text, 'x' the exception thrown, as its toString, 'e' a malformed op. ops run on the loop
    thread, so a call that blocks stalls the screen. every process love starts inherits the
    door: the app's own uid, no reach it lacks. assets/perms names the permissions to ask for at
-   start (RECORD_AUDIO for the mic), NUL-separated; the input stream waits on the grant.
+   start, NUL-separated, but RECORD_AUDIO, the mic's, which is asked when an ear first opens: the
+   ear waits on the answer, and one refused is closed.
    assets/argv holds love's arguments, NUL-separated; assets/app is laid in the data
    directory before each start, which is love's cwd and HOME. love inherits the app's own
    environment (android's ANDROID_* and PATH), and its PATH leads with DATA/bin, where love
@@ -73,7 +78,7 @@ int ANativeWindow_setBuffersGeometry(void *, int, int, int);
 int ANativeWindow_getWidth(void *); int ANativeWindow_getHeight(void *);
 int ANativeWindow_lock(void *, ANativeWindow_Buffer *, void *);
 int ANativeWindow_unlockAndPost(void *);
-void *ALooper_prepare(int); int ALooper_addFd(void *, int, int, int, void *, void *);
+void *ALooper_prepare(int); void *ALooper_forThread(void); int ALooper_addFd(void *, int, int, int, void *, void *);
 int ALooper_removeFd(void *, int); int ALooper_pollOnce(int, int *, int *, void **); void ALooper_wake(void *);
 void AInputQueue_attachLooper(void *, void *, int, void *, void *); void AInputQueue_detachLooper(void *);
 int AInputQueue_getEvent(void *, void **); int AInputQueue_preDispatchEvent(void *, void *);
@@ -105,7 +110,7 @@ void *mmap(void *, size_t, int, int, int, long); int munmap(void *, size_t);
 int pthread_create(void *, void const *, void *(*)(void *), void *); int pthread_join(long, void **);
 int pthread_mutex_lock(void *); int pthread_mutex_unlock(void *);
 int snprintf(char *, size_t, char const *, ...);
-int pthread_detach(long);
+int pthread_detach(long); int clock_gettime(int, void *);
 int AAudio_createStreamBuilder(void **); int AAudioStreamBuilder_delete(void *);
 void AAudioStreamBuilder_setSampleRate(void *, int); void AAudioStreamBuilder_setChannelCount(void *, int);
 void AAudioStreamBuilder_setFormat(void *, int); void AAudioStreamBuilder_setPerformanceMode(void *, int);
@@ -116,29 +121,35 @@ void *dlsym(void *, char const *); int usleep(unsigned); ssize_t send(int, void 
 struct pollfd { int fd; short events, revents; }; int poll(struct pollfd *, unsigned long, int);
 struct dirent { unsigned long long ino; long long off; unsigned short reclen; unsigned char type; char name[256]; };
 void *opendir(char const *); struct dirent *readdir(void *); int closedir(void *);
+int getsockopt(int, int, int, void *, unsigned *);
+int glhelp_serve(int, void *(*)(void *, int, int, int), void *);
 
-enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS };
+enum { LISTEN = 1, CONN, LOG, INPUT, HORN, EAR, DROID, SESS, GPU };
 enum { O_WRONLY = 1, O_CREAT = 0100, O_TRUNC = 01000, O_NONBLOCK = 04000, O_CLOEXEC = 02000000 };
 
 /* a session: a love, the windows it started in a stack, a socket of its own so they land here */
 enum { NDECK = 8 };
 typedef struct {
-  int pid, lsock, csock, typing;
+  int pid, lsock, csock, typing, back;    /* back: its love keeps Back, which else backs out */
   int under[3], utyping[3], nunder;       /* the clients csock covers, oldest first, and what each asked of the keyboard */
 } deck;
 
 typedef struct {
   ANativeActivity *a; void *vm, *looper, *win, *queue;   /* a is 0 between activities, stay's only; the act lock guards it */
-  int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, vh, shown;
+  int ww, wh, fw, fh, logfd, logw, quit, hsock, esock, dsock, gsock, vh, shown;
+  void *gl; int lost, gw;                 /* the gpu session drawing on the window, its picture's width; one that let it go */
   int bare;                               /* the client on top has not been told its pixels are gone */
   int baking, tick;                       /* love's first run lays its image, no client yet */
   deck decks[NDECK], *d;                  /* d is on the screen */
   int up, ears, stay;                     /* in sight (onStart to onStop); hear threads alive; the service keeps us */
   void *env, *kcm, *kload, *kget;         /* the loop thread's JNIEnv, KeyCharacterMap's class and methods */
+  int resumed;                            /* ours in front: no dialog over us */
+  int micp[2], mic, ask, earwait, micgen, micok;   /* the mic: pokes to the main thread; its grant; asked 1, our pause seen 2; the ears waiting, the answers, the last */
+  void *main; long askt, mik[8];          /* the main thread's looper; when asked; the lock on earwait, micgen and micok */
   long th; long mu[8], act[8];            /* pthread_t, pthread_mutex_t (zero is unlocked) */
   char argv[2048], label[64]; long nargv;
   uint32_t *fb; size_t fbsz;              /* a frame as love sent it */
-  char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], line[2048]; int nline;
+  char dir[512], data[512], sock[600], horn[600], ear[600], droid[600], gpu[600], line[2048]; int nline;
 } br;
 
 #define LOG(s) __android_log_write(4, "love", s)
@@ -176,8 +187,12 @@ static int writeall(int fd, void const *p, size_t n) {
 
 static int vis(br *b) { return b->vh > 0 && b->vh < b->wh ? b->vh : b->wh; }
 
-/* how many of the window's pixels a frame's pixel is: whole, so none is filtered */
-static int zoom(br *b) { return b->fw && b->ww >= b->fw ? b->ww / b->fw : 1; }
+/* how many of the window's pixels a frame's pixel is: whole, so none is filtered; the gpu's
+   picture's while it draws */
+static int zoom(br *b) {
+  int const w = b->gl ? b->gw : b->fw;
+  return w && b->ww >= w ? b->ww / w : 1;
+}
 
 static void block(ANativeWindow_Buffer *o, int x, int y, int w, int h) {
   for (int j = y; j < y + h && j < o->height; j++)
@@ -214,6 +229,7 @@ static void notice(br *b) {
    under the lock */
 static void paint(br *b) {
   int w = b->fw, ht = b->fh;
+  if (b->gl) return;                           /* the gpu's */
   if (b->win && b->baking && !b->fb) notice(b);
   if (b->win && b->fb && w) {
     int k = zoom(b), vh = vis(b);
@@ -354,7 +370,7 @@ static void input(br *b) {
     int handled = 1;
     if (AInputEvent_getType(e) == 1) {
       int k = AKeyEvent_getKeyCode(e), down = AKeyEvent_getAction(e) == 0;
-      handled = k != 4 || b->d->nunder;   /* back backs out, or a window over a love takes it */
+      handled = k != 4 || b->d->nunder || b->d->back;   /* back backs out, or a window over a love takes it */
       if (handled) put(b, 'K', down, k, down ? typed(b, e) : 0);
     } else {
       int raw = AMotionEvent_getAction(e), ac = raw & 0xff, ix = raw >> 8 & 0xff, vh = vis(b);
@@ -763,18 +779,36 @@ static void *play(void *p) {
   return 0;
 }
 
-/* one ear: the rate and channels, then an AAudio input stream's frames until love hangs
-   up -- its socket readable, since love says nothing after the rate. a stream refused,
-   as before RECORD_AUDIO is granted, is asked again each half second; out of sight the
-   mic is let go, and taken again on the way back */
+/* one ear: the rate and channels, the mic granted, then an AAudio input stream's frames until
+   love hangs up -- its socket readable, since love says nothing after the rate. a stream
+   refused is asked again each half second; out of sight the mic is let go, and taken again
+   on the way back */
 typedef struct { br *b; int fd; } ear;
 static int hung(int fd) { struct pollfd q = {fd, 1, 0}; return poll(&q, 1, 0) != 0; }
+/* the mic's grant, waited for: the main thread poked each half second until it answers */
+static int granted(br *b, int fd) {
+  if (__atomic_load_n(&b->mic, 2)) return 1;
+  pthread_mutex_lock(b->mik);
+  int g = b->micgen; b->earwait++;
+  pthread_mutex_unlock(b->mik);
+  for (int i = 0, ok, same; ; i++) {
+    if (i % 10 == 0) write(b->micp[1], "m", 1);
+    usleep(50000);
+    int gone = hung(fd);
+    pthread_mutex_lock(b->mik);
+    same = b->micgen == g; ok = b->micok;
+    if (same && gone) b->earwait--;
+    pthread_mutex_unlock(b->mik);
+    if (!same || gone) return !same && ok && !gone;
+  }
+}
 static void *hear(void *p) {
   ear *h = p; br *b = h->b; int fd = h->fd; unsigned char r[4]; void *bd = 0, *st = 0; short buf[2048];
   munmap(h, sizeof *h);
   void (*preset)(void *, int) = (void (*)(void *, int)) dlsym(0, "AAudioStreamBuilder_setInputPreset");
   int rate = 0, ch = 1;
   if (!readall(fd, r, 4)) rate = r[0] | r[1] << 8 | r[2] << 16, ch = r[3] == 2 ? 2 : 1;
+  if (rate && !granted(b, fd)) rate = 0;
   while (rate && !hung(fd)) {
     if (!__atomic_load_n(&b->up, 2)) { usleep(100000); continue; }
     if (!AAudio_createStreamBuilder(&bd)) {
@@ -792,6 +826,60 @@ static void *hear(void *p) {
   }
   close(fd);
   __atomic_fetch_sub(&b->ears, 1, 3);   /* the last touch of b: destroy waits on it */
+  return 0;
+}
+
+/* a gpu session: the window its glhelp draws on, while its love (the peer of the gpu socket and of
+   the deck's top) has the screen; the lock held from a take to its give */
+typedef struct { br *b; int fd, pid; } gses;
+static int peer(int fd) {
+  int u[3] = {0, 0, 0}; unsigned n = sizeof u;   /* struct ucred: pid, uid, gid */
+  return fd >= 0 && !getsockopt(fd, 1, 17, u, &n) ? u[0] : -1;   /* SOL_SOCKET, SO_PEERCRED */
+}
+/* the window off the cpu, which a lock left connected, so egl may: perform's api disconnect.
+   the ndk has no call for it; the window's own table does, past its base and fields */
+struct anw { int magic, ver; void *res[4], *ref[2];      /* android_native_base_t */
+  unsigned flags; int lo, hi; float xd, yd; long oem[4];
+  void *swap, *deq, *lock, *que, *query; int (*perform)(void *, int, ...); };
+_Static_assert(__builtin_offsetof(struct anw, perform) == (sizeof(void *) == 8 ? 152 : 88), "the window's table");
+static void uncpu(void *w) {
+  struct anw *a = w;
+  if (a->magic == ('_' << 24 | 'w' << 16 | 'n' << 8 | 'd')) a->perform(w, 14, 2);   /* NATIVE_WINDOW_API_DISCONNECT, _CPU */
+}
+/* the window the cpu's again, its love told to draw all of it. the lock held */
+static void regive(br *b) {
+  b->gl = 0; b->lost = 0; b->bare = 1;
+  if (b->win) ANativeWindow_setBuffersGeometry(b->win, 0, 0, 1);
+  paint(b);
+}
+/* op 0 takes the window for a picture w wide, or 0, the lock held until op 1 gives it; op 2: the
+   session's gl gone */
+static void *gpuwin(void *p, int op, int w, int h) {
+  (void) h;
+  gses *g = p; br *b = g->b;
+  if (op == 1) {
+    int lost = b->lost; if (lost) regive(b);
+    pthread_mutex_unlock(b->mu);
+    if (lost && b->ww) sized(b);
+    return 0;
+  }
+  pthread_mutex_lock(b->mu);
+  if (op == 2) {
+    int had = b->gl == g; if (had) regive(b);
+    pthread_mutex_unlock(b->mu);
+    if (had && b->ww) sized(b);
+    return 0;
+  }
+  int top = b->win && __atomic_load_n(&b->up, 2) && peer(b->d->csock) == g->pid;
+  if (top && b->gl != g) b->gl = g, uncpu(b->win);
+  if (top) b->gw = w;
+  else if (!top && b->gl == g) b->lost = 1;   /* its surface goes before the give */
+  return top ? b->win : 0;
+}
+static void *gpu(void *p) {
+  gses *g = p;
+  glhelp_serve(g->fd, gpuwin, g);
+  close(g->fd); munmap(g, sizeof *g);
   return 0;
 }
 
@@ -887,6 +975,7 @@ static void *loop(void *p) {
   ALooper_addFd(b->looper, b->hsock, HORN, 1, 0, 0);
   ALooper_addFd(b->looper, b->esock, EAR, 1, 0, 0);
   ALooper_addFd(b->looper, b->dsock, DROID, 1, 0, 0);
+  ALooper_addFd(b->looper, b->gsock, GPU, 1, 0, 0);
   if (b->queue) AInputQueue_attachLooper(b->queue, b->looper, INPUT, 0, 0);
   while (!b->quit) {
     int fd, ev; void *d;
@@ -914,6 +1003,9 @@ static void *loop(void *p) {
         bad = readall(fd, &on, 1);
         if (!bad && fd == o->csock) { if (o == b->d && on != o->typing) keyboard(b, b->env, on); o->typing = on; }   /* up is a toggle */
         else if (!bad) o->utyping[covered(o, fd)] = on;
+      } else if (!bad && k == 'B') {
+        bad = readall(fd, &on, 1);
+        if (!bad && fd == (o->nunder ? o->under[0] : o->csock)) o->back = on;
       } else if (!bad && k == 'C') bad = copy(b, fd);
       else if (!bad && k == 'V') { if (fd == b->d->csock) paste(b); }
       else if (!bad && k == 'D') {
@@ -944,6 +1036,13 @@ static void *loop(void *p) {
       sess *s = c >= 0 ? mmap(0, sizeof(sess), 3, 0x22, -1, 0) : 0;
       if (s && s != (void *) -1) s->b = b, s->fd = c, ALooper_addFd(b->looper, c, SESS, 1, 0, s);
       else if (c >= 0) close(c);
+    } else if (id == GPU) {
+      long t; int c = accept4(b->gsock, 0, 0, O_CLOEXEC);
+      gses *g = c >= 0 ? mmap(0, sizeof(gses), 3, 0x22, -1, 0) : 0;
+      if (g && g != (void *) -1) {
+        g->b = b; g->fd = c; g->pid = peer(c);
+        if (pthread_create(&t, 0, gpu, g)) close(c), munmap(g, sizeof *g); else pthread_detach(t);
+      } else if (c >= 0) close(c);
     } else if (id == SESS) {
       if (sessop(d)) sessend(d);
     } else if (id == LOG) {
@@ -960,7 +1059,7 @@ static void *loop(void *p) {
 }
 
 static void spawn(br *b, deck *d) {
-  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400];
+  char *av[32], exe[600], *ev[64], img[640], home[600], tmp[600], fc[640], sk[640], horn[640], ear[640], droid[640], bin[620], path[1400], gh[640], gf[640];
   char const *s = b->argv; long n = b->nargv;
   snprintf(exe, sizeof exe, "%s/liblove.so", b->dir);
   int k = 0; av[k++] = "love";
@@ -979,6 +1078,7 @@ static void spawn(br *b, deck *d) {
     snprintf(path, sizeof path, "%s/%s", b->data, de->name);
     if (n > 11 && prefix(de->name, "love-") && prefix(de->name + n - 6, ".image") && !prefix(de->name, me)) unlink(path); }
   if (dd) closedir(dd);
+  snprintf(bin, sizeof bin, "%s/.love", b->data); mkdir(bin, 0700);   /* the nest, else nothing is kept until a shell makes it */
   snprintf(bin, sizeof bin, "%s/bin", b->data); mkdir(bin, 0700);
   void *bd = opendir(bin);                     /* DATA/bin is the bridge's: every link goes, then names[]'s */
   for (struct dirent *de; bd && (de = readdir(bd)); )
@@ -989,9 +1089,11 @@ static void spawn(br *b, deck *d) {
     snprintf(bin, sizeof bin, "%s/bin/%s", b->data, names[i]); symlink(exe, bin); }   /* its dir moves per install */
   char const *pp = getenv("PATH");
   snprintf(path, sizeof path, "PATH=%s/bin:%s", b->data, pp ? pp : "/system/bin:/system/xbin:/vendor/bin");
-  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img;
-  int e = 8;                                   /* then the app's own, but for the ones set here */
-  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=" };
+  snprintf(gh, sizeof gh, "LOVE_GLHELP=%s/libglhelp.so", b->dir);   /* the gpu's helper, run from where the app may exec */
+  snprintf(gf, sizeof gf, "LOVE_GPU_FACE=%s", b->gpu);
+  ev[0] = home; ev[1] = tmp; ev[2] = fc; ev[3] = horn; ev[4] = ear; ev[5] = path; ev[6] = droid; ev[7] = img; ev[8] = gh; ev[9] = gf;
+  int e = 10;                                   /* then the app's own, but for the ones set here */
+  static char const *const ours[] = { "HOME=", "TMPDIR=", "LOVE_FACE=", "HORN=", "HORN_IN=", "PATH=", "LOVE_DROID=", "LOVE_IMAGE=", "LOVE_GLHELP=", "LOVE_GPU_FACE=" };
   char ***envp = dlsym(0, "environ");          /* RTLD_DEFAULT: a data import moon's -shared cannot lay */
   for (char **v = envp ? *envp : 0; v && *v && e < 63; v++) {
     int mine = 0;
@@ -1001,6 +1103,7 @@ static void spawn(br *b, deck *d) {
       if (!*o) mine = 1; }
     if (!mine) ev[e++] = *v; }
   ev[e] = 0;
+  d->back = 0;
   d->pid = fork();
   if (!d->pid) { dup2(b->logw, 1); dup2(b->logw, 2); chdir(b->data); execve(exe, av, ev); _exit(127); }
 }
@@ -1022,12 +1125,14 @@ static void lay(br *b) {
 
 static br *me(void *a) { return ((ANativeActivity *) a)->instance; }
 
-/* assets/perms, asked of the user where not granted yet: checkSelfPermission each, then
-   one requestPermissions with the rest, through JNIEnv's table */
-static void perms(ANativeActivity *a) {
+/* assets/perms but the mic's (how 0), or the mic's alone (1), asked of the user where not granted
+   yet: checkSelfPermission each, then one requestPermissions with the rest, through JNIEnv's
+   table. 2 checks the mic's and asks nothing. answers how many are not granted, -1 none listed */
+static int same(char const *a, char const *b) { while (*a && *a == *b) a++, b++; return *a == *b; }
+static int perms(ANativeActivity *a, int how) {
   void *as = AAssetManager_open(a->assetManager, "perms", 3);
-  if (!as) return;
-  char const *s = AAsset_getBuffer(as), *want[8]; long n = AAsset_getLength(as); int k = 0;
+  if (!as) return -1;
+  char const *s = AAsset_getBuffer(as), *want[8]; long n = AAsset_getLength(as); int k = 0, seen = 0;
   void *e = a->env; void *const *t = *(void *const **) e;
   void *(*find)(void *, char const *) = t[6]; void (*clear)(void *) = t[17];
   int (*push)(void *, int) = t[19]; void *(*pop)(void *, void *) = t[20];
@@ -1041,17 +1146,46 @@ static void perms(ANativeActivity *a) {
     for (long i = 0; s && ck && i < n && k < 8; i++) {
       char const *p = s + i;
       while (i < n && s[i]) i++;
-      if (*p && calli(e, ac, ck, str(e, p))) want[k++] = p;
+      if (!*p || !same(p, "android.permission.RECORD_AUDIO") == !!how) continue;
+      seen = 1;
+      if (calli(e, ac, ck, str(e, p))) want[k++] = p;
     }
-    void *sc = k ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
-    if (k && !sc) clear(e);
+    void *sc = k && how < 2 ? find(e, "java/lang/String") : 0, *v = sc ? arr(e, k, sc, 0) : 0;
+    if (k && how < 2 && !sc) clear(e);
     for (int i = 0; v && i < k; i++) seta(e, v, i, str(e, want[i]));
     void *rq = v ? mid(e, cls(e, ac), "requestPermissions", "([Ljava/lang/String;I)V") : 0;
     if (rq) callv(e, ac, rq, v, 1); else clear(e);
     clear(e); pop(e, 0);
   } else clear(e);
   AAsset_close(as);
+  return seen ? k : -1;
 }
+
+/* the mic, on the main thread. the ears waiting answered */
+static void mican(br *b, int ok) {
+  pthread_mutex_lock(b->mik);
+  if (ok) __atomic_store_n(&b->mic, 1, 3);
+  b->ask = 0; b->micok = ok; b->micgen++; b->earwait = 0;
+  pthread_mutex_unlock(b->mik);
+}
+static long now(void) { struct { long s, n; } t = {0, 0}; clock_gettime(1, &t); return t.s; }
+/* an ear's poke: the dialog put up, or, where none came over us in a while, what android says.
+   with no activity in sight there is no one to ask */
+static int micpoke(int fd, int ev, void *p) {
+  br *b = p; char c[64];
+  (void) ev;
+  while (read(fd, c, sizeof c) > 0) ;
+  if (b->ask) { if (b->ask == 1 && now() - b->askt > 2) mican(b, b->a && !perms(b->a, 2)); return 1; }
+  pthread_mutex_lock(b->mik); int w = b->earwait; pthread_mutex_unlock(b->mik);
+  if (!w || (b->a && __atomic_load_n(&b->up, 2) && !b->resumed)) return 1;   /* under another dialog: the next poke */
+  int n = b->a && __atomic_load_n(&b->up, 2) ? perms(b->a, 1) : b->a ? perms(b->a, 2) : -1;
+  if (n > 0 && __atomic_load_n(&b->up, 2)) b->ask = 1, b->askt = now(); else mican(b, !n);
+  return 1;
+}
+/* the dialog covers us; in front again, it is answered or gone */
+static void pause(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 0; if (b->ask) b->ask = 2; }
+static void resume(void *a) { br *b = me(a); if (b->a != a) return; b->resumed = 1; if (b->ask == 2) mican(b, !perms(a, 2)); }
+
 
 /* the whole screen: getWindow().getDecorView().setSystemUiVisibility(immersive sticky,
    the bars hidden, laid out under them), through JNIEnv's table -- the spec fixes the slots */
@@ -1094,17 +1228,23 @@ static void qout(void *a, void *q) {
   br *b = me(a); AInputQueue_detachLooper(q); if (b->queue == q) b->queue = 0;
 }
 static void start(void *a) { __atomic_store_n(&me(a)->up, 1, 3); }
-static void stop(void *a) { if (me(a)->a == a) __atomic_store_n(&me(a)->up, 0, 3); }
+static void stop(void *a) {
+  br *b = me(a);
+  if (b->a != a) return;
+  __atomic_store_n(&b->up, 0, 3);          /* a dialog left up by home is there on the way back: its ears wait */
+}
 static void destroy(void *a) {
   br *b = me(a);
   if (b->stay) {                               /* the decks run on; an old activity's end, one taken over, is nothing */
     if (b->a == a) {
+      b->resumed = 0; mican(b, 0);
       pthread_mutex_lock(b->act); b->a = 0; pthread_mutex_unlock(b->act);
       b->shown = 0; b->vh = 0; b->bare = 1;
     }
     return;
   }
   the = 0;
+  ALooper_removeFd(b->main, b->micp[0]); mican(b, 0);
   for (int i = 0; i < NDECK; i++) if (b->decks[i].pid > 0) kill(b->decks[i].pid, 15), waitpid(b->decks[i].pid, 0, 0);
   for (int i = 0; __atomic_load_n(&b->ears, 2) && i < 50; i++) usleep(20000);   /* love gone, its ears hang up */
   b->quit = 1; ALooper_wake(b->looper); pthread_join(b->th, 0);
@@ -1117,7 +1257,7 @@ static void destroy(void *a) {
   close(b->hsock); close(b->esock); close(b->dsock); close(b->logfd); close(b->logw);
   unlink(b->horn); unlink(b->ear); unlink(b->droid);
   if (b->fb) munmap(b->fb, b->fbsz);
-  if (!__atomic_load_n(&b->ears, 2)) munmap(b, sizeof *b);   /* an ear still up keeps b */
+  if (!__atomic_load_n(&b->ears, 2)) close(b->micp[0]), close(b->micp[1]), munmap(b, sizeof *b);   /* an ear still up keeps b */
 }
 
 /* the service's onStartCommand: its notification, or with an action the quit it carries.
@@ -1196,6 +1336,7 @@ static void hook(ANativeActivity *a, br *b) {
   a->callbacks->onInputQueueCreated = qin; a->callbacks->onInputQueueDestroyed = qout;
   a->callbacks->onDestroy = destroy; a->callbacks->onWindowFocusChanged = focus;
   a->callbacks->onStart = start; a->callbacks->onStop = stop;
+  a->callbacks->onPause = pause; a->callbacks->onResume = resume;
   immersive(a);
 }
 
@@ -1217,6 +1358,7 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   snprintf(b->horn, sizeof b->horn, "%s/horn", b->data);
   snprintf(b->ear, sizeof b->ear, "%s/ear", b->data);
   snprintf(b->droid, sizeof b->droid, "%s/droid", b->data);
+  snprintf(b->gpu, sizeof b->gpu, "%s/gpu", b->data);
   b->a = a; b->vm = a->vm; b->d = b->decks;
   for (int i = 0; i < NDECK; i++) b->decks[i].csock = b->decks[i].lsock = -1;
   hook(a, b);
@@ -1249,7 +1391,14 @@ void ANativeActivity_onCreate(ANativeActivity *a, void *saved, size_t n) {
   unlink(b->droid);
   b->dsock = socket(1, 1 | O_CLOEXEC, 0);
   bind(b->dsock, &du, sizeof du); listen(b->dsock, 4);
-  perms(a);
+  struct sockaddr_un gu = {1}; snprintf(gu.path, sizeof gu.path, "%s", b->gpu);
+  unlink(b->gpu);
+  b->gsock = socket(1, 1 | O_CLOEXEC, 0);
+  bind(b->gsock, &gu, sizeof gu); listen(b->gsock, 2);
+  pipe2(b->micp, O_CLOEXEC | O_NONBLOCK);
+  b->main = ALooper_forThread(); ALooper_addFd(b->main, b->micp[0], -2, 1, (void *) micpoke, b);   /* POLL_CALLBACK */
+  b->mic = !perms(a, 2);
+  perms(a, 0);
   if (b->stay) service(b, a);
   lay(b); deckup(b, b->d);
   pthread_create(&b->th, 0, loop, b);

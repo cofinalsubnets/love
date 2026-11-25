@@ -79,7 +79,7 @@ void kputs(char const *s) { bput_s(kputc, s); }
 void kputn(uintptr_t n, int base) { bput_n(kputc, n, (unsigned) base); }
 // the kernel-only nifs (defs[] below), bracketed by the linker
 extern struct def const __start_knifs[], __stop_knifs[];
-// the metal image's far edge, patched in by kproject.l; unpatched, the heap eats the image
+// the metal image's far edge, patched in by transpose.l; unpatched, the heap eats the image
 uintptr_t const k_image_top = 1;
 // where the pie's base landed and its data copy, for an arch's proc.c; unpatched, none
 uintptr_t const k_pie_base = 0, k_pie_data = 0;
@@ -108,9 +108,6 @@ struct k_boot kboot;
 
 // the source table: each fd's row of methods, a NULL one skipped (writes discard, reads
 // the end, ready false); state is per row. grows through k_source_open to k_fd_most
-void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-void kfree(void *p), k_drop(void *p);
-
 struct k_source {
   // love.h's readn, one fd deeper: >0 bytes, 0 nothing, -1 end
   intptr_t (*readn)(int fd, unsigned char *dst, uintptr_t n),
@@ -512,6 +509,11 @@ void *kmallocwa(uintptr_t n, uintptr_t a) { return ff_alloc_aligned(&kmem, n, a)
 
 void kfree(void *p) { ff_free(&kmem, p); }
 
+void k_ram(uintptr_t *all, uintptr_t *spare) {
+  uintptr_t f = 0;
+  for (struct mem const *m = kmem; m; m = m->next) f += m->len;
+  *all = kram_words, *spare = f; }
+
 // small objects ride malloc; kmallocw keeps the pages and regions
 void *k_grab(uintptr_t n) { return malloc(n); }
 void k_drop(void *p) { free(p); }
@@ -551,13 +553,14 @@ static char const k_pimg[] = "proc/image";
 static char const k_pinitrd[] = "proc/initrd";
 // null is the table's empty slot, zero that slot with a read door: entries only for stat and dents
 static char const k_dnull[] = "dev/null", k_dzero[] = "dev/zero", k_durandom[] = "dev/urandom",
-                  k_decm[] = "dev/ecm";
-// 0 neither, 1 null, 2 zero, 3 urandom, 4 ecm
+                  k_decm[] = "dev/ecm", k_dhci[] = "dev/hci";
+// 0 neither, 1 null, 2 zero, 3 urandom, 4 ecm, 5 hci
 static int k_dev_slot(char const *p, uintptr_t n) {
   if (n == sizeof k_dnull - 1 && !memcmp(p, k_dnull, n)) return 1;
   if (n == sizeof k_dzero - 1 && !memcmp(p, k_dzero, n)) return 2;
   if (n == sizeof k_durandom - 1 && !memcmp(p, k_durandom, n)) return 3;
   if (n == sizeof k_decm - 1 && !memcmp(p, k_decm, n)) return 4;
+  if (n == sizeof k_dhci - 1 && !memcmp(p, k_dhci, n)) return 5;
   return 0; }
 static intptr_t k_zero_readn(int fd, unsigned char *dst, uintptr_t n) {
   return memset(dst, 0, n), (intptr_t) n; }
@@ -578,6 +581,13 @@ __attribute__((weak)) intptr_t k_ecm_write(unsigned char const *src, uintptr_t n
 static intptr_t k_ecm_readn(int fd, unsigned char *dst, uintptr_t n) { return k_ecm_read(dst, n); }
 static intptr_t k_ecm_writen(int fd, unsigned char const *src, uintptr_t n) { return k_ecm_write(src, n); }
 static bool k_ecm_ok(int fd) { return k_ecm_ready() != 0; }
+// a bluetooth controller's hci, its h4 bytes both ways; a machine with no radio answers the end
+__attribute__((weak)) int k_hci_ready(void) { return 1; }
+__attribute__((weak)) intptr_t k_hci_read(unsigned char *dst, uintptr_t n) { (void) dst; (void) n; return -1; }
+__attribute__((weak)) intptr_t k_hci_write(unsigned char const *src, uintptr_t n) { (void) src; (void) n; return -1; }
+static intptr_t k_hci_readn(int fd, unsigned char *dst, uintptr_t n) { return k_hci_read(dst, n); }
+static intptr_t k_hci_writen(int fd, unsigned char const *src, uintptr_t n) { return k_hci_write(src, n); }
+static bool k_hci_ok(int fd) { return k_hci_ready() != 0; }
 
 // 0 neither, 1 fg, 2 bg, 3 the glyph scale, 4 the lift, 5 the font
 static int k_vt_slot(char const *p, uintptr_t n) {
@@ -634,7 +644,7 @@ static bool k_fs_init(void) {
     { k_pmem, NULL, 0444, false },                                    // filled at each open
     { k_dnull, NULL, 0666, false }, { k_dzero, NULL, 0666, false },   // always empty (k_dev_slot)
     { k_durandom, NULL, 0444, false },
-    { k_decm, NULL, 0666, false },
+    { k_decm, NULL, 0666, false }, { k_dhci, NULL, 0666, false },
     { k_pboard, NULL, 0444, false },                                   // filled at each open
     { "usr/bin", NULL, 0755, true },
     { k_vtscale, NULL, 0644, false },                                  // the glyph scale
@@ -790,7 +800,7 @@ static int k_bootline(char *b) {
 
 // at the open of a read; a refusal leaves the last content
 static void k_proc_read(int i, int slot) {
-  char b[768];
+  char b[768 + sizeof kboot.cmdline];              // /proc/cmdline is the line and "love "
   int n = slot == 1 ? k_meminfo(b) : slot == 2 ? k_bootline(b) : k_board(b);
   if (!vfs_fit(&k_fs, i, (uintptr_t) n)) return;
   memcpy(k_fs.ents[i].bytes, b, (uintptr_t) n);
@@ -926,6 +936,7 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
       *ds = dv == 2 ? (struct k_source) { .readn = k_zero_readn, .ready = k_dev_ready }
           : dv == 3 ? (struct k_source) { .readn = k_rand_readn, .ready = k_dev_ready }
           : dv == 4 ? (struct k_source) { .readn = k_ecm_readn, .writen = k_ecm_writen, .ready = k_ecm_ok }
+          : dv == 5 ? (struct k_source) { .readn = k_hci_readn, .writen = k_hci_writen, .ready = k_hci_ok }
                     : (struct k_source) { .writen = k_null_writen, .ready = k_dev_ready };
       return dfd; } }
   int i = vfs_find(&k_fs, cp, (uintptr_t) cn);
@@ -970,7 +981,6 @@ love_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 
 // (stat path) -> (size mtime-ms mode ns) | (); ns is the ms date times a million. ino, nlink,
 // uid and dev are sys.c's to invent
-struct k_st { uintptr_t size, ms, mode; };
 
 // -> 0 | -ENOENT. fills a struct, not an index: a synthesized directory (the root, a bare
 // prefix) has no row
@@ -1371,7 +1381,8 @@ long k_fd_chdir(int fd) {
  return 0; }
 
 // linux_dirent64: 19 header bytes, the name with its NUL, rounded to 8
-struct k_dent { unsigned long ino; long off; unsigned short reclen;
+// linux_dirent64, 64-bit ino and off on every arch
+struct k_dent { unsigned long long ino; long long off; unsigned short reclen;
                 unsigned char type; char name[]; };
 static long k_host_dents(struct k_hd *h, void *buf, long cap) {
  long off = 0;
@@ -1463,18 +1474,18 @@ static lvm(lvm_disk) {
   Sp[0] = putcharm((intptr_t) k_blk_sectors());
   love_musttail return Next(1); }
 
-love_noinline static struct g *k_disk_read(struct g *g) {
-  word lw = g->sp[0], nw = g->sp[1];
+static lvm(lvm_disk_read) {
+  word lw = Sp[0], nw = Sp[1];
   intptr_t lba = (lw & 1) ? getcharm(lw) : -1,
            n   = (nw & 1) ? getcharm(nw) : -1;
-  if (lba < 0 || n <= 0 || n > 1 << 24) return g->sp[1] = ZeroPoint, g->sp += 1, g;
-  if (!ok(g = str0(g, (uintptr_t) n * 512))) return g;   // OOM: the wrapper raises
-  if (k_blk_rw((uint64_t) lba, (uint32_t) n, txt(g->sp[0]), 0) < 0)
-    g->sp[0] = ZeroPoint;
-  return g->sp[2] = g->sp[0], g->sp += 2, g; }
+  if (lba < 0 || n <= 0 || n > 1 << 24) love_musttail return Answerp(1, ZeroPoint);
+  uintptr_t const req = str_width((uintptr_t) n * 512);
+  Have(req);
+  struct str *o = ini_str(str(Hp), (uintptr_t) n * 512);
+  Hp += req;
+  word const r = k_blk_rw((uint64_t) lba, (uint32_t) n, txt(o), 0) < 0 ? ZeroPoint : word(o);
+  love_musttail return Answerp(1, r); }
 
-static lvm(lvm_disk_read) {
- LvmCall(g, k_disk_read) }
 
 love_noinline static word k_disk_write(word lw, word sw) {
  intptr_t lba = (lw & 1) ? getcharm(lw) : -1;
@@ -2048,32 +2059,32 @@ love_noinline static struct g *k_paper(struct g *g) {
   return k_charms(g, v, 2); }
 // (kgrab 1) grabs the held paper's pointer, at its middle; (kgrab 0) lets it go; (kgrab (x y))
 // puts it there -> 1, 0 when the paper is not held
-love_noinline static struct g *k_grabev(struct g *g) {
-  word const a = g->sp[0];
-  if (!kkb.hold) return g->sp[0] = putcharm(0), g;
+static lvm(lvm_kgrab) {
+  word const a = Sp[0];
+  if (!kkb.hold) love_musttail return Answer(putcharm(0));
   if (chainp(a) && charmp(A(a)) && chainp(B(a)) && charmp(A(B(a))))
     kkb.vx = k_aimed(0, (int32_t) getcharm(A(a)), kfb.width), kkb.vy = k_aimed(0, (int32_t) getcharm(A(B(a))), kfb.height);
   else {
     bool const on = charmp(a) && getcharm(a);
     if (on && !kkb.grab) kkb.vx = kfb.width / 2, kkb.vy = kfb.height / 2, kkb.lon = 0;
     if (on != kkb.grab) kkb.grab = on, k_hold_out(on); }
-  return g->sp[0] = putcharm(1), g; }
+  love_musttail return Answer(putcharm(1)); }
 // (kshow cask y0 y1): rows y0..y1 of a screen-sized paper (32-bit pixels, as paint.c lays them)
 // -> the rows shown; 0 when the paper is not held or no longer fits
-love_noinline static struct g *k_show(struct g *g) {
+static lvm(lvm_kshow) {
   uintptr_t n = 0;
-  uint8_t const *s = cask_bytes(g->sp[0], &n);
+  uint8_t const *s = cask_bytes(Sp[0], &n);
   uintptr_t const w = kfb.width, h = kfb.height;
-  intptr_t y0 = charmp(g->sp[1]) ? getcharm(g->sp[1]) : 0, y1 = charmp(g->sp[2]) ? getcharm(g->sp[2]) : 0;
+  intptr_t y0 = charmp(Sp[1]) ? getcharm(Sp[1]) : 0, y1 = charmp(Sp[2]) ? getcharm(Sp[2]) : 0;
   if (y0 < 0) y0 = 0;
   if (y1 > (intptr_t) h) y1 = (intptr_t) h;
-  if (!kkb.hold || !s || n != w * h * 4 || y1 <= y0) return g->sp[0] = putcharm(0), g;
+  if (!kkb.hold || !s || n != w * h * 4 || y1 <= y0) love_musttail return Answerp(2, putcharm(0));
   for (intptr_t y = y0; y < y1; y++) {
     volatile uint32_t *d = kfb._ + (uintptr_t) y * kfb.pitch;
     uint32_t const *r = (uint32_t const*) s + (uintptr_t) y * w;
     for (uintptr_t x = 0; x < w; x++) d[x] = r[x]; }
   k_fb_touch();
-  return g->sp[0] = putcharm(y1 - y0), g; }
+  love_musttail return Answerp(2, putcharm(y1 - y0)); }
 // (kscan _) -- the held paper's next event: a key's set-1 code (bit 7 the break, 0x100 the
 // extended keys), (how b x y) for the pointer, (w h) when the paper changed size; () for none
 love_noinline static struct g *k_scanev(struct g *g) {
@@ -2092,10 +2103,6 @@ love_noinline static struct g *k_scanev(struct g *g) {
   return g->sp[0] = c < 0 ? ZeroPoint : putcharm(c), g; }
 static lvm(lvm_kpaper) {
   LvmCall(g, k_paper) }
-static lvm(lvm_kshow) {
-  LvmCallp(g, 2, k_show) }
-static lvm(lvm_kgrab) {
-  LvmCall(g, k_grabev) }
 static lvm(lvm_kscan) {
   LvmCall(g, k_scanev) }
 
@@ -2120,6 +2127,19 @@ static lvm(color) {
  Sp[1] = ZeroPoint;
  love_musttail return Nextp(1, 1); }
 
+// a board's pins through k_gpio (op 0 claim, 1 direction, 2 level, 3 read), its answer
+// or below zero where the board has no such pin; main.c's four words over it
+__attribute__((weak)) long k_gpio(int op, unsigned pin, int v) { (void) op, (void) pin, (void) v; return -1; }
+static word kgpio_op(int op, word pin, int v) {
+  long r = charmp(pin) ? k_gpio(op, (unsigned) getcharm(pin), v) : -1;
+  return r < 0 ? ZeroPoint : putcharm(r); }
+// (gpio_init pin) the pin, (gpio_get pin) 1 high or 0 low; () for a pin the board lacks
+static lvm(kgpio_init) { Sp[0] = kgpio_op(0, Sp[0], 0); love_musttail return Next(1); }
+static lvm(kgpio_get) { Sp[0] = kgpio_op(3, Sp[0], 0); love_musttail return Next(1); }
+// (gpio_dir pin out) out non-zero an output, (gpio_put pin val) val non-zero high; each its 0 or 1
+static lvm(kgpio_dir) { Sp[1] = kgpio_op(1, Sp[0], charmp(Sp[1]) && getcharm(Sp[1]) != 0); love_musttail return Nextp(1, 1); }
+static lvm(kgpio_put) { Sp[1] = kgpio_op(2, Sp[0], charmp(Sp[1]) && getcharm(Sp[1]) != 0); love_musttail return Nextp(1, 1); }
+
 // (fault n): a CPU exception for arch.c's ap, n x64's vector numbers; what follows runs only on a miss
 static lvm(lvm_fault) {
   k_fault_trigger(getcharm(Sp[0]));
@@ -2137,6 +2157,10 @@ static union u
   nif_draw[] = {{draw}, {lvm_ret0}},
   nif_key[] = {{key}, {lvm_ret0}},
   nif_color[] = {{lvm_cur}, {.x = putcharm(2)}, {color}, {lvm_ret0}},
+  nif_gpio_init[] = {{kgpio_init}, {lvm_ret0}},
+  nif_gpio_get[] = {{kgpio_get}, {lvm_ret0}},
+  nif_gpio_dir[] = {{lvm_cur}, {.x = putcharm(2)}, {kgpio_dir}, {lvm_ret0}},
+  nif_gpio_put[] = {{lvm_cur}, {.x = putcharm(2)}, {kgpio_put}, {lvm_ret0}},
   nif_disk[] = {{lvm_disk}, {lvm_ret0}},
   nif_disk_read[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_read}, {lvm_ret0}},
   nif_disk_write[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_disk_write}, {lvm_ret0}},
@@ -2247,7 +2271,12 @@ static struct def const __attribute__((section("knifs"), used)) defs[] = {
   {"kgrab", {.k = nif_kgrab}},
   // a guest of the firmware's (x64/arch.c)
   {"kexec-initrd", {.k = nif_kexec_initrd}},
-  {"efi-read", {.k = nif_efi_read}} };
+  {"efi-read", {.k = nif_efi_read}},
+  // a board's pins (k_gpio), () where it has none
+  {"gpio_init", {.k = nif_gpio_init}},
+  {"gpio_dir", {.k = nif_gpio_dir}},
+  {"gpio_put", {.k = nif_gpio_put}},
+  {"gpio_get", {.k = nif_gpio_get}} };
 
 // the kore cat is read off the ramfs at boot: only the order is baked
 static char const src_korelist[] =
@@ -2289,7 +2318,11 @@ void kmain(void) {
   if (!guest) k_blk_init(kmallocwa(b2w(320), 16));
  // hda: rings, buffer list and position buffer in one 128-aligned block; the sample ring apart
   if (!guest) k_hda_init(kmallocwa(b2w(3840), 128));
- // baked_pick reads the projection's re-based image as the hosted start does; NULL bakes the egg
+ // baked_pick reads the transpose's re-based image as the hosted start does; NULL bakes the egg
+  // the heap's budget, said before a core wakes so its pools are sized inside it. it counts every
+  // pool but not a resize, which holds the old pair beside the new: a third of RAM leaves room for
+  // that. a seat under 32 MB gives three quarters, and the wake keeps its pools to it
+  love_budget_boot = kram_words < ((uintptr_t) 32 << 20) / sizeof(word) ? kram_words - kram_words / 4 : kram_words / 3;
   struct g *g = NULL;
   uintptr_t blen = 0;
   void const *bimg = NULL;
@@ -2306,9 +2339,6 @@ void kmain(void) {
   // then the kernel's own, on both lanes, so a kernel row wins any name it shares
   g = defn(g, __start_knifs,
               (uintptr_t)(__stop_knifs - __start_knifs));
-  // the budget counts every pool but not a resize, which holds the old pair beside the new;
-  // a third of RAM leaves room for that
-  if (ok(g)) g->budget = kram_words / 3;
   // the kore roster; the cat itself is read off the ramfs below
   g = strof(g, src_korelist);
   struct def kd[] = {{"korelist", {.x = pop1(g)}}};
@@ -2380,7 +2410,8 @@ void kmain(void) {
    "      (quit (? (charm? r) r 0)))"
    "   0)");
   r = evals_(r,
-   "(: pr (k-prog (. \"pier\" (. \"--here\" ())))"
+   "(: pp (k-prog (. \"pier\" (. \"--here\" ())))"
+   "   pr (? (two? pp) pp (k-prog (. \"lush\" ())))"       // a seat with no pier: lush on the console
    "   (? (two? pr) (trap (\\ _ ((cap pr) (cup pr))) () (\\ a b 0)) 0))");
   r = evals_(r, "(cite 'cli 'shell 0)");
   // a terminal scare's face on serial before reset

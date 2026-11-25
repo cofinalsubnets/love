@@ -52,5 +52,25 @@
    h (brush-ray [rr] [2.0 1.5 2.0] [1.0 0.0 0.0]) h2 (brush-ray [rr rc] [3.5 1.5 1.5] [-1.0 0.0 0.0])
  (test (h 't = 2.0) (h 'b = 0) (h 'n = [-1.0 0.0 0.0]) (h 'p = [4.0 1.5 2.0])
        (h2 'b = 1) (h2 't = 1.5) (h2 'n = [1.0 0.0 0.0]) (brush-ray [rr rc] [1.5 1.5 1.5] [1.0 0.0 0.0] 't = 2.5) (brush-ray [] [1.5 1.5 1.5] [1.0 0.0 0.0] = ())))
+; what is seen through cells: a room, a square way ahead into a second, its chunk 0 over the way
+; and chunk 1 off past the way's edge; with the way the sky's, the balls in its sight alone
+(: f (l \ gem-tray [#l] (map (x \ 1.0 * x) l)) z (l \ int (f l))
+   (D to) [(f [-1 1 1 -1  -0.5 0.5 0.5 -0.5  40 50 50 40]) (f [-1 -1 1 1  -0.5 -0.5 0.5 0.5  -1 -1 1 1]) (f [2 2 2 2  3 3 3 3  3 3 3 3])
+           (z [0 4 12]) (z [0 1 1]) (z [to]) (z [0 4]) (z [0 1 2 3]) (z [0 0 2]) (z [0 1]) (z [0 4 8]) (z [4 5 6 7 8 9 10 11])
+           (f [0 9]) (f [0 0]) (f [5 5]) (f [1 1])]
+   V (f [1 0 0 0  0 1 0 0  0 0 1 0  0.1 0.1 0.05 0]) (swap l k v) (map (i \ i = k ? v (l i)) ^#l) see (cite 'lore 'ways-seen)
+ (test (see (D 1) V (z [0]) = [0]) (see (D 1) V (z [1]) = [0]) (see (D -1) V (z [0]) = [0])
+       (see (swap (D -1) 12 (f [0 2])) V (z [0]) = [0 1]) (see (swap (D 1) 12 (f [0 2])) V (z [0]) = [0])
+       (see (swap (D 1) 2 (f (map (_ \ -2) ^12))) V (z [0]) = ())
+       ; ..and what is not as it says, refused
+       (see (D 2) V (z [0]) = ()) (see (D 1) V (z [2]) = ()) (see (D 1) (f [1]) (z [0]) = ()) (see () V (z [0]) = ())
+       (see (swap (D 1) 7 (z [0 1 2 12])) V (z [0]) = ()) (see (swap (D 1) 3 (z [0 9 4])) V (z [0]) = ())))
+; a box stood a hair off a wall, as a 4-byte number lays one: the wall is cut at its edges and
+; kept around it
+(: room (brush-box 1 [0.0 0.0 0.0] [4.0 3.0 4.0])
+   (area ps) (: a <ps (go l s) (atom? >l ? s (go >l (c+ s (cross (c+ <l (c* -1.0 a)) (c+ <>l (c* -1.0 a)))))) (: v (go >ps [0.0 0.0 0.0]) (0.5 * sqrt (dot v v))))
+   (west e) (foldl (\ a f (a + area (f 0))) 0.0
+                   (filter (f \ f 1 0 > 0.9 && all (p \ p 0 < 0.001) (f 0)) (brush-faces [room (brush-box 0 [e 0.0 1.5] [0.7 2.0 2.5])])))
+ (test (all (e \ mag (west e - 10.0) < 1e-3) [0.0 3e-5 -3e-5 8e-5 -8e-5])))
 (test_fin ())
 (puts "brush: ok\n")

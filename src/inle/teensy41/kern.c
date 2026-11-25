@@ -7,14 +7,16 @@
 #include "psram.h"
 #include "../k.h"
 #include "../bput.h"
+#include "../kface.h"
 
-void kq(uint8_t);
 uintptr_t te_ms(void);
 void kmain(void);
 uint32_t sd_sectors(void);
 int sd_rw(uint32_t lba, uint32_t n, void *buf, int wr);
 // the baked heap image (mkimg.l), empty when no bake ran
 extern unsigned char const _binary_love_img_start[], _binary_love_img_end[];
+// the bytes the link laid from its base: in the psram, where the heap may start
+extern char __load_size__[];
 
 void archinit(void) { }
 void serial_init(void) { }
@@ -64,7 +66,6 @@ void k_kb_sync(int room) {
   for (; room > 0 && usb_rx_ready(); room--) kq((uint8_t) usb_getc()); }
 
 // asmops' k_wait: nothing interrupts a wait here, so it drains output and polls
-void k_kb_poll(void);
 void k_idle(void) { usb_flush(), k_tick_sync(), k_kb_poll(); }
 
 // the microSD slot in blk.c's place
@@ -86,11 +87,12 @@ void te_main(void) {
   // a few seconds for a host to open the port, so the boot is seen
   for (uint32_t t = te_ms(), d = 0; !usb_up() && te_ms() - t < 8000; )
     if ((te_ms() - t) / 1000 > d) d++, uart_putc('.');
-  bput_s(serial_putc, "; usb up, psram next\n");
-  uint32_t mb = psram_init();
+  bput_s(serial_putc, te_in_psram() ? "; from sram\n" : "; from flash\n");
+  uint32_t mb = te_in_psram() ? psram_mb() : psram_init();
+  uintptr_t own = te_in_psram() ? ((uintptr_t) __load_size__ + 4095u) & ~(uintptr_t) 4095u : 0;
   // 64 B shy of the edge: a one-past read at a block boundary stays inside
   if (mb) {
-    k_ram_give(PSRAM_BASE, ((uint64_t) mb << 20) - 64);
+    k_ram_give(PSRAM_BASE + own, ((uint64_t) mb << 20) - 64 - own);
     te_last = (volatile uint32_t *) (PSRAM_BASE + (mb << 20) - 64);
     if (te_last[5] == 0xFA017EDu) {
       char const *tags[5] = { "; last boot faulted: pc=", " lr=", " sp=", " cfsr=", " bfar=" };
@@ -101,3 +103,13 @@ void te_main(void) {
   kboot.image_len = (uintptr_t) (_binary_love_img_end - _binary_love_img_start);
   bput_s(serial_putc, "; psram "), bput_n(serial_putc, mb, 10), bput_s(serial_putc, " MB, kmain next\n");
   kmain(); }
+
+// kmain's gpio words over teensy41.c's pin map, the board's own numbers
+long k_gpio(int op, unsigned pin, int v) {
+  if (!gpio_ok(pin)) return -1;
+  switch (op) {
+    case 0: gpio_init(pin); return (long) pin;
+    case 1: gpio_set_dir(pin, v); return v;
+    case 2: gpio_put(pin, v); return v;
+    case 3: return gpio_get(pin);
+    default: return -1; } }

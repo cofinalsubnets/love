@@ -176,10 +176,15 @@ static intptr_t image_imm_index(word v) {
 #define CodeSegHead (4 * sizeof(uint64_t))
 #define CodeRow (3 * sizeof(uint64_t))                         // raw offset, coded offset, digest
 #define CodeZChunk ((uintptr_t) 64 << 10)
-#define CodeDict ((uintptr_t) 32 << 10)
+#define CodeDict ((uintptr_t) 256 << 10)                       // the largest; a segment under 4x a size takes the next
 #define CodeDictSpan 1536u                                    // the picker's spans, and the bytes of a shape
 #define CodeDictShape 8u
 #define CodeDictTabs ((uintptr_t) 1 << 10)                     // the tables' bound, past the content
+// the dictionary's size for a code segment of n bytes: the largest that a quarter of it holds,
+// 32K below that, where the picker declines
+static uintptr_t code_dict_for(uintptr_t n) {
+ uintptr_t k = n / 4 >> 10;
+ return (k >= 256 ? 256 : k >= 112 ? 112 : k >= 64 ? 64 : 32) << 10; }
 #ifndef CodeZLevel
 #define CodeZLevel 15
 #endif
@@ -1219,7 +1224,8 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
  // code ships as whole-blob chunks of about CodeZChunk coded apart against one dictionary, so
  // a wake decodes only what runs; one that would not shrink is raw, nch 0
  uintptr_t craw = H->ncode, cstore = 0, nch = 0, dn = 0, dnz = 0;
- unsigned char *cz = NULL, *dic = craw ? alloc(NULL, CodeDict + 2 * (CodeDict + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
+ uintptr_t cd = code_dict_for(craw);
+ unsigned char *cz = NULL, *dic = craw ? alloc(NULL, cd + 2 * (cd + CodeDictTabs) + 64) : NULL, *zd = NULL, *dz = NULL;
  if (craw) {
   uintptr_t hd = 2 * sizeof(uintptr_t), zn = 0, ncap = craw / CodeZChunk + 2, pn = 0;
   uintptr_t *cut = dic ? alloc(NULL, (ncap + 1) * sizeof *cut) : NULL;
@@ -1232,10 +1238,10 @@ static void *img_wire(struct g *g, struct image_hdr *H, word const *blob, uintpt
     cut[nch + 1] = b; }
    if (cut[nch] != craw) nch = 0; }
   uintptr_t *ze = nch ? alloc(NULL, nch * sizeof *ze) : NULL;
-  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, CodeDict, CodeZChunk, CodeDictSpan, CodeDictShape))) {
-   zd = dic + CodeDict, dz = zd + CodeDict + CodeDictTabs;
-   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, CodeDict + CodeDictTabs, cz, craw, ze);
-   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, CodeDict + CodeDictTabs + 64) : 0;
+  if (ze && (cz = alloc(NULL, craw)) && (pn = img_dict_of(cseg, craw, dic, cd, CodeZChunk, CodeDictSpan, CodeDictShape))) {
+   zd = dic + cd, dz = zd + cd + CodeDictTabs;
+   dn = zstde_dict(dic, pn, (unsigned char const*) cseg, cut, nch, CodeZLevel, zd, cd + CodeDictTabs, cz, craw, ze);
+   intptr_t dg = dn ? deflate_raw(g, zd, dn, dz, cd + CodeDictTabs + 64) : 0;
    if (dg <= 0) dn = 0; else dnz = (uintptr_t) dg; }
   if (!dn) nch = 0;
   uint64_t *tab = nch ? alloc(NULL, 3 * nch * sizeof(uint64_t)) : NULL;
@@ -1500,9 +1506,12 @@ void image_drop(word const *pool) {
  img_touch_out(L);
  img_lazy_disarm(L), alloc(L, 0); }
 
-// arm: whole pages shut, the ragged edges decoded now. 0 declines, and the caller decodes eagerly
+// arm: whole pages shut, the ragged edges decoded now. 0 declines, and the caller decodes eagerly.
+// LOVE_EAGER_WAKE declines always, for a debugger that stops on each first touch's fault
 static int img_lazy_arm(struct img_lazy *L) {
  if (img_lazy_on) return 0;
+ char const *ew = getenv("LOVE_EAGER_WAKE");
+ if (ew && *ew && *ew != '0') return 0;
  uintptr_t ps = (uintptr_t) getauxval(6);         // AT_PAGESZ
  if (!ps) ps = 4096;
  uintptr_t b = (uintptr_t) L->base, e = (uintptr_t) (L->base + L->nw);
@@ -1527,6 +1536,12 @@ void image_warm(void) {}
 static int img_lazy_arm(struct img_lazy *L) { (void) L; return 0; }
 #endif
 
+// the nursery a woken image is seeded with: half its live set, within appel's room under a budget
+static uintptr_t img_seed(struct g *g, uintptr_t nw) {
+ uintptr_t want = nw >> 1, room = g->budget > 2 * nw ? (g->budget - 2 * nw) / 4 : 0;
+ if (g->budget && want > room) want = room;
+ return want < (uintptr_t) g->len ? (uintptr_t) g->len : want; }
+
 static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  struct image_hdr H;
  if (len < sizeof H) return NULL;
@@ -1547,6 +1562,10 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
   // the slack must clear the nursery seeded at nw >> 1 below, or please's promotion test
   // latches the first collection to a major over the whole image
   g->major_len = nw + (nw >> 1) + (1u << 19);
+  // under a budget the pool keeps to its share beside the nursery seeded below, the image at least
+  if (g->budget) {
+   uintptr_t sh = (g->budget - img_seed(g, nw)) / 2, lo = nw + 2 * (uintptr_t) g->len + 64;
+   if (g->major_len > sh) g->major_len = sh > lo ? sh : lo; }
   if (!(g->major_base = alloc(NULL, g->major_len * sizeof(word)))) goto no; }
  word *base = g->major_base;
  g->major_hp = base + nw;
@@ -1598,7 +1617,7 @@ static struct g *img_wake(void const *buf, uintptr_t len, int kept) {
  g->major_live0 = nw;
  g->rem_n = 0, g->rem_miss = 0;           // it names ini's pool, freed above
  // seed the nursery from the live set, rather than ramping from the floor a collection at a time
- uintptr_t want = nw >> 1;
+ uintptr_t want = img_seed(g, nw);
  g->hp = g->end;                          // ini's young: garbage, every root came from the image
  if (want > (uintptr_t) g->len) { struct g *h = gen_grow(g, want); if (ok(h)) g = h; }
  return g;

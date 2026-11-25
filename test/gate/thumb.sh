@@ -26,7 +26,8 @@ mkdir -p "$d"
 rm -f "$d"/*.o
 thumb_board $tgt "$d"
 
-# one differential lane; libgcc rides every link for its __aeabi helpers
+# one differential lane; libgcc rides every link for its __aeabi helpers, and $lx's objects
+lx=
 lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
   tag=$1; libsrc=$2; harsrc=$3; mflags=$4; want=$5; tmo=$6; msg=$7; tail=$8
   lb=$(basename "$libsrc" .c); hb=$(basename "$harsrc" .c)
@@ -34,7 +35,8 @@ lane() { # lane TAG LIBSRC HARNESSSRC MOONFLAGS WANT TIMEOUT MSG TAIL
     || fail "mooncc -t $tgt -c $lb"
   arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$harsrc" -o "$d/$tag.har.o" \
     || fail "gcc $hb"
-  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" "$lg" \
+  # shellcheck disable=SC2086
+  arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/$tag.har.o" "$d/$tag.lib.o" $lx "$lg" \
     -o "$d/$prefix$tag.elf" || fail "ld $tag objects"
   timeout "$tmo" qemu-system-arm -M $mach -semihosting -nographic \
     -kernel "$d/$prefix$tag.elf" < /dev/null
@@ -97,6 +99,21 @@ if [ "$tgt" = thumb2 ]; then
 fi
 
 # ---------------------------------- the shared differential lanes ----------------
+# setjmp and longjmp: the leaves are mksys's, longjmp moonlibc's over them, the members the
+# carried runtime lays for this isa
+rt=$(pwd)/out/rt/$tgt
+(cd "$d" && rm -f mksys.o proc_longjmp.o && arm-none-eabi-ar x "$rt/top.a" mksys.o \
+  && arm-none-eabi-ar x "$rt/proc.a" proc_longjmp.o) || fail "no mksys.o or proc_longjmp.o in out/rt/$tgt"
+lx="$d/mksys.o $d/proc_longjmp.o"
+lane j test/thumb2/libj.c test/thumb2/harnessj.c "-Isrc/apps/moon/include" 2 30 "$tgt setjmp" \
+  " = a jump out of a nest, longjmp 0 answering 1, the callee-saved ints and doubles back, and s16-s31 kept across a jump from a frame that wrote them; 100+n names the first miss -- see test/thumb2/libj.c"
+# the pair divide by rt.c's own, where the other lanes link libgcc's
+moonc -t "$tgt" -Isrc/apps/moon/include -c src/apps/moon/lib/rt.c "$d/rt.o" || fail "mooncc rt.c"
+lx=$d/rt.o
+lane q test/thumb2/lib64.c test/thumb2/harnessq.c "" 9 120 "$tgt rt.c's divides" \
+  " = 101 udiv, 102 umod, 103 div, 104 mod, 105 clz, 106 __udivdi3, 107 __umoddi3, 108 and 109 theirs at a digit two over, differs from gcc's"
+lx=
+
 case $tgt in
 thumb1)
   lane v  test/thumb1/libv.c  test/thumb1/harnessv.c  "" 7  30 "thumb1 varargs" \
@@ -164,7 +181,7 @@ thumb2sp)
   LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c "$d/r4.c" -o "$d/r4.o" || fail "mooncc r4.c"
   arm-none-eabi-objdump -d "$d/r4.o" | grep -qE 'stmdb.*\{r4,' || fail "thumb2 leaves r4 idle under pressure"
   # a float is in the fpu here: what draws asks no soft float or double of rt.c
-  for f in raster lamp poly swatch audio/tones; do
+  for f in raster lamp poly swatch audio/tones audio/tonerun; do
     LOVE_NO_IMAGE= out/love mooncc -t thumb2sp -c src/love/$f.c -o "$d/nosoft.o" -I. -Isrc/love -Iout/lib -D tco=1 || fail "mooncc $f.c"
     arm-none-eabi-nm -u "$d/nosoft.o" | grep -E '__aeabi_(dadd|dsub|dmul|ddiv|dcmp|i2d|ui2d|fadd|fsub|fmul|fdiv|fcmp|i2f|ui2f|f2iz|f2uiz)' && fail "$f.c calls a soft float or double"
   done

@@ -61,7 +61,8 @@
              {"name" (prop "the lock's name")} ["name"])
        (tool "lock_list" "The machine's locks: who holds what, who waits, memory available and load."
              {} [])
-       (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or the row behind a green one, its union "
+       (tool "queue_gate" ("Gate your row in a git merge queue: the head row, or a row stacked on the gated head of one "
+                           + "gating or green ahead, its union "
                            + "merged and committed in dir. It writes the row gating with dir's HEAD and starts love bee "
                            + "--gate there, which runs every lane the union owes from the row's gated-on, light and heavy, "
                            + "once, the slow lane last, through test/gate/lanes.sh under the heavy lock, then writes the row "
@@ -575,12 +576,19 @@
             (0 < #(git-sha "HEAD") && #(git-sha head) = 0) [0 "no commit \(head) here"]
             (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
                bk (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
-               [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk (lm 'lanes-covers (string? mk ? mk "")))))])))
+               cv (lm 'lanes-covers (string? mk ? mk ""))
+               [1 (unlines (lm 'lanes-lines (lm 'lanes-plan ps bk cv)
+                            + map (\ [l why] (l + " by name, unrun: " + join " " (take 3 why))) (lm 'lanes-held ps bk cv)))])))
      ; the plan itself, [[lane heavy? cost why] ..], for base..head in this tree
      (lanes-plan-of b head)
       (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
          ((cite 'lanemap 'lanes-plan) ps (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
                                       ((cite 'lanemap 'lanes-covers) (string? mk ? mk ""))))
+     ; the by-name lanes base..head would owe, which no plan runs
+     (lanes-held-of b head)
+      (: ps (row-paths b head) dl (slurp-file "out/.dist.list") mk (slurp-file "test/test.mk")
+         (map cap ((cite 'lanemap 'lanes-held) ps (? (string? dl) (words dl) (filter (p \ ends? p ".l") ps))
+                                               ((cite 'lanemap 'lanes-covers) (string? mk ? mk "")))))
 
      ; --- queue_gate: the row written gating at dir's HEAD, then `love bee --gate` detached there runs every
      ; lane the union owes from its gated-on, slow last, under the heavy lock; green, or waiting with its reds,
@@ -600,8 +608,14 @@
             ; a plan is from the gated-on: none, and every lane but test and test_slow drops out
             (#(g-git dir ("rev-parse --verify -q " + sh-quote (rows r 3 + "^{commit}"))) = 0)
              ("row \(r) is gated on " + rows r 3 + ", not a commit: write gated_on with queue_row, the sha its union merges onto")
-            (0 < #prev && rows prev 5 != "green")
-             ("row " + prev + " ahead is \(rows prev 5): the head row gates, or the row behind a green one")
+            ; stacked: behind a gating row, the union merges onto that row's gated head
+            (0 < #prev && rows prev 5 = "gating"
+             && g-git dir ("rev-parse -q --verify " + sh-quote (rows r 3 + "^{commit}"))
+                != g-git dir ("rev-parse -q --verify " + sh-quote (rows prev 4 + "^{commit}")))
+             ("row " + prev + " ahead gates " + rows prev 4 + ", but row \(r) is gated on " + rows r 3
+              + ": merge onto its gated head and write gated_on with queue_row")
+            (0 < #prev && rows prev 5 != "green" && rows prev 5 != "gating")
+             ("row " + prev + " ahead is \(rows prev 5): the head row gates, or a row stacked on one gating or green")
             !(two? (stat "\(dir)/test/gate/lanes.sh")) "no test/gate/lanes.sh in \(dir)"
             (#(g-git dir "rev-parse --verify -q HEAD") = 0) "no commit checked out in \(dir)"
             (0 < #(g-git dir "status --short --untracked-files=no")) "\(dir) has changes not committed: a gate runs on a commit"
@@ -657,10 +671,14 @@
                n (? (two? ln) (q-note <ln) "")
                ; a rerun after a split: the lanes named run again, and the ones the last gate passed stand
                ls (? (two? only) (filter (!= "test_slow") only) all)
-               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow"))
+               ; a by-name lane never stands on an old pass: it shows only where this run's list ran it
+               byname (cite 'lanemap 'lanes-byname)
+               stood (? (two? only) (filter (\ l (!(elem l ls) && l != "test_slow" && !(elem l byname)))
                                             (map cap (filter (\ y (y 1 = "0")) (gate-was n)))) ())
+               held (filter (\ l !(elem l ls)) (lanes-held-of b h))
                _ (gate-say ("row \(r) at \(h) from \(b): " + join " " (ls + ["test_slow"])
-                            + (two? stood ? (", standing: " + join " " stood) "")))
+                            + (two? stood ? (", standing: " + join " " stood) "")
+                            + (two? held ? ("; by name, unrun: " + join " " held) "")))
                ; the lanes write to this log as they run
                p (spawnio ([bee-self "bee" "--lock" "--heavy" "--out" (dir + "/out") "--" "sh" "test/gate/lanes.sh"
                             "-d" "out/lanes-gate" "--slow" "--remote"] + ls + ["test_slow"]) -1 -1 -1 () -1 0)
@@ -670,6 +688,16 @@
                (word w k) (: f (filter (\ x (starts? x k)) w) (two? f ? (snip <f #k #<f) ()))
                got (map (\ l (: w (words l) [<w (snip (w 1) 5 #(w 1)) (word w "on=") (word w "back=")]))
                         (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ())))
+               ; each lane's time, a line apiece in the nest's run/lanes.tsv: when, queue, row, who, head, lane, rc, secs, host
+               _ (: o (open (cite 'path 'nest 0 + "/run/lanes.tsv") "a") t (show (clock 0 // 1000))
+                    (? (hot? o)
+                       (: _ (each (filter (\ l (0 < find l " exit=" 0)) (? (string? sm) (lines sm) ()))
+                                  (\ l (: w (words l)
+                                          (say o (join "\t" [t q r who h <w (snip (w 1) 5 #(w 1))
+                                                             (word w "secs=" @ s (string? s ? s ""))
+                                                             (word w "on=" @ s (string? s ? s "here"))] + "\n")))))
+                          (close o))
+                       0))
                (one l) (: g (filter (\ y (<y = l)) got) (? (two? g) <g [l (elem l stood ? "0" "unrun") () ()]))
                res (map one (q-uniq (all + stood + ls + ["test_slow"])))
                reds (filter (\ y (y 1 != "0")) res)
@@ -684,7 +712,8 @@
                      + (two? backs ? (" | back here: " + join " " (map (\ y (<y + "<" + y 3)) backs)) "")
                      + ((ok || two? reds) ? "" (" lanes.sh=" + show rc))
                      + (two? stood ? (" | stood: " + join " " stood) "")
-                     + (two? reds ? (" | red: " + said) ""))
+                     + (two? reds ? (" | red: " + said) "")
+                     + (two? held ? (" | by name, unrun: " + join " " held) ""))
                w (queue-row1 {"queue" q "state" (ok ? "green" "waiting") "row" r "note" note})
                _ (gate-say (w 1))
                _ (? ok 0 (gate-tell q r owe dir))
@@ -708,10 +737,14 @@
              + "queue, once in a union at its head. join, write the row gating with this head, or pass --no-row "
              + "REASON (lock_acquire's no_row)")))
      ; each red lane and the rows whose paths owed it: a member's paths are its own head's change from
-     ; the row's gated-on; a lane no member's paths owed is the row's own -> [[lane [[pos session branch
+     ; its own gated-on where that is past the row's (a row it stacked on, merged in), else from the
+     ; row's gated-on; a lane no member's paths owed is the row's own -> [[lane [[pos session branch
      ; paths] ..] why] ..]. the owners are told, and those rows split out of the union
      (gate-owe r rows b plan reds)
-      (: mp (map (\ m (: rw (rows m) hm (rw 4) [m (rw 1) (rw 2) (row-paths (git1 ("merge-base " + sh-quote b + " " + sh-quote hm)) hm)]))
+      (: (under? x y) (git1 ("merge-base --is-ancestor " + sh-quote x + " " + sh-quote y + " && echo yes") = "yes")
+         (own-base rw) (: o (rw 3) hm (rw 4)
+                     (? (#(git-sha o) > 0 && under? o hm && !(under? o b)) o (git1 ("merge-base " + sh-quote b + " " + sh-quote hm))))
+         mp (map (\ m (: rw (rows m) [m (rw 1) (rw 2) (row-paths (own-base rw) (rw 4))]))
                  (r . q-folds rows r))
          (why l) (: p (filter (= l * cap) plan) (? (two? p) (<p 3) ()))
          (map (\ l (: os (filter (o \ any (p \ elem p (o 3)) (why l)) mp)
@@ -1157,7 +1190,9 @@
      (lk nm) (cite 'locks nm)
      (locks? _) (lit? (lk 'locks-acquire))
      bee-locks {}                                          ; name -> [kind note], still queued
-     bee-floor (: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+     ; the heavy pool's gate: the memory floor, and a ceiling on the one-minute load, the processors unless set
+     bee-floor [(: v (peep bee-salt 'mem-floor ()) (? (two? v && charm? <v) <v ()))
+                (: v (peep bee-salt 'heavy-load ()) (? (two? v && numeric? <v) <v (sysconf () @ (_ . c . _) (charm? c && 0 < c ? c ()) ())))]
      bee-hmax (: v (peep bee-salt 'heavy-max ()) (? (two? v && charm? <v) <v 2))
      ; the holder's pid: this bee's own, read off its card when a child speaks as it
      (lock-pid _) (: c (card-of (me 0)) p (tablet? c ? (card-pid c) 0) (? (alive? p) p (getpid 0)))
@@ -1171,6 +1206,7 @@
                 "?")
           ("queued for \(nm): position " + show (peep r "position" "?") + ", held by \(by)"
            + (r "mem_gb" @ () "" g (", \(g) GB available"))
+           + (r "load" @ () "" l (", load \(l)"))
            + "; a message from lock-\(nm) comes when it is yours")))
      (lock-acquire in)
       (? !(locks? 0) [0 "locks are not in this binary"]

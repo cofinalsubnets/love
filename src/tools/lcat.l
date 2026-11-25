@@ -83,6 +83,8 @@
    (file n) (cache n @ s
                (string? s ? s (minify (slurp-file (path n)) @ m (pin cache n m, m))))
 
+   ; after the glaze's reload of holo: its assembler, now glazed, is the one the glaze uses
+   repin " ((\\ t (pin t 'f (cite 'holo 'assemble), pin t 'at (cite 'holo 'assemble-at))) (cite 'glaze 'glazeasm))"
    ; the baked source (cats.c): a string lays as is (arch guards); a list is [symbol items],
    ; laid deflated with its _raw twin, items a boot file by name or glue text. a group is one
    ; text, which evals_ reads and runs form by form.
@@ -107,15 +109,18 @@
      ; the glaze: glaze.l states its own module wrapper. not a module blob: an unglazed build
      ; must not pay for it.
      "#ifdef LvGlazed"
+     ; holo again under the hook, so it is glazed, and the glaze assembles with it
      "#if defined(__arm__)"
-     ['src_glaze_z ['glaze 'holo 'x64 'a64 'thumb2]]   ; holo again, so arm's backend rides it
+     ['src_glaze_z ['glaze 'holo 'x64 'a64 'thumb2 repin]]
+     "#elif defined(__riscv)"
+     ['src_glaze_z ['glaze 'holo 'x64 'a64 'rv64 repin]]
      "#else"
-     ['src_glaze_z ['glaze 'holo 'x64 'a64]]
+     ['src_glaze_z ['glaze 'holo 'x64 'a64 repin]]
      "#endif"
      "#endif"]
    (text items) (foldl (\ a i (a + (string? i ? i (file i)))) "" items)
    (lay-z sym s)
-    (deflate s @ z
+    ((deflate-best s @ b (string? b ? b (deflate s))) @ z
        (string? z ? 0 (die ("deflate refused " + sym)),
         say out ("static unsigned char const " + sym + "[] =\n"),
         zrows z 0 #z,

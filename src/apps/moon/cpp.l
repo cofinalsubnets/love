@@ -57,6 +57,9 @@
    (spaced? (_ . _ . _ . _ . _ . _ . _)) 1      ; clexw's mark: whitespace followed it
    ; a rebuild hands the mark on; bare drops it, so parse meets the shapes it always has
    (retok t l h) (spaced? t ? [(kof t) (vof t) l h (sof t) 1] [(kof t) (vof t) l h (sof t)])
+   ; x with t's mark: a paste or a placemarker spaces after itself as what it stands for did
+   (markas t x) (: h (3 < #x ? (x 3) ()) s (4 < #x ? (x 4) ())
+                  (spaced? t ? [(kof x) (vof x) (lof x) h s 1] [(kof x) (vof x) (lof x) h s]))
    (bare t) (? !(spaced? t) t
                !(() = sof t) [(kof t) (vof t) (lof t) (hof t) (sof t)]
                !(() = hof t) [(kof t) (vof t) (lof t) (hof t)]
@@ -71,7 +74,7 @@
        (d = 0 ? l (: (go k) (atom? k ? () (lnbump d <k . go >k)) (go l))))
    ; -- include markers -- bracket each included run, since spliced line numbers can't say the
    ; file. strcat-pass retires them into spans for parse. 'in carries the header's name, 'out pops.
-   (fmin name path) ['fmark 'in name path]
+   (fmin name path line) ['fmark 'in name path line]          ; line: the #include's, in the includer
    fmout ['fmark 'out ()]
    (idt? ('id . _)) 1
    ; the value is a guard, never a second pattern variable: `(pv? ('p v) v)` would rebind v
@@ -138,6 +141,7 @@
     (? (atom? ts) ()
        (depth = 1 && pv? <ts ")") [(rev (rev cur . args)) >ts (rev seps) <ts]
        (depth = 1 && pv? <ts ",") (cargo >ts depth () (rev cur . args) (<ts . seps))
+       (cmt? <ts) (cargo >ts depth cur args seps)       ; an argument carries no comment
        (pv? <ts "(") (cargo >ts (depth + 1) (<ts . cur) args seps)
        (pv? <ts ")") (cargo >ts (depth - 1) (<ts . cur) args seps)
        (cargo >ts depth (<ts . cur) args seps))
@@ -147,6 +151,11 @@
    ; -- ## paste: fold every (p "##") by joining the spellings either side. an empty operand is
    ; a placemarker (C11 6.10.3.3p2): it pastes to anything and vanishes; leftovers drop at the end --
    (pmk? ('pmark . _)) 1
+   (cmt? ('cmt . _)) 1                          ; -C's comment, text alone
+   ; a comment dropped is one space: the token before it takes the mark
+   (nocmt l) ((: (pad t) (#t @ k (? (5 < k) t (k = 3) (t + [() () 1]) (k = 4) (t + [() 1]) (t + [1])))
+                 (go l a) (? (atom? l) (rev a) (cmt? <l) (go >l (two? a ? (pad <a . >a) a)) (go >l (<l . a))))
+              l ())
    (paste toks line)
     (!(any (t \ pv? t "##" || pmk? t) toks) ? toks         ; nothing to fold: the list as it came
      (: (nopm l) (? (atom? l) () (pmk? <l) (nopm >l) (<l . nopm >l))
@@ -154,9 +163,9 @@
                       (pv? <l "##" && two? acc && two? >l)
                        (: a <acc b <>l
                           (? (pmk? a) (go >>l (b . >acc))     ; placemarker ## x -> x
-                             (pmk? b) (go >>l acc)             ; x ## placemarker -> x
+                             (pmk? b) (go >>l (markas b a . >acc))   ; x ## placemarker -> x
                              (relex (spell a + spell b) line @ r
-                                (go >>l ((r ? r a) . >acc)))))
+                                (go >>l ((r ? (markas b r) a) . >acc)))))
                       (go >l (<l . acc)))
         (go toks ())))
 
@@ -193,9 +202,11 @@
                   (: pi (paramidx params (pnm t))
                      raw (args pi)
                      ; an empty argument beside a ## is a placemarker, not nothing
-                     sub (? !(pv? q1 "##" || (two? >ml && pv? <>ml "##")) (ex pi raw)
-                            (two? raw) raw
-                            [(tok 'pmark "" line)])
+                     ; the space after the argument is the parameter's in the body
+                     (lastas l) (two? l ? (rev (markas t <(rev l) . >(rev l))) l)
+                     sub (? !(pv? q1 "##" || (two? >ml && pv? <>ml "##")) (lastas (ex pi raw))
+                            (two? raw) (lastas raw)
+                            [(markas t (tok 'pmark "" line))])
                      (go >ml t q1 (revcat sub acc)))
                  (var? && idv? t "__VA_ARGS__")                 ; the variadic tail
                   (: va (vaargs args params seps)
@@ -556,9 +567,12 @@
                    (go >l d))
        (go buf 0))
    (cppgo toks macs cond buf out incf)
-    (atom? toks ? (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
-                        (rev (tokflush buf macs out)))
-       (: ls (linesplit toks) line <ls rest <>ls
+    (atom? toks ? (? (peep macs 'feed ()) ['feed cond buf out]      ; a block's end: cppfeed's
+                     (two? cond) (gripe () <>><cond () "unterminated #if -- no #endif")
+                     (rev (tokflush buf macs out)))
+       (: ls (linesplit toks) rest <>ls
+          ; a directive's comments go with it
+          line (<ls @ l (? (atom? l || !(any cmt? l)) l (nocmt l @ k (two? k && pv? <k "#" ? k l))))
           (? (pv? <line "#")
               (: dir (two? >line ? (dirname <>line))   ; if/else are keywords; the rest ids
                  ; inside a function-like macro's open argument list the run is held, as
@@ -657,11 +671,14 @@
                 got (nth = 0 ? (mfind ipath <>txt pre))
                 ; the marks bracket the header's run (out is reversed); minted here, never memoized
                 (rejoin toks)
-                 (cppgo rest macs cond () (fmout . rev toks + (fmin name ipath . out)) incf)
+                 (cppgo rest macs cond () (fmout . rev toks + (fmin name ipath (two? body ? (lof <body) 0) . out)) incf)
                 d0 #(peep cppdeps 'l ())
                 (? seen (cppgo rest macs cond () out incf)
                    (two? got) (mrestore macs <>>>>got, pin cppdeps 'l (got 5 + peep cppdeps 'l ()), rejoin <>>>got)
                    (: _ (0 < #ipath && pin cppdeps 'l (ipath . peep cppdeps 'l ()))
+                   ; a guarded header whose guard stands is never entered, as gcc and clang skip it,
+                   ; but for one still open: its guard is known only once it ends
+                   (? (guarded? ipath <>txt macs) (cppgo rest macs cond () out incf)
                    (lexinc ipath <>txt macs @ lr
                       ; okv?, not two?: a gripe is a pair. a located gripe is the header's;
                       ; a bare one stays at the #include
@@ -671,15 +688,18 @@
                             ; the #line delta is the header's own: saved across the recursion
                             sv (lndel macs)
                             _ (pin macs 'lndelta 0)
+                            _ (pin macs "#open:\(ipath)" [1])
+                            fd (peep macs 'feed ())                   ; a header ends as a whole TU does
+                            _ (pin macs 'feed ())
                             raw (cppgo itoks macs () () () chf)       ; recurse with fresh cond; shares macs
-                            (pin macs 'lndelta sv,
+                            (pin macs 'feed fd, pin macs "#open:\(ipath)" (), pin macs 'lndelta sv,
                             ; a nested failure propagates up wearing its file; never answer (),
                             ; which reads as an empty include
                              gripe? raw ? (gripein raw name)
                                (? (nth = 0 && !(mleak? raw (peep macs 'fname "")))
                                   (mput [ipath <>txt pre raw (msnap macs)
                                          (peep cppdeps 'l () @ l (take (#l - d0) l))]) 0,
-                                rejoin raw)))))))))))
+                                rejoin raw))))))))))))
    ; a path with . and .. folded away: "a/sys/../b.h" and "a/b.h" are one key; a leading /
    ; and a .. with nothing left to fold stay
    (pnorm p)
@@ -708,15 +728,17 @@
        (go2 i) (i < #s && s i != 10 ? (go2 (i + 1)) i)
        (go 0))
    ; -- the multiple-include rule: a header wholly inside `#ifndef G .. #endif` reads as nothing
-   ; once G is defined (the marks still bracket it). an assembly source's headers lex as assembly --
+   ; once G is defined (doinc does not enter it). an assembly source's headers lex as assembly --
    ; under -E as its top file does, `#` kept as text (" -E", no name a source can spell, keys the memo too)
+   (guarded? ip txt macs) (peep guards ip () @ e (two? e && <e = txt && two? (mdef macs <>e) && !(two? (macs "#open:\(ip)"))))
    (lexinc ip txt macs)
     (peep guards ip () @ e
-       (? (two? e && <e = txt && two? (mdef macs <>e)) [1 ()]
-          ((? !(two? (mdef macs "__ASSEMBLER__")) (clexw txt 1) (peep macs " -E" 0 = 1) (clexm txt 1 2 1) (clexasm txt 1 (armgas? macs))) @ lr
-             (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof <>lr)])
+       (? (guarded? ip txt macs) [1 ()]
+          ((? !(two? (mdef macs "__ASSEMBLER__")) (clexm txt 1 () (kwm macs)) (peep macs " -E" 0 = 1) (clexm txt 1 2 (kwm macs)) (clexasm txt 1 (armgas? macs))) @ lr
+             (: _ (okv? lr && 0 < #ip && pin guards ip [txt (guardof (nocmt <>lr))])
                 lr))))
    (armgas? macs) (two? (mdef macs "__aarch64__") || two? (mdef macs "__arm__"))  ; `#` past code marks an immediate
+   (kwm macs) (peep macs " -C" 0 = 1 ? 2 1)       ; the lexer's whitespace mode: 2 keeps comments
    (dirat? l) (two? l && pv? <l "#" && two? >l)      ; l opens a directive, its name next
    (guardof ts)
     (: (go l ln d)                                   ; d: the conditional depth, 1 inside the guard
@@ -760,15 +782,41 @@
                 pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - 1.0 / 4503599627370496.0) * 1023 2.0) 0)]],
                ; bool/true/false are the driver's (moon.l cc-defs)
                 t))
-   (cpp toks incf fname) (cpp-fin toks incf fname bare)   ; -> (1 out) | a gripe (test with okv?, never two?)
-   (cppasm toks incf fname) (cpp-fin toks incf fname (t \ t))
-   (cpp-fin toks incf fname fin)
+   ; an assembly source fed in blocks, each cut at a line end: one macro table and one
+   ; conditional stack across them. a feed answers (1 toks), finished, up to its last line
+   ; mark; the line after it is held for the next, so no string run or spacing straddles a
+   ; cut. a run that ends in an open macro call, or on a name that may open one, is held too
+   (cppopen fname) {'macs (pin (cppmacs fname) 'feed 1) 'cond () 'buf () 'tail ()}
+   (cppfeed st toks incf)
+    (: macs (st 'macs)
+       r (cppgo toks macs (st 'cond) (st 'buf) () incf)
+       (r @ ('feed cond buf out)
+          (: held (callopen? buf macs || two? buf && macat? <buf macs && fnish? (mdef macs (macnm <buf)) macs 8)
+             (pin st 'cond cond, pin st 'buf (held ? buf ()),
+              cppcut st (held ? out (tokflush buf macs out))))
+          r))
+   ; out is reversed: from its last line mark on is the tail
+   (cppcut st out)
+    (: (go l tl) (? (atom? l) ()
+                    (pv? <l "\n") [>l (<l . tl)]
+                    (go >l (<l . tl)))
+       (go out () @ c
+          (atom? c ? (pin st 'tail (st 'tail + rev out), [1 ()])     ; no line starts here
+             (: ts (st 'tail + rev <c)
+                (pin st 'tail <>c, cppdone st ts)))))
+   ; the tokens are spelled and dropped, so the sharing table goes with each block
+   (cppdone st ts) (pin spanacc 'l (), pin (st 'macs) 'itab (), [1 (strcat-pass ts 0 () (t \ t))])
+   (cppclose st)
+    (: cond (st 'cond) macs (st 'macs)
+       (two? cond ? (gripe () <>><cond () "unterminated #if -- no #endif")
+          (cppdone st (st 'tail + rev (tokflush (st 'buf) macs ())))))
+   (cpp toks incf fname)                                  ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (cppmacs fname)
        r (cppgo toks macs () () () incf)
        ; the spans ride the head as one 'fspans token, so cpp keeps its (1 out) channel
        (gripe? r ? r
           (: _ (pin spanacc 'l ())
-             out (strcat-pass r 0 () (t \ itok macs (fin t)))
+             out (strcat-pass r 0 () (t \ itok macs (bare t)))
              [1 (tok 'fspans (rev (spanacc 'l)) 0 . out)])))       ; an empty list is a valid empty TU
 
    ; -E: the TU as text in gcc -E's shape: tokens by line, a `# N "file"` marker where the file
@@ -777,32 +825,61 @@
    cpuncts '("->" "++" "--" "<<" ">>" "<=" ">=" "==" "!=" "&&" "||" "*=" "/=" "%=" "+=" "-="
              "&=" "^=" "|=" "##" "<<=" ">>=" "...")
    (wordc? c) (c = 95 || 48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122 || 127 < c)
-   (pastes? x y)
+   ; a period after a period splits only where a third would make `...` (clang's rule), so
+   ; `.text..x` keeps its pair: w is the spelling before x
+   (pastes? w x y)
     (? (#x < 1 || #y < 1) ()
        (: c (y 0) z (x (#x - 1)) xy (x + string c) n #xy
           (? (wordc? z && (wordc? c || c = 34 || c = 39)) 1
-             ((48 <= x 0 <= 57 || x 0 = 46) && (c = 46 || (c = 43 || c = 45) && elem z '(101 69 112 80))) 1
+             ((48 <= x 0 <= 57 || x 0 = 46 && 1 < #x && 48 <= x 1 <= 57) && (c = 46 || (c = 43 || c = 45) && elem z '(101 69 112 80))) 1
              (z = 46 && 48 <= c <= 57) 1
              (z = 47 && (c = 47 || c = 42)) 1
+             (xy = "..") (w = ".")
              (any (p \ n <= #p && snip p 0 n = xy) cpuncts))))
-   (cpp-text toks incf fname)
-    (: r (cppgo toks (pin (cppmacs fname) " -E" 1) () () () incf)
+   (cpp-text toks incf fname nolm kc)
+    (: r (cppgo toks (pins (cppmacs fname) " -E" 1 " -C" (kc ? 1 0)) () () () incf)
        (qesc s) "\"\(string (catmap (c \ (c @ 34 [92 34] 92 [92 92] 10 [92 110] 9 [92 116]
                                                    (c < 32 || 126 < c ? (c & 255 @ o [92 (48 + (o >> 6)) (48 + ((o >> 3) & 7)) (48 + (o & 7))]) [c])))
                                         (chars s)))\""
-       (sp t) (? (kof t = 'str) (0 < #(sof t) ? (sof t) (qesc (vof t))) (spell t))
+       (sp t) (? (kof t = 'str) (0 < #(sof t) ? (sof t) (qesc (vof t))) (cmt? t) (vof t) (spell t))
+       ; a comment's own newlines move the line it leaves off on
+       (past t l) (cmt? t ? (l + #(filter (c \ c = 10) (chars (vof t)))) l)
        (mark l f) "\n# \(l < 1 ? 1 l) \"\(f)\"\n"
        ; files: the stack of open paths; cl the line the text stands on, cf its file
-       (go ts files cl cf acc prev)
+       (go ts files cl cf acc prev pw)
         (atom? ts ? (join "" (rev ("\n" . acc)))
            (<ts @ t
-              (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc) ())
-                                             (go >ts >files 0 () acc ()))
-                 (elem (kof t) '(pmark pack)) (go >ts files cl cf acc prev)
+              (? (fmark? t) (vof t = 'in ? (go >ts ((t 3) . files) 1 (t 3) (mark 1 (t 3) . acc) () ())
+                                             (go >ts >files 0 () acc () ()))
+                 (elem (kof t) '(pmark pack)) (go >ts files cl cf acc prev pw)
                  (: f (two? files ? <files fname) l (lof t)
-                    (? (f != cf || l < cl || cl + 8 < l) (go >ts files l f (sp t . mark l f . acc) t)
-                       (l > cl) (go >ts files l f (sp t . string (map (_ \ 10) ^(l - cl)) . acc) t)
-                       (two? prev && !(spaced? prev) && !(pastes? (sp prev) (sp t))) (go >ts files l f (sp t . acc) t)
-                       (go >ts files l f (sp t . " " . acc) t))))))
-       (gripe? r ? r [1 (go r () 1 fname [(mark 1 fname)] ())])))
+                    (? (f != cf || l < cl || cl + 8 < l) (go >ts files (past t l) f (sp t . mark l f . acc) t ())
+                       (l > cl) (go >ts files (past t l) f (sp t . string (map (_ \ 10) ^(l - cl)) . acc) t ())
+                       (two? prev && !(spaced? prev) && !(pastes? pw (sp prev) (sp t))) (go >ts files (past t l) f (sp t . acc) t (sp prev))
+                       (go >ts files (past t l) f (sp t . " " . acc) t (two? prev ? (sp prev) ())))))))
+       ; -P as clang lays it: no markers; a line's first token indented to its source column (a
+       ; tab one); the next line a newline, a longer jump one only once the line has text, and a
+       ; last newline at the end. stk holds each includer and its #include's line; et: a token
+       ; stands on this line
+       cols {}
+       (lead f l) (: ls (peep cols f () @ c (two? c ? <c (: x (uread f @ [1 q] (lines q) ()) (pin cols f [x], x))))
+                     (0 < l <= #ls ? (: q (ls (l - 1)) (go i) (i < #q && (q i = 32 || q i = 9) ? (go (i + 1)) i) (go 0)) 0))
+       (pind f l t) (: n (lead f l) (n < 1 && sp t = "#" ? " " (string (map (_ \ 32) ^n))))
+       (pmove l cl et) (? (l = cl) "" (l - cl = 1 || et) "\n" "")
+       (pgo ts stk cl f et acc prev pw)
+        (atom? ts ? (join "" (rev ("\n" . acc)))
+           (<ts @ t
+              (? (fmark? t)
+                  (? (vof t = 'in)
+                      (: il (4 < #t ? (t 4) cl) m (pmove il cl et) e2 (m = "" && et)
+                         (pgo >ts ([f il] . stk) 1 (t 3) () ((e2 ? "\n" "") . m . acc) () ()))
+                     (: b (two? stk ? <stk [fname 0])
+                        (pgo >ts >stk (b 1 + 1) (b 0) () ((et ? "\n" "") . acc) () ())))
+                 (elem (kof t) '(pmark pack)) (pgo >ts stk cl f et acc prev pw)
+                 (: l (lof t)
+                    (? (l = cl && et)
+                        (? (two? prev && !(spaced? prev) && !(pastes? pw (sp prev) (sp t))) (pgo >ts stk (past t l) f 1 (sp t . acc) t (sp prev))
+                           (pgo >ts stk (past t l) f 1 (sp t . " " . acc) t (two? prev ? (sp prev) ())))
+                       (pgo >ts stk (past t l) f 1 (sp t . pind f l t . pmove l cl et . acc) t ()))))))
+       (gripe? r ? r [1 (nolm ? (pgo r () 1 fname () [] () ()) (go r () 1 fname [(mark 1 fname)] () ()))])))
 ) ; module 'moon

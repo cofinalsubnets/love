@@ -4,12 +4,16 @@
 ;   love -l src/apps/wifi/netlink.l -l src/apps/wifi/dhcp.l src/apps/wifi/wifi.l IFACE SSID PASSPHRASE
 ;   ..wifi.l IFACE CONF       the ssid and passphrase as CONF's first two lines, a third the
 ;                             country's two letters (US), whose rules the radio keeps
+;   ..wifi.l -w IFACE         a wire: no association, the carrier then dhcp alone; IFACE * the
+;                             first ethernet link that is not a radio, waited for
 ; run so it stays: the lease renewed at half its time, its dns in /run/resolv.conf, and a link
 ; gone or a renewal refused a failure, for helm to start it again
 ;   (wifi-pmk pass ssid)      -> the 32-byte pmk, pbkdf2-hmac-sha1 over 4096 rounds
 ;   (wifi-up iface ssid pass cc) -> the lease as dhcp answers it, or a scare 'wifi why; cc "" for none
+;   (wired-up iface)          -> the lease on a wire, or a scare 'wifi why
+;   (wired-pick k)            -> the first wire's name, k seconds waited for one
 ;   (wifi-hold iface lease)   -> never; a scare 'wifi why when the link or the lease goes
-(module (wifi wifi-pmk wifi-hmac1 wifi-ies wifi-rsn wifi-rsn-ie wifi-up wifi-hold wifi-conf)
+(module (wifi wifi-pmk wifi-hmac1 wifi-ies wifi-rsn wifi-rsn-ie wifi-up wired-up wired-pick wifi-hold wifi-conf)
 (borrow '(posix bytes hashes netlink dhcp))
 (:
    ; --- the numbers: nl80211's ---
@@ -110,7 +114,10 @@
        _ (? !(two? st) (gone "no connect result in 30 s")
             (<st = 0) (say1 "associated, keyed by the radio")
             (gone ("connect refused, status " + show <st)))
-       l (dhcp ix mac 3000)
+       (lease rt ix mac))
+   ; dhcp's address and route on a link that is up
+   (lease rt ix mac)
+    (: l (dhcp ix mac 3000)
        _ (l = () ? (gone "no dhcp lease"))
        _ (rt-addr rt ix <l (l 1))
        _ (l 2 != "" ? (rt-gateway rt ix (snip (l 2) 0 4)))
@@ -119,6 +126,23 @@
               + (l 3 != "" ? (", dns " + quad-show (l 3)) "")
               + ", lease " + show (l 4) + " s"),
         l))
+   ; a wire's link up and its carrier awaited, 30 s at most
+   (wired-up ifc)
+    (: ix (read (sysnet ifc "ifindex"))
+       mac (hex2b (join "" (split ":" (sysnet ifc "address"))))
+       rt (nl-open 0 ())
+       _ (rt-up rt ix)
+       (wait k) (? (sysnet ifc "carrier" = "1") 1 (k > 0) (rest 500, wait (k - 1)) (gone ("no carrier on " + ifc)))
+       _ (wait 60)
+       _ (say1 ("carrier on " + ifc))
+       (lease rt ix mac))
+   ; the first ethernet link with a device under it that is not a radio, waited for
+   (wired-pick k)
+    (: (wire? n) (uread ("/sys/class/net/" + n + "/type") @ [1 s] (trim s = "1"
+                   && string? (readlink ("/sys/class/net/" + n + "/device"))
+                   && !(two? (lstat ("/sys/class/net/" + n + "/wireless")))) 0)
+       w (filter wire? (sort (readdir "/sys/class/net")))
+       (? (two? w) <w (k > 0) (rest 1000, wired-pick (k - 1)) (gone "no wire")))
 
    (resolv l) (l 3 != "" ? (uwrite "/run/resolv.conf" ("nameserver " + quad-show (snip (l 3) 0 4) + "\n")) 0)
    ; every 10 s the link looked at; at half the lease's time it is asked again
@@ -142,7 +166,12 @@
    (after l) (atom? l ? () (<l @ (_ + "wifi.l") >l (after >l)))
    as (after cmdline)
    (run ifc sp) (: l (wifi-up ifc <sp (sp 1) (sp 2)) (resolv l, wifi-hold ifc l))
-   _ (#as = 3 || #as = 2
+   (wire ifc) (: i (ifc = "*" ? (wired-pick 60) ifc) l (wired-up i) (resolv l, wifi-hold i l))
+   wired (#as = 2 && <as = "-w")
+   _ (wired
+      ? (trap (_ \ wire (as 1)) 0 (a \ b \ (say err ("wifi: " + show a + " " + show b + "\n"), quit 1)))
+      0)
+   _ (!wired && (#as = 3 || #as = 2)
       ? (trap (_ \ run (as 0) (#as = 3 ? [(as 1) (as 2) ""] (wifi-conf (as 1)))) 0
               (a \ b \ (say err ("wifi: " + show a + " " + show b + "\n"), quit 1)))
       0)

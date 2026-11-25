@@ -6,10 +6,11 @@
          view-frame view-walk view-run view-bayer view-deep-pens view-cube-pens view-deep-frame
          view-deep? view-words view-flag view-window view-arg view-scale view-main view-song view-stage view-set1
          view-binds view-bind view-walking view-repeat view-listed view-help view-help-say view-help-bands
-         view-cells view-pen view-band
-         view-rescale view-scaled view-gauge view-gauged view-loading view-spin view-tick view-corner? view-tap)
+         view-pen view-band
+         view-rescale view-scaled view-gauge view-gauged view-loading view-busy view-spin view-tick view-corner? view-middle? view-tap)
 (borrow '(rove cli))
 (borrow 'horn)                          ; the pacer, the horn's lead, the keys drained
+(borrow '(slip console))                ; the console's pane beside the scene's
 (borrow 'window)                        ; a level in a window of its own, its keys held
 (borrow 'lore)                          ; frame-paint, in C
 (borrow 'posix)    ; close, for the horn
@@ -113,7 +114,7 @@
  ;     keys come to the same codes. a level binds its own over these ---
  view-binds {104 'turn-left -1 'turn-left 108 'turn-right -2 'turn-right 107 'forward -8 'forward
              106 'back -9 'back 117 'look-up 110 'look-down 63 'help 113 'quit 27 'quit
-             43 'finer 61 'finer 45 'coarser}
+             43 'finer 61 'finer 45 'coarser 48 'auto 126 'console 96 'console}
  ; ..b with o laid over it, o's own winning; a code o binds to () comes unbound
  (view-bind b o) (: t {} _ (each (keys b) (k \ pin t k (b k))) _ (each (keys o) (k \ pin t k (o k))) t)
  ; ..a picture's pixel scale halved or doubled, 1 to 8, and the screen sized again for it:
@@ -122,19 +123,37 @@
  (view-scaled lv st s) (pin st 'scale s, lv 'size st (st 'w) (st 'h // 2))
  ; ..or moved a step at a time by the frame's time: a gauge over steps whose pixels are pix,
  ; finest first, at step i, a frame's goal in ms with the song's feed counted in it
- (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low ()}
+ (view-gauge pix i goal) {'pix pix 'i i 'goal goal 'p () 'f () 'at () 'low () 'sl () 'bk () 'seen {}}
  ; ..a frame's paint and feed ms, and whether the horn is running low, at clock t: the step
  ; to draw at. coarser half a second after a step on a low horn, a second after it over the
- ; goal; finer only three seconds from a step and from a low horn, where the finer step's
- ; pixels fit under 0.8 of the goal. the feed's share is a slow mean, so a phrase's spike
- ; leans on the horn's lead rather than the picture
+ ; goal, five on one come back to, where the coarser step's frame is guessed under 0.9 of
+ ; this one's; back a step a second on where this one's is not under 0.9 of the finer's,
+ ; measured; finer three seconds from a step, where its frame is guessed under 0.8 of the
+ ; goal, or tried where this one's is under half the goal and the finer's is not measured;
+ ; neither within three seconds of a low horn, but back where this step is over the goal. a step's frame is its own, a
+ ; slow mean with a spike held to twice it, measured half a second on and kept half a minute,
+ ; else a line through this step's and the nearest other measured, a part fixed and a part by
+ ; the pixels, else the pixels' share of this one. the feed's share is a slow mean, so a
+ ; phrase's spike leans on the horn's lead rather than the picture
  (view-gauged g ms fd low t) (: (avg o x k) (o @ () (1.0 * x) (o + k * (x - o)))
    p (avg (g 'p) ms 0.25) f (avg (g 'f) fd 0.0625) at (g 'at @ () t a a) i (g 'i) pix (g 'pix)
-   b (g 'goal - f) held (t - at) lw (low ? t (g 'low))
-   j (? (i + 1 < #pix && (low && 500 <= held || b < p && 1000 <= held)) (i + 1)
-        (0 < i && 3000 <= held && (lw = () || 3000 <= t - lw) && p * pix (i - 1) < 0.8 * b * pix i) (i - 1)
+   b (g 'goal - f) held (t - at) lw (low ? t (g 'low)) quiet (lw = () || 3000 <= t - lw)
+   sl (g 'sl @ () (min (1.0 * ms) (2.0 * p)) o (o + 0.0625 * (min ms (2.0 * o) - o)))
+   sn (g 'seen) _ (500 <= held ? (pin sn i [sl t]))
+   (fresh k) (sn k @ [q s] (t - s <= 30000 ? q) ())
+   (guess k) (fresh k @ ()
+               (: ws (filter (m \ m != i && fresh m != ()) ^#pix)
+                  (ws = () ? (sl * pix k / pix i)
+                     (: m (foldl (\ n m (abs (m - k) < abs (n - k) ? m n)) <ws >ws)
+                        c (max 0.0 ((sl - fresh m) / (pix i - pix m))) a (max 0.0 (sl - c * pix i))
+                        (a + c * pix k))))
+               q q)
+   bk (0 < i && 1000 <= held && (quiet || b < sl) && (fresh (i - 1) @ () 0 q (0.9 * q <= sl)))
+   j (? (i + 1 < #pix && (low && 500 <= held || b < sl && (g 'bk = i ? 5000 1000) <= held) && guess (i + 1) < 0.9 * sl) (i + 1)
+        bk (i - 1)
+        (0 < i && 3000 <= held && quiet && (guess (i - 1) < 0.8 * b || fresh (i - 1) = () && sl < 0.5 * b)) (i - 1)
         i)
-   (pins g 'p (p * pix j / pix i) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
+   (pins g 'p (j = i ? p (guess j)) 'sl (j = i ? sl ()) 'bk (? (j = i) (g 'bk) (bk && j < i) j ()) 'f f 'at (j = i ? at t) 'low lw 'i j, j))
  ; ..the walking ones, which act again while a window's key is held: after a pause, then
  ; at a pace (ms), like a keyboard's own repeat
  view-repeat [250 110]
@@ -147,7 +166,7 @@
             16 113 17 119 18 101 19 114 20 116 21 121 22 117 23 105 24 111 25 112
             30 97 31 115 32 100 33 102 34 103 35 104 36 106 37 107 38 108
             44 122 45 120 46 99 47 118 48 98 49 110 50 109 53 47
-            2 49 3 50 4 51 5 52 6 53 7 54 8 55 9 56 10 57 11 48}
+            41 96 2 49 3 50 4 51 5 52 6 53 7 54 8 55 9 56 10 57 11 48}
  ; --- the help: the actions listed, a line each in their order, every key b binds to it and
  ;     its name; one b binds no key to is left out ---
  (view-key-name k) (k @ -1 "←" -2 "→" -8 "↑" -9 "↓" 32 "space" 27 "esc" 13 "enter" 10 "enter" 9 "tab"
@@ -168,24 +187,25 @@
  (view-synced f o) (: e (esc + "[?2026l") n #e
    (? (n <= #f && snip f (#f - n) #f = e) (snip f 0 (#f - n) + o + e)
       (esc + "[?2026h" + f + o + e)))
- (view-help-say st ls) (view-help-box ls (st 'w) (st 'h // 2) @ [x0 y0 rows]
+ (view-help-say st ls) (view-box-say st (view-help-box ls (st 'w) (st 'h // 2)))
+ (view-box-say st b) (b @ [x0 y0 rows]
    (foldl (+) "" (map (i \ esc + "[" + show (y0 + i + 1) + ";" + show (x0 + 1) + "H"
                           + esc + (st 'deep ? "[38;2;220;214;200;48;2;24;22;20m" "[38;5;253;48;5;235m")
                           + rows i + esc + "[0m")
                       ^#rows)))
  ; ..or as bands, a row's [x0 cells fg bg], its pens 24-bit six bits a channel or the 256
- (view-help-bands st ls) (view-help-box ls (st 'w) (st 'h // 2) @ [x0 y0 rows]
+ (view-help-bands st ls) (view-box-bands st (view-help-box ls (st 'w) (st 'h // 2)))
+ (view-box-bands st b) (b @ [x0 y0 rows]
    (: dp (st 'deep) fg (dp ? (55 << 12 | 53 << 6 | 50) 253) bg (dp ? (6 << 12 | 5 << 6 | 5) 235)
-      (foldl (t \ i \ pin t (y0 + i) [x0 (view-cells (rows i)) fg bg]) {} ^#rows)))
- ; a band's text a cell at a time, each one character, and a pen [r g b n] as deep or the 256 has it
- (view-cells s) (: (go i) (i < #s ? (: j (cite 'text 'cpnext s i) (snip s i j . go j)) ()) (go 0))
+      (foldl (t \ i \ pin t (y0 + i) [x0 (con-cells (rows i)) fg bg]) {} ^#rows)))
+ ; a band's pen [r g b n] as deep or the 256 has it
  (view-pen deep v) (deep ? (: (q x) ((x * 63 + 127) // 255) (q (v 0) * 4096 + q (v 1) * 64 + q (v 2))) (v 3))
  ; ..and a line s laid as the band on row r, light on bg
- (view-band st s r bg) {(r - 1) [0 (view-cells s) (view-pen (st 'deep) [240 240 240 255]) (view-pen (st 'deep) bg)]}
+ (view-band st s r bg) {(r - 1) [0 (con-cells s) (view-pen (st 'deep) [240 240 240 255]) (view-pen (st 'deep) bg)]}
  ; a level lv on a stage already raised, a frame a tick. lv: 'new (w h) its state, 'size
  ; (st w r), 'frame (st), 'key (st action), 'tick (st), 'fps, 'linger once 'done, 'next
  ; [module walk] or (), 'song (hn) a feeder of (st), hn () with no horn, fed every frame;
- ; optional 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
+ ; optional 'words (st) the console's, [[name doc value] ..], 'binds 'listed 'win 'repeat ([pause gap] ms), 'walking the actions that repeat
 ; and 'held (st) to stop a repeat; 'stick [ahead back left right], those keys for a phone's
 ; thumbs, and 'tap (st x y) the keys a tap at pixel x y is, view-tap unless said.
  ; help shows in a terminal until the next key, which does nothing else; in a window while
@@ -195,6 +215,14 @@
    binds (peep lv 'binds view-binds)
    hl (view-help binds (peep lv 'listed (view-listed ())))
    hs {'on 0 'p ()}
+   ; ..the console, on any level; the level's 'words its own, beside st
+   con (con-new ()) words (peep lv 'words (_ \ ())) at (c \ view-set1 c)
+   ; ..on a phone, the panes side by side
+   phone (win && win 'how = 'droid) _ (phone ? (pin con 'split ['beside 60 'scene 'con]) 0)
+   (eval l) (con-task (_ \ con-eval words st l) (_ \ con-stop con win at))
+   (con? k) (binds k = 'console)
+   ; ..the keys held let go as the console takes them
+   (let-go _) (con-keyed? con ? (each (keys held) (c \ pin held c ())) ())
    ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
    ; middle summed for the frame and it put back there, esc lets it go
    look (lv 'look) ms {'on 0 'dx 0 'dy 0}
@@ -209,16 +237,31 @@
                 (tty 1 @ ws [(two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)]))
    sh0 (shape ())
    st (lv 'new (sh0 0) (2 * sh0 1))
+   pn {'con () 'at [0 0]} gz {'g () 'on 1 'l0 0 't ()}
    (resize _) (shape () @ sh
-               (sh 0 != st 'w || 2 * sh 1 != st 'h ?
-                (lv 'size st (sh 0) (sh 1), win ? 0 (say out (esc + "[2J")))))
+               (: l (con-lay con (sh 0) (sh 1)) q (l 0) at [(q 0) (q 1)] pw (max 4 (q 2)) pr (max 2 (q 3)) _ (pin pn 'con (l 1))
+                  (? (pw != st 'w || 2 * pr != st 'h || at != pn 'at)
+                     (pin st 'pane (con 'on ? (slip-box (con 'ps) 'scene) ()), pin pn 'at at, pin gz 'g (),
+                      lv 'size st pw pr, win ? 0 (say out (esc + "[2J"))))))
    held {}
+   ; ..a held letter as shift has it now, either shift down, whichever was pressed first
+   shifts {}
+   (cased k) (? (65 <= k && k <= 90 || 97 <= k && k <= 122) (any (c \ shifts c = 1) [42 54] ? (k & 95) (k | 32)) k)
+   (shift! d p) (: _ (pin shifts p d) (each (keys held) (c \ held c @ h (h != () && charm? (h 0) ? (pin held c [(cased (h 0)) (h 1)])))))
    rep (peep lv 'repeat view-repeat)
    (hold? k) (elem (binds k) (peep lv 'walking view-walking) && (peep lv 'held (_ \ 1)) st)
    ; ..thumbs: the left half a stick centred where it lands, its keys held like a keyboard's,
    ; the right half looking, and a touch that stays put a tap
    stick (lv 'stick) fg {}
    _ (stick && win ? (window-thumbs win) 0)
+   ; ..a phone's console: a tap at the top's middle opens it and puts it away, as esc and Back do; the
+   ; keyboard up and its touches the panes' while it is up, the gpu let go, which would hide it
+   pc {'on 0}
+   (phone-con _) (: on (con 'on) gp (st 'gpu) (? (!phone || on = pc 'on) ()
+     (: _ (pin pc 'on on) _ (each (keys fg) (i \ pin fg i ())) _ (each (keys held) (c \ pin held c ()))
+        (on ? (: _ (tablet? gp && tablet? (gp 'g) ? ((cite 'gpu 'gpu-close) (gp 'g), pin st 'gpu 'off, pin pc 'gpu 1) 0) (pin win 'thumbs 0, window-typing win 1))
+              (: _ (peep pc 'gpu 0 ? (pins pc 'gpu 0, pin st 'gpu ()) 0) (window-thumbs win))))))
+   (phone-shut? e) (phone && con 'on && (<e = 'press ? (view-middle? st (e 2) (e 3)) (<e = 'down && elem (e 1) [1 362])))
    (axis slot want) (: old (held slot @ h (h != () ? <h ()))
      (? (want = old) ()
         (want = ()) (pin held slot (), ())
@@ -231,7 +274,8 @@
                                     + axis 'stick-y (? (#stick > 4 && dy < -view-thumb-run) (stick 4) (dy < -d) (stick 0) (d < dy) (stick 1) ()))
                          (: _ (pins ms 'dx (ms 'dx + view-thumb-look * (x - f 'x)) 'dy (ms 'dy + view-thumb-look * (y - f 'y))) ()))
                    (pins f 'x x 'y y 'far (f 'far || d < abs dx || d < abs dy ? 1 0), ks))
-        (: ks (f 'far ? () (peep lv 'tap view-tap st x y))
+        (: mid (phone && !(f 'far) && view-middle? st x y) _ (mid ? (con-up con 1) 0)
+           ks (f 'far || mid ? () (peep lv 'tap view-tap st x y))
            ((f 'walk ? (pins held 'stick-x () 'stick-y ())),
             pin fg id (),
             ks))))
@@ -242,12 +286,15 @@
                  k (? (0 < #t) (t 0) (view-set1 (e 1)))
                  (? (<e = 'close) ('quit . wgo >l)
                     (<e = 'finger) (finger e @ ks (ks + wgo >l))     ; in turn: a quick tap's up may ride with its down
+                    (phone-shut? e) (con-up con 0, wgo >l)
+                    (!(ms 'on && elem <e ['press 'move 'release]) && con-event con eval e t at (<e = 'down && charm? k && con? k)) (let-go (), wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
                     (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
                                               (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
                                                (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),
                                                wgo >l))
+                    (elem (e 1) [42 54] && elem <e ['down 'up]) (shift! (<e = 'down ? 1 0) (e 1), wgo >l)
                     (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
                     (<e = 'down && charm? k && held (e 1) != ()) (wgo >l)
                     (<e = 'down && charm? k) (pin held (e 1) [k (clock 0 + rep 0)],
@@ -261,12 +308,12 @@
    ; ..and one due before this frame's events and still down after them acts again
    (wkeys _) (: now (clock 0)
                due (filter (c \ held c @ h (h != () && hold? (h 0) && h 1 <= now)) (sort (keys held)))
-               pressed (wgo (window-events win))
+               pressed (wgo (con-events con win))
                again (filter (c \ held c != ()) due)
                _ (each again (c \ pin held c [(held c 0) (now + rep 1)]))
                (pressed + map (c \ held c 0) again))
    ; ..a terminal's: the last waiting; with the help up, any key puts it away and does no more
-   (tkeys last) (cue? 0 ? (edkey in @ k (tkeys (charm? k ? k last))) last)
+   (tkeys last) (cue? 0 ? (edkey in @ k (con-term con eval k (charm? k && con? k) @ q (tkeys (? (charm? q) q (con-keyed? con) () last)))) last)
    (tget _) (tkeys () @ k (? !(charm? k) ()
                              (hs 'on) (pin hs 'on 0, ())
                              (binds k = 'help) (pin hs 'on 1, ())
@@ -277,13 +324,16 @@
    pace (pacer ())
    (feed _) (? (hn && fd) (song-keep hn pace song-lead (_ \ (fd st))) fd (fd st) 0)
    ; ..the pixel scale gauged where a picture's pixels are the scale's, a window's or kitty's,
-   ; until a key moves it by hand; the horn low once under half its lead and falling
-   scales [1 2 4 8] gz {'g () 'on 1 'l0 0}
-   (gauged? _) (gz 'on && (tablet? win || st 'kitty) && st 'pic-w != ())
+   ; from the tenth frame, past the first ones' warming, until a key moves it by hand, and
+   ; again from the scale it left when 'auto's key says; the
+   ; horn low once what it holds would last under a frame and a quarter, the last one's, and falling
+   scales [1 2 4 8]
+   (gauged? _) (gz 'on && 10 <= st 't && (tablet? win || st 'kitty) && st 'pic-w != ())
    (steer paint feed l0 t) (: g (gz 'g @ () (: g0 (view-gauge [64 16 4 1] (scale-step (peep st 'scale 2)) (1.0 * tick)) (pin gz 'g g0, g0)) g g)
-     lw (hn && l0 * 2 < song-lead-of (pace 'gap) && l0 < gz 'l0) i (g 'i)
+     per (gz 't @ () tick u (t - u))
+     lw (hn && l0 * 1000 < 1.25 * per * song-rate && l0 < gz 'l0) i (g 'i)
      j (view-gauged g paint feed lw t)
-     (pin gz 'l0 l0, j != i ? (view-scaled lv st (scales j))))
+     (pins gz 'l0 l0 't t, j != i ? (view-scaled lv st (scales j))))
    (scale-step s) (s @ 1 0 2 1 4 2 3)
    (go _) (: t0 (clock 0)
              l0 (hn ? (horn-lag hn) 0)
@@ -292,13 +342,15 @@
              ks (win ? (wkeys ()) (tget ()))
              acts (map (k \ k = 'quit ? 'quit (binds k)) ks)
              _ (look && (ms 'dx != 0 || ms 'dy != 0) ? (look st (ms 'dx) (ms 'dy), pins ms 'dx 0 'dy 0) 0)
+             _ (phone-con ())
              _ (resize ())
-             _ (pin st 'over (win && hs 'on ? (view-help-bands st hl) {}))
+             _ (pin st 'over (? !win {} (two? (pn 'con)) (view-box-bands st (con-box con (pn 'con))) (hs 'on) (view-help-bands st hl) {}))
              _ (win ? (lv 'frame st)
-                    (lv 'frame st @ f (say out (esc + "[H" + (hs 'on ? (view-synced f (view-help-say st hl)) f)), flush out)))
+                    (lv 'frame st @ f (say out (esc + "[H" + (? (two? (pn 'con)) (view-synced (con-shift f (pn 'at 0) (pn 'at 1)) (view-box-say st (con-box con (pn 'con)))) (hs 'on) (view-synced f (view-help-say st hl)) f)), flush out)))
              _ (gauged? () ? (steer (clock 0 - t1) (t1 - t0) l0 (clock 0)))
              (each acts (a \ (? (elem a ['finer 'coarser]) (pin gz 'on 0, view-rescale lv st a)
-                                (nom? a && !(elem a ['quit 'help])) (lv 'key st a))),
+                                (a = 'auto) (pins gz 'on 1 'g () 'l0 0 't ())
+                                (nom? a && !(elem a ['quit 'help 'auto 'console])) (lv 'key st a))),
               lv 'tick st,
               pin st 't (st 't + 1),
               (? (st 'done && !(st 'done-at)) (pin st 'done-at (clock 0))),
@@ -330,13 +382,15 @@
      (side on) ((cite 'droid 'droid-side) on)
      (? (!asked && (o 'md != () || !(window-here? ()))) (tty ())
         (side 1, window-open 640 400 "lore" @ win
-           (? (tablet? win) (window-thumbs win,
+           (? (tablet? win) (window-thumbs win, window-back win 1,
                              mind (_ \ walk (pins o 'md 'window 'win win)) () (_ \ (window-close win, side 0)), 0)
               asked (side 0, say err ("lore: no window (" + show win + ")\n"), flush err, 1)
               (side 0, tty ())))))
  ; ..whether pixel x y is a top corner of st's window, and the tap that leaves by one
  (view-corner? st x y) (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1)
                           (v < 0.15 && (u < 0.15 || 0.85 < u)))
+ ; ..the top's middle, a phone's console
+ (view-middle? st x y) (: ws (window-size (st 'win)) u (1.0 * x / <ws) v (1.0 * y / ws 1) (v < 0.15 && 0.4 < u && u < 0.6))
  (view-tap st x y) (view-corner? st x y ? [113] ())
  ; --- a loading screen while a level is made: (view-loading win box draw) answers a tick,
  ;     (tick what part), for the making to call as it goes, what it is at and () or how far
@@ -346,17 +400,29 @@
  ;     paints the paper inside box [x0 y0 x1 y1], in pixels, or () the whole window
  ;     as big as it is by then, and answers [y0 y1] the rows to show, or () for the box's;
  ;     the paper may not hold what the screen does, a window's frames being sent whole.
- ;     else box is in cells and it answers what to say to the terminal ---
+ ;     else box is in cells and it answers what to say to the terminal. under view-busy the
+ ;     tick only notes where the making is, and the busy loop draws ---
  view-load-wait 150 view-load-every 40
- (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0}
-   (\ what part (: now (clock 0)
+ (view-loading win box draw) (: t0 (clock 0) at {'n 0 'last 0 'busy 0}
+   (paint what part) (: now (clock 0)
      (? ((now - t0) < view-load-wait || (now - at 'last) < view-load-every) ()
         (: b (tablet? win && atom? box ? (window-sized win @ s [0 0 (s 0) (s 1)]) box)
            s (draw {'win win 'box b 'ms (now - t0) 'n (at 'n) 'fresh (at 'n = 0 || b != at 'box) 'what what 'part part})
            (pins at 'n (at 'n + 1) 'last now 'box b,
             (? (tablet? win) (s @ [y0 y1] (window-show win y0 y1) _ (window-show win (b 1) (b 3)))
                (string? s) (say out s, flush out)),
-            ()))))))
+            ()))))
+   (\ what part (what @
+     'busy (pin at 'busy part, ())
+     'spin (paint (at 'what) (at 'part))
+     _ (pins at 'what what 'part part, at 'busy ? () (paint what part)))))
+ ; ..(view-busy tk f) answers (f ()), made on a task of its own while this one draws tk's
+ ; screen every view-load-every ms, whether the making ticks or not; a scare in the making
+ ; scares here. tk () just makes it. a long call into C still holds both till it is back
+ (view-busy tk f) (tk @ () (f ())
+   _ (: w (twirl (_ \ trap (_ \ [1 (f ())]) () (a \ b \ [0 a b])) 0)
+        (go _) (landed? w ? 0 (tk 'spin (), rest view-load-every, go ()))
+        (tk 'busy 1, go (), tk 'busy 0, catch w @ r (<r = 1 ? (r 1) (scare (r 1) (r 2))))))
  ; ..a tick for win, or the terminal where it is (), its whole screen the box
  (view-tick win draw) (view-loading win (tablet? win ? ()
                          (tty 1 @ ws [0 0 (two? ws && 19 < <>ws ? <>ws 80) (two? ws && 7 < <ws ? <ws 24)])) draw)

@@ -299,7 +299,7 @@
 
 ; locks through bee in a scratch BEE_LOCKS root; the test holds the one heavy ticket
 ; (heavy-max 1), so bee's ask queues behind it
-(: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n")
+(: cr-l2 (cr-dir "locks" "(mem-floor 1)\n(heavy-max 1)\n(heavy-load 1000000)\n")
    lroot (cr-l2 + "/locks")
    (L nm) (cite 'locks nm)
    mine ((L 'locks-acquire) lroot "heavy" 'heavy (getpid 0) "the test holds heavy" 1 1)
@@ -724,6 +724,27 @@
       (lp-heavy = sort lp-heavy)
       (<lp-cli = 0)
       (cr-in >lp-cli "test light 195s every change\ntest_slow heavy ? last, on the tree that lands"))
+   0)
+
+; the by-name lanes, on the tree's own test.mk: no path owes one, whatever recipe names it, and
+; the lanes beside it are owed still; lanes-held says which a change left out; the board ones chained
+(: bn-cov ((cite 'lanemap 'lanes-covers) (cr-get (cr-home + "/test/test.mk")))
+   bn (cite 'lanemap 'lanes-byname)
+   (bn-of p) (map cap ((cite 'lanemap 'lanes-plan) [p] () bn-cov))
+   (bn-held p) (map cap ((cite 'lanemap 'lanes-held) [p] () bn-cov))
+   bn-ps ["test/gate/mcuboard.sh" "test/gate/ch32v203board.sh" "src/inle/teensy41/usb.c" "test/gate/mipsrouter.sh"]
+   bn-map (hark [cr-love cr-app "--lanes-map"])
+   _ (test
+      (bn = ["test_teensy41_board" "test_ch32v203_board" "test_mips_router"])
+      (all (p \ all (l \ !(elem l (bn-of p))) bn) bn-ps)
+      (elem "test_teensy41_ram_board" (bn-of "test/gate/mcuboard.sh"))
+      (elem "test_ccmips" (bn-of "src/apps/moon/gen.l"))
+      (bn-held "test/gate/mcuboard.sh" = ["test_teensy41_board"])
+      (bn-held "test/gate/ch32v203board.sh" = ["test_ch32v203_board"])
+      (bn-held "test/gate/mipsrouter.sh" = ["test_mips_router"])
+      !(two? (bn-held "src/apps/moon/gen.l"))
+      (cr-in >bn-map ",test_teensy41,test_teensy41_board,")
+      (cr-in >bn-map ",test_ch32v203,test_ch32v203_board,"))
    0)
 
 (hark ["rm" "-rf" cr-root])

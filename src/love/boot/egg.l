@@ -2,12 +2,10 @@
  ; a text read form by form, each after the one before it has run; the first sound lays
  ; the residue as a charlist, each later one answers its tail
  (sit e z t) (: r (sound t) (? (two? r) (sit e (e (cap r)) (cup r)) (== r 'torn) (scare 'unfinished-form ()) z))
- now (clock 0)
  ev (sit (sit ev () egg) () egg)
  _ (pin book 'ev ev)
  _ (sit ev () post)
  _ (ev '(cpkindfill 0))          ; ev's kind table again, show bound now
- _ (pin book 'born (clock now))
  ; the internals move off the book into the guts module. compiled code holds its own
  ; references, so after the boot the module keeps only `kept`; the rest leave for good.
  ; nomop keeps them all. a start that loads more first finds `mop` under latemop
@@ -24,7 +22,7 @@
    _ (each n p)
    _ (pin M 'guts F)
    ; what a run may still cite: none reaches a word by address or writes a cell it did not lay
-   kept '(peepw pinw peepv pinv pinf threadir)
+   kept '(peepw pinw peepv pinv pinf pind peepd threadir)
    ; a book name goes only while it is still the one moved: a later file may bind its own
    (off k) (: v (peep F k miss) (? (== v miss) 0 (== v (peep book k miss)) (pull book k k) 0))
    (mop _) (: _ (pull book 'latemop 0)

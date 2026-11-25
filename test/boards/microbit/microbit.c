@@ -2,11 +2,8 @@
 // daplink, TIMER0's microseconds, the 5x5 matrix, the die's temperature and a ble beacon. vectors, crt0 and the asm helpers are mkboot.l's
 #include <stdint.h>
 #include "microbit.h"
+#include "../crt0.h"
 #include "../../../src/inle/bput.h"
-
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[];
-extern void *const vectors[];
 
 int main(void);
 
@@ -26,12 +23,9 @@ void hardfault_report(uint32_t *frame) {
 // interrupts pending, and this table has none past the system sixteen
 void cmain(void) {
   arm_irq_off();
-  for (uint32_t i = 0; i < 8; i++) REG(NVIC_ICER0 + 4u * i) = 0xFFFFFFFFu, REG(NVIC_ICPR0 + 4u * i) = 0xFFFFFFFFu;
   REG(SCB_CPACR) |= (0xFu << 20);
   arm_dsb_isb();
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
-  REG(SCB_VTOR) = (uint32_t)(uintptr_t) vectors;
+  crt0(8);
   clocks_init();
   serial_init();
   main();
@@ -39,6 +33,7 @@ void cmain(void) {
 
 // the crystal, bounded: a timeout stays on the internal rc, which the banner says
 void clocks_init(void) {
+  REG(NVMC_ICACHECNF) = 1;
   REG(CLOCK_HFSTARTED) = 0;
   REG(CLOCK_HFCLKSTART) = 1;
   for (uint32_t i = 0; i < 4000000u && !REG(CLOCK_HFSTARTED); i++) {} }
@@ -102,6 +97,9 @@ static void col_put(int c, int on) {
   REG(on ? GPIO_OUTCLR(col_port[c]) : GPIO_OUTSET(col_port[c])) = 1u << col_pin[c]; }
 
 void led_init(void) {
+  REG(GPIO_CNF(P0, BTN_A)) = 3u << 2, REG(GPIO_CNF(P0, BTN_B)) = 3u << 2;   // inputs, pulled up
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN;
+  REG(GPIO_DIRSET(P0)) = 1u << SPKR_PIN;
   for (int k = 0; k < LED_N; k++) {
     REG(GPIO_OUTCLR(P0)) = 1u << row_pin[k];
     REG(GPIO_DIRSET(P0)) = 1u << row_pin[k];
@@ -118,14 +116,36 @@ void led_put(int on) {
 #define LED_SLICES 32
 static uint8_t const led_gamma[LED_MAX + 1] = { 0, 1, 2, 4, 7, 11, 17, 24, 32 };
 
-// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms
-void led_scan(uint8_t const *lv) {
+// one pass over the rows, LED_SLICES slices of 62 us each, so a pass is ~10 ms. with noise,
+// each slice is also a sample: the speaker's pin set to an xorshift bit, white noise at ~16 kHz
+void led_scan(uint8_t const *lv, uint32_t *noise) {
   for (int r = 0; r < LED_N; r++) {
     REG(GPIO_OUTSET(P0)) = 1u << row_pin[r];
     for (int s = 0; s < LED_SLICES; s++) {
+      if (noise) {
+        uint32_t x = *noise;
+        x ^= x << 13, x ^= x >> 17, x ^= x << 5, *noise = x;
+        REG((x & 1u) ? GPIO_OUTSET(P0) : GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }
       for (int c = 0; c < LED_N; c++) col_put(c, led_gamma[lv[r * LED_N + c]] > s);
       for (uint32_t t = clock_us(); clock_us() - t < 62u; ) {} }
-    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; } }
+    REG(GPIO_OUTCLR(P0)) = 1u << row_pin[r]; }
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }
+
+// the buttons held: bit 0 A, bit 1 B
+int buttons(void) {
+  uint32_t in = REG(GPIO_IN(P0));
+  return !(in >> BTN_A & 1u) | !(in >> BTN_B & 1u) << 1; }
+
+// the logo pad, a capacitor: drained low, then released to its pull-up, the us until it reads
+// high. a finger adds its capacitance and the charge takes longer; 4 ms caps a stuck pad
+uint32_t logo_us(void) {
+  REG(GPIO_CNF(P1, LOGO_PIN)) = 1u;                       // output, driven low
+  REG(GPIO_OUTCLR(P1)) = 1u << LOGO_PIN;
+  for (uint32_t t = clock_us(); clock_us() - t < 20u; ) {}
+  REG(GPIO_CNF(P1, LOGO_PIN)) = 0u;                       // input, no pull
+  uint32_t t = clock_us(), d = 0;
+  while (!(REG(GPIO_IN(P1)) >> LOGO_PIN & 1u) && (d = clock_us() - t) < 4000u) {}
+  return d; }
 
 // --- the die's temperature, in quarter degrees ------------------------------
 int32_t temp_read(void) {
@@ -167,3 +187,39 @@ void ble_adv(uint8_t const *pdu) {
     REG(RADIO_DISABLED) = 0;
     REG(RADIO_TXEN) = 1;
     while (!REG(RADIO_DISABLED)) {} } }
+
+// --- the speaker's samples: PWM0 on the speaker's pin plays a then b, n duties each out of
+// PWM_TOP, and again forever; pwm_ended(i) says (once) that i has played and may be laid
+// again while the other plays. a and b live in RAM, which EasyDMA reads
+void pwm_start(uint16_t const *a, uint16_t const *b, uint32_t n) {
+  REG(PWM_PSEL_OUT0) = SPKR_PIN;
+  REG(PWM_ENABLE) = 1;
+  REG(PWM_MODE) = 0;                                      // up
+  REG(PWM_COUNTERTOP) = PWM_TOP;
+  REG(PWM_PRESCALER) = 0;                                 // 16 MHz
+  REG(PWM_DECODER) = 0;                                   // one duty for every channel, by refresh
+  uint16_t const *q[2] = { a, b };
+  for (uint32_t i = 0; i < 2; i++) {
+    REG(PWM_SEQ_PTR(i)) = (uint32_t) (uintptr_t) q[i];
+    REG(PWM_SEQ_CNT(i)) = n;
+    REG(PWM_SEQ_REFRESH(i)) = 16000000u / PWM_TOP / PWM_RATE - 1u;
+    REG(PWM_SEQ_ENDDELAY(i)) = 0;
+    REG(PWM_EVENTS_SEQEND(i)) = 0; }
+  REG(PWM_LOOP) = 1;                                      // a then b, a loop
+  REG(PWM_SHORTS) = 1u << 2;                              // the loop done starts a again
+  REG(PWM_EVENTS_STOPPED) = 0;
+  REG(PWM_TASKS_SEQSTART0) = 1; }
+
+int pwm_ended(int i) {
+  if (!REG(PWM_EVENTS_SEQEND(i))) return 0;
+  REG(PWM_EVENTS_SEQEND(i)) = 0;
+  return 1; }
+
+// the pin back to the gpio, low, for the static's noise
+void pwm_stop(void) {
+  REG(PWM_SHORTS) = 0;
+  REG(PWM_TASKS_STOP) = 1;
+  for (uint32_t i = 0; i < 100000u && !REG(PWM_EVENTS_STOPPED); i++) {}
+  REG(PWM_ENABLE) = 0;
+  REG(PWM_PSEL_OUT0) = PSEL_OFF;
+  REG(GPIO_OUTCLR(P0)) = 1u << SPKR_PIN; }

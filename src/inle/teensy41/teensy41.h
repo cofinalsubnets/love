@@ -19,12 +19,14 @@
 #define IOMUXC_GPR_BASE 0x400AC000u
 #define LPUART6_BASE    0x40198000u   // Teensy "Serial1": pin0 RX / pin1 TX
 #define GPT1_BASE       0x401EC000u
-#define GPIO2_BASE      0x401BC000u   // pin 13 LED lives on GPIO2_IO03
+#define GPIO1_BASE      0x401B8000u   // GPIO1..4, 0x4000 apart: the board's pins (teensy41.c)
 #define SCB_VTOR        0xE000ED08u
 #define SCB_CPACR       0xE000ED88u   // FPU coprocessor access control
 
-#define CCM_CCGR1 (CCM_BASE + 0x6Cu)   // GPT1 gates (CG10 bus, CG11 serial)
-#define CCM_CCGR3 (CCM_BASE + 0x74u)   // LPUART6 gate (CG3)
+#define CCM_CCGR0 (CCM_BASE + 0x68u)   // GPIO2 gate (CG15)
+#define CCM_CCGR1 (CCM_BASE + 0x6Cu)   // GPT1 gates (CG10 bus, CG11 serial), GPIO1 (CG13)
+#define CCM_CCGR2 (CCM_BASE + 0x70u)   // GPIO3 gate (CG13)
+#define CCM_CCGR3 (CCM_BASE + 0x74u)   // LPUART6 gate (CG3), GPIO4 (CG6)
 #define CCM_CSCDR1 (CCM_BASE + 0x24u)  // UART_CLK_SEL (bit6) + UART_CLK_PODF[5:0]
 
 // core = 24 MHz * DIV_SELECT / 2 / (ARM_PODF+1); 600 = 24*100/2/2. each mux or divider
@@ -82,10 +84,9 @@
 #define LPUART_STAT_ERR  ((1u << 19) | (1u << 18) | (1u << 17) | (1u << 16))   // OR | NF | FE | PF, all write-1-clear
 #define LPUART_FIFO_RXFE (1u << 3)                // enable RX FIFO
 
-// IOMUXC: the two console pads and the LED pad
+// IOMUXC: the two console pads; the rest are teensy41.c's pin map
 #define IOMUXC_SW_MUX_GPIO_AD_B0_02 (IOMUXC_BASE + 0x0C4u)  // pin1 TX1 -> LPUART6_TX (ALT2)
 #define IOMUXC_SW_MUX_GPIO_AD_B0_03 (IOMUXC_BASE + 0x0C8u)  // pin0 RX1 -> LPUART6_RX (ALT2)
-#define IOMUXC_SW_MUX_GPIO_B0_03    (IOMUXC_BASE + 0x148u)  // pin13 LED -> GPIO2_IO03 (ALT5)
 // the RX daisy chain: SELECT_INPUT lives in the second block, +0x400 + 0x150 (imxrt.h offset150)
 #define IOMUXC_LPUART6_RX_SELECT    (IOMUXC_BASE + 0x550u)
 #define MUX_ALT(n) (n)
@@ -108,12 +109,7 @@
 #define GPT1_CCGR_BUS    10            // CCGR1 CG10
 #define GPT1_CCGR_SERIAL 11           // CCGR1 CG11
 
-#define GPIO2_DR       (GPIO2_BASE + 0x00u)
-#define GPIO2_GDIR     (GPIO2_BASE + 0x04u)
-#define GPIO2_PSR      (GPIO2_BASE + 0x08u)
-#define GPIO2_DR_SET   (GPIO2_BASE + 0x84u)
-#define GPIO2_DR_CLEAR (GPIO2_BASE + 0x88u)
-#define LED_BIT 3u                     // GPIO2_IO03 = Teensy pin 13
+#define LED_PIN 13u                    // GPIO2_IO03, pad GPIO_B0_03
 
 void clocks_init(void);
 void uart_init(void);
@@ -121,6 +117,7 @@ void uart_putc(int c);
 int  uart_getc(void);
 int  uart_rx_ready(void);
 uint32_t uart_rx_lost(void);   // inbound bytes the soft ring could not hold, and clears
+int  gpio_ok(unsigned pin);   // a board pin love may take: not the console's, the sd's or the psram's
 void gpio_init(unsigned pin);
 void gpio_set_dir(unsigned pin, int out);
 void gpio_put(unsigned pin, int hi);
@@ -130,6 +127,10 @@ int  gpio_get(unsigned pin);
 void arm_dsb_isb(void);
 void arm_dsb(void);
 void arm_wfi(void);
+void arm_irq_off(void);
+void arm_enter(uintptr_t image);   // its first word the stack, its second the entry
+// the image runs where the flash's loader laid it, the psram, its clocks and caches already up
+int te_in_psram(void);
 
 // usb.c: the board's own USB as a CDC-ACM console beside the UART
 void usb_init(void);
@@ -137,5 +138,6 @@ void usb_putc(int c);
 void usb_flush(void);
 int usb_rx_ready(void);
 int usb_up(void);
+void usb_off(void);
 int usb_getc(void);
 void arm_bkpt(void);

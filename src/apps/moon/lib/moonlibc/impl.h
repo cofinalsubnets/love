@@ -39,17 +39,34 @@
 #include <netinet/in.h>
 
 extern long __love_sys(long n, long a, long b, long c, long d, long e, long f);
-/* a test-and-set: a plain swap where the core has no exclusive load (v6-m, xtensa's lx6),
- * whose one thread the swap serves */
+/* no kernel: an isa with no syscall door (bare thumb, xtensa), or -os none. every call
+ * answers ENOSYS (os.c), and on a bare isa nosys.c lays the leaves mksys lays elsewhere */
+#if defined(__arm__) && !defined(__ARM_EABI__) || defined(__xtensa__)
+# define LvBare 1
+#endif
+#if defined(LvBare) || !defined(__unix__) && !defined(__APPLE__)
+# define LvOsNone 1
+#endif
+/* the read-modify-writes: plain where the core has none (v6-m, xtensa's lx6), whose one
+ * thread they serve; the order is the builtin's */
 #if defined(__ARM_ARCH_6M__) || defined(__xtensa__)
 static int __love_tas(int volatile *p, int v) { int o = *p; *p = v; return o; }
 static void __love_rel(int volatile *p) { *p = 0; }
+static int __love_xchg(int volatile *p, int v, int mo) { int o = *p; *p = v; return o; }
+static int __love_fadd(int volatile *p, int v, int mo) { int o = *p; *p = o + v; return o; }
+static int __love_cas(int volatile *p, int *e, int v, int mo) {
+  if (*p != *e) { *e = *p; return 0; }
+  *p = v;
+  return 1; }
 #else
 # define __love_tas(p, v) __sync_lock_test_and_set(p, v)
 # define __love_rel(p) __sync_lock_release(p)
+# define __love_xchg(p, v, mo) __atomic_exchange_n(p, v, mo)
+# define __love_fadd(p, v, mo) __atomic_fetch_add(p, v, mo)
+# define __love_cas(p, e, v, mo) __atomic_compare_exchange_n(p, e, v, 0, mo, mo)
 #endif
-/* the tables compile everywhere but wasm and rv32; without the sigtramp netbsd's sigaction refuses by name */
-#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__))   /* wasm's one kernel is the page's loader; rv32 has only linux */
+/* the tables compile everywhere but wasm, rv32, mips and a kernel-less link; without the sigtramp netbsd's sigaction refuses by name */
+#if !defined(__wasm__) && !(defined(__riscv) && defined(__ILP32__)) && !defined(__mips__) && !defined(LvOsNone)   /* wasm's one kernel is the page's loader; rv32 and mips have only linux */
 # define LvOsTranslate 1        /* the os*.c tables, and the leaves they call */
 # define LvNbTramp 1            /* netbsd's signal return path */
 #endif
@@ -342,9 +359,145 @@ struct _IO_FILE {
 #define NR_waitid          95
 #define NR_prlimit64      261
 #endif
-#elif defined(__ARM_EABI__)
+#elif defined(__mips__)
+/* mips o32: arm's shape at 4000 up, 64-bit off_t and time_t through the *64 and *_time64
+ * calls (the 32-bit twins named beside them answer before linux 5.1); the uid calls and
+ * getrlimit are 32-bit already, under their own names */
+#define NR_read             4003
+#define NR_write            4004
+#define NR_close            4006
+#define NR_mmap           4210   /* mmap2 */
+#define NR_mprotect       4125
+#define NR_munmap          4091
+#define NR_mremap         4167
+#define NR_madvise        4218
+#define NR_msync          4144
+#define NR_copy_file_range 4360
+#define NR_mincore        4217
+#define NR_rt_sigaction   4194
+#define NR_rt_sigprocmask 4195
+#define NR_ioctl           4054
+#define NR_pread64        4200
+#define NR_pwrite64       4201
+#define NR_getpid          4020
+#define NR_getppid         4064
+#define NR_getegid        4050
+#define NR_uname          4122
+#define NR_sysinfo        4116
+#define NR_setuid         4023
+#define NR_setgid         4046
+#define NR_setgroups      4081
+#define NR_setresuid      4185
+#define NR_sigaltstack    4206
+#define NR_setresgid      4190
+#define NR_geteuid        4049
+#define NR_sendfile       4237   /* sendfile64 */
+#define NR_pselect6       4413   /* pselect6_time64 */
+#define NR_pselect6_32    4301
+#define NR_socket         4183
+#define NR_socketpair     4184
+#define NR_connect        4170
+#define NR_accept         4334   /* accept4 */
+#define NR_sendto         4180
+#define NR_getsockname    4172
+#define NR_getpeername    4171
+#define NR_recvfrom       4176
+#define NR_sendmsg        4179
+#define NR_recvmsg        4177
+#define NR_shutdown       4182
+#define NR_bind           4169
+#define NR_listen         4174
+#define NR_getsockopt     4173
+#define NR_setsockopt     4181
+#define NR_clone          4120
+#define NR_execve          4011
+#define NR_execveat       4356
+#define NR_wait4          4114
+#define NR_getrusage       4077
+#define NR_getrlimit      4076
+#define NR_prlimit64      4338
+#define NR_setrlimit       4075
+#define NR_getpriority     4096
+#define NR_setpriority     4097
+#define NR_statx          4366
+#define NR_kill            4037
+#define NR_setitimer      4104
+#define NR_getitimer      4105
+#define NR_fcntl          4220   /* fcntl64 */
+#define NR_fsync          4118
+#define NR_fdatasync      4152
+#define NR_fchown         4095
+#define NR_ftruncate      4212   /* ftruncate64 */
+#define NR_getcwd         4203
+#define NR_chdir           4012
+#define NR_fchdir         4133
+#define NR_chroot          4061
+#define NR_fchmod          4094
+#define NR_umask           4060
+#define NR_getuid         4024
+#define NR_getgid         4047
+#define NR_setpgid         4057
+#define NR_setsid          4066
+#define NR_getpgid        4132
+#define NR_sync            4036
+#define NR_mount           4021
+#define NR_reboot          4088
+#define NR_swapon          4087
+#define NR_swapoff        4115
+#define NR_umount2         4052
+#define NR_getdents64     4219
+#define NR_clock_gettime  4403   /* clock_gettime64 */
+#define NR_clock_gettime_32 4263
+#define NR_exit_group     4246
+#define NR_exit             4001
+#define NR_futex          4422   /* futex_time64 */
+#define NR_futex_32       4238
+#define NR_sched_yield    4162
+#define NR_accept4        4334
+#define NR_flock          4143
+#define NR_getrandom      4353
+#define NR_rt_sigsuspend  4199
+#define NR_tgkill         4266
+#define NR_gettid         4222
+#define NR_set_thread_area 4283
+#define NR_prctl          4192
+#define NR_getsid         4151
+#define NR_getpgid        4132
+#define NR_openat         4288
+#define NR_mkdirat        4289
+#define NR_mknodat        4290
+#define NR_fchownat       4291
+#define NR_faccessat      4300
+#define NR_unlinkat       4294
+#define NR_renameat       4295
+#define NR_renameat2      4351
+#define NR_linkat         4296
+#define NR_symlinkat      4297
+#define NR_readlinkat     4298
+#define NR_fchmodat       4299
+#define NR_ppoll          4414   /* ppoll_time64 */
+#define NR_ppoll_32       4302
+#define NR_unshare        4303
+#define NR_utimensat      4412   /* utimensat_time64 */
+#define NR_utimensat_32   4316
+#define NR_signalfd4      4324
+#define NR_dup3           4327
+#define NR_pipe2          4328
+#define NR_memfd_create   4354
+#define NR__llseek        4140
+#define NR_clock_nanosleep 4407   /* clock_nanosleep_time64 */
+#define NR_clock_nanosleep_32 4265
+#define NR_statfs64       4255
+#define NR_fstatfs64      4256
+#define NR_fstatat64      4293
+#define NR_lseek           4019    /* the BSDs' keys in os.c's map: linux's members say _llseek, */
+#define NR_fstat          4215    /* statx or fstatat64, and clock_nanosleep */
+#define NR_newfstatat     4293
+#define NR_nanosleep      4166
+#elif defined(__ARM_EABI__) || defined(LvBare)
 /* arm eabi: 64-bit off_t and time_t through the *64 and *_time64 calls; before linux 5.1
- * the 32-bit twins named beside them answer */
+ * the 32-bit twins named beside them answer. a bare isa takes these numbers too, which no
+ * kernel reads */
 #define NR_read             3
 #define NR_write            4
 #define NR_close            6
@@ -835,7 +988,21 @@ static size_t __munits(__mhdr const *b) { return b->next == __MSlot ? b->size & 
 __mhdr *__mblock(void *p, char const *who);   /* the block behind p, or an abort naming who */
 int __mgrow(__mhdr *b, size_t nu);            /* realloc's growth in place: 1 when b now holds nu units */
 struct __sctx { char *p; size_t n, at; };
+/* the kernel's signal set: 64 signals in 8 bytes, or mips's 128 in four words. sigset_t keeps
+ * them in 64-bit words, which on a big-endian 32-bit core lay the two halves the other way */
+#ifdef __mips__
+# define LvSigsz 16
+static void __love_ksig(unsigned long *k, sigset_t const *s) {
+  for (int i = 0; i < 4; i++) k[i] = (unsigned long) (s->__v[i / 2] >> (i % 2 * 32)); }
+static void __love_usig(sigset_t *s, unsigned long const *k) {
+  for (int i = 0; i < 4; i++) s->__v[i / 2] |= (unsigned long long) k[i] << (i % 2 * 32); }
+struct __ksigaction { unsigned long flags; void *h; unsigned long mask[4]; };   /* mips's: flags first, no restorer */
+#else
+# define LvSigsz 8
+# define __love_ksig(k, s) memcpy((k), &(s)->__v[0], 8)
+# define __love_usig(s, k) memcpy(&(s)->__v[0], (k), 8)
 struct __ksigaction { void *h; unsigned long flags; void *restorer; unsigned long mask[8 / sizeof(long)]; };   /* the mask in words: 4-aligned on arm */
+#endif
 /* ent: readdir's repack of the BSD record */
 struct __dirstream { int fd; int pos; int len; struct dirent ent; char buf[4096]; };
 
@@ -947,9 +1114,38 @@ extern void __love_tiokeep(struct __fb_termios *f, struct __fb_termios const *cu
             __love_tiocan(struct __fb_termios const *f, struct termios *t);
 extern unsigned int __love_bcode(speed_t);   /* signal/cfspeed.c: a rate as linux's CBAUD code */
 extern speed_t __love_bnum(unsigned int);
+/* linux's tty ioctls: asm-generic's, or mips's own numbers and _IOC encoding (and its
+ * 23 control characters, which TCGETS2's record carries) */
+#ifdef __mips__
+# define LvNCC        23
+# define LvTCGETS     0x540dUL
+# define LvTCSETS     0x540eUL                /* ..W and F follow it */
+# define LvTCSBRK     0x5405UL
+# define LvTCXONC     0x5406UL
+# define LvTCFLSH     0x5407UL
+# define LvTIOCGPGRP  0x40047477UL
+# define LvTIOCSPGRP  0x80047476UL
+# define LvTCGETS2    0x4030542aUL
+# define LvTCSETS2    0x8030542bUL            /* ..W2 and F2 follow it */
+# define LvTIOCGPTN   0x40045430UL
+# define LvTIOCSPTLCK 0x80045431UL
+#else
+# define LvNCC        19
+# define LvTCGETS     21505UL
+# define LvTCSETS     21506UL
+# define LvTCSBRK     0x5409UL
+# define LvTCXONC     0x540aUL
+# define LvTCFLSH     0x540bUL
+# define LvTIOCGPGRP  21519UL
+# define LvTIOCSPGRP  21520UL
+# define LvTCGETS2    0x802c542aUL
+# define LvTCSETS2    0x402c542bUL
+# define LvTIOCGPTN   2147767344UL
+# define LvTIOCSPTLCK 1074025521UL
+#endif
 struct __lx_termios2 {                /* TCGETS2's: the speeds a BOTHER code stands for */
   unsigned int c_iflag, c_oflag, c_cflag, c_lflag;
-  unsigned char c_line, c_cc[19];
+  unsigned char c_line, c_cc[LvNCC];
   unsigned int c_ispeed, c_ospeed;
 };
 
@@ -1065,6 +1261,13 @@ extern long __love_nbp20(long), __love_nbp202(long, long, long, long, long, long
 #endif
 #define FfLeft 1
 #define FfZero 2
+/* the word an unaligned copy stores: the bytes o (l bits) into aligned word a, then the start
+ * of b, the word after it in memory, in the machine's order */
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+# define LvJoin(a, b) ((a) << l | (b) >> r)
+#else
+# define LvJoin(a, b) ((a) >> l | (b) << r)
+#endif
 #define FfAlt  4
 #define FfPlus 8
 #define FfSpc  16

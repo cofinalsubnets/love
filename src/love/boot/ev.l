@@ -97,7 +97,9 @@
                 k (ana c (feel c x lo) (k0 c) 0 0)
                 _ (each (rev (peep c 'defer ())) (t \ t 0))   ; the glaze's compiles that waited on a sibling
                 k)
-  (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {}}
+  (sco p a i) {'arg a 'imp i 'par p 'sn 0 'st {} 'row (!p ? {} (p 'row))}
+  ; row: each free name's value as the bytecode folds it; one read at run time is not in it. the hook compiles from it
+  (rowpin c x v) (: r (c 'row) (pin r x v, v))
   (rootc c) (: p (c 'par) (!p ? c (rootc p)))   ; top scope: where feel stashes 'src
   ; --- the emission interface (the codegen seam) ---
   ; ana emits through curried emitters (\ k n ..): k = the continuation emitter, n = the current
@@ -191,7 +193,7 @@
               ns (ln bs)
               (letc . rows . wxb bs (ns + bnd) [rows #bnd #ns])))   ; a let's names all shadow throughout
      ; no macro lane: cprop's output is macro-free
-     (fold (mapi (e \ wx e bnd) x) bnd)))
+     (fold c (mapi (e \ wx e bnd) x) bnd)))
    ; census: one walk of the defs answers boxfix's read graph and, per lambda sibling, the names
    ; it captures, resolved as ana will. an enclosing let's lambda sibling, seen from inside one of
    ; that let's lambda defs, is rebuilt at each reference from its imports, so its row reads there
@@ -304,7 +306,7 @@
                     (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
   ; fold: un-shadowed global head -> ap (fold/iop/apx); else an apx node (apx n head . args)
   ; carrying the strategy: n > 1 = the leading n-ary apply's width, 0 = the l2r chain.
-  (fold x bnd) (: h <x
+  (fold c x bnd) (: h <x
    (? (atom? >x) x                          ; (f): ana's (atom? b) handles it
       ; a value head (opfix's glued lane, a macro splice): no binding reaches a value, so it
       ; takes feels' lane
@@ -313,7 +315,7 @@
       (: v (gv h ())
        (? (v == () && !(feels v)) (apx . 0 . x)    ; no global to shadow: the local lane either way
           (elem h bnd) (apx . 0 . x)                ; a shadowed name: local head
-          (: hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
+          (: _ (rowpin c h v) hd (feels v) jf (nom? v ? () (jotfuse v)) n (two? jf ? (jotn x jf bnd) ())
            (? (two? n) (apx . napof v >x . ['\ (jnum? <n bnd (jotfuse 'ops) ? (jf 3) (jf 2))] . jotsub >x <jf <n)   ; a walker over jot: its twin, a number's own
               hd (hd x)
               (apx . napof v >x . x)))))))
@@ -421,20 +423,20 @@
   ; N is a number for certain -- a numeric literal, or a book tally -- so no list can reach the loop
   ; ..or, as wx has lowered it, an (iop OP x) of tally's own op
   (jnum? N bnd ops) (charm? N || two? N && two? ops
-                     && (: T (ops 5) h <N
+                     && (: T (ops 4) h <N
                            (2 = #N && (h == T || h == 'tally && !(elem 'tally bnd) && gv 'tally () == T)
                             || 3 = #N && h == iop && <>N == pick 0 T)))
   (jotloop kind F ps B N Z tw ops num) (jotloop1 kind F ps B N Z tw ops @ [b n f l] (num ? (b + [l]) (b + [['? [<ops n] l f]])))   ; a whole N loops, the rest is the twin's
   ; -> [(: n N z Z) awaiting its body, n, the twin's call, the loop]
   (jotloop1 kind F ps B N Z tw ops)
-   (: lt <>ops pl <>>ops cons (ops 3) rv (ops 4)
-      n (nom 0) z (nom 0) go (nom 0) e (nom 0) a (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
+   (: lt <>ops pl <>>ops cons (ops 3)
+      n (nom 0) z (nom 0) go (nom 0) e (nom 0) I (kind = 1 ? <ps (ps (#ps - 1))) A <ps
       (? (kind = 0) [[': n N z Z] n [tw F z n] [': [go I A] ['? [lt I n] [go [pl I 1] B] A] [go 0 z]]]
          (kind = 1) [[': n N z Z] n [tw F z n] [': [go I] ['? [lt I n] [': (ps 1) [go [pl I 1]] B] z] [go 0]]]
          (kind = 2) [[': n N] n [tw n F] [': [go I] ['? [lt I n] [': e B [go [pl I 1]]]] [go 0]]]
          (kind > 3) (: t [go [pl I 1]] u (kind = 4)
                        [[': n N] n [tw F n] [': [go I] ['? [lt I n] (u ? ['? B t 0] ['? B 1 t]) u] [go 0]]])
-         [[': n N] n [tw F n] [': [go I a] ['? [lt I n] [go [pl I 1] [cons B a]] [rv a]] [go 0 ()]]]))
+         [[': n N] n [tw F n] [': [go I] ['? [lt I n] [': e B [cons e [go [pl I 1]]]]] [go 0]]]))   ; map: one list, front to back
   ; cprop: the partial-evaluation pre-pass, before wx and boxfix. it propagates a constant-bound
   ; var and folds a pure-fn call on constant args; pureset is the fold license and a
   ; bnd-shadowed head never folds (the alpha law). it prunes a cond's dead arms and unfolds no
@@ -876,7 +878,7 @@
    (tablet? far && 0 <= peep far x -1 && sat (d 'par) x < 0))
   (avw c d x)
    (!d ?
-    (: y (gv x gone) (y == gone ? (em2 lvm_index x) (kim y)))   ; ==, not the pin: see gv
+    (: y (gv x gone) (y == gone ? (em2 lvm_index x) (rowpin c x y, kim y)))   ; ==, not the pin: see gv
     (: lfd (assq x (d 'lam)) home (d == c)
      (? (two? lfd) (lz c lfd d)
         (!home && shadowed? c d x)

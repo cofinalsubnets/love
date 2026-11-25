@@ -263,8 +263,10 @@
                        (ws? (s i)) (go (i + 1) (i + 1) shut)
                        (go (i + 1) st acc)))
                 (go 0 0 ()))
-   (upper s) (string (map (c \ 97 <= c <= 122 ? (c - 32) c) (chars s)))
-   (lower s) (string (map (c \ 65 <= c <= 90 ? (c + 32) c) (chars s)))
+   ; each character's simple case, in C
+   ucase (cite 'ucd 'case)
+   (upper s) (ucase 1 (string s))
+   (lower s) (ucase 0 (string s))
    (padl s n) (#s >= n ? s (padl (" " + s) n))
    (padr s n) (#s >= n ? s (padr (s + " ") n))
    (uniq l)  (: (go seen l) (? (atom? l) () (peep seen <l 0) (go seen >l)
@@ -345,11 +347,19 @@
                'thumb2sp 'thumb2sp  'playdate 'thumb2sp
                'i386 'i386  'i686 'i386  'ia32 'i386  'x86 'i386
                'i386m16 'i386m16
+               'mips 'mips  'mipsbe 'mips
                'xtensa 'xtensa  'esp32 'xtensa}
    ; uname's machine and a gnu triple's head; () for the embedded targets
    arch-uname {'x64 "x86_64" 'a64 "aarch64" 'rv64 "riscv64" 'arm "armv7l"}
    ; main.c pins `love-os` per run off __love_osv: one binary meets four kernels
    os-uname {'linux "Linux" 'freebsd "FreeBSD" 'netbsd "NetBSD" 'macos "Darwin" 'inle "Inle"}
+   ; the kernels' vocabulary likewise, one word per OS
+   os-canon {'linux 'linux  'gnu-linux 'linux
+             'freebsd 'freebsd  'fbsd 'freebsd
+             'netbsd 'netbsd
+             'macos 'macos  'darwin 'macos  'osx 'macos  'macosx 'macos  'mac 'macos
+             'inle 'inle}
+   osof (os-canon * name)
    ; a nom or string -> the canonical nom, () for an unknown one
    archof (arch-canon * name)
    ; total: an unknown spelling passes through as its nom, for the refuser to name
@@ -1973,12 +1983,16 @@
                 (<>v = 36 ? (see p) 0,
                  <m = 2027 && <>v = 36 ? (pin edgc 'on (<v = 1 || <v = 3 ? 1 0)) 0,
                  0))
+   ; ..a page key, plain; a modified one (; M ~) is a miss, read whole
+   (edpage p k) (see p @ 126 k 59 (see p, see p, 0) 0)
    (edcsi p) (: c (see p) e (peep arrow c 0)
                (e != 0 ? e
                   (c @ 49 (see p @ 126 -5  59 (see p, peep modarrow (see p) 0)  0)
                        55 (see p, -5)
                        (52 || 56) (see p, -6)
                        51 (see p, -4)
+                       53 (edpage p -14)           ; page up, page down
+                       54 (edpage p -15)
                        60 (edmouse p)
                        50 (edpaste p)
                        63 (edrqm p)

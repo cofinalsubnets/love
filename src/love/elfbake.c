@@ -1,4 +1,4 @@
-// elfbake.c -- image_lay for an ELF: every link but the mach-o's, which takes macho.c instead
+// elfbake.c -- image_lay's ELF writer; macho.c is the other
 #define _GNU_SOURCE
 #include "love.h"
 #include <string.h>
@@ -17,14 +17,7 @@ static int bake_phdr(struct dl_phdr_info *in, size_t sz, void *d) {
 
 // lay the image into .image, which must end the last segment: append where it sits, rewrite
 // its one phdr and shdr, fsync, rename. 0 done, >0 not laid for growth, <0 a failure
-int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win) {
-  // baked_image_len patched by the file offset the running phdrs give; a copy shares the head
-  struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0 },
-                 bi = { (uintptr_t) baked_image, 0, 0 };        // ..and the blob goes where that symbol reads
-  dl_iterate_phdr(bake_phdr, &bl);
-  dl_iterate_phdr(bake_phdr, &bi);
-  if (!(bl.found && bi.found)) return -5;
-  uint64_t lenoff = bl.off, imgoff = bi.off;
+int image_lay_elf(int src, int dst, void const *buf, uintptr_t len, char *win) {
   ElfW(Ehdr) eh;
   ElfW(Shdr) *sh = NULL;
   ElfW(Phdr) *ph = NULL;
@@ -36,6 +29,13 @@ int image_lay(int src, int dst, void const *buf, uintptr_t len, char *win) {
   if (memcmp(eh.e_ident, ELFMAG, SELFMAG) || eh.e_ident[EI_CLASS] != (sizeof(void *) == 8 ? ELFCLASS64 : ELFCLASS32)
       || eh.e_shentsize != sizeof *sh || eh.e_phentsize != sizeof *ph
       || eh.e_shnum < 2 || !eh.e_phnum || eh.e_shstrndx >= eh.e_shnum) return 1;
+  // baked_image_len patched by the file offset the running phdrs give; a copy shares the head
+  struct bake_at bl = { (uintptr_t) &baked_image_len, 0, 0 },
+                 bi = { (uintptr_t) baked_image, 0, 0 };        // ..and the blob goes where that symbol reads
+  dl_iterate_phdr(bake_phdr, &bl);
+  dl_iterate_phdr(bake_phdr, &bi);
+  if (!(bl.found && bi.found)) return -5;
+  uint64_t lenoff = bl.off, imgoff = bi.off;
   nsh = eh.e_shnum, nph = eh.e_phnum;
   sh = alloc(NULL, nsh * sizeof *sh), ph = alloc(NULL, nph * sizeof *ph);
   if (!sh || !ph) { rc = -6; goto out; }

@@ -3,6 +3,7 @@
 #include "../apps/moon/lib/moonlibc/impl.h"
 #include <stdint.h>
 #include <sys/utsname.h>
+#include "kface.h"
 
 // what a hosted __love_start would arm: the environment (seat.l's envt starts as a copy) and
 // stdout/stderr write-through on fds 1 and 2. kmain calls this after the osv
@@ -13,42 +14,7 @@ void k_seat_init(void) {
   stderr->fd = 2; stderr->wr = 1; }
 
 // a kernel-side fd is an absolute row: a task's `write(1, ..)` reaches row 1, not what its parent
-// handed it; redirection lives in the task's ports. the faces below are kmain.c's
-extern void *kmallocw(uintptr_t n), *kmallocwa(uintptr_t n, uintptr_t a), *k_grab(uintptr_t n);
-extern void kfree(void *p), k_drop(void *p);
-
-// the ramfs path faces, each 0 or a negative errno
-struct k_st { uintptr_t size, ms, mode; };
-extern int
- k_fs_open(char const *p, uintptr_t pn, char m),
- k_fs_stat(char const *p, uintptr_t pn, struct k_st *st, bool follow),
- k_fs_mkdir(char const *p, uintptr_t pn, uintptr_t mode),
- k_fs_rmdir(char const *p, uintptr_t pn),
- k_fs_unlink(char const *p, uintptr_t pn),
- k_fs_rename(char const *o, uintptr_t on, char const *n, uintptr_t nn),
- k_fs_symlink(char const *t, uintptr_t tn, char const *p, uintptr_t pn),
- k_fs_chdir(char const *p, uintptr_t pn),
- k_fs_getcwd(char *b, uintptr_t n),
- k_fs_chmod(char const *p, uintptr_t pn, uintptr_t mode),
- k_fs_utime(char const *p, uintptr_t pn, uintptr_t ms);
-// readlink answers a count, not a status
-extern intptr_t k_fs_readlink(char const *p, uintptr_t pn, char *b, uintptr_t n);
-extern uintptr_t k_clock_ms(void);     // ms since the epoch, the kernel's one scale
-
-// the fd faces, g-free: which task runs never crosses this seam
-extern long
- k_fd_pipe(int fds[2]),
- k_fd_dup(int src, int at),
- k_fd_dup3(int src, int dst),
- k_fd_stat(int fd, struct k_st *st),
- k_fd_dents(int fd, void *buf, long cap),
- k_fs_opendir(char const *p, uintptr_t pn),
- k_fd_chdir(int fd),
- k_fd_write(int fd, void const *b, long n),
- k_fd_read(int fd, void *b, long n),
- k_fd_close(int fd),
- k_fd_lseek(int fd, long off, int whence),
- k_fd_truncate(int fd, long n);
+// handed it; redirection lives in the task's ports. the faces are kmain.c's (kface.h)
 
 // a dirfd is honored as AT_FDCWD only: the ramfs has one cwd
 static long at_ok(long dfd, char const *p) {
@@ -90,6 +56,18 @@ static void stat_fab(struct stat *st, struct k_st const *t) {
   st->st_mtim.tv_nsec = (long) (t->ms % 1000) * 1000000;
   st->st_atim = st->st_ctim = st->st_mtim; }
 
+#ifdef __ILP32__
+// a 32-bit libc asks statx (fstat.c's floor), and reads linux's record
+static void statx_fab(struct __lx_statx *sx, struct k_st const *t) {
+  *sx = (struct __lx_statx) {0};
+  sx->stx_mask = STATX_BASIC_STATS, sx->stx_blksize = 4096, sx->stx_nlink = 1;
+  sx->stx_mode = (unsigned short) t->mode;
+  sx->stx_size = t->size, sx->stx_blocks = (t->size + 511) / 512;
+  sx->stx_mtime.tv_sec = (long long) (t->ms / 1000);
+  sx->stx_mtime.tv_nsec = (unsigned) (t->ms % 1000) * 1000000;
+  sx->stx_atime = sx->stx_ctime = sx->stx_mtime; }
+#endif
+
 static long k_statat(long dfd, char const *p, struct stat *st, long fl) {
  long r = at_ok(dfd, p);
  if (r || !st) return r ? r : -EFAULT;
@@ -121,6 +99,18 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
   case NR_ftruncate: return k_fd_truncate((int) a, b);
   case NR_openat:     return k_openat(a, (char const*) b, c, d);
   case NR_newfstatat: return k_statat(a, (char const*) b, (struct stat *) c, d);
+#ifdef __ILP32__
+  case NR_statx: {
+   struct k_st t;
+   char const *p = (char const*) b;
+   if (!e || !p) return -EFAULT;
+   // an empty path with AT_EMPTY_PATH is fstat's ask
+   if ((c & AT_EMPTY_PATH) && !*p) r = k_fd_stat((int) a, &t);
+   else if (!(r = at_ok(a, p))) r = k_fs_stat(p, strlen(p), &t, !(c & AT_SYMLINK_NOFOLLOW));
+   if (r) return r;
+   statx_fab((struct __lx_statx*) e, &t);
+   return 0; }
+#endif
   case NR_utimensat:  return k_utimeat(a, (char const*) b, (struct timespec const*) c, d);
   case NR_mkdirat:
    if ((r = at_ok(a, (char const*) b))) return r;
@@ -209,6 +199,16 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
    return 0; }
   // the kernel is one process, its tasks threads; a task's pid is its nif's
   case NR_getpid: return 1;
+  // the ram is the kernel's heap, in words
+  case NR_sysinfo: {
+   struct k_sysinfo *s = (struct k_sysinfo *) a;
+   if (!s) return -EFAULT;
+   uintptr_t all, spare;
+   k_ram(&all, &spare);
+   memset(s, 0, sizeof *s);
+   s->uptime = (long) (k_clock_ms() / 1000);
+   s->totalram = all, s->freeram = spare, s->mem_unit = sizeof(uintptr_t);
+   return 0; }
   case NR_ioctl: return k_term_ioctl(1, (int) a, (unsigned long) b, (void *) c);
   case NR_uname: {
    struct utsname *u = (struct utsname *) a;
@@ -230,10 +230,6 @@ long __love_inle(long n, long a, long b, long c, long d, long e, long f) {
 
 // processes: a wasm instance, or on x64 an address space (x64/proc.c), calling k_proc_call.
 // the kernel keeps its pid, parent, cwd and fds; status as wait4 lays it, the signal in the low byte
-extern void k_fs_cwd_swap(char *cwd, uintptr_t *n);
-extern bool k_fd_blocks(int fd);
-extern int k_fd_term(int fd, int set, int *raw, uintptr_t *rows, uintptr_t *cols);
-extern bool ready(int fd, int events);
 
 #define k_proc_fds 64
 struct k_proc { int pid, ppid, live, status, exitw; uint64_t cx, nb; uintptr_t cwd_n; char cwd[256];

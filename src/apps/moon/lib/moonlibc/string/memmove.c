@@ -53,15 +53,15 @@ void *memmove(void *d, void const *s, size_t n) {
     unsigned l = 8 * (unsigned) o, r = 8 * sizeof(unsigned long) - l;
     unsigned long *dw = (unsigned long *) dp;
     unsigned long const *sw = (unsigned long const *) (sp - o);
-    unsigned long w = sw[0];            /* its low o bytes are the source's last */
+    unsigned long w = sw[0];            /* its first o bytes are the source's last */
     while (n >= 4 * sizeof(unsigned long)) {
       unsigned long a = sw[-1], b = sw[-2], c = sw[-3], e = sw[-4];
-      dw[-1] = a >> l | w << r; dw[-2] = b >> l | a << r;
-      dw[-3] = c >> l | b << r; dw[-4] = e >> l | c << r;
+      dw[-1] = LvJoin(a, w); dw[-2] = LvJoin(b, a);
+      dw[-3] = LvJoin(c, b); dw[-4] = LvJoin(e, c);
       w = e; dw -= 4; sw -= 4; n -= 4 * sizeof(unsigned long); }
     while (n >= sizeof(unsigned long)) {
       unsigned long a = *--sw;
-      *--dw = a >> l | w << r; w = a; n -= sizeof(unsigned long); }
+      *--dw = LvJoin(a, w); w = a; n -= sizeof(unsigned long); }
     dp = (unsigned char *) dw; sp = (unsigned char const *) sw + o; }
   while (n--) *--dp = *--sp;
   return d; }

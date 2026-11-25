@@ -1,7 +1,11 @@
 #pragma once
 #include <signal.h>
 #define SFD_CLOEXEC  524288
+#ifdef __mips__
+#define SFD_NONBLOCK   128
+#else
 #define SFD_NONBLOCK   2048
+#endif
 /* 128 bytes on the wire */
 struct signalfd_siginfo {
   unsigned int  ssi_signo;

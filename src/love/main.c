@@ -21,11 +21,11 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 
-// the fine clock; love.c's weak default degrades to ms*1e6
-love_noinline intptr_t nclock(void) {
+// the fine clock; where there is no monotonic one (inle's kernels), the coarse one in ns
+love_noinline int64_t nclock(void) {
  struct timespec ts;
- return clock_gettime(CLOCK_MONOTONIC, &ts) ? -1
-  : (intptr_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
+ return clock_gettime(CLOCK_MONOTONIC, &ts) ? (int64_t) love_clock() * 1000000
+  : (int64_t) ts.tv_sec * 1000000000 + ts.tv_nsec; }
 
 static void stdin_give(struct g *g) {
  if (love_inflag)                                        // the blocking bit was ours, a scare or not
@@ -291,9 +291,10 @@ static struct g *env_budget(struct g *g) {
     if (pg > 0 && sz > 0) g->budget = (uintptr_t) pg * (uintptr_t) sz / 2 / sizeof(word); }
   return g; }
 
-// LOVE_NO_GLAZE: a pure-interpreter session, never the artifact
+// LOVE_NO_GLAZE: a pure-interpreter session, never the artifact. an egg boot under it never
+// loads the glaze, so this finds no module there and what it bakes carries no native
 #ifdef LvGlazed
-static char const glaze_off[] = "(: ev (cite 'glaze 'base-ev) natjit ())";
+static char const glaze_off[] = "((cite 'glaze) ? (ev '(: ev (cite 'glaze 'base-ev) natjit ())) 0)";
 #else
 static char const glaze_off[] = "";
 #endif
@@ -483,10 +484,15 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   if (nm && *nm) g = evals_(g, "(: nomop 1)");
   g = evals_(g, "(: latemop 1)");                   // the egg leaves its mop here, run past the glaze
   g = cats_egg(g);                                    // prel then ev's half, post and the arch's holo
-  g = cats_glaze(g);                                     // a no-op on an unglazed arch
+  // LOVE_NO_GLAZE: an egg that never loads the glaze, as an unglazed arch's, for an image a
+  // core that cannot enter the natives will wake (a cortex-m has no a32 state for the arm stub)
+  char const *ng = getenv("LOVE_NO_GLAZE");
+  if (!(ng && *ng)) {
+   g = cats_glaze(g);                                    // a no-op on an unglazed arch
 #ifdef LvGlazed
-  g = shelve(g);                                    // glaze.l's own borrow of holo
+   g = shelve(g);                                   // glaze.l's own borrow of holo
 #endif
+  }
   g = evals_(g, "(latemop ())");                    // the egg's mop
 
   g = evals_(g,
@@ -534,7 +540,7 @@ static struct g *boot(struct g *g, bool argp, char const *bake, char const *bake
   // FIXME why pull from book here? that's mop's job
   // a bake pulls book past the crew, and bake-calls with it: the glaze's while the crew bakes
   g = evals_(g, bake
-    ? "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'born 0))"
+    ? "(: _ (pull book 'nif 0) (pull book 'nifx 0))"
     : "(: _ (pull book 'nif 0) _ (pull book 'nifx 0) (pull book 'book 0))");
 
   if (bake) {                                            // snapshot the post-warm heap, then exit
@@ -685,13 +691,10 @@ int main(int argc, char const **argv) {
     ? (fprintf(stderr, "love: wake: %s: cannot open\n", image_load_path), 1)
     : (fprintf(stderr, "love: wake: %s: not an image this binary can wake (%s)\n", image_load_path, says[why]), 2); }
   char const *noimg = getenv("LOVE_NO_IMAGE");
-  uintptr_t woke_ms = 0;                       // what the wake cost, for `born` below
   if (!g && !bake && !(noimg && *noimg)) {
-   uint64_t t0 = love_clock();
    uintptr_t blen = 0;
    void const *bimg = NULL;
    if (baked_pick(&bimg, &blen) && (g = love_image_load(bimg, blen, 2)))
-    woke_ms = (uintptr_t) (love_clock() - t0),
     image_load_path = "<baked>"; }                                     // the booted state: no egg warm
 #ifndef Love0
   char const *envimg = getenv("LOVE_IMAGE");
@@ -745,9 +748,6 @@ int main(int argc, char const **argv) {
         g = defv(g, "love-os");
         if (ok(g)) g->sp++; }
       if (ok(g = boot_env(g))) g->sp++; }
-    if (image_load_path && ok(g = push(g, 1, putcharm((intptr_t) woke_ms)))) {
-      g = defv(g, "born");
-      if (ok(g)) g->sp++; }
     if (!bake) g = stdin_take(g);
     g = image_load_path ? run_program(g, !argp && isatty(STDIN_FILENO))
                         : boot(g, argp, bake, bake_load, bake_out, bake_opt); }

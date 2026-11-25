@@ -1,11 +1,11 @@
 ; mesh -- levels drawn in triangles: meshes built from shapes, lit by sun or lamps, packed
 ; for facets; a camera; textures; the frame out as half blocks, kitty's pixels, or a window.
 ; the world is lore's: x right, y up, z ahead when 'th is 0, 'th turning toward x.
-(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-normals
+(module (mesh mesh mesh-join mesh-move mesh-quad mesh-box mesh-grid mesh-lathe mesh-sheet mesh-rod mesh-dots mesh-halo mesh-normals
          mesh-keep mesh-keep-all mesh-pack mesh-bake mesh-bake-sun mesh-sun-view mesh-sun-map mesh-open
-         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
+         mesh-lamp mesh-lamp-row mesh-lamps mesh-lamps! mesh-lit-ks mesh-lamp-slots mesh-sun-slots mesh-shine mesh-glow mesh-pic mesh-tex mesh-rgba
          mesh-view mesh-eye mesh-aim mesh-dirs mesh-spot mesh-step mesh-sky mesh-sky-memo mesh-haze mesh-frame mesh-gpu mesh-coarse mesh-flat
-         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-gone
+         mesh-cells mesh-kitty mesh-kitty? mesh-kitty-del mesh-mode mesh-size mesh-dims mesh-sway mesh-show mesh-win mesh-paint mesh-gone
          mesh-glb mesh-glb-of)
 (borrow '(view window vec sky json gpu quay))
 (borrow 'lore)                          ; lamp-light, facets, lace and the frame's layouts, in C
@@ -67,6 +67,17 @@
  (mesh-dots ps sky sun tex) (: n #(ps 0 0) i (iota n)
    (vtx q) [(ps q 0) (ps q 1) (ps q 2) 0.0 0.0 (sky 0) (sky 1) (sky 2) (sun 0) (sun 1) (sun 2)]
    [(lace (catmap vtx ^3)) (int (lace [(i * 3) (i * 3 + 1) (i * 3 + 2) tex]))])
+ ; a glow round each of ps, r across, its colour col: a disc each, turned by facets to face the
+ ; eye by its u v, bright in the middle and falling as a bell to none at its rim
+ (mesh-halo ps r col) (: n 12 rs [0.3 0.6 1.0] m (#rs - 1) k (1 + #rs * n)
+   (bell a) ((exp (-6.0 * a * a) - exp -6.0) / (1.0 - exp -6.0))
+   ring ([0.0 0.0 1.0] . catmap (a \ map (i \ [(a * r * cos (tau * i / n)) (a * r * sin (tau * i / n)) (bell a)]) ^n) rs)
+   (at j i) (1 + j * n + i % n)
+   ts (map (i \ [0 (at 0 i) (at 0 (i + 1)) -1]) ^n
+       + catmap (j \ catmap (i \ (: a (at j i) b (at j (i + 1)) c (at (j + 1) i) d (at (j + 1) (i + 1))
+                                  [[a d b -1] [a c d -1]])) ^n) ^m)
+   (mesh (catmap (p \ map (q \ [(p 0) (p 1) (p 2) (q 0) (q 1) 0.0 0.0 0.0 (q 2 * col 0) (q 2 * col 1) (q 2 * col 2)]) ring) ps)
+         (catmap (o \ map (t \ [(t 0 + o) (t 1 + o) (t 2 + o) -1]) ts) (map (j \ j * k) ^#ps))))
  ; the vertices' first m parts as trays, and their places [x y z], indexable; a triangle t's corners
  (columns vs m) (: n #vs (map (k \ gem-tray [n] (map (v \ 1.0 * v k) vs)) ^m))
  (places vs) (columns vs 3)
@@ -129,7 +140,8 @@
    (lit j) (gain * c (8 + j) * foldl (\ a i (a + ks i * chs i j)) (z + amb j) ^#chs)
    [(lace [(c 0) (c 1) (c 2) (c 3) (c 4) (lit 0) (lit 1) (lit 2)]) (pk 'tris)])
  ; ..the same kept on the packed mesh, only colours rewritten: amb, chs and gain are the
- ; first call's, and after it only the vertices a lamp reaches change, only when ks does
+ ; first call's, and after it only the vertices a lamp reaches change, only when the ks of
+ ; the lamps that reach it do
  (mesh-lamps! pk amb chs ks gain)
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
@@ -138,12 +150,29 @@
            base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
            v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
            on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
-           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs)})
+           r (filter (i \ net (chs i 0 + chs i 1 + chs i 2) > 0.0) ^#chs)
+           _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs) 'r r 'ks (map ks r)})
            [v (pk 'tris)])
       ; ..and nothing written while the lamps stand where they stood
-      b (: lv (pk 'live) [(#(lv 'ix) = 0 || lv 'ks = ks ? b
-                           (: _ (pin lv 'ks ks) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
+      b (: lv (pk 'live) kr (map ks (lv 'r)) [(#(lv 'ix) = 0 || lv 'ks = kr ? b
+                           (: _ (pin lv 'ks kr) v (pins3 b (lv 'ix) (lit (lv 'c8) (lv 'base) (lv 'chs))) (pin pk 'buf v, v)))
                           (pk 'tris)])))
+ ; ..the ks of the lamps that reach a mesh mesh-lamps! keeps, all of them before it has
+ (mesh-lit-ks pk ks) (pk 'live @ () ks lv (map ks (lv 'r)))
+ ; ..a mesh mesh-lamps! keeps, for a gpu to light: [verts li cols], its verts lit with the lamps
+ ; that reach it out, li those lamps, 8 at most, and cols 24 numbers a vertex, slot k lamp li
+ ; k's light there at full strength; () where none or more than 8 reach it. made once, kept
+ (mesh-lamp-slots pk) (: lv (peep pk 'live ()) r (tablet? lv ? (lv 'r) ())
+   (? (!(two? r) || #r > 8) ()
+      (pk 'slots @ ()
+         (: ix (lv 'ix) on (ix // 8) n (pk 'n) c8 (lv 'c8)
+            v (foldl (\ v j (pin v (ix + 5 + j) (c8 j * lv 'base j))) (pk 'buf) ^3)
+            cs (foldl (\ a k (foldl (\ a j (pin a (on * 24 + 3 * k + j) (c8 j * lv 'chs (r k) j))) a ^3)) (iota (24 * n) * 0.0) ^#r)
+            q [v (r + map (_ \ 0) ^(8 - #r)) cs]
+            (pin pk 'slots q, q))
+         q q)))
+ ; ..a mesh's sun su [r g b] trays, its own colour's, for a gpu to shade: 3 numbers a vertex, kept
+ (mesh-sun-slots pk su gain) (pk 'sunned @ () (: c (pk 'cols) q (lace (map (j \ gain * c (8 + j) * su j) ^3)) (pin pk 'sunned q, q)) q q)
  ; ..a mesh that is its own light, its colour times k and nothing on it
  (mesh-shine pk k) (mesh-lamps pk [k k k] () () 1.0)
  ; ..a copy of a scene with its triangles made glows
@@ -206,32 +235,46 @@
  ; lore's sky for mesh-frame's bare: k 1 asks every bare pixel, stars ss a pixel each; k past
  ; 1 asks about every k pixels on directions fixed to the sky and shades between by facets,
  ; stars put on by night; nothing asked where no pixel is bare. past 1, a third part for a gpu:
- ; the grid's mesh, [verts tris tone] or (), and what lays the disc or the stars after
+ ; the grid's mesh and the spots it lays, [verts tris tone [S C] e] or (), what lays the disc or
+ ; the stars after, and their spots for a frame the gpu kept, [S C] or (). a sky with no 'turn
+ ; the gpu asks a pixel at a time instead, [() () tone [S C] e [nums map air]]: sky-gpu's, then the
+ ; view's right, up, ahead, focal length, step, width, height and
+ ; the sun's share its light was made with, 0 for no shadows of the clouds; LORE_SKY_PX 0 keeps the grid
  (mesh-sky ss lt wx e sim t0 k sm)
   (: X (ss 'x) Y (ss 'y) Z (ss 'z)
      (shine c ix) (word (sky-tone lt (sky-stars! ss c lt wx (e 0) (e 2) sim t0 ix)))
      ; ..by day the bare pixels about the sun asked one each, clouds as coarse as the grid's: its corners too few to round the disc
-     (disc v f g b?) (: s (lt 'sun) w (v 'w) h (v 'h) zc (dot s (v 'f))
-       (zc < 0.1 ? g
+     (disc v ok) (: s (lt 'sun) w (v 'w) h (v 'h) zc (dot s (v 'f))
+       (zc < 0.1 ? ()
           (: foc (w / 2.0 / tan (v 'fov / 2.0)) ca (cos (sun-r + 2.0 * mesh-step v k)) R (int (foc * tan (sun-r + 2.0 * mesh-step v k) / zc) + 2)
              cx (int (floor (w / 2.0 + foc * dot s (v 'r) / zc))) cy (int (floor (h / 2.0 - foc * dot s (v 'u) / zc)))
              ; ..the box about it cut to the frame first, so a disc off it asks nothing
              x0 (max 0 (cx - R)) x1 (min (w - 1) (cx + R)) y0 (max 0 (cy - R)) y1 (min (h - 1) (cy + R))
-             (x1 < x0 || y1 < y0 ? g
+             (x1 < x0 || y1 < y0 ? ()
                 (: bw (x1 - x0 + 1) J (iota (bw * (y1 - y0 + 1))) S0 ((y0 + J // bw) * w + x0 + J % bw)
-                   S1 (S0 (iota (b? (f S0)))) d (#S1 @ 0 () (mesh-dirs v S1))
+                   S1 (S0 (iota (ok S0))) d (#S1 @ 0 () (mesh-dirs v S1))
                    I (#S1 @ 0 S1 (iota (d 0 * s 0 + d 1 * s 1 + d 2 * s 2 > ca)))
-                   (#I = 0 ? g (pin g (S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ()))))))))
+                   (#I = 0 ? () [(S1 I) (shine (sky-colour-at lt wx (mesh-step v k) (d 0 I) (d 1 I) (d 2 I) (e 0) (e 2) sim) ())]))))))
      sun-r 0.0316                       ; the disc's radius, acos 0.9995 as sky.l draws it
-     ; ..the disc by day, the stars by night, on g where f was bare, as b? tells
-     (lay v f g b?) (: sp (mesh-spot v X Y Z) ix (over -1 (b? (peep f sp 0)) (iota #X))
-       (1.0 <= lt 'day * 3.0 ? (disc v f g b?) (pin g (over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix))))
+     ; ..the disc while it is up, the stars by night, on the pixels ok holds of: [S C] their indices,
+     ; -1 for none, and their colours, or ()
+     (spots v ok) (? (1.0 <= lt 'day * 3.0) (disc v ok)
+                     (: sp (mesh-spot v X Y Z) ix (over -1 (ok sp) (iota #X))
+                        st [(over -1 (0 <= ix) sp) (shine (sky-colour-at lt wx (mesh-step v 1) X Y Z (e 0) (e 2) sim) ix)]
+                        (lt 'hi < (two? (lt 'turn) ? -0.4 -0.06) ? st (disc v ok @ () st d (map (k \ glued (st k) (d k)) ^2)))))
+     (glued a b) (: n #a i (iota (n + #b)) (over (peep b (i - n) 0) (i < n) (peep a i 0)))
+     ; ..laid on g where f was bare, as b? tells: through a glass's tint or onto a glow kept there
+     (lay v f g b?) (spots v (S \ b? (peep f S 0)) @ () g q (pin g (q 0) (glowed (q 1) (peep f (q 0) 0 @ F ((F < 0) * (-1 - F))))))
      (k <= 1
       ? (\ v S (: at (pin (iota (v 'w * v 'h) * 0 - 1) S (iota #S)) d (mesh-dirs v S)
                   (shine (sky-colour-at lt wx (mesh-step v 1) (d 0) (d 1) (d 2) (e 0) (e 2) sim) (peep at (mesh-spot v X Y Z) -1))))
         [(v \ -1)
-         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x = -1))))
-         [(v \ sky-mesh v lt wx e sim k sm) (\ v g (lay v g g (x \ x >> 32 = 1)))]]))
+         (\ v f B (? (!(aany (f < 0))) f (lay v f (sky-grid v lt wx e sim k f sm) (x \ x < 0))))
+         [(v \ (: q (getenv "LORE_SKY_PX" != "0" ? (sky-gpu lt wx (e 0) (e 2) sim) ())
+                  (? (two? q) [() () (1.5 * lt 'expo) (spots v (S \ S >= 0)) e
+                               [(q 0 + map (x \ 1.0 * x) (v 'r + v 'u + v 'f + [(v 'w / 2.0 / tan (v 'fov / 2.0)) (mesh-step v 1) (v 'w) (v 'h) (0.02 < lt 'sun 1 && 0.0 < lt 'bare ? (lt 'disc / lt 'bare) 0.0)])) (q 1) (q 2)]]
+                     (sky-mesh v lt wx e sim k sm @ () () m (m + [(spots v (S \ S >= 0)) e])))))
+          (\ v g (lay v g g (x \ x >> 32 = 1))) (v \ spots v (S \ S >= 0))]]))
  ; ..a state's sky kept between frames, sm for mesh-sky: made the first time it is asked
  (mesh-sky-memo st) (st 'sky-memo @ () (: t {} (pin st 'sky-memo t, t)) t t)
  ; ..the radians between rays k pixels apart at the middle of v
@@ -239,18 +282,22 @@
  ; the sky over f's bare pixels, about every k pixels, a flat tray: asked on a cube of
  ; directions n a face, fixed to the sky and drawn through the eye, so no turn or tilt moves
  ; an ask across it. the faces in blocks of 4 by 4 quads, only the blocks in view drawn.
- ; with sm a tablet, each ask kept there and asked again a frame in sky-turn, or once
- ; sky-age of sim old; all of them again for a new grid, weather or light, or once the eye
- ; moves, so no two asks side by side are of different moments
- sky-turn 4 sky-age 1.0
- (sky-keep sm n mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
-   ok (peep sm 'n 0 = n && peep sm 'wx () == wx && all (k \ e k = q k) ^3 && l 0 = lt 'sun && l 1 = lt 'expo && 2 ds < 3600.0)
+ ; with sm a tablet, each ask kept there: one never asked asked at once, and all in view
+ ; again together each sky-age of sim, so the mesh through them is made once in that; all of
+ ; them again once the eye has gone sky-move metres, the deck so far over it that less moves
+ ; nothing a pixel, and for a new grid, weather or light
+ sky-age 1.0 sky-cut 2 sky-move 4.0 sky-lead 0.25
+ (sky-keep sm n p mm e lt wx sim) (: q (peep sm 'e e) ds (sim - peep sm 'sim sim) l (peep sm 'lt [(lt 'sun) (lt 'expo)])
+   ok (peep sm 'n 0 = n && peep sm 'p 0.0 = p && peep sm 'wx () == wx && l 0 = lt 'sun && l 1 = lt 'expo && 2 ds < 3600.0)
    z (iota (6 * mm) * 0.0)
-   _ (? !ok (pins sm 'n n 'wx wx 'r z 'g z 'b z 'at (z - 1e9) 'k 0))
-   (pins sm 'e e 'lt [(lt 'sun) (lt 'expo)] 'sim sim 'k (sm 'k + 1)))
+   _ (? !ok (pins sm 'n n 'p p 'wx wx 'cs (map (_ \ z) ^7) 'at (z - 1e9) 'all -1e9 'e e)
+        (2 (e 0 - q 0) + 2 (e 2 - q 2) > 2 sky-move) (pins sm 'all -1e9 'e e))
+   (pins sm 'lt [(lt 'sun) (lt 'expo)] 'sim sim))
  (sky-grid v lt wx e sim k f sm) (sky-mesh v lt wx e sim k sm @ () f m
-   (facets (v 'w) (v 'h) f (v 'cam) (m 0) (m 1) () (gem-tray [7] [0.0 0.0 0.0 0.0 0.0 96.0 (m 2)])))
- ; ..its mesh, facets's verts and tris and the tone, or () where no block is in view
+   (: J (iota (#(m 0) // 11) * 11) at (foldl (\ a k (pin a (J + k) (e k))) (m 0 * 0.0) ^3)
+     (facets (v 'w) (v 'h) f (v 'cam) (m 0 + at) (m 1) () [(gem-tray [7] [0.0 0.0 0.0 0.0 0.0 352.0 (m 2)])])))
+ ; ..its mesh, facets's verts and tris and the tone, the places from the eye, or () where no
+ ; block is in view
  (sky-mesh v lt wx e sim k sm)
   (: w (v 'w) h (v 'h) qa (pi / 2.0) nb (int (qa / mesh-step v k / 4.0) + 1) n (4 * nb) m (n + 1) mm (2 m)
      ; ..a point a b across face fc, -1 to 1 by equal angles, unit: on axis fc // 2, its side
@@ -260,36 +307,102 @@
                      x (A0 * sg + (1 - A0) * s) y (A1 * sg + A0 * s + A2 * t) z (A2 * sg + (1 - A2) * t)
                      L (sqrt (2 x + 2 y + 2 z)) [(x / L) (y / L) (z / L)])
      (dir N) (dirs (N // mm) (2.0 * (N % m) / n - 1.0) (2.0 * (N // m % m) / n - 1.0))
-     ; ..the corners in view, their directions and the triangles through them: kept in sm
-     ; until the view turns, the grid being the sky's and not the eye's
-     key [nb w h (v 'fov) (v 'f) (v 'r) (v 'u)]
+     ; ..a block in view: inside each side of the view but for half a block's diagonal, and
+     ; those kept sky-lead radians wider, while the view stays within them; the blocks' middles
+     ; kept for the grid
+     bm (? (tablet? sm && peep sm 'bk () = nb) (sm 'bm)
+           (: K (iota (6 * nb * nb)) m (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
+              (? (tablet? sm) (pins sm 'bk nb 'bm m) 0, m)))
+     tx (tan (v 'fov / 2.0)) ty (tx * h / w) fw (v 'f)
+     (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
+     sides [(side (v 'r) tx) (side (map (j \ 0.0 - v 'r j) ^3) tx) (side (v 'u) ty) (side (map (j \ 0.0 - v 'u j) ^3) ty)]
+     out (foldl (\ a p (max a (bm 0 * p 0 + bm 1 * p 1 + bm 2 * p 2))) (bm 0 * 0.0 - 1.0) sides)
+     ah (bm 0 * fw 0 + bm 1 * fw 1 + bm 2 * fw 2) need ((out < 1.15 * qa / nb) * (ah > 0.0)) vm (tablet? sm ? (peep sm 'vm ()) ())
+     vb (iota (? (two? vm && <vm = nb && net (need * (1 - vm 1)) = 0) (vm 1)
+                 (: m ((out < 1.15 * qa / nb + sky-lead) * (ah > 0.0 - sky-lead)) (? (tablet? sm) (pin sm 'vm [nb m]) 0, m))))
+     ; ..the corners of the blocks in view, their directions and the triangles through them:
+     ; kept in sm while the same blocks are in view, the grid being the sky's and not the eye's
+     key [nb w h (show vb)]
      gd (? (tablet? sm && peep sm 'gk () = key) (sm 'gd)
-           (: ; ..a block in view: inside each side of the view but for half a block's diagonal
-              tx (tan (v 'fov / 2.0)) ty (tx * h / w) r (v 'r) u (v 'u) fw (v 'f)
-              (side a k) (: l (sqrt (1.0 + 2 k)) (map (j \ (a j - k * fw j) / l) ^3))
-              sides [(side r tx) (side (map (j \ 0.0 - r j) ^3) tx) (side u ty) (side (map (j \ 0.0 - u j) ^3) ty)]
-              K (iota (6 * nb * nb)) bd (dirs (K // (2 nb)) (2.0 * (K % nb + 0.5) / nb - 1.0) (2.0 * (K // nb % nb + 0.5) / nb - 1.0))
-              out (foldl (\ a p (max a (bd 0 * p 0 + bd 1 * p 1 + bd 2 * p 2))) (bd 0 * 0.0 - 1.0) sides)
-              vb (iota ((out < 1.15 * qa / nb) * (bd 0 * fw 0 + bd 1 * fw 1 + bd 2 * fw 2 > 0.0)))
-              ; ..the blocks' corners, each asked once
+           (: ; ..the blocks' corners, each asked once, and a ring round each within its face
+              ; for the curves through them
+              (cl x) (max 0 (min n x))
               (corner E c) (: bk (vb (E // (2 c))) o (E % (2 c))
                              (bk // (2 nb) * mm + (bk // nb % nb * 4 + o // c) * m + bk % nb * 4 + o % c))
-              N (iota (pin (iota (6 * mm) * 0) (corner (iota (#vb * 25)) 5) 1 > 0))
+              (ring E) (: bk (vb (E // 49)) o (E % 49)
+                         (bk // (2 nb) * mm + cl (bk // nb % nb * 4 + o // 7 - 1) * m + cl (bk % nb * 4 + o % 7 - 1)))
+              N (iota (pin (iota (6 * mm) * 0) (ring (iota (#vb * 49))) 1 > 0))
               ix (pin (iota (6 * mm) * 0 - 1) N (iota #N)) qs (corner (iota (#vb * 16)) 4)
-              (q j) (ix (qs + j)) zq (qs * 0 - 1)
-              g [N (dir N) (lace [(q 0) (q 1) (q (m + 1)) zq (q 0) (q (m + 1)) (q m) zq])]
+              (q j) (ix (qs + j))
+              ; ..each quad's corners; one quad cut sky-cut by sky-cut, its points' weights on
+              ; the corners and its triangles; and one fanned from its middle to its sides'
+              ; points, the fan's triangles [middle a b] along each side cut and along it whole
+              c sky-cut S (c + 1) J (iota (S * S)) ua (J % S / (1.0 * c)) ub (J // S / (1.0 * c))
+              K (iota (2 c)) at (K // c * S + K % c) zk (K * 0 - 1)
+              (wts a b) [((1.0 - a) * (1.0 - b)) (a * (1.0 - b)) (a * b) ((1.0 - a) * b)]
+              ; ..and on the 4 by 4 corners about the quad, a catmull-rom curve each way, the
+              ; face's edge corners standing in past it
+              (cr t) [(0.5 * t * (t * (2.0 - t) - 1.0)) (0.5 * (t * t * (3.0 * t - 5.0) + 2.0))
+                      (0.5 * t * (t * (4.0 - 3.0 * t) + 1.0)) (0.5 * t * t * (t - 1.0))]
+              (bic a b) (: x (cr a) y (cr b) (map (k \ x (k % 4) * y (k // 4)) ^16))
+              nr (4 * c) R (iota nr) sd (R // c) t (R % c / (1.0 * c))
+              mid (gem-tray [1] [0.5])
+              fa (abut [((sd = 0) * t + (sd = 1) + (sd = 2) * (1.0 - t)) mid])
+              fb (abut [((sd = 1) * t + (sd = 2) + (sd = 3) * (1.0 - t)) mid])
+              g [N (dir N) [(q 0) (q 1) (q (m + 1)) (q m)] (wts ua ub)
+                 (lace [at (at + 1) (at + S + 1) zk at (at + S + 1) (at + S) zk])
+                 (wts fa fb) [sd R ((R + 1) % nr) ((R % c = 0) * sd * c + (R % c > 0) * nr) ((R % c = 0) * ((sd + 1) * c % nr) + (R % c > 0) * nr)]
+                 ; ..each quad's sides that lie on its face's edge
+                 (: x (qs % m) y (qs // m % m) [(y = 0) (x + 1 = n) (y + 1 = n) (x = 0)])
+                 (map (k \ ix (qs // mm * mm + cl (qs // m % m + k // 4 - 1) * m + cl (qs % m + k % 4 - 1))) ^16)
+                 (bic ua ub) (bic fa fb)]
               (? (tablet? sm) (pins sm 'gk key 'gd g) 0, g)))
      N (gd 0) d (gd 1)
-     ; ..each ask's clouds no finer than the asks beside it; kept ones as they were
-     (ask N d) (sky-colour-at lt wx (qa / n) (d 0) (d 1) (d 2) (e 0) (e 2) sim)
+     ; ..each ask's clouds as fine as a grid half as coarse, their edges a pixel's: its two
+     ; colours and its edge, seven trays; kept ones as they were
+     p (mesh-step v 1)
+     (ask N d) (sky-ends lt wx (qa / n / 2.0) p (d 0) (d 1) (d 2) (e 0) (e 2) sim @ [c0 dc x] (c0 + dc + [x]))
      c (? (!(tablet? sm)) (ask N d)
-          (: _ (sky-keep sm n mm e lt wx sim)
-             A (iota (((N + sm 'k) % sky-turn = 0) + (sim - sm 'at N > sky-age) > 0)) NA (N A)
+          (: _ (sky-keep sm n p mm e lt wx sim)
+             old (sim - sm 'all > sky-age) _ (old ? (pin sm 'all sim) 0)
+             A (old ? (iota #N) (iota (sm 'at N < -1e8))) NA (N A)
              cA (#A @ 0 () (ask NA (dir NA)))
-             _ (#A @ 0 () (pins sm 'r (pin (sm 'r) NA (cA 0)) 'g (pin (sm 'g) NA (cA 1)) 'b (pin (sm 'b) NA (cA 2)) 'at (pin (sm 'at) NA (NA * 0.0 + sim))))
-             [(sm 'r N) (sm 'g N) (sm 'b N)]))
-     zs (N * 0.0) cols [(e 0 + d 0) (e 1 + d 1) (e 2 + d 2) zs zs (c 0) (c 1) (c 2)]
-     (#N @ 0 () [(lace cols) (gd 2) (1.5 * lt 'expo)]))
+             _ (#A @ 0 () (pins sm 'cs (map (j \ pin (sm 'cs j) NA (cA j)) ^7) 'at (pin (sm 'at) NA (NA * 0.0 + sim)) 'ver (peep sm 'ver 0 + 1)))
+             (map (j \ sm 'cs j N) ^7)))
+     ; ..the mesh about the eye. a quad an edge crosses cut, clear at a corner and cloud at
+     ; another, its corners' asks eased between, so the edge bends within it, but on a face's
+     ; edge; one all soft eased whole; a side cut where both its corners are a cut quad's, so
+     ; no side is cut on one face of it and whole on the other, and none on a face's edge, whose
+     ; corners the next face numbers apart; a quad with a side cut fanned; the rest two triangles
+     (build _)
+      (: Q (gd 2) W (gd 3) T (gd 4) Wf (gd 5) Tf (gd 6) bd (gd 7) St (gd 8) (at k) (c 6 (Q k))
+        lo (min (min (at 0) (at 1)) (min (at 2) (at 3))) hi (max (max (at 0) (at 1)) (max (at 2) (at 3)))
+        ce ((lo < 0.5) * (hi > -0.5) * (hi - lo > 1.0))
+        cq (ce * (bd 0 + bd 1 + bd 2 + bd 3 = 0))
+        E (iota cq) hit (foldl (\ h k (pin h (Q k E) 1)) (N * 0) ^4) (hc k) (hit (Q k))
+        cs [(hc 0 * hc 1 * (1 - bd 0)) (hc 1 * hc 2 * (1 - bd 1)) (hc 2 * hc 3 * (1 - bd 2)) (hc 3 * hc 0 * (1 - bd 3))]
+        ns (cs 0 + cs 1 + cs 2 + cs 3) B (iota ((1 - cq) * (ns > 0))) F (iota ((1 - cq) * (ns = 0)))
+        nE (#E * #(W 0)) nf (#(Wf 0))
+        zf (F * 0 - 1) Jt (iota (#E * #T))
+        ; ..a fan's sides cut or whole, each of its triangles the one or the other
+        Jf (iota (#B * #(Tf 0))) qf (Jf // #(Tf 0)) lf (Jf % #(Tf 0))
+        sf (Tf 0 lf) bq (B qf) fc ((sf = 0) * cs 0 bq + (sf = 1) * cs 1 bq + (sf = 2) * cs 2 bq + (sf = 3) * cs 3 bq)
+        o (#N + nE + qf * nf) zb (Jf * 0 - 1)
+        fan (lace [(o + nf - 1) (o + Tf 3 lf + fc * (Tf 1 lf - Tf 3 lf)) (o + Tf 4 lf + fc * (Tf 2 lf - Tf 4 lf)) zb])
+        tris (abut [(lace [(Q 0 F) (Q 1 F) (Q 2 F) zf (Q 0 F) (Q 2 F) (Q 3 F) zf])
+                    (T (Jt % #T) + (Jt % 4 != 3) * (#N + Jt // #T * #(W 0))) fan])
+        ; ..each column the asks' own, then the cuts' and the fans' points: a place or a colour
+        ; eased straight from the corners, so a side's points lie on it and meet the next quad's,
+        ; and the edge along the curves through the 4 by 4 about them
+        (by x C V0 V1) (abut [x (mix-quads x C V0 E) (mix-quads x C V1 B)])
+        (lin x) (by x Q W Wf)
+        [(lace [(lin (d 0)) (lin (d 1)) (lin (d 2)) (by (c 6) St (gd 9) (gd 10)) 0.0
+                (lin (c 0)) (lin (c 1)) (lin (c 2)) (lin (c 3)) (lin (c 4)) (lin (c 5))]) tris])
+     ; ..kept while no ask is new and the view has not turned, its places from the eye, so a
+     ; gpu keeps it as the eye moves
+     mk [key (tablet? sm ? (peep sm 'ver 0) ())]
+     mv (? (tablet? sm && peep sm 'mk () = mk) (sm 'mv) (: m (build ()) (? (tablet? sm) (pins sm 'mk mk 'mv m) 0, m)))
+     (#N @ 0 () [(mv 0) (mv 1) (1.5 * lt 'expo)]))
  ; the sky low ahead before the gain, 0 to 255: the colour a far thing fades to
  ; ..the horizon's colour toward th: a ring of headings fixed in the world, each easing out
  ; 60 degrees off th, so a turn carries no sample across a cloud's edge. the ring is the costly
@@ -301,6 +414,9 @@
    q (cos (th - as) - 0.5) w ((q > 0.0) * q * q) s (net w)
    (ch k) (255.0 * net (w * c k) / s)
    [(ch 0) (ch 1) (ch 2)])
+ ; a glow faces the eye, u v its offsets along the eye's right and up, and fades over glow-soft
+ ; metres as what is behind it comes within glow-lead of it
+ glow-lead 0.1 glow-soft 0.25
  ; a frame, a flat w*h colour tray: sc [verts tris] or [verts tris sun], sun () or [view
  ; depths bias]; fog [r g b near far] 0 to 255; gain sky-tone's, 0 none; bare a colour,
  ; (\ v S ..) for bare pixels S, or [base over]: (base v) drawn under, (over v f B) finishes; a
@@ -310,18 +426,28 @@
  ; v 'under a coarser frame of mesh-coarse's, laid first where it drew; v 'gpu a gpu-state, which
  ; draws it where it can, v 'keys each batch's name for it or (), and a sky's mesh under it where
  ; bare has one; with its pipe the frame before is answered, finished as that frame's own v and
- ; bare ask
+ ; bare ask; or ['kept spots], where the gpu that shows on the window kept a frame none of
+ ; whose pixels were bare, the sky's spots to lay over its sky
  (mesh-frame v sc texs fog flags gain bare) (: B0 (two? bare ? (<bare v) -1) B (v 'under @ () B0 u [B0 (u 0) (u 1)])
    sun (#sc < 3 ? () (sc 2)) bias (two? sun ? (sun 2) 0.0)
-   o (gem-tray [8] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias])
+   er (v 'r) eu (v 'u)
+   o (gem-tray [18] [(1.0 * fog 0) (1.0 * fog 1) (1.0 * fog 2) (1.0 * fog 3) (1.0 * fog 4) (1.0 * (flags | 64)) (1.0 * gain) bias
+                     (er 0) (er 1) (er 2) (eu 0) (eu 1) (eu 2) (v 'near) (v 'far) glow-lead glow-soft])
    os (#sc < 3 ? o [o (two? sun ? (sun 0) ()) (two? sun ? (sun 1) ())])
    gp (peep v 'gpu ()) sk (tablet? gp && two? bare && #bare = 3 ? (bare 2 0 v) ())
    c [v B0 bare (two? sk)] q (tablet? gp ? (gpu-facets gp (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os (peep v 'keys ()) sk c) ())
-   r (tray? q ? [q c] (two? q ? q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os) [v B0 bare 0]]))
-   (r 1 3 ? (r 1 2 2 1 (r 1 0) (r 0)) (mesh-bare (r 0) (r 1 0) (r 1 1) (r 1 2))))
- ; ..the gpu that draws st's frames, opened at the first: with LORE_GPU=1, else 'off. each is
- ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0
- (mesh-gpu st) (st 'gpu @ () (: s (getenv "LORE_GPU" = "1" ? (gpu-open () @ g (tablet? g ? (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0")) 'off)) 'off)
+   r (? (tray? q || nom? q) [q c] (two? q) q [(facets (v 'w) (v 'h) B (v 'cam) (sc 0) (sc 1) texs os) [v B0 bare 0]])
+   (? (nom? (r 0)) [(r 0) (r 1 3 ? (r 1 2 2 2 (r 1 0)) ())] (r 1 3) (r 1 2 2 1 (r 1 0) (r 0)) (mesh-bare (r 0) (r 1 0) (r 1 1) (r 1 2))))
+ ; ..the gpu that draws st's frames, opened at the first: on a window or under android's bridge
+ ; (LOVE_GPU_FACE) but with LORE_GPU=0, and otherwise only with LORE_GPU=1, else 'off. each is
+ ; shown a frame late, drawn while the next is made, but with LORE_GPU_PIPE=0; on an X window,
+ ; or an app's under android's bridge, it shows them there itself, but with LORE_GPU_WIN=0
+ (mesh-gpu st) (st 'gpu @ () (: w (st 'win) on (getenv "LORE_GPU_WIN" != "0") x (tablet? w && w 'how = 'x && on)
+                                  dr (tablet? w && w 'how = 'droid && on)
+                                  (open g) (: s (pin (gpu-state g) 'pipe (getenv "LORE_GPU_PIPE" != "0"))
+                                              (? (x && gpu-win g (w 'xw) = ()) (pin s 'win 1) (dr && peep g 'face 0) (pin s 'win 1) s))
+                                  ge (getenv "LORE_GPU") on? (ge = "1" || ge != "0" && (x || dr || string? (getenv "LOVE_GPU_FACE")))
+                                  s (on? ? (gpu-open x @ g (tablet? g ? (open g) (gpu-said (unwords (map string g)), 'off))) 'off)
                                 (pin st 'gpu s, s))
                           s s)
  ; ..f's bare pixels filled as bare asks, through v, B0 the ground: again, none is left to fill
@@ -363,8 +489,10 @@
  ; of its pixels 'scale of the window's each way
  kitty-w 640
  (mesh-scale st) (peep st 'scale 2 @ s (elem s [1 2 4 8] ? s 2))
+ ; ..a window's share that is the picture's, where the console has the rest: 'pane its box in pixels
+ (mesh-pane st) (: wh (window-size (st 'win)) (peep st 'pane () @ () wh q [(max 1 (q 2)) (max 1 (q 3))]))
  (mesh-size st w r) (: h (2 * r) s (mesh-scale st) win (st 'win)
-   wh (tablet? win ? (window-size win) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
+   wh (tablet? win ? (mesh-pane st) [(8 * w) (16 * r)]) pw (max 1 ((tablet? win ? (wh 0) kitty-w) // s)) ph (max 1 (pw * wh 1 // max 1 (wh 0)))
    (pins (view! st w h r) 'bay (view-bayer w h) 'pic-w pw 'pic-h ph
          'kp (? (tablet? win) (max 1 (pw // 160)) (st 'kitty) (max 1 (kitty-w // max w h // s)) 1)))
  ; ..the picture a frame is: in a window 'pic-w by 'pic-h, else 'kp pixels a cell
@@ -386,20 +514,45 @@
          (esc + "[?2026h" + mesh-kitty f (k * w) (k * h) w (h // 2) (7 + n) + mesh-kitty-del (8 - n)
           + text + esc + "[?2026l"))
       (esc + "[?2026h" + mesh-cells f w h (st 'deep) (st 'deep ? 0 (st 'bay)) bands + esc + "[?2026l")))
- ; ..or to a window: the picture sent for the server to enlarge, else painted onto the
- ; paper as often as fits; bands then 'over in 8 by 16 cells, only their rows shown when
- ; the server enlarged the rest; answers ""
+ ; ..or to a window: by the gpu that shows on it, its kept frame or f, else the picture sent
+ ; for the server to enlarge, else painted onto the paper as often as fits; bands then 'over
+ ; in 8 by 16 cells, only their rows shown when the server enlarged the rest, their cells
+ ; when the gpu did; answers ""
  (mesh-win st f bands) (: win (st 'win) d (mesh-dims st) w <d h (d 1)
-   wh (window-size win) W <wh H (wh 1) P (window-paper win)
+   wh (window-size win) W <wh H (wh 1) P (window-paper win) gp (st 'gpu)
+   (? (two? (peep st 'pane ())) (mesh-split st f bands w h W H P)
+      (tablet? gp && peep gp 'win 0 && tablet? (gp 'g) ? (mesh-gpu-win st gp f w h W H P bands) (mesh-blit st f bands w h W H P))))
+ ; ..beside the console the picture painted into its pane, the gpu keeping none of its frames
+ (mesh-split st f bands w h W H P) (: b (st 'pane) pw (b 2) ph (b 3) gp (st 'gpu) ov (peep st 'over {}) _ (tablet? gp ? (pin gp 'keep 0))
+   T (cask (4 * max 1 (pw * ph)))
+   _ (tray? f && #f = w * h && 0 < pw && 0 < ph ? (: _ (mesh-paint f w h T pw ph)
+                                    _ (each (sort (keys bands)) (r \ mesh-band st T pw ph r (bands r)))
+                                    (each ^(min ph (H - b 1)) (j \ pour P (4 * ((b 1 + j) * W + b 0)) T (4 * j * pw) (4 * min pw (W - b 0))))) 0)
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   (window-show (st 'win) 0 H, ""))
+ ; ..its frames kept by the gpu from the next on
+ (mesh-gpu-win st gp f w h W H P bands) (: ov (peep st 'over {})
+   _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
+   _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
+   (cells t) (map (r \ (t r) @ bd [(8 * bd 0) (16 * r) (min W (8 * (bd 0 + #(bd 1)))) (min H (16 * r + 16))]) (sort (keys t)))
+   rs (filter (q \ q 0 < q 2 && q 1 < q 3) (cells bands + cells ov))
+   (pin gp 'keep 1, gpu-show (gp 'g) f w h W H (peep st 'slide [0 0]) rs P, ""))
+ (mesh-blit st f bands w h W H P) (: win (st 'win)
    Q (peep st 'pic-n 0 = w * h ? (st 'pic) (: q (cask (w * h * 4)) _ (pins st 'pic q 'pic-n (w * h)) q))
    _ (frame-paint f w 1 Q w)
    ov (peep st 'over {}) rs (sort (keys bands + keys ov))
    up (window-blit win Q w h (map (r \ [(16 * r) (16 * r + 16)]) rs) (peep st 'slide [0 0]))
-   _ (up ? (each rs (mesh-under f w h P W H)) (frame-paint f w (max 1 (min (W // w) (H // h))) P W))
+   _ (up ? (each rs (mesh-under f w h P W H)) (mesh-paint f w h P W H))
    _ (each (sort (keys bands)) (r \ mesh-band st P W H r (bands r)))
    _ (each (sort (keys ov)) (r \ mesh-band st P W H r (ov r)))
    _ (? up (each rs (r \ window-show win (16 * r) (16 * r + 16))) (window-show win 0 H))
    "")
+ ; ..the picture f w by h on the paper P, W by H, at the largest whole scale that fits; the
+ ; paper past it black, so nothing laid there before stays
+ (mesh-paint f w h P W H) (: s (max 1 (min (W // w) (H // h))) cw (min W (w * s)) ch (min H (h * s)) Z (cask (4 * W))
+   _ (frame-paint f w s P W)
+   _ (cw < W ? (each ^ch (y \ pour P (4 * (y * W + cw)) Z 0 (4 * (W - cw)))) 0)
+   (each (map (+ ch) ^(H - ch)) (y \ pour P (4 * y * W) Z 0 (4 * W)), P))
  ; ..the paper's cell row r laid from the picture f w by h, enlarged to the window W by H
  (mesh-under f w h P W H r) (: y0 (16 * r) n (min 16 (H - y0))
    (? (0 < n) (: I (iota (W * n)) X (I % W) Y (I // W + y0) g (f (Y * h // H * w + X * w // W)) T (cask (W * n * 4))

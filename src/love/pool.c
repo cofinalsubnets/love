@@ -10,11 +10,13 @@
 // piece of the work, never n / width, so the answer is the same at any width.
 // the width: min(LOVE_THREADS, physical cores, chunks, cpus spare). spare is what the box
 // left idle over the window since the last read (/proc/stat's idle and iowait, a BSD's
-// kern.cp_time idle), plus what
-// we took ourselves, in whole cpus; and 1 whenever /proc/pressure/cpu says tasks waited for a
-// cpu over more than PoolPsi of the window. read at most every 50 ms through held fds; it
-// drops at once and grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is read each call: 1 is off, N a cap, N! exactly N whatever the
-// load (the laws, and the measure's forced widths).
+// kern.cp_time idle), plus what we took ourselves, in whole cpus; and 1 whenever
+// /proc/pressure/cpu says tasks waited for a cpu over more than PoolPsi of the window. where
+// the load cannot be read (android denies an app /proc/stat, and there one app has the
+// screen) every cpu is spare. read at most every 50 ms through held fds; it drops at once and
+// grows only when two reads in a row allow it, so a loaded box runs serial. LOVE_THREADS is
+// read each call: 1 is off, N a cap, N! exactly N whatever the load (the laws, and the
+// measure's forced widths).
 // serial where there are no threads (inle, wasm, macos, love0, a 32-bit BSD, a board), inside a
 // worker, and in a fork's child until the pool is made again there.
 #include "love.h"
@@ -133,11 +135,12 @@ static uint64_t pool_self(void) {
  struct rusage u;
  if (getrusage(RUSAGE_SELF, &u)) return 0;
  return (uint64_t) (u.ru_utime.tv_sec + u.ru_stime.tv_sec) * 1000000u + (uint64_t) (u.ru_utime.tv_usec + u.ru_stime.tv_usec); }
-// the whole cpus the box can spare now, from the window since the last read; 1 at the first
+// the whole cpus the box can spare now, from the window since the last read; 1 at the first,
+// and all of them where no load can be read
 static int pool_ask(struct pool *p, uint64_t t) {
  uint64_t idle, tot, self = pool_self(), psi;
  int ok = 1, ask = 1;
- if (!(__love_osv == 1 ? pool_stat(p->fd, &idle, &tot) : pool_cptime(&idle, &tot))) return 1;
+ if (!(__love_osv == 1 ? pool_stat(p->fd, &idle, &tot) : pool_cptime(&idle, &tot))) return p->ncpu;
  psi = pool_num(p->fp, "total=", 0, &ok);   // the first line is "some": its total, us of stall
  if (p->tot0 && tot > p->tot0 && t > p->at) {
   uint64_t win = (t - p->at) / 1000,           // us
@@ -268,16 +271,12 @@ void par_run(intptr_t n, void (*fn)(void *, intptr_t), void *ctx) {
 #endif
 }
 
-love_noinline static struct g *host_par_width(struct g *g) {
- word nw = g->sp[0];
- g->sp[0] = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
- return g; }
-static LvmWrap(lvm_par_width, host_par_width)
+static lvm(lvm_par_width) {
+ word const nw = Sp[0], r = putcharm(oddp(nw) ? par_width(getcharm(nw)) : 1);
+ love_musttail return Answer(r); }
 LvDef("par-width", par_width, 1, "pool");
 // (par-cpus m) the whole cpus a spare of m thousandths allows, the rounding the width takes: the laws'
-love_noinline static struct g *host_par_cpus(struct g *g) {
- word mw = g->sp[0];
- g->sp[0] = putcharm(oddp(mw) && getcharm(mw) >= 0 ? pool_cpus((uint64_t) getcharm(mw)) : 0);
- return g; }
-static LvmWrap(lvm_par_cpus, host_par_cpus)
+static lvm(lvm_par_cpus) {
+ word const mw = Sp[0], r = putcharm(oddp(mw) && getcharm(mw) >= 0 ? pool_cpus((uint64_t) getcharm(mw)) : 0);
+ love_musttail return Answer(r); }
 LvDef("par-cpus", par_cpus, 1, "pool");

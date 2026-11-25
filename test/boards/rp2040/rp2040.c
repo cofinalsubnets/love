@@ -1,45 +1,18 @@
 // rp2040 bare-metal arch backend, no pico SDK: vectors, crt0, clocks, UART0 console, the
 // timer and SIO GPIO, for a cortex-M0+ booting from flash XIP
 #include <stdint.h>
+#define CRT0_V6M
 #include "rp2040.h"
-
-// linker bounds (rp2040.lds)
-extern uint32_t __data_start__[], __data_end__[], __data_load__[];
-extern uint32_t __bss_start__[], __bss_end__[], __stack_top__[];
+#include "../crt0.h"
 
 int main(void);
 
-// --- fault diagnostics ----------------------------------------------------
-// ARMv6-M has no CFSR/BFAR: halt and let SWD read the stacked frame
-void isr_hardfault(void) { for (;;) asm volatile("bkpt #0"); }
-
-// spins: wfe/wfi have no thumb1 row in holo yet
-static void default_handler(void) { for (;;) asm volatile("bkpt #0"); }
-
-// --- crt0 / reset ---------------------------------------------------------
-// boot2 has loaded SP from vectors[0]
+// boot2, or the rom's warm entry, has loaded sp from vectors[0]
 __attribute__((used, noreturn)) void reset_handler(void) {
-  REG(VTOR_ADDR) = 0x10000100u;
-  for (uint32_t *s = __data_load__, *d = __data_start__; d < __data_end__; ) *d++ = *s++;
-  for (uint32_t *b = __bss_start__; b < __bss_end__; b++) *b = 0;
+  crt0(1);
   clocks_init();
   main();
   for (;;) asm volatile("bkpt #0"); }
-
-// --- vector table (at 0x10000100) -----------------------------------------
-// system vectors only: no peripheral IRQ is enabled
-__attribute__((section(".vectors"), used))
-void *const vectors[] = {
-  (void *) __stack_top__,   // 0  initial SP
-  reset_handler,            // 1  reset
-  default_handler,          // 2  NMI
-  isr_hardfault,            // 3  HardFault
-  0, 0, 0, 0, 0, 0, 0,      // 4..10 reserved
-  default_handler,          // 11 SVCall
-  0, 0,                     // 12..13 reserved
-  default_handler,          // 14 PendSV
-  default_handler,          // 15 SysTick
-};
 
 // --- clocks: XOSC (12 MHz) + PLL_SYS -> 125 MHz clk_sys; clk_peri off XOSC --
 void clocks_init(void) {
@@ -128,3 +101,41 @@ void gpio_put(unsigned pin, int hi) {
   REG(hi ? SIO_GPIO_OUT_SET : SIO_GPIO_OUT_CLR) = 1u << pin; }
 
 int gpio_get(unsigned pin) { return (REG(SIO_GPIO_IN) >> pin) & 1u; }
+
+// --- the chip's unique id: its flash's ------------------------------------
+// its 0x4b read: four dummy bytes, then eight. xip is off while it runs, so the exchange runs
+// from ram (.data, copied by crt0) and boot2, copied to the stack first, puts xip back after.
+// the rom's flush also lets go of chip select
+typedef void (*romfn)(void);
+static romfn rom_fn(uint32_t code) {
+  typedef void *(*lookup_t)(uint16_t const *, uint32_t);
+  lookup_t const look = (lookup_t) (uintptr_t) *(uint16_t const *) 0x18u;
+  return (romfn) look((uint16_t const *) (uintptr_t) *(uint16_t const *) 0x14u, code); }
+
+__attribute__((section(".data"), noinline))
+static void flash_uid_ram(uint8_t *id, romfn connect, romfn exit_xip, romfn flush, romfn boot2) {
+  connect(), exit_xip();
+  REG(0x4001800cu) = (REG(0x4001800cu) & ~0x300u) | 0x200u;   // ss low
+  for (uint32_t i = 0; i < 13; i++) {
+    while (!(REG(0x18000028u) & 2u)) {}
+    REG(0x18000060u) = i ? 0 : 0x4bu;
+    while (!(REG(0x18000028u) & 8u)) {}
+    uint32_t const b = REG(0x18000060u);
+    if (i >= 5) id[i - 5] = (uint8_t) b; }
+  REG(0x4001800cu) = (REG(0x4001800cu) & ~0x300u) | 0x300u;   // ss high
+  flush(), boot2(); }
+
+void chip_uid(uint8_t id[8]) {
+  // from sram no boot2 ran and xip came up in reset: the rom's own slow xip goes back instead
+  int const sram = (uintptr_t) chip_uid >> 28 == 2u;
+  uint32_t b2[64];
+  for (uint32_t i = 0; i < 64 && !sram; i++) b2[i] = ((uint32_t const *) 0x10000000u)[i];
+  // the ram copy is past a bl's reach from flash: by register
+  void (*volatile const ram)(uint8_t *, romfn, romfn, romfn, romfn) = flash_uid_ram;
+  ram(id, rom_fn('I' | 'F' << 8), rom_fn('E' | 'X' << 8), rom_fn('F' | 'C' << 8),
+      sram ? rom_fn('C' | 'X' << 8) : (romfn) ((uintptr_t) b2 | 1u)); }
+
+// --- into the rom's usb boot: reset_usb_boot, by its two-letter code ------
+void rom_bootsel(void) {
+  void (*const boot)(uint32_t, uint32_t) = (void (*)(uint32_t, uint32_t)) rom_fn('U' | 'B' << 8);
+  boot(0, 0); }

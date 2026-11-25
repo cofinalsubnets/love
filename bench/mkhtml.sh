@@ -176,18 +176,18 @@ than the whole corpus
 (<code>bench/ccrypto.l</code> drives the <code>chacha20</code> and <code>poly1305</code>
 nifs in <code>src/love/crypto/tls.c</code>), and they are here because an average can hide a
 lopsided one. <b>chacha</b> indexes a sixteen-word state <i>array</i> in its inner loop;
-<b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc gives a register
-home to the second shape and not the first, so the two rows are a gauge: wide chacha
-beside narrow poly says the remaining gap is array slots, and the day they close
-together is the day that reading was wrong.</p>
+<b>poly1305</b> keeps its five limbs as scalar <i>locals</i>. mooncc splits an array that
+small into scalars of its own, so both shapes can live in registers; what is
+left of chacha&rsquo;s gap includes its byte-at-a-time xor, which mooncc does not vectorize.
+A chacha row far wider than poly again says the array is back in memory.</p>
 <p class="note">The last three rows (<code>bench/cnifs.l</code>) are the other kind
 of row: not a gauge chosen to name a defect, but work the tree waits on.
 <code>love source</code> unpacks its own tarball through <code>inflate</code> and checks
 it with <code>crc32</code>; every svalbard blob and patch id is a <code>sha256</code>.
 They are three shapes as well &mdash; <b>inflate</b> is branchy (a bit reader and a table
 lookup per symbol), <b>crc32</b> has no branch in its loop at all, and <b>sha256</b>
-carries a sixty-four word array beside eight scalar working variables, which is the
-cipher pair&rsquo;s two shapes inside one function. A lane behind on inflate and level on
+carries a sixty-four word array, too large to split, beside eight scalar working
+variables. A lane behind on inflate and level on
 crc32 is losing to branches rather than to loads.</p>
 <p class="note">The <b>zstd</b> and <b>raster</b> rows are where mooncc&rsquo;s register
 allocator is being worked on. <b>zstd</b> decodes a frame of the same source the inflate row

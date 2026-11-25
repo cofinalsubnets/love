@@ -79,11 +79,11 @@ for f in test/cc/*.c; do
 done
 
 # -g lays line tables: each statement's line at its code, a body with a prologue its `{` at the
-# entry, an arm laid out of line its statement's (an inlined copy takes the caller's); -g0 lays
+# entry, an arm laid out of line its statement's, an inlined copy its function's `{`; -g0 lays
 # none, and the code is the same either way
 printf 'int sq(int x) {\n  int y = x * x;\n  return y + 1;\n}\nint q(int a) { if (a)\n    return sq(a);\n  return 7; }\n' > "$ho/.dwl.c"
 moonrun -g -c "$ho/.dwl.c" -o "$ho/.dwl.o" || fail "mooncc -g"
-[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 5 - " ] ||
+[ "$(readelf -W --debug-dump=decodedline "$ho/.dwl.o" | awk '$1 ~ /\.dwl\.c$/ {print $2}' | tr '\n' ' ')" = "2 3 5 5 7 1 - " ] ||
   fail "-g's line rows are not each statement's, at its code"
 moonrun -g0 -c "$ho/.dwl.c" -o "$ho/.dwl0.o" || fail "mooncc -g0"
 readelf -SW "$ho/.dwl0.o" | grep -q debug_ && fail "-g0 laid debug sections"
@@ -481,6 +481,7 @@ for o in 0 2; do
   "$ho/.tls$o" || fail "tls: gcc -O$o's thread-locals read wrong under mooncc's link and moonlibc (exit $?)"
 done
 readelf -lW "$ho/.tls2" | grep -q ' TLS ' || fail "tls: the link laid no PT_TLS"
+readelf -lW "$ho/.tls2" | grep -q 'GNU_STACK .* RW  ' || fail "the link laid no PT_GNU_STACK rw"
 # ..and with no libc call to pull the startup in, the template does
 moonrun -o "$ho/.tlsb" test/cc/tls/bare.c "$ho/.tlsp2.o" "$ho/.tlsd.o" > "$ho/.tls.log" 2>&1 \
   || { cat "$ho/.tls.log" >&2; fail "tls: mooncc could not link bare.c"; }
@@ -525,6 +526,17 @@ a=$(wc -c < "$ho/.oszs.o"); b=$(wc -c < "$ho/.osz2.o")
 printf 'int h(int *p, int n);\nint k(int *a, int n) { int t[100]; for (int i = 0; i < 100; i++) t[i] = a[i] + n; int s = 0; for (int i = 0; i < n; i++) s += h(t, i) * a[i]; return s + t[n %% 100]; }\n' > "$ho/.t2x.c"
 moonrun -t thumb2 -c -o "$ho/.t2x.o" "$ho/.t2x.c" > /dev/null 2>&1 || fail "mooncc -t thumb2 a frame array by index"
 [ "$(readelf -x .text "$ho/.t2x.o" | awk '/^  0x/ {print $2; exit}')" != "4df804ed" ] || fail "thumb2: a frame array by index keeps the old frame"
+
+# a bl past its reach refuses the link, naming the callee: flash at 0x10000000 calling a function
+# kept in ram at 0x20000000, as a board's xlink lays them, on both thumb cores
+printf 'int far(void);\nint f(void) { return far() + 1; }\n' > "$ho/.farbl.c"
+printf '__attribute__((section(".data"))) int far(void) { return 7; }\n' > "$ho/.farbr.c"
+for t in thumb1 thumb2; do
+  moonrun -t $t -c -o "$ho/.farbl.o" "$ho/.farbl.c" > /dev/null 2>&1 && moonrun -t $t -c -o "$ho/.farbr.o" "$ho/.farbr.c" > /dev/null 2>&1 \
+    || fail "mooncc -t $t the far call"
+  r=$(echo "(borrow 'holo) (: ps [\"$ho/.farbl.o\" \"$ho/.farbr.o\"] (puts (show (trap (_ \\ ldbare32 '$t [['at 0x10000000 'text 'rodata] ['at 0x20000000 'data 'bss]] (map (p \\ [p <>(uread p)]) ps) () () @ _ 'linked) 0 (a \\ b \\ [a b])))))" | "$m" 2>&1)
+  case "$r" in *link-range*far*) ;; *) fail "$t: a bl past its reach linked: $r" ;; esac
+done
 
 # a helper spliced at many sites costs its sites: four plain ones stay calls, four in a loop splice
 cat > "$ho/.isite.c" <<'EOF'
@@ -870,6 +882,10 @@ a+ +b + + + + x->y a-- -1 1.e+5 0x1p-3 L"wide" 'c'
 f(a,b) [i] {x;} a/ /b a/ *b
 EOF
 moonrun -E "$ho/.esp.c" | grep -v '^#' | grep -v '^$' | cmp -s - "$ho/.esp.want" || fail "-E spaced tokens gcc keeps joined"
+# a pp-number runs through its dots, and a comment a directive drops is one space (a linker script's)
+printf '#define TP *(a)/* c */\t\\\n }\nLINUX_2.6.39 { TP\nb = 1..2; c = 1.5.2.x; d = 2.6 .39;\n' > "$ho/.ppn.S"
+printf 'LINUX_2.6.39 { *(a) }\nb = 1..2; c = 1.5.2.x; d = 2.6 .39;\n' > "$ho/.ppn.want"
+moonrun -E -P -C "$ho/.ppn.S" | grep -v '^$' | cmp -s - "$ho/.ppn.want" || fail "-E split a pp-number at a dot, or lost a dropped comment's space"
 mkdir -p "$ho/.once"
 printf '#pragma once\nstruct once { int a; };\n' > "$ho/.once/h.h"
 printf '#include "h.h"\n#include "h.h"\nint main(void) { return sizeof (struct once); }\n' > "$ho/.once/m.c"
@@ -1000,6 +1016,12 @@ done
 printf 'int lf(int a, int b) { int t[4] = { a, b, a + b, a - b }; return t[a & 3] * t[b & 3]; }\n' > "$ho/.rz.c"
 moonrun -O2 -mno-red-zone -c -o "$ho/.rz.o" "$ho/.rz.c" > /dev/null 2>&1 || fail "-mno-red-zone compile"
 objdump -d "$ho/.rz.o" | grep -q -- '-0x[0-9a-f]*(%rsp)' && fail "-mno-red-zone: a store below sp"
+# under -Werror a -D that gives a predefine another body is an error, unless a -U ahead means it
+moonrun -Werror -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
+[ $r -eq 1 ] && grep -q '__SIZEOF_INT128__ redefined' "$ho/.fl.err" || fail "-Werror -D of a predefine: exit $r, not refused by name"
+moonrun -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine refused without -Werror"
+moonrun -Werror -U__SIZEOF_INT128__ -D__SIZEOF_INT128__=0 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine refused after its -U"
+moonrun -Werror -D__SIZEOF_INT128__=16 -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a -D of a predefine's own body refused"
 # what mooncc does not honour refuses by name, exit 2
 for fl in -mcmodel=large -fno-such-flag -mno-such-flag; do
   moonrun $fl -c -o /dev/null "$ho/.fl.c" > "$ho/.fl.err" 2>&1; r=$?
@@ -1008,6 +1030,88 @@ done
 moonrun -fno-strict-aliasing -fno-common -fno-pie -fno-asynchronous-unwind-tables -ffunction-sections -mtune=generic \
   -c -o /dev/null "$ho/.fl.c" > /dev/null 2>&1 || fail "a flag taken as it stands was refused"
 echo "mooncc: -f[un]signed-char held to gcc, the -f flags that change the object do, the rest refuse by name"
+
+# -S: the object -c lays, said as assembly. assembled again, by holo and by gas where there is
+# one, it is -c's object: every section's bytes, the relocations, the symbols
+dssig() { # an object's sections, relocations and symbols as text; an assembler's own marks left out
+  readelf -SW "$1" | sed -n 's/^ *\[ *[0-9]*\] \(\.[^ ]* *\(PROGBITS\|NOBITS\|NOTE\|INIT_ARRAY\|FINI_ARRAY\) \)/\1/p' |
+    awk '$1 != ".note.gnu.property" && $5 !~ /^0+$/ { print "sec", $1, $2, $5, (NF == 10 ? $7 : "-"), $NF }' | sort > "$1.sec"
+  cat "$1.sec"
+  while read -r _ s _; do readelf -x "$s" "$1" 2> /dev/null | grep '^  0x'; done < "$1.sec"
+  readelf -rW "$1" | awk '/^Relocation section/ { sec = $3 } /^[0-9a-f]+ +[0-9a-f]+ +R_/ { print "rel", sec, $1, $3, $5, $6, $7 }' | sort > "$1.rel"
+  cat "$1.rel"
+  # a mapping symbol is gas's own; an undefined name no relocation asks for, or one the object
+  # also defines (an asm label's second entry), has no line to come from
+  readelf -sW "$1" | awk 'FNR == NR { used[$5] = 1; next }
+    FNR > 3 && $8 != "" && $8 !~ /^[$][dx]/ && $4 != "SECTION" && $4 != "FILE" {
+      if ($7 == "UND") und[$8] = $4 " " $5; else { def[$8] = 1; print "sym", $8, $4, $5, $3, "DEF" } }
+    END { for (n in und) if (used[n] && !def[n]) print "sym", n, und[n], 0, "UND" }' "$1.rel" - | sort
+}
+dsrt() { # dsrt TGT GAS FILE..
+  dt=$1; dg=$2; shift 2
+  for f; do
+    b="$ho/.ds.$(basename "$f" .c)"
+    moonrun -t "$dt" -c -o "$b.o" "$f" > /dev/null 2>&1 || continue
+    moonrun -t "$dt" -S -o "$b.s" "$f" > /dev/null 2>&1 || fail "mooncc -t $dt -S $f"
+    dssig "$b.o" > "$b.want"
+    case $f in
+      */138-ucn.c) ;;      # holo's gas front reads no utf-8 name in an expression
+      *) moonrun -t "$dt" -c -o "$b.h.o" "$b.s" > /dev/null 2>&1 || fail "holo does not read mooncc -t $dt -S $f"
+         dssig "$b.h.o" | cmp -s - "$b.want" || fail "mooncc -t $dt -S $f, assembled by holo, is not -c's object";;
+    esac
+    if [ -n "$dg" ]; then
+      "$dg" -o "$b.g.o" "$b.s" 2> /dev/null || fail "gas does not read mooncc -t $dt -S $f"
+      dssig "$b.g.o" | cmp -s - "$b.want" || fail "mooncc -t $dt -S $f, assembled by gas, is not -c's object"
+    fi
+    rm -f "$b".*
+  done
+}
+# kbuild's offsets: a template of data directives stands as its text, which sed reads; one that
+# names a symbol, or holds an instruction, stays bytes under its relocation
+cat > "$ho/.dso.c" <<'DSEOF'
+struct t { long a, b; char c[40]; long d; };
+extern int ext(void); int g = 7; static int s;
+#define DEFINE(sym, val) asm volatile("\n.ascii \"->" #sym " %0 " #val "\"" : : "i" (val))
+int main(void) {
+  DEFINE(NR_THINGS, 24);
+  DEFINE(T_D, __builtin_offsetof(struct t, d));
+  DEFINE(T_MASK, ~(sizeof(struct t) - 1));
+  asm volatile(".quad ext");
+  asm volatile("nop");
+  return ext() + g + s;
+}
+DSEOF
+for dt in x64 a64; do
+  moonrun -t $dt -S -o "$ho/.dso.s" "$ho/.dso.c" || fail "mooncc -t $dt -S"
+  [ "$(grep -c '^\.ascii "->' "$ho/.dso.s")" = 3 ] && grep -q '^\.ascii "->T_D [$]*56 ' "$ho/.dso.s" ||
+    fail "-t $dt -S: an offsets template is not its text"
+  grep -q '^\.ascii "->T_MASK [$]*-64 ' "$ho/.dso.s" || fail "-t $dt -S: an immediate past 2^63 is not spelled signed"
+  grep -q 'nop\|\.quad' "$ho/.dso.s" && fail "-t $dt -S: a template that is not all data, or names a symbol, stood as text"
+done
+(cd "$ho" && moonrun -S .dso.c && [ -s .dso.s ]) || fail "-S with no -o did not lay FILE.s"
+# an "i" operand some runtime test cannot move is a constant: the bits its ?: arms differ in are
+# masked away (arm64's PIE_E0 under lpa2); one a runtime value reaches still refuses
+cat > "$ho/.kb.c" <<'DSEOF'
+extern int rt(void); extern _Bool ng;
+/* a pte: two runtime terms under bits no index reads, and the four an index is made of */
+#define PTE(x) ((ng ? (1UL << 11) : 0) | (rt() ? 0UL : (3UL << 8)) | (1UL << 10) | (x))
+#define IDX(p) ((((p) & (1UL << 54)) >> (54 - 3)) | (((p) & (1UL << 53)) >> (53 - 2)) | (((p) & (1UL << 51)) >> (51 - 1)) | (((p) & (1UL << 6)) >> 6))
+#define B(i) ((((i) & 8UL) << 51) | (((i) & 4UL) << 51) | (((i) & 2UL) << 50) | (((i) & 1UL) << 6))
+#define T(perm, i) (((perm) & 0xfUL) << (IDX(PTE(B(i))) * 4))
+int main(void) {
+  asm volatile("\n.ascii \"->K %0\"" : : "i" (T(0x8UL, 5) | T(0xcUL, 7) | T(0x8UL, 13) | T(0xcUL, 15) | T(0xaUL, 8) | T(0xeUL, 10) | T(0x8UL, 12) | T(0xcUL, 14)));
+#ifdef BAD
+  asm volatile("\n.ascii \"->B %0\"" : : "i" (PTE(0) >> 8));
+#endif
+  return 0;
+}
+DSEOF
+# arm64's PIE_E1 under lpa2, the value clang lays: 0xcc880e0ac0800000, spelled signed
+moonrun -S -o "$ho/.kb.s" "$ho/.kb.c" && grep -q '^\.ascii "->K [$]-3708698853797527552"' "$ho/.kb.s" || fail "an asm immediate its runtime terms are masked out of is not folded to clang's value"
+moonrun -DBAD -S -o "$ho/.kb.s" "$ho/.kb.c" > "$ho/.kb.err" 2>&1; grep -q 'not a constant' "$ho/.kb.err" || fail "an asm immediate a runtime bit reaches was not refused"
+dsrt x64 "$(command -v as)" "$ho/.dso.c" test/cc/*.c
+dsrt a64 "$(command -v aarch64-linux-gnu-as)" "$ho/.dso.c" test/cc/*.c
+echo "mooncc: -S assembles to -c's object by holo and by gas, an offsets template its text"
 
 # -ftrivial-auto-var-init=zero: every automatic without an initializer reads zero, over a dirty stack
 cat > "$ho/.avz.c" <<'EOF'
@@ -1059,12 +1163,14 @@ moonrun -fcf-protection=full -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 ||
 readelf -n "$ho/.ibt.o" | grep -q 'x86 feature: IBT, SHSTK' || fail "-fcf-protection=full: no IBT, SHSTK mark"
 moonrun -t i386 -fcf-protection=branch -c -o "$ho/.ibt.o" "$ho/.ibt.c" > /dev/null 2>&1 || fail "-fcf-protection=branch on i386"
 objdump -d "$ho/.ibt.o" | grep -q endbr32 || fail "-fcf-protection on i386 laid no endbr32"
-# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute;
+# arm under -fpic: an address is movw/movt against PREL from the pc an add reads, never absolute,
+# a hidden name's too; one the module may not bind loads through the got;
 # the arm asks lay on arm alone, and a soft float abi refuses float code as -msoft-float does
 # and tells the linker base aapcs (a vfp one makes ld.lld mark the link hard-float)
-printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\n' > "$ho/.apic.c"
+printf 'extern int d __attribute__((visibility("hidden")));\nstatic int f(int x) { return x + 1; }\nint (*g(void))(int) { return f; }\nint *h(void) { return &d; }\nextern int e;\nint *k(void) { return &e; }\n' > "$ho/.apic.c"
 moonrun -t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft -c -o "$ho/.apic.o" "$ho/.apic.c" > /dev/null 2>&1 || fail "-t arm -fPIC -mthumb -mabi=aapcs-linux -mfloat-abi=soft compile"
 [ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_THM_MOV[WT]_PREL')" = 4 ] || fail "-t arm -fPIC: an address is not a movw/movt PREL pair"
+[ "$(readelf -rW "$ho/.apic.o" | grep -c 'R_ARM_GOT_PREL .* e$')" = 1 ] || fail "-t arm -fPIC: an extern's address is not a got load"
 readelf -rW "$ho/.apic.o" | grep -q 'R_ARM_THM_MOV[WT]_ABS' && fail "-t arm -fPIC laid an absolute movw/movt"
 readelf -A "$ho/.apic.o" | grep -q 'Tag_ABI_VFP_args: VFP registers' && fail "-mfloat-abi=soft still says Tag_ABI_VFP_args: VFP registers"
 printf 'double m(double a) { return a * 2; }\n' > "$ho/.asf.c"
@@ -1601,6 +1707,13 @@ grep -q "no member 'x' in 's'" "$ho/.cc6.out" || fail "mooncc missing member mus
 printf 'struct t;\nint f(struct t *p) { return p->x; }\nint main(void) { return 0; }\n' > "$ho/.cc7.c"
 moonrun "$ho/.cc7.c" "$ho/.ccx" > "$ho/.cc7.out" 2>&1
 grep -q "incomplete type 't'" "$ho/.cc7.out" || fail "mooncc incomplete member must name it: $(head -1 "$ho/.cc7.out")"
+# a member named twice, directly or through an anonymous member, is refused
+printf 'struct s { int a; int a; };\nint main(void) { return 0; }\n' > "$ho/.cc7d.c"
+moonrun "$ho/.cc7d.c" "$ho/.ccx" > "$ho/.cc7d.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7d.out" || fail "mooncc duplicate member must refuse: $(head -1 "$ho/.cc7d.out")"
+printf 'struct s { int a; struct { int b, a; }; };\nint main(void) { return 0; }\n' > "$ho/.cc7e.c"
+moonrun "$ho/.cc7e.c" "$ho/.ccx" > "$ho/.cc7e.out" 2>&1
+grep -q "duplicate member 'a'" "$ho/.cc7e.out" || fail "mooncc duplicate anonymous member must refuse: $(head -1 "$ho/.cc7e.out")"
 # sizeof an incomplete struct is no size
 printf 'struct u;\nint main(void) { return sizeof (struct u); }\n' > "$ho/.cc8.c"
 moonrun "$ho/.cc8.c" "$ho/.ccx" > "$ho/.cc8.out" 2>&1
@@ -2186,6 +2299,11 @@ long keep(long a, long n) { long s = 0; for (long i = 0; i < n; i++) s += g(i + 
 long early(long x) { if (x < 0) return -1; return g(x) + 1; }
 asm(".globl lone\n.type lone, %function\nlone: ret\n.size lone, .-lone");
 EOF
+# -msign-return-address is -mbranch-protection's older spelling: non-leaf lays pac-ret's object, all refuses
+printf 'int g(int); int f(int x) { return g(x) + 1; }\n' > "$ho/.sra.c"
+moonrun -t a64 -mbranch-protection=pac-ret -c -o "$ho/.sra1.o" "$ho/.sra.c" && moonrun -t a64 -msign-return-address=non-leaf -c -o "$ho/.sra2.o" "$ho/.sra.c" &&
+  cmp -s "$ho/.sra1.o" "$ho/.sra2.o" || fail "-msign-return-address=non-leaf is not -mbranch-protection=pac-ret"
+moonrun -t a64 -msign-return-address=all -c -o /dev/null "$ho/.sra.c" > /dev/null 2>&1; [ $? -eq 2 ] || fail "-msign-return-address=all not refused"
 moonrun -t a64 -O2 -mcmodel=tiny -fasynchronous-unwind-tables -mbranch-protection=pac-ret -c "$ho/.uwt.c" -o "$ho/.uwt.o" \
   || fail "mooncc -t a64: -mcmodel=tiny -fasynchronous-unwind-tables"
 uw=$(readelf -wF "$ho/.uwt.o")
@@ -2468,3 +2586,23 @@ fi
 moonrun -t i386 -os netbsd "$ho/.os.c" -o "$ho/.os.i386nb" > /dev/null 2>&1 \
   && fail "carried runtime: -t i386 -os netbsd linked -- it took linux's archive for a BSD"
 echo "mooncc: the carried runtime is kernel-neutral (linux/freebsd/netbsd all take it on x64, a64 and rv64; i386's BSDs still refuse) ok"
+# the built runtime: the bootstrap compiler carries no archive, so its link reads the groups
+# make laid (-rt out/rt) where it would compile them. the same members in the same order as
+# the carried archive, so its hello is love's own byte for byte, and no archive is cached for it
+"$m" mooncc "$ho/.os.c" -o "$ho/.rt.car" > /dev/null 2>&1 || fail "built runtime: love's own hello does not link"
+na=$(ls out/cache/moon 2>/dev/null | grep -c '\.a$')
+moon0 -rt out/rt "$ho/.os.c" -o "$ho/.rt.blt" > "$ho/.rt.say" 2>&1 || fail "built runtime: -rt out/rt does not link"
+[ -s "$ho/.rt.say" ] && fail "built runtime: a whole directory was not taken ($(head -1 "$ho/.rt.say"))"
+[ "$(ls out/cache/moon 2>/dev/null | grep -c '\.a$')" = "$na" ] || fail "built runtime: the link cached an archive beside the built one"
+cmp -s "$ho/.rt.car" "$ho/.rt.blt" || fail "built runtime: the hello it links is not the carried runtime's"
+[ "$("$ho/.rt.blt")" = "os lane" ] || fail "built runtime: its hello does not run"
+# a directory short of the roster is said once and the cache answers, with the same bytes
+ra=$(uname -m | sed 's/x86_64/x64/; s/aarch64/a64/; s/riscv64/rv64/')
+rm -rf "$ho/.rt.short"; mkdir -p "$ho/.rt.short/$ra"; cp "out/rt/$ra/ctype.a" "$ho/.rt.short/$ra/"
+moon0 -rt "$ho/.rt.short" "$ho/.os.c" -o "$ho/.rt.sht" > "$ho/.rt.say" 2>&1 || fail "built runtime: a short directory does not fall to the cache"
+[ "$(grep -c 'lacks .* members' "$ho/.rt.say")" = 1 ] || fail "built runtime: a short directory is not said once (got '$(cat "$ho/.rt.say")')"
+cmp -s "$ho/.rt.car" "$ho/.rt.sht" || fail "built runtime: the cache's hello is not the carried runtime's"
+# it refuses where the carried archive does
+moon0 -rt out/rt -t i386 -os netbsd "$ho/.os.c" -o "$ho/.rt.nb" > /dev/null 2>&1 \
+  && fail "built runtime: -t i386 -os netbsd linked -- it took linux's groups for a BSD"
+echo "mooncc: the built runtime answers the bootstrap link (whole or not at all; refused where the carried one is) ok"

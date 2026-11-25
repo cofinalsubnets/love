@@ -2,6 +2,7 @@
 (:
    _ (borrow "src/apps/moon/clay.l")
    _ (borrow "src/love/compress/vc.l")
+   _ (borrow "src/love/compress/deflate.l")
 
    ; --- inf_walk, prefix.h ----------------------------------------------------------------------
    ; a code past the table, read a bit at a time. Cn and Sy are c->cnt and c->sym, bit is what bb
@@ -339,6 +340,40 @@
        "end-1" '(inf-cphi Cp Ln nsym u hk (inf-lelt 0 nsym u (idpath false) Nu) Nu)
        "end-2" '(lam z (inf-lttrans (Sy z) q u (e3 z) (inf-letrans q (inf-by16 q) u (inf-leby16 q) gu)))
        "end-3" '(hb 15)}}
+
+   ; what a built code leaves: 0 nothing, 1 all but one 1-bit code, 2 no code at all, 3 anything else,
+   ; which spends too much or leaves a hole
+   whole
+    {'name "inf_whole" 'short "whole"
+     'attrs '("static" "inline")
+     'ret 'int
+     'params '(("c" (ptr (const (struct "inf_code")))))
+     'decls '((uint (l) (left 1)))
+     'stops ()
+     'ensures ()
+     'arrays '((Cn (f "cnt") 16))
+     'requires '((Cn (pi i nat nat)) (w nat) (gw (inf-le 32 w)))
+     'body
+      '((w1 for l 1 16
+         ((k1 (inf-le left (inf-pow l))))
+         ((s1 set left (+ left left))
+          (i1 if g1 (lt left (at Cn l)) ((r1 ret 3)))
+          (s2 set left (- left (at Cn l)))))
+        (i2 if g2 (z left) ((r2 ret 0)))
+        (i3 if g3 (le (pow 15) left) ((r3 ret 2)))
+        (i4 if g4 (lt left (pow 14)) ((r4 ret 3)))
+        (i5 if g5 (z (at Cn 1)) ((r5 ret 3)))
+        (r6 ret 1))
+     'macros
+      '((D (add left left))
+        (Dp (inf-add2 left (inf-pow l) left (inf-pow l) k1 k1))
+        (Pw (inf-powlt (succ l) w (inf-lttrans (succ l) 32 w (inf-lelt (succ l) 16 32 (inf-ltsu l 16 w1) (idpath true)) gw)))
+        (Dw (inf-lelt D (inf-pow (succ l)) (inf-pow w) Dp Pw)))
+     'proofs
+      {"w1e-1" '(idpath false)
+       "s1-1" 'Dw
+       "s2-3" '(inf-lelt (natminus D (Cn l)) D (inf-pow w) (inf-suble D (Cn l)) Dw)
+       "w1b-2" '(inf-letrans (natminus D (Cn l)) D (inf-pow (succ l)) (inf-suble D (Cn l)) Dp)}}
 
    ; --- the bit reader, inflate.h ---------------------------------------------------------------
    ; n bytes at in; ip read so far, bc of them buffered in bb and cons consumed. a call leaves the
@@ -784,12 +819,14 @@
      'decls '(((arr (named "uint8_t") 320) (lens)) ((arr (named "uint8_t") 19) (cl))
               (uint (hlit) (hdist) (hclen) (tot) (prev 0) (i) (k) (rr) (v)) (int (x) (sy)))
      'ensures (rd-ens + co-ens)
-     'calls [fill take sym build]
+     'calls [fill take sym build whole]
      'body
       '((t1 try x "inf_take" ((raw (var "r")) 5) (In n w carry (k 5)) ())
         (s1 set hlit (+ x 257))
         (t2 try x "inf_take" ((raw (var "r")) 5) (In n w carry (k 5)) ())
         (s2 set hdist (+ x 1))
+        (i3 if g6 (lt 286 hlit) ((r3 retneg 1)))
+        (i4 if g7 (lt 30 hdist) ((r4 retneg 1)))
         (t3 try x "inf_take" ((raw (var "r")) 4) (In n w carry (k 4)) ())
         (s3 set hclen (+ x 4))
         (c1 clear Cl (szof (var "cl")))
@@ -802,6 +839,8 @@
           (s4 aset Cl (at Ob i) x)))
         (c2 call "inf_build" ((taddr "cl") (raw (var "cl")) 19 (tf "csym") (tf "ctab") CROOT)
             ((Ln Cl) (nsym 19) (root CROOT) q (u (inf-pow h)) w) ((Cn Cc) (Sy Cs) (Tb Ct)))
+        (k1 calx x "inf_whole" ((taddr "cl")) ((Cn Cc) w) ())
+        (i5 if g8 (lt 0 x) ((r5 retneg 1)))
         (c3 clear Lz (szof (var "lens")))
         (s5 set tot (+ hlit hdist))
         (s5b set i 0)
@@ -815,7 +854,8 @@
            ((s6 set rr 1) (s7 set v sy))
            ((i1 if g2 (lt 18 sy) ((r1 retneg 1)))
             (j2 join g3 (le sy 16)
-             ((t6 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
+             ((i6 if g9 (z i) ((r6 retneg 1)))
+              (t6 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
               (s8 set rr (+ x 3)) (s9 set v prev))
              ((j3 join g4 (le sy 17)
                ((t7 try x "inf_take" ((raw (var "r")) 3) (In n w carry (k 3)) ())
@@ -826,18 +866,24 @@
               (s12 set v 0))
              ((f3 (inf-lt 0 rr)) (f4 (inf-le rr 138)) (f5 (inf-le v 15)) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons)))))
            ((f6 (inf-lt 0 rr)) (f7 (inf-le rr 138)) (f8 (inf-le v 15)) (r1 (inf-le ip n)) (r3 (inf-le bc 63)) (r4 (inf-bits-inv carry ip cons bc)) (r5 (inf-le cons0 cons))))
+          (i2 if g5 (lt tot (+ i rr)) ((r7 retneg 1)))
           (w3 for k 0 rr
            ((c1 (inf-le k rr))
             (c2 (pi j nat (inf-le (Lz j) 15))))
-           ((i2 if g5 (lt (+ i k) 320) ((s13 aset Lz (+ i k) v)))))
+           ((s13 aset Lz (+ i k) v)))
           (s14 set i (+ i rr))
           (s15 set prev v)))
+        (i7 if g10 (z (at Lz 256)) ((r8 retneg 1)))
         (c4 call "inf_build" ((taddr "lit") (raw (var "lens")) hlit (tf "lsym") (tf "ltab") LROOT)
             ((Ln Lz) (nsym hlit) (root LROOT) q (u (inf-pow h)) w) ((Cn Lc) (Sy Ls) (Tb Lt)))
         (d1 gset lm hlit)
         (c5 call "inf_build" ((taddr "dst") (raw (bin + (var "lens") (var "hlit"))) hdist (tf "dsym") (tf "dtab") DROOT)
             ((Ln (inf-shift Lz hlit)) (nsym hdist) (root DROOT) q (u (inf-pow h)) w) ((Cn Dc) (Sy Ds) (Tb Dt)))
         (d2 gset dm hdist)
+        (k2 calx x "inf_whole" ((taddr "lit")) ((Cn Lc) w) ())
+        (i8 if g11 (lt 1 x) ((r9 retneg 1)))
+        (k3 calx x "inf_whole" ((taddr "dst")) ((Cn Dc) w) ())
+        (i9 if g12 (lt 2 x) ((r10 retneg 1)))
         (r2 ret 0))
      'macros
       '((Pw (inf-powle h w (inf-letrans h 16 w gh (inf-letrans 16 32 w (idpath false) gw))))
@@ -898,16 +944,14 @@
        "j3j-7" '(inf-pos3 xt8 11 (idpath true))
        "j3j-8" 'X8
        "j3j-12" '(inf-letrans cons0 const5 const8 (inf-letrans cons0 cons const5 r5 t5e5) t8e5)
-       "i2-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "i2-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
        "s13-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "s13-2" '(inf-lttrans (add i k) (add i rrj1) 320 (inf-ltaddl i k rrj1 w3) (inf-letrans (add i rrj1) (add H Hd) 320 g5 T3))
        "s13-3" '(inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
        "w3b-1" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
        "w3b-2" '(inf-ltsu k rrj1 w3)
        "w3b-3" '(inf-updle Lz (add i k) vj1 15 c2 f8)
        "w3b-4" '(inf-subfall rrj1 k w3)
-       "w3b-5" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
-       "w3b-6" '(inf-ltsu k rrj1 w3)
-       "w3b-8" '(inf-subfall rrj1 k w3)
        "s14-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
        "s15-1" '(inf-wlit vj1 w gw (inf-letrans vj1 15 63 f8 (idpath false)))
        "w2b-7" '(inf-subby i (add H Hd) rrj1 w2 f6)
@@ -1751,7 +1795,7 @@
        + '((b1 (inf-le prev 15))
            (b2 (pi j nat (inf-le (Lz j) 15)))
            (a2 (pi k nat (inf-le (Cl k) 15)))))
-     'calls [take build]
+     'calls [take build whole]
      'body
       '((i0 if g0 (lt 19 hclen) ((r0 retneg 3)))
         (w1 while (lt i hclen) (natminus hclen i)
@@ -1762,6 +1806,8 @@
           (s2 set i (+ i 1))))
         (c1 call "inf_build" ((taddr "cl") (raw (dot (deref (var "s")) "cl")) 19 (tf "csym") (tf "ctab") CROOT)
             ((Ln Cl) (nsym 19) (root CROOT) q (u (inf-pow h)) w) ((Cn Cc) (Sy Cs) (Tb Ct)))
+        (k1 calx x "inf_whole" ((taddr "cl")) ((Cn Cc) w) ())
+        (i1 if g1 (lt 0 x) ((r1 retneg 3)))
         (c2 clear Lz (szof (dot (deref (var "s")) "lens")))
         (d1 havoc i 0)
         (d2 set prev 0)
@@ -1800,10 +1846,10 @@
      'decls '((int (x)) (uint (tot) (rr) (v) (k)))
      'stops (rd-ens + co-ens + st-cl)
      'ensures (rd-ens + co-ens + st-cl)
-     'calls [take sy1 build]
+     'calls [take sy1 build whole]
      'body
-      ['(i0 if g0 (lt 288 hlit) ((r0 retneg 3)))
-       '(i00 if g00 (lt 32 hdist) ((r00 retneg 3)))
+      ['(i0 if g0 (lt 286 hlit) ((r0 retneg 3)))
+       '(i00 if g00 (lt 30 hdist) ((r00 retneg 3)))
        '(s0 set tot (+ hlit hdist))
        ['w1 'while '(lt i tot) '(natminus tot i)
         (['(b1 (inf-le prev 15)) '(b2 (pi j nat (inf-le (Lz j) 15)))] + st-rd)
@@ -1818,7 +1864,8 @@
           '((s1 set rr 1) (s2 set v sy))
           ['(i1 if g4 (lt 18 sy) ((r1 retneg 3)))
            ['j2 'join 'g5 '(le sy 16)
-            '((t2 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
+            '((i3 if g8 (z i) ((r3 retneg 3)))
+              (t2 try x "inf_take" ((raw (var "r")) 2) (In n w carry (k 2)) ())
               (s3 set rr (+ x 3))
               (s4 set v prev))
             [['j3 'join 'g6 '(le sy 17)
@@ -1830,19 +1877,25 @@
              '(s7 set v 0)]
             ('((f3 (inf-lt 0 rr)) (f4 (inf-le rr 138)) (f5 (inf-le v 15))) + st-rd)]]
           ('((f6 (inf-lt 0 rr)) (f7 (inf-le rr 138)) (f8 (inf-le v 15))) + st-rd)]
+         '(i2 if g7 (lt tot (+ i rr)) ((r4 retneg 3)))
          '(w3 for k 0 rr
            ((c1 (inf-le k rr))
             (c2 (pi j nat (inf-le (Lz j) 15))))
-           ((i2 if g7 (lt (+ i k) 320) ((s8 aset Lz (+ i k) v)))))
+           ((s8 aset Lz (+ i k) v)))
          '(s9 set i (+ i rr))
          '(s10 set prev v)
          '(d3 havoc stage 0)]]
+       '(i5 if g9 (z (at Lz 256)) ((r5 retneg 3)))
        '(c4 call "inf_build" ((taddr "lit") (raw (dot (deref (var "s")) "lens")) hlit (tf "lsym") (tf "ltab") LROOT)
             ((Ln Lz) (nsym hlit) (root LROOT) q (u (inf-pow h)) w) ((Cn Lc) (Sy Ls) (Tb Lt)))
        '(d4 gset lm hlit)
        '(c5 call "inf_build" ((taddr "dst") (raw (bin + (dot (deref (var "s")) "lens") (dot (deref (var "s")) "hlit"))) hdist (tf "dsym") (tf "dtab") DROOT)
             ((Ln (inf-shift Lz hlit)) (nsym hdist) (root DROOT) q (u (inf-pow h)) w) ((Cn Dc) (Sy Ds) (Tb Dt)))
        '(d5 gset dm hdist)
+       '(k1 calx x "inf_whole" ((taddr "lit")) ((Cn Lc) w) ())
+       '(i6 if g10 (lt 1 x) ((r6 retneg 3)))
+       '(k2 calx x "inf_whole" ((taddr "dst")) ((Cn Dc) w) ())
+       '(i7 if g11 (lt 2 x) ((r7 retneg 3)))
        '(d6 havoc mode 6)
        '(d7 havoc stage 0)
        '(r2 ret 0)]
@@ -1852,7 +1905,8 @@
         (W3 (inf-lelt 320 512 (inf-pow w) (idpath false) W9))
         (W4 (inf-lelt 458 512 (inf-pow w) (idpath false) W9))
         (W1 (inf-lelt 138 512 (inf-pow w) (idpath false) W9))
-        (T3 (inf-add2 hlit 288 hdist 32 g0 g00))
+        (T6 (inf-add2 hlit 286 hdist 30 g0 g00))
+        (T3 (inf-letrans (add hlit hdist) 316 320 T6 (idpath false)))
         (Ti (inf-letrans i (add hlit hdist) 320 (inf-ltle i (add hlit hdist) w1) T3))
         (Ik (inf-add2 i 320 k 138 Ti (inf-letrans k rrj1 138 (inf-ltle k rrj1 w3) f7)))
         (Rk (inf-letrans (succ k) rrj1 138 (inf-ltsu k rrj1 w3) f7))
@@ -1872,22 +1926,20 @@
        "s6-1" '(inf-lelt (add xt4 11) 512 (inf-pow w) (inf-letrans (add xt4 11) 138 512 X4 (idpath false)) (inf-lttrans 512 1024 (inf-pow w) (idpath true) (inf-powle 10 w (inf-letrans 10 32 w (idpath false) gw))))
        "j3j-7" '(inf-pos3 xt4 11 (idpath true))
        "j3j-8" 'X4
-       "i2-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "i2-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
        "s8-1" '(inf-lelt (add i k) 458 (inf-pow w) Ik W4)
+       "s8-2" '(inf-lttrans (add i k) (add i rrj1) 320 (inf-ltaddl i k rrj1 w3) (inf-letrans (add i rrj1) (add hlit hdist) 320 g7 T3))
        "w3b-1" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
        "w3b-2" '(inf-ltsu k rrj1 w3)
        "w3b-3" '(inf-updle Lz (add i k) vj1 15 c2 f8)
        "w3b-4" '(inf-subfall rrj1 k w3)
-       "w3b-5" '(inf-lelt (succ k) 138 (inf-pow w) Rk W1)
-       "w3b-6" '(inf-ltsu k rrj1 w3)
-       "w3b-8" '(inf-subfall rrj1 k w3)
        "s9-1" '(inf-lelt (add i rrj1) 458 (inf-pow w) (inf-add2 i 320 rrj1 138 Ti f7) W4)
        "w1b-7" '(inf-subby i (add hlit hdist) rrj1 w1 f6)
        "c4-1" '(lam k g (b2 k))
-       "c4-2" '(inf-lelt hlit 288 q g0 (inf-lttrans 288 320 q (idpath true) Xq))
+       "c4-2" '(inf-lelt hlit 286 q g0 (inf-lttrans 286 320 q (idpath true) Xq))
        "c4-4" 'Pw
        "c5-1" '(lam k g (b2 (add hlit k)))
-       "c5-2" '(inf-lelt hdist 32 q g00 (inf-lttrans 32 320 q (idpath true) Xq))
+       "c5-2" '(inf-lelt hdist 30 q g00 (inf-lttrans 30 320 q (idpath true) Xq))
        "c5-4" 'Pw}}
 
    ; stored's bytes: what the buffer holds first, then straight from the input. what bb holds past bc is
@@ -2320,11 +2372,10 @@
 
    ; --- the constants, one list for the C and the uu -----------------------------------------------
    inf-tables
-    '(("gz_lbase" "uint16_t" inf-tlb (3 4 5 6 7 8 9 10 11 13 15 17 19 23 27 31 35 43 51 59 67 83 99 115 131 163 195 227 258))
-      ("gz_lext" "uint8_t" inf-tle (0 0 0 0 0 0 0 0 1 1 1 1 2 2 2 2 3 3 3 3 4 4 4 4 5 5 5 5 0))
-      ("gz_dbase" "uint16_t" inf-tdb (1 2 3 4 5 7 9 13 17 25 33 49 65 97 129 193 257 385 513 769 1025 1537 2049 3073 4097 6145 8193 12289 16385 24577))
-      ("gz_dext" "uint8_t" inf-tde (0 0 0 0 1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10 11 11 12 12 13 13))
-      ("gz_clord" "uint8_t" inf-tob (16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15)))
+    (: ls (df-ladder df-lens) ds (df-ladder df-dists)
+     [["gz_lbase" "uint16_t" 'inf-tlb (map cap ls)] ["gz_lext" "uint8_t" 'inf-tle (map (r \ r 1) ls)]
+      ["gz_dbase" "uint16_t" 'inf-tdb (map cap ds)] ["gz_dext" "uint8_t" 'inf-tde (map (r \ r 1) ds)]
+      ["gz_clord" "uint8_t" 'inf-tob df-clord]])
    inf-roots '((LROOT 11) (DROOT 9) (CROOT 7))
    (commas l) (two? >l ? "\(show <l), \(commas >l)" (show <l))
    (table-c t) (t @ [nm ty _ vs] "static const \(ty) \(nm)[\(show #vs)] = { \(commas vs) };\n")
@@ -2478,8 +2529,8 @@
       ("link" "LD64 is 8 bytes little endian, an In element a byte, and a mask the sum of its bits" "fillv, takev"))
    (ledger-text l) (cats (map (r \ r @ [a b c] "; \(a): \(b) -- \(c)\n") l))
 
-   inf-specs [walk build fill take sym stored copy fixed dyn fast block go top sy1 sthead stlen sttab stcl stln ststo stsy strest ststep stkeep stfeed]
-   inf-run-specs [fill take sym stored fixed dyn copy fast block go top]
+   inf-specs [walk build whole fill take sym stored copy fixed dyn fast block go top sy1 sthead stlen sttab stcl stln ststo stsy strest ststep stkeep stfeed]
+   inf-run-specs [whole fill take sym stored fixed dyn copy fast block go top]
    inf-rh (cats ["// inf_run_gen.h -- laid by src/love/compress/inf.l, `make mx`. edit that file.\n"
                  (cats (map table-c inf-tables))
                  "// table roots: a longer code walks bits, so these trade 2^root fill writes against walks\n"

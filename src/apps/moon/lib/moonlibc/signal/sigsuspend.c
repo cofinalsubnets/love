@@ -7,5 +7,6 @@ int sigsuspend(sigset_t const *s) {
     unsigned long ks[2] = { __love_maskfb((unsigned long) s->__v[0]), 0 };
     if (__love_osv == 4) return (int) er(fb1(111, (long) (unsigned) ks[0]));
     return (int) er(fb1(__love_osv == 3 ? 294 : 341, (long) ks)); }
-  unsigned long long k = s->__v[0];
-  return (int) er(sc2(NR_rt_sigsuspend, (long) &k, 8)); }
+  unsigned long k[LvSigsz / sizeof(long)];
+  __love_ksig(k, s);
+  return (int) er(sc2(NR_rt_sigsuspend, (long) k, LvSigsz)); }

@@ -98,6 +98,11 @@
        sym {}
        (each ^nsym (i \ (peep lens i 0 @ l (l ? (peep ofs l 0 @ o (pin sym o i, pin ofs l (o + 1), 0)) 0))),
         [cnt sym]))
+   ; what a code leaves unspent, in 15-bit codes; under 0 it spends too much
+   (gz-left h) (foldl (a \ l \ (a - (peep <h (l + 1) 0 << (14 - l)))) 32768 ^15)
+   ; whole, or one 1-bit code, or where none will do no code at all
+   (gz-whole? h none)
+    (: k (gz-left h) (? (k = 0) 1 (k = 16384) (peep <h 1 0 = 1) (none && k = 32768)))
    ; the position is held in a local too, written back on every way out
    (gz-dec s n t h)                          ; -> (1 symbol) | ()
     (: cnt <h sym (<(>h))
@@ -162,17 +167,17 @@
               (!d ? ()
                  (: sy (<(>d))
                     (sy < 16 ? (pin lens i sy, rd (i + 1) sy)
-                     (sy @ 16 (3 + gz-bits s n t 2 @ r (rep i r prev, rd (i + r) prev))
-                           17 (3 + gz-bits s n t 3 @ r (rep i r 0, rd (i + r) 0))
-                           18 (11 + gz-bits s n t 7 @ r (rep i r 0, rd (i + r) 0))))))))
-       ok (rd 0 0)
+                     (sy @ 16 (3 + gz-bits s n t 2 @ r (!i || tot < i + r ? () (rep i r prev, rd (i + r) prev)))
+                           17 (3 + gz-bits s n t 3 @ r (tot < i + r ? () (rep i r 0, rd (i + r) 0)))
+                           18 (11 + gz-bits s n t 7 @ r (tot < i + r ? () (rep i r 0, rd (i + r) 0)))))))))
+       ok (286 < hlit || 30 < hdist || !(gz-left ch = 0) ? () (rd 0 0))
        (!ok ? ()
           ; the distance lengths follow the literal ones; gz-huff counts from 0, so copy them down
           (: dl {}
              _ (each ^hdist (k \ pin dl k (peep lens (hlit + k) 0)))
              lit (gz-huff lens hlit)
              dst (gz-huff dl hdist)
-             (gz-codes s n t b lit dst))))
+             (peep lens 256 0 && gz-whole? lit 0 && gz-whole? dst 1 ? (gz-codes s n t b lit dst) ()))))
 
    (gz-block s n t b)                         ; -> (1 last?) | ()
     (: fin (gz-bit s n t)
