@@ -219,7 +219,7 @@
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
-  (: l (o + map (i \ mat i) ^16 + ids) c (cask (8 * #l)) _ ((cite 'guts 'pind) c 0 (gem-tray [#l] (map (* 1.0) l)))
+  (: l (o + map (i \ mat i) ^16 + ids) c (cask (4 * #l)) _ ((cite 'guts 'pinf) c 0 4 (gem-tray [#l] (map (* 1.0) l)))
    (put! g c @ o (room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) \(show o)\n", ())))
  (gpu-take g w h) (: e (due g) f (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r) (string? e ? e f))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)

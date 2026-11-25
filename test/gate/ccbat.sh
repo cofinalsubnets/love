@@ -762,6 +762,40 @@ case $tgt in
   mips) va_pair "clang $mpf" -os linux ;;
 esac
 [ $tgt != arm ] || cs_file "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard -Wa,-mimplicit-it=thumb"
+# arm's __int128 has no place past the named parameters: the va_arg and the call refuse by name;
+# a fixed one, and one to an unprototyped callee, pass
+case $tgt in arm|thumb2)
+  printf '%s\n' 'int f(int n, ...) { __builtin_va_list a; __builtin_va_start(a, n); __int128 x = __builtin_va_arg(a, __int128); __builtin_va_end(a); return (int) x; }' > "$d/.vwa.c"
+  printf '%s\n' 'int f(int n, ...); int g(__int128 x) { return f(1, x); }' > "$d/.vwc.c"
+  cat > "$d/.vwf.c" <<'EOF'
+int __attribute__((noinline)) fx(int n, __int128 x, int y) { return n == 1 && y == 42 && x >> 64 == 9 && (unsigned long long) x == 7; }
+int old();
+int main(void) {
+  __int128 v = ((__int128) 9 << 64) | 7;
+  int (*volatile p)(int, __int128, int) = fx;
+  int (*volatile q)() = fx;
+  return p(1, v, 42) && q(1, v, 42) && old(1, v, 42) ? 42 : 1; }
+int old(int n, __int128 x, int y) { return fx(n, x, y); }
+EOF
+  for tw in $tgt $([ $tgt = thumb2 ] && echo thumb1 thumb2sp); do
+    for o in "" -O2 -Os; do
+      for w in vwa vwc; do
+        moonrun -t $tw $o -c -o "$d/vw.o" "$d/.$w.c" > "$d/vw.log" 2>&1 && fail "va128: mooncc -t $tw $o took a variadic __int128 ($w)"
+        grep -q 'no lane for' "$d/vw.log" || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o $w refused without naming it"; }
+        [ $tw = thumb1 ] || grep -q 'a variadic __int128' "$d/vw.log" || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o $w refused for another reason"; }
+      done
+      [ $tw = thumb1 ] || moonrun -t $tw $o -c -o "$d/vwf.o" "$d/.vwf.c" > "$d/vw.log" 2>&1 || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o a fixed __int128"; }
+    done
+  done
+  if [ $tgt = arm ]; then
+    for o in "" -O2 -Os; do
+      moonrun -t arm $o -o "$d/vwt" "$d/.vwf.c" > "$d/vw.log" 2>&1 || { cat "$d/vw.log" >&2; fail "va128: the fixed ones, $o"; }
+      timeout 60 qemu-arm "$d/vwt"; a=$?
+      [ $a -eq 42 ] || fail "va128: $o a fixed or unprototyped __int128 (got $a want 42)"
+    done
+  fi
+  echo "va128: a variadic __int128 refused by name, a fixed one passed" ;;
+esac
 if [ -n "$exitonly" ]; then
   # -ftrivial-auto-var-init=zero clears every word of a VLA and an alloca block
   cat > "$d/avz.c" <<'AVZ'

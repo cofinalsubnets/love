@@ -539,6 +539,37 @@
        (? (<it = 'skip) ["..." ()] (<it = 'dir) [(it 1) ()]
           [(show (it 1) + (two? (it 2) ? ("\t" + xa-join ", " (map (o \ md-opt o sym) (it 2))) "")) ()])))
 
+;; avr: a word or two decoded by the first row in avr-tab (avr.l) its family has, and shown as
+;; llvm-objdump writes it. a word no row takes is two bytes of <unknown>
+(: (av-val r k w)
+    (peep avr-kinds k () @ f
+     (!(two? f) ? ['ptr k]
+      (: n (av-bits (f 1)) q (av-get (av-mask r k (f 1)) w)
+         v (f 2 + f 3 * (f 4 = 1 && q >= 1 << (n - 1) ? (q - (1 << n)) q))
+         (<f = 'dsp ? ['dsp (k = 'Yq ? 'Y 'Z) v] [<f v]))))
+   (av-takes? fam w1 w2 r)
+    (: w (av-long? r ? (w1 << 16 | w2) w1)
+       (w & r 2 = r 1 && (av-has? fam r) && !(elem 'rr (r 3) && av-get 0x1f0 w != av-get 0x20f w)))
+   ;; -> (n item): item (op name ops), or (dir "<unknown>")
+   (avr-dec fam s i pc)
+    (? (#s < i + 2) [(#s - i) ['dir "<unknown>"]]
+       (: w1 (dc-at s i | dc-at s (i + 1) << 8) w2 (dc-at s (i + 2) | dc-at s (i + 3) << 8)
+          (rvd-first (av-takes? fam w1 w2) avr-tab @ r
+           (? !(two? r) [2 ['dir "<unknown>"]]
+              (: n (av-long? r ? 4 2) w (n = 4 ? (w1 << 16 | w2) w1)
+                 (#s < i + n ? [(#s - i) ['dir "<unknown>"]]
+                  [n ['op <r (map (k \ av-val r k w) (r 3))]]))))))
+   (avr-disasm fam s base lo hi) (od-walk (avr-dec fam) s base lo hi)
+   (av-opt o)
+    (<o @ 'r ("r" + show (o 1)) ('im || 'abs) (od-hex (o 1)) 'ptr (o 1)
+          'dsp (show (o 1) + "+" + show (o 2)) 'rel ("." + (o 1 < 0 ? "" "+") + show (o 1))
+          (show o))
+   ;; a row -> (text notes) as x64-od answers
+   (avr-od r a sym)
+    (: it (r 2)
+       (? (<it = 'skip) ["..." ()] (<it = 'dir) [(it 1) ()]
+          [(show (it 1) + (two? (it 2) ? ("\t" + xa-join ", " (map av-opt (it 2))) "")) ()])))
+
 ;; a64: a word decoded by its row in a64-tab (a64.l), and shown as llvm-objdump writes it. an
 ;; operand: (x n) (w n) with 31 zr and 32 sp, (f c n), (v n arr), (el n c i), (im v) (dec v)
 ;; (sh name v) (ext name v), (cc k), (mem n off) (pre n off) (post n off) (memr n m ext amt s),

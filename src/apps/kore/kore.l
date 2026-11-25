@@ -864,7 +864,7 @@
    ; and aarch64's disassembled, a heading per symbol, a branch or rip target named by the symbol
    ; it lands in
    (od-fmt b) ((b 4 = 2 ? "elf64-" "elf32-")
-               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" 8 "mips" "unknown"))
+               + (rdle b 18 2 @ 62 "x86-64" 3 "i386" 183 "littleaarch64" 40 "littlearm" 243 "littleriscv" 8 "mips" 83 "avr" "unknown"))
    ; --macho: a mach-o's dyld_info streams, rebase, bind and weak bind, as llvm-objdump prints
    ; them. -> ((seg addr vsz ((sect addr size) ..)) ..) and (dylib ..) and the stream pairs
    (mo-str b i n) (: (go j) (j < n && b (i + j) != 0 ? (go (j + 1)) j) (snip b i (i + go 0)))
@@ -960,7 +960,8 @@
        0)
 
    (od-dis b ss m)
-    (: fs (bu-fs b) sy (ld-syms "objdump" (bu-le b)) rv? (m = 243) a6? (m = 183) mi? (m = 8) wd? (rv? || a6? || mi?)
+    (: fs (bu-fs b) sy (ld-syms "objdump" (bu-le b)) rv? (m = 243) a6? (m = 183) mi? (m = 8) av? (m = 83) wd? (rv? || a6? || mi? || av?)
+       fam (av? ? (rdle b 36 4 & 127 @ 5 'avr5 25 'avr25 (udie 1 "objdump: an avr family it does not know")) ())
        ; x86's bytes one by one, and data's; riscv's and aarch64's a word or halfword as a number,
        ; longer ones by halves
        (hexb s) (xa-join " " (map (c \ zpad 2 (radix c 16)) (chars s)))
@@ -985,11 +986,11 @@
                        (" <" + <>l + (<l = a ? "" ("+" + od-hex (a - <l))) + ">")))
            at (foldl (\ t l (pin t <l (peep t <l () + [<>l]))) {} labs)
            (row r)
-            (: a (addr + <r) x ((? rv? rv-od a6? a64-od mi? mips-od x64-od) r a sym)
+            (: a (addr + <r) x ((? rv? rv-od a6? a64-od mi? mips-od av? avr-od x64-od) r a sym)
                _ (each (peep at a ()) (n \ say out ("\n" + zpad (b 4 = 2 ? 16 8) (radix a 16) + " <" + n + ">:\n")))
                h (urpad (8 - #(radix a 16)) "" + radix a 16 + ": ")
                ; mips's bytes one by one, as llvm writes a big-endian word
-               by ((wd? && !mi? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
+               by ((wd? && !mi? && !av? && !(a6? && 2 < #(r 2) && r 2 2 = 'data) ? hexr hexb) (snip bs <r (<r + r 1)))
                c0 (#h + #by) pad (col c0 "")
                t0 ((c0 + #pad) // 8 * 8 + 8)
                tx <x
@@ -1013,7 +1014,7 @@
            (data? o) (100 = foldl (\ k p (<p <= addr + o ? (p 1) k)) 120 maps)
            ; a word ISA's rows a symbol or mapping at a time, where llvm counts its zero runs
            cuts (sort (filter (o \ 0 < o && o < sc 5) (map (l \ <l - addr) (catall [labs maps]))) + [(sc 5)])
-           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) mi? (mips-disasm bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
+           (dis lo hi) (? rv? (rv-disasm bs addr lo hi) mi? (mips-disasm bs addr lo hi) av? (avr-disasm fam bs addr lo hi) (data? lo) (a64-data bs addr lo hi)
                           (a64-disasm bs addr lo hi))
            (wrows _) (foldl (\ acc hi (acc + dis (two? acc ? (last acc @ r (<r + r 1)) 0) hi)) () cuts)
            (each (wd? ? (wrows 0) (catmap split (x64-disasm bs addr))) row))
@@ -1042,7 +1043,7 @@
                   (: ss (bu-secs (bu-fs b) b) w (b 4 = 2 ? 16 8) m (rdle b 18 2)
                      rs (filter (sc \ (sc 2 = 4 || sc 2 = 9) && 0 < sc 7 && 0 < sc 5) ss)
                      _ (say out ("\n" + f + ":\tfile format " + od-fmt b + "\n"))
-                     _ (d? && !(elem m [62 183 243 8]) ? (udie 1 ("objdump: -d reads x86-64, aarch64, riscv and mips here, not " + od-fmt b)) 0)
+                     _ (d? && !(elem m [62 183 243 8 83]) ? (udie 1 ("objdump: -d reads x86-64, aarch64, riscv, mips and avr here, not " + od-fmt b)) 0)
                      _ (d? ? (od-dis b ss m) 0)
                      _ (each (d? ? () rs) (sc \ (say out ("\nRELOCATION RECORDS FOR [" + ss (sc 7) 1 + "]:\n"
                                                 + urpad (w + 1) "OFFSET" + urpad 25 "TYPE" + "VALUE\n"),

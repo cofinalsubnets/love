@@ -15,6 +15,14 @@
        (#py-g = 4 && py-g 3 = [[0.0 0.0 0.0] [1.0 0.0 0.0] [1.0 1.0 0.0] [0.0 1.0 0.0]])
        (net (map (p \ #p) py-g) = 16)
        (poly-grid py-sq 4.0 = [py-sq])
+       ; ..within a box: only the pieces reaching into it are cut, one beside it or off it not
+       (: py-in (\ d lo hi (py-x d + [[lo hi]]))
+        (poly-carve py-sq [(py-in 1.0 [0.5 0.0 -1.0] [1.5 2.0 0.0])] = poly-carve py-sq [(py-x 1.0)]
+         && poly-carve py-sq [(py-in 1.0 [0.5 2.0 -1.0] [1.5 3.0 0.0])] = [py-sq]
+         && poly-carve py-sq [(py-in 1.0 [0.5 0.0 -1.0] [1.5 2.0 -0.1])] = [py-sq]
+         && #(poly-carve py-sq [(py-y 1.0) (py-in 1.0 [0.0 1.0 -1.0] [1.0 2.0 0.0])]) = 3
+         && #(poly-carve py-sq [(py-y 1.0) (py-x 1.0)]) = 4))
+       (poly-carve py-sq [(py-x 1.0 + ['a])] = ())
        (poly-carve py-sq [(py-x 'a)] = ()) (poly-grid [[0.0 0.0]] 1.0 = ()) (poly-keep 3 () = ())))
 ; poly-fans: a face's pieces fanned, an edge taking on a corner some piece has on it -- then
 ; fanned from the middle -- each corner's texels U and V on [x y z 1], as
@@ -48,6 +56,20 @@
  (test (py-sb = [[12] [10 11] [10 11]])
        (poly-beside py-fl py-fh (star-tray [3] [1 0 2]) (star-tray [3] ^3) (py-c3 [[0 0 0]]) (py-c3 [[1 1 1]]) = ())
        (poly-beside 1 2 3 4 5 6 = ())))
+; ..as weighed pair by pair, over brushes that meet, lie just apart and have no face
+(: (py-col n f) (map (k \ gem-tray [n] (map (i \ f i k) ^n)) ^3)
+   nb 40 nf 120 (py-r i m) ((i * 7919 + 104729) * (i + 31) % 10007 % m)
+   (py-bl c k) (0.5 * py-r (3 * c + k) 4) (py-bh c k) (py-bl c k + 0.5 - (c % 3 = 0 ? 0.01 0.0))
+   (py-br i) (py-r (500 + i) 13 * 7 % nb)
+   (py-lo i k) (py-bl (py-br i) k + (k = i % 3 ? 0.25 0.0)) (py-hi i k) (py-bl (py-br i) k + 0.5)
+   (py-meets al ah bl bh e) (all (k \ bh k >= al k - e && bl k - e <= ah k) ^3)
+   (py-near c d) (py-meets (py-bl c) (py-bh c) (py-bl d) (py-bh d) 0.02)
+   (py-besides i) (catmap (d \ (py-near (py-br i) d
+                                 ? (map (+ 1000) (filter (j \ py-br j = d && py-meets (py-lo i) (py-hi i) (py-lo j) (py-hi j) 0.001) ^nf)))) ^nb)
+   py-want (map py-besides ^nf)
+   py-got (poly-beside (py-col nf py-lo) (py-col nf py-hi) (star-tray [nf] (map py-br ^nf)) (star-tray [nf] (map (+ 1000) ^nf))
+                       (py-col nb py-bl) (py-col nb py-bh))
+ (test (py-got = py-want) (any (l \ 1 < #l) py-want && 1 < #(filter (c \ !(any (i \ py-br i = c) ^nf)) ^nb))))
 ; lamp-open: the open air puts a point out, a solid buries it, a room carved in the solid
 ; brings it in, or standing up out of a land leaves it open; past, out of every brush but a
 ; land's box. lamp-near the brushes near a box, lamp-varies whether a face's light changes
