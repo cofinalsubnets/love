@@ -236,7 +236,7 @@
        ; -g's sections: their words reach a section and an offset, so a function's has no thumb bit
        lanes (lanes0 + (5 < #ax && two? (ax 5) ?
                           (map ([nm t f al bs rs lb] \ [nm t f al bs (map ([o k l a p] \ [o 'dabs32 l a p]) rs) lb])
-                               ((thumb-framed? target ? (o-eh lanes0 (funcnames + loc0) target 1 @ e (two? e ? [e] ())) ())
+                               ((thumb? target ? (o-eh lanes0 (funcnames + loc0) target 1 @ e (two? e ? [e] ())) ())
                                 + o-dwarf lanes0 (ax 5) (funcnames + loc0) funcnames target))
                           ()))
        nsec #lanes
@@ -1050,7 +1050,7 @@
    ; whether it is an indirect jump. x: the isa
    (o-ehstep x s pc st nm lo hi rl)
     (? (x = 'x64) (x-ehstep s pc st nm lo hi rl)
-       (thumb2? x && thumb-framed? x) (t-ehstep 2 s pc st nm lo hi rl)
+       (thumb2? x) (t-ehstep 2 s pc st nm lo hi rl)
        (x = 'thumb1) (t-ehstep 3 s pc st nm lo hi rl)
        (x = 'mips) (mips-ehstep s pc st nm lo hi rl)
        (x = 'rv64 || x = 'rv32) (rv-ehstep (x = 'rv32) s pc st nm lo hi rl)
@@ -1068,7 +1068,7 @@
    ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
    (o-ehrows x s lo hi rl labs nm)
     (: sts {}
-       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 'mips mips-st0 (_ && thumb-framed? x) t-st0 _ o-st0)
+       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 'mips mips-st0 (_ && thumb? x) t-st0 _ o-st0)
        (s6 st) (take 6 st)
        ; jst: the state at a br that is no tail call, which a table's targets share
        (walk stk jst)
@@ -1099,7 +1099,7 @@
    o-dcie [12 0 0 0 255 255 255 255 1 0 1 124 30 12 31 0]
    (o-eh lanes uw x df)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) 'mips '(mj26 mb16) (_ && thumb-framed? x) '(b bcc bl b16 b8 cbz) _ '(b26 b19 b14))) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) 'mips '(mj26 mb16) (_ && thumb? x) '(b bcc bl b16 b8 cbz) _ '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -1120,7 +1120,7 @@
                           (: n (13 + #ins) pad ((4 - n % 4) % 4)
                              [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
                               ([(fo + 8) 'secrel32 k 0 0] . rs)])))))
-             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie 'mips mips-dcie (_ && thumb-framed? x) t-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
+             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie 'mips mips-dcie (_ && thumb? x) t-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
              (? df [".debug_frame" 1 0 8 <r (rev <>r) {(name ".dbg.frame") 0}]
                 [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
@@ -1261,7 +1261,7 @@
        (dwreg r) (show r @ s (: i (read (snip s 1 #s))
                                 (? (isa = 'rv64 || isa = 'rv32) ((s 0 = 102 ? rv-dwf rv-dwr) i)
                                    (isa = 'mips) ([2 3 4 5 6 7 8 9 16 17 18 19] i)
-                                   (thumb-framed? isa) (? (s 0 = 102) (i < 16 ? (256 + i) (33 + 2 * i)) i)
+                                   (thumb? isa) (? (s 0 = 102) (i < 16 ? (256 + i) (33 + 2 * i)) i)
                                    (s 0 = 102) (i + (isa = 'a64 ? 64 17))
                                    (isa = 'a64) i
                                    ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))

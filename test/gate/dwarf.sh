@@ -34,6 +34,7 @@ int twice(int v) {
 }
 EOF
 
+fail() { echo "FAIL $name: $*"; exit 1; }
 mc() { "$ho/love" mooncc "$@" || { echo "FAIL $name: mooncc $*"; exit 1; }; }
 for t in x64 a64 rv64 rv32; do
   mc -t $t -g -c "$d/t.c" -o "$d/t.$t.o"
@@ -54,8 +55,8 @@ for t in x64 a64 rv64 rv32; do
 done
 [ -n "$dd" ] || gate_partly "$name: no llvm-dwarfdump, --verify skipped"
 # .debug_frame under -g, an fde for each function: raster.c's, past jump tables, restores and d29
-for t in x64 a64 rv64 rv32 thumb2 thumb2sp; do
-  case $t in thumb*) os=;; *) os='-os linux'
+for t in x64 a64 rv64 rv32 thumb2 thumb2sp arm; do
+  case $t in thumb*) os=;; arm) os='-os linux';; *) os='-os linux'
     [ -z "$dd" ] || "$dd" --debug-frame "$d/two.$t" | grep -q ' FDE ' || { echo "FAIL $name: $t has no fde"; exit 1; };; esac
   mc -t $t $os -g -Isrc/love -Isrc/inle -Iout -Iout/lib -I. -c src/love/raster.c -o "$d/raster.o"
   if [ -n "$dd" ]; then
@@ -257,9 +258,37 @@ if [ -n "$gdb" ] && [ "`uname -m`" = x86_64 ]; then
 else
   gate_partly "$name: no gdb on x64 here, its session skipped"
 fi
-# the same on a64, rv64, rv32 and mips, under qemu's user stub
-for t in a64 rv64 rv32 mips; do
-  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; rv32) q=qemu-riscv32;; *) q=qemu-mips;; esac
+cat > "$d/fd.c" <<'EOF'
+__attribute__((noinline)) int lf(int x) { return x + 1; }
+int (*volatile lp)(int) = lf;
+__attribute__((noinline)) double mid(double a, double b, int n) {
+  volatile int q[3] = {11, 22, 33};
+  int u = n + 1, v = n * 3, w = n ^ 5, x = n - 7, y = n | 64, z = n << 2;
+  double s = a, t = b;
+  for (int i = 0; i < 2; i++) { s += lp((int)t); t += s * b; u += lp(v); v += lp(w); w += x; x += lp(y); y += z; z += lp(u); }
+  return s + t + u + v + w + x + y + z + q[n & 1]; }
+__attribute__((noinline)) double top(double a, int n) {
+  int u = lp(n), v = lp(u * 3), w = lp(v * 5), x = lp(w + 7), y = lp(x + u), z = lp(y + v);
+  double k = a * lp(2), j = k * 5, r = mid(a, 2, n);
+  return r + k + j + lp(u) + v + lp(w) + x + lp(y) + z + u + w + y; }
+int main(void) { return (int)top(1.5, 9); }
+EOF
+# top's callee-saved registers, in lf under mid, are those at mid's entry, and mid's local reads: regs RUN DIR TARGET REGS..
+regs() {
+  run=$1; b=$2; t=$3; shift 3; r="$*"
+  pr=; for x in $r; do pr="$pr -ex p/x\$$x"; done
+  $run fd gdbd -ex 'break *mid' -ex continue -ex 'delete' -ex 'echo A\n' $pr -ex 'break *lf' -ex continue -ex 'up' -ex 'echo Q\n' -ex 'print q[1]' -ex 'up' -ex 'echo B\n' $pr -ex 'info symbol $pc'
+  sed -n '/^A$/,/^Q$/ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/ra"; sed -n '/^B$/,$ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/rb"
+  l=`sed -n '/^Q$/,/^B$/ s/^\$[0-9]* = //p' "$b/gdbd"`
+  [ "$l" = 22 ] || { cat "$b/gdbd"; fail "$t's local in a frame that saves registers: $l"; }
+  n=`sort -u "$b/ra" | wc -l`
+  [ $n -ge 4 ] || { cat "$b/gdbd"; fail "$t's callee-saved registers are alike, $n values"; }
+  [ `wc -l < "$b/ra"` = `echo $r | wc -w` ] && cmp -s "$b/ra" "$b/rb" && grep -q '^top + ' "$b/gdbd" \
+    || { cat "$b/gdbd"; fail "$t's callee-saved registers through mid's frame"; }
+}
+# the same on a64, rv64, rv32, mips and arm, under qemu's user stub
+for t in a64 rv64 rv32 mips arm; do
+  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; rv32) q=qemu-riscv32;; arm) q=qemu-arm;; *) q=qemu-mips;; esac
   [ -f "$d/two.$t" ] || mc -t $t -os linux -g "$d/t.c" "$d/u.c" -o "$d/two.$t"
   if [ -z "$gdb" ] || ! command -v $q > /dev/null 2>&1 || ! "$gdb" -q -batch -nx -ex "file $d/two.$t" -ex 'info line main' 2>/dev/null | grep -q 'Line 9'; then
     gate_partly "$name: no gdb or $q for $t, its session skipped"; continue
@@ -281,25 +310,13 @@ for t in a64 rv64 rv32 mips; do
       -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p' -ex kill
   l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.$t" | tr '\n' ' '`
   [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.$t"; echo "FAIL $name: $t's gdb's locals: $l"; exit 1; }
+  [ $t = arm ] || continue
+  mc -t $t -os linux -g "$d/fd.c" -o "$d/fd.$t"; mkdir -p "$d/$t"
+  arm() { sp=$1; so=$2; shift 2; ses $sp.arm arm/$so "$@" -ex kill; }
+  regs arm "$d/arm" arm r4 r5 r6 r7 r8 r9 r10 d8 d9 d10 d11 d12 d13 d14 d15
 done
 # the thumbs, on a board under qemu-system-arm: by line, bt, finish and the locals, and d8-d15 given back to the caller
-cat > "$d/fd.c" <<'EOF'
-__attribute__((noinline)) int lf(int x) { return x + 1; }
-int (*volatile lp)(int) = lf;
-__attribute__((noinline)) double mid(double a, double b, int n) {
-  volatile int q[3] = {11, 22, 33};
-  int u = n + 1, v = n * 3, w = n ^ 5, x = n - 7, y = n | 64, z = n << 2;
-  double s = a, t = b;
-  for (int i = 0; i < 2; i++) { s += lp((int)t); t += s * b; u += lp(v); v += lp(w); w += x; x += lp(y); y += z; z += lp(u); }
-  return s + t + u + v + w + x + y + z + q[n & 1]; }
-__attribute__((noinline)) double top(double a, int n) {
-  int u = lp(n), v = lp(u * 3), w = lp(v * 5), x = lp(w + 7), y = lp(x + u), z = lp(y + v);
-  double k = a * lp(2), j = k * 5, r = mid(a, 2, n);
-  return r + k + j + lp(u) + v + lp(w) + x + lp(y) + z + u + w + y; }
-int run(void) { return (int)top(1.5, 9); }
-EOF
 have() { command -v $1 > /dev/null 2>&1; }
-fail() { echo "FAIL $name: $*"; exit 1; }
 . test/gate/thumbrt.sh
 if [ -n "$gdb" ] && have arm-none-eabi-gcc && have arm-none-eabi-ld && have qemu-system-arm \
    && "$gdb" -q -batch -nx -ex 'set architecture armv7e-m' 2>&1 | grep -q 'set to "armv7e-m"'; then
@@ -328,19 +345,10 @@ if [ -n "$gdb" ] && have arm-none-eabi-gcc && have arm-none-eabi-ld && have qemu
       -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p'
     l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$b/gdbl" | tr '\n' ' '`
     [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$b/gdbl"; fail "$t's gdb's locals: $l"; }
-    # in lf, under mid: top's callee-saved registers are those at mid's entry
     [ $t = thumb1 ] && r='r4 r5 r6 r7' || r='r4 r5 r6 r7 r8 r9 r10 d8 d9 d10 d11 d12 d13 d14 d15'
-    pr=; for x in $r; do pr="$pr -ex p/x\$$x"; done
-    board fd gdbd -ex 'break *mid' -ex continue -ex 'delete' -ex 'echo A\n' $pr -ex 'break *lf' -ex continue -ex 'up' -ex 'echo Q\n' -ex 'print q[1]' -ex 'up' -ex 'echo B\n' $pr -ex 'info symbol $pc'
-    sed -n '/^A$/,/^Q$/ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/ra"; sed -n '/^B$/,$ s/^\$[0-9]* = //p' "$b/gdbd" > "$b/rb"
-    l=`sed -n '/^Q$/,/^B$/ s/^\$[0-9]* = //p' "$b/gdbd"`
-    [ "$l" = 22 ] || { cat "$b/gdbd"; fail "$t's local in a frame that saves registers: $l"; }
-    n=`sort -u "$b/ra" | wc -l`
-    [ $n -ge 4 ] || { cat "$b/gdbd"; fail "$t's callee-saved registers are alike, $n values"; }
-    [ `wc -l < "$b/ra"` = `echo $r | wc -w` ] && cmp -s "$b/ra" "$b/rb" && grep -q '^top + ' "$b/gdbd" \
-      || { cat "$b/gdbd"; fail "$t's callee-saved registers through mid's frame"; }
+    regs board "$b" $t $r
   done
 else
   gate_partly "$name: no gdb for arm, arm-none-eabi toolchain or qemu-system-arm, the thumbs' sessions skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; on mips and the thumbs' boards too, less the copies; every function of raster.c has an fde"
+echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; on mips, arm and the thumbs' boards too, less the copies; every function of raster.c has an fde"

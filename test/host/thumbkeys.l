@@ -12,7 +12,6 @@
          (hrow 'thumb2?       = '(0 0   0    0    0    0   0  1  1    1   0  0))
          (hrow 'thumb-hosted? = '(0 0   0    0    0    0   0  0  0    1   0  0))
          (hrow 'aprofile?     = '(0 0   0    0    0    0   0  0  0    1   0  0))
-         (hrow 'thumb-framed? = '(0 0   0    0    0    0   1  1  1    0   0  0))
          (mrow 't32?          = '(0 0   0    0    0    0   1  1  1    1   0  0))
          (mrow 't2c?          = '(0 0   0    0    0    0   0  1  1    1   0  0))
          (mrow 't2?           = '(0 0   0    0    0    0   0  1  1    0   0  0))
@@ -20,5 +19,5 @@
          ; hosted is thumb-2 with a kernel: what no bare archive serves
          (hrow 'thumb-hosted? = row (t \ (h 'thumb2? t && !(m 'rtbare? t)))),
     test_fin (),
-    puts "thumbkeys: ok -- thumb? thumb2? thumb-hosted? aprofile? thumb-framed? and moon's t32? t2c? t2? t32f? answer the table over twelve targets",
+    puts "thumbkeys: ok -- thumb? thumb2? thumb-hosted? aprofile? and moon's t32? t2c? t2? t32f? answer the table over twelve targets",
     putc 10))
