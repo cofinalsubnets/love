@@ -2542,7 +2542,7 @@
         o (open hp "a")
         (? (hot? o) (say o (ln + "\n"), flush o, close o) 0))
 
-   ; --- completion: (insert . candidates) off the text left of the cursor ------
+   ; --- completion: edlnc's [n text choices] off the text left of the cursor -----
    (sh-prefix? p s) (: n #p ((n <= #s) && (p = (snip s 0 n))))
    (sh-comm2 a s)                               ; longest common prefix of two
      (: n (? (#a < #s) #a #s)
@@ -2559,33 +2559,59 @@
                      (? (2 = (sh-mode S) 0) () (filter (sh-prefix? w) (sh-verbnames 0))) +
                      (catmap (filter (sh-prefix? w) * readdir) (sh-pathdirs ())))))
    (sh-dirp q) (: st (stat q) (two? st && (16384 = (61440 & (st 2)))))
-   (sh-unfold w)                                ; ~/x -> $HOME/x (stat wants the real path)
-     (? (#w && w 0 = 126) ("" + getenv "HOME" + snip w 1 #w) w)
-   (sh-fileca w)                                ; pathname candidates: glob w*, ~ refolded
-     (: h ("" + (getenv "HOME"))
-        w2 (sh-unfold w)
-        g (sh-glob (w2 + "*") (sh-ones (#w2 + 1)))
-        (? (w = w2) g
-           (map (\ p ("~" + (snip p #h #p))) g)))
-   (sh-wdst s)                                  ; where the word under the cursor starts
-    (:- (go (#s - 1)) (go k)
-     (k < 0 ? 0 (s k @- (go (k - 1)) (32 || 9 || 124 || 38 || 59 || 60 || 62) (k + 1))))
+   ; pathname candidates for the text w and its glob mask, a live ~ unfolded and folded again
+   (sh-fileca w m til)
+     (: h ("" + (getenv "HOME")) z (#h (s \ s + "0") "")
+        (? til (map (\ p ("~" + (snip p #h #p))) (sh-glob (h + snip w 1 #w + "*") (z + snip m 1 #m + "1")))
+           (sh-glob (w + "*") (m + "1"))))
+   ; the word under the cursor: [start, the quote open (or 0), its text unquoted, the glob mask]
+   (sh-word s)
+    (:- (go 0 0 0 "" "") n #s
+     (go i st q t m)
+      (? (n <= i) [st q t m]
+         (: b (s i) nx (i + 1 < n ? (s (i + 1)) 0)
+            (lit k c v) (go (i + k) st q (t + string c) (m + v))
+            (? (b = q) (go (i + 1) st 0 t m)
+               (q = 39) (lit 1 b "0")
+               (q = 34) (b = 92 && elem nx [34 36 92 96] ? (lit 2 nx "0") (lit 1 b "0"))
+               (b = 92) (i + 1 < n ? (lit 2 nx "0") (go n st q t m))
+               (b = 34 || b = 39) (go (i + 1) st b t m)
+               (elem b [32 9 124 38 59 60 62]) (go (i + 1) (i + 1) 0 "" "")
+               (lit 1 b "1")))))
+   ; name p as the line would spell it, inside the open quote q or bare; a live ~ stays live
+   (sh-spell p q til)
+    (: (each-b f s) (foldl (a \ i \ a + f (s i)) "" ^#s)
+       (one b) (b = 39 ? "'\\''" (string b))
+       (two b) (elem b [34 36 92 96] ? "\\\(string b)" (string b))
+       (bare b) (elem b (map "\t !\"#$&'()*;<=>?[\\]`{|}" ^24) ? "\\\(string b)" (string b))
+       ctl (foldl (a \ i \ a || (p i < 32) || p i = 127) 0 ^#p)
+       (? (q = 39) ("'" + each-b one p)
+          (q = 34) ("\"" + each-b two p)
+          til (#p < 2 ? p ("~/" + sh-spell (snip p 2 #p) 0 0))
+          ctl ("'" + each-b one p + "'")
+          ((#p && p 0 = 126 ? "\\" "") + each-b bare p)))
    (sh-cmdpos? s st)                            ; only spaces / a separator before it?
     (:- (go (st - 1)) (go k) (k < 0 ? 1 (s k @- 0 (32 || 9) (go (k - 1)) (124 || 38 || 59) 1)))
+   ; what two names share ends on a whole character
+   (sh-whole c p) (#c < #p && #c && 128 <= p #c < 192 ? (sh-whole (snip c 0 (#c - 1)) p) c)
    (sh-complete S left)
-     (: s (slurp (tap left))
-        st (sh-wdst s)
-        w (snip s st #s)
-        (? !#w '(())
-           (: cmdp (sh-cmdpos? s st && sh-rfind w 47 < 0 && w 0 != 126)
-              cands (? cmdp (sh-cmds S w) (sh-fileca w))
-              (? (atom? cands) '(())
-                 (: com (sh-common cands)
-                    ins (? (sh-prefix? w com) (snip com #w #com) "")
-                    one (atom? >cands)
-                    sfx (? !one ""
-                           (? (!cmdp && sh-dirp (sh-unfold <cands)) "/" " "))
-                    (sh-expl (ins + sfx) . cands))))))
+     (: s (string left)
+        wd (sh-word s) st <wd q (wd 1) w (wd 2) m (wd 3)
+        raw (snip s st #s)
+        til (#w && w 0 = 126 && m 0 = 49)
+        (? !#raw ()
+           (: cmdp (sh-cmdpos? s st && sh-rfind w 47 < 0 && !til)
+              cands (? cmdp (sh-cmds S w) (sh-fileca w m til))
+              ; a directory keeps its quote open for what follows it
+              (pick p) (: d (? cmdp 0 til (sh-dirp (getenv "HOME" + snip p 1 #p)) (sh-dirp p))
+                          b (sh-spell p q til)
+                          v (sh-vis (snip p (sh-rfind p 47 + 1) #p))
+                          (? d [(b + "/") "" (v + "/")] [(b + (q ? (string q) "")) " " v]))
+              (? (atom? cands) ()
+                 (: cs (map pick cands)
+                    com (sh-whole (sh-common cands) <cands)
+                    (? (atom? >cands) [#raw (<<cs + <cs 1) cs]
+                       [#raw (? (sh-prefix? w com && #w < #com) (sh-spell com q til) raw) cs]))))))
 
    ; --- the loops ---------------------------------------------------------------
    (sh-cooked S buf)
