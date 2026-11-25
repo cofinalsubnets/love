@@ -27,6 +27,18 @@
            ; refused by name, nothing laid
            (<(frame "e") = 1) (<(frame "big") = 1) (get "big.out" = ())
            (<(hk ["write"]) = 1) (<(hk []) = 1))
+   ; start DEV, the device reached through a link as sysfs lays one: its words
+   (lay n id) (: d (dir + "/real-" + n)
+                 _ (hark ["mkdir" "-p" (d + "/1-3.1:1.0/0003:16C0:0478.0001/hidraw/hidraw987")])
+                 _ (uwrite (d + "/idVendor") "16c0\n", uwrite (d + "/idProduct") (id + "\n"))
+                 _ (hark ["ln" "-s" d (dir + "/" + n)])
+                 (dir + "/" + n))
+   (says dev) (: _ (hark ["sh" "-c" ((selfpath 0) + " src/tools/halfkay.l start " + dev + " > " + dir + "/said 2>&1")])
+                 (get "said"))
+   _ (test (has? (says (dir + "/nowhere")) "no usb device at")
+           (has? (says (lay "loader" "0489")) "is not in HalfKay: nothing sent")
+           ; a board there passes the guard, and is refused only at its node, which no host has
+           (has? (says (lay "parked" "0478")) "hidraw987"))
    _ (hark ["rm" "-rf" dir])
    0)
 

@@ -149,12 +149,23 @@ tty=/dev/serial/by-path/$usb:1.0
 # the port's product: "love loader" the flash's, "inle teensy41" a kernel
 prod() { q=$(readlink -f "$tty" 2>/dev/null) && [ -e "$q" ] && cat "$(readlink -f "/sys/class/tty/${q##*/}/device/..")/product"; }
 upto() { n=0; until [ "$(prod)" = "$2" ]; do n=$((n + 1)); [ $n -gt $(($1 * 4)) ] && return 1; sleep 0.25; done; }
-# a kernel left running: 134 baud is HalfKay, whose start runs what the flash holds. no write
+# a kernel left running: 134 baud is HalfKay
 if [ "$(prod)" = "inle teensy41" ]; then
   stty -F "$tty" 134 2>/dev/null
+  n=0; while [ "$(prod)" = "inle teensy41" ] && [ $n -lt 40 ]; do n=$((n + 1)); sleep 0.25; done
   sleep 2
-  timeout 30 ./love halfkay.l start > start.log 2>&1 || { tail -3 start.log; echo "halfkay would not start the flash's image"; exit 1; }
-  upto 15 "love loader"
+fi
+# no loader: the port's usb device, its whole hub chain under its controller and one match or
+# none, is started on what its flash holds if halfkay is there, sent or parked. no write
+if [ "$(prod)" != "love loader" ]; then
+  pci=${usb#pci-}; pci=${pci%%-usb*}; h= n=0
+  for d in /sys/bus/usb/devices/[0-9]*-"${usb##*-usb*-0:}"; do
+    case $(readlink -f "$d") in */"$pci"/*) h=$d; n=$((n + 1)) ;; esac
+  done
+  if [ $n = 1 ]; then
+    timeout 30 ./love halfkay.l start "$h" > start.log 2>&1 || { tail -3 start.log; echo "halfkay would not start the flash's image"; exit 1; }
+    upto 15 "love loader" || { echo "halfkay started the flash's image, but no loader came on $usb"; exit 1; }
+  fi
 fi
 p=$(prod); [ "$p" = "love loader" ] || { echo "no loader on $usb (${p:-no device}): the flash wants make flashloader, a write gwen says go to"; exit 1; }
 sleep 0.5
