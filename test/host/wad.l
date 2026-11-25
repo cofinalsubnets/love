@@ -112,6 +112,9 @@
    _ (test (wad-free? st 128.0 128.0) !(wad-free? st 128.0 250.0) !(wad-free? st 4.0 128.0))
    s (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) (pin st 'dt 0.25) ^40)
    _ (test (s 'pz > 150.0) (s 'pz < 167.0) (s 'px = 128.0))
+   ; ..frames a quarter second long owe more tics than one frame runs: the rest dropped, none kept to run fast after
+   slow (foldl (\ s _ (wad-tick (pin s 'wall (clock 0 - 1000)))) (wad-new 64 40 wd M) ^10)
+   _ (test (peep slow 'frac 9.0 < 1.0))
    s (foldl (\ s _ (wad-tics (wad-step s 'forward) 1)) (pins (wad-new 64 40 wd M) 'dt 0.25 'px 40.0) ^40)
    _ (test (s 'pz > 200.0) (s 'pz < 241.0))
 

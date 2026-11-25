@@ -225,12 +225,12 @@
    (let-go _) (con-keyed? con ? (each (keys held) (c \ pin held c ())) ())
    ; ..the mouse, where the level looks by it: a click holds it, its motion from the window's
    ; middle summed for the frame and it put back there, esc lets it go
-   look (lv 'look) ms {'on 0 'dx 0 'dy 0}
+   look (lv 'look) ms {'on 0 'dx 0 'dy 0 'at ()}
    ; ..and its buttons, once it is held or where nothing looks by it, to the level's 'mouse
    mouse (lv 'mouse) (hand? _) (mouse != () && (ms 'on = 1 || look = ()))
    (mid _) (window-size win @ s [(s 0 // 2) (s 1 // 2)])
    (grab! on) (: c (mid ()) ok (window-hold win on)
-     (on && ok ? (pins ms 'on 1 'dx 0 'dy 0, window-warp win (c 0) (c 1)) (pin ms 'on 0)))
+     (on && ok ? (pins ms 'on 1 'dx 0 'dy 0 'at (), window-warp win (c 0) (c 1)) (pin ms 'on 0)))
    ; the terminal's size, and 80 by 24 off a tty that will not say; asked again every
    ; frame, so a resized window is painted whole
    (shape _) (? win (window-size win @ s [(max 20 (s 0 // 8)) (max 8 (s 1 // 16))])
@@ -290,9 +290,8 @@
                     (!(ms 'on && elem <e ['press 'move 'release]) && con-event con eval e t at (<e = 'down && charm? k && con? k)) (let-go (), wgo >l)
                     (<e = 'press && look && !(ms 'on)) (grab! 1, wgo >l)
                     (elem <e ['press 'release] && hand? ()) (mouse st <e (e 1), wgo >l)
-                    (<e = 'move && ms 'on) (: c (mid ()) dx (e 1 - c 0) dy (e 2 - c 1)
-                                              (pins ms 'dx (ms 'dx + dx) 'dy (ms 'dy + dy),
-                                               (dx != 0 || dy != 0 ? (window-warp win (c 0) (c 1)) 0),
+                    (<e = 'move && ms 'on) (: p (ms 'at @ () (mid ()) q q)     ; from the centre, then from the move before
+                                              (pins ms 'dx (ms 'dx + e 1 - p 0) 'dy (ms 'dy + e 2 - p 1) 'at [(e 1) (e 2)],
                                                wgo >l))
                     (elem (e 1) [42 54] && elem <e ['down 'up]) (shift! (<e = 'down ? 1 0) (e 1), wgo >l)
                     (<e = 'down && ms 'on && k = 27) (grab! 0, wgo >l)
@@ -308,7 +307,10 @@
    ; ..and one due before this frame's events and still down after them acts again
    (wkeys _) (: now (clock 0)
                due (filter (c \ held c @ h (h != () && hold? (h 0) && h 1 <= now)) (sort (keys held)))
+               _ (pin ms 'at ())
                pressed (wgo (con-events con win))
+               ; ..the pointer put back once, after the frame's moves, each counted from the one before
+               _ (ms 'on && two? (ms 'at) ? (mid () @ c (ms 'at 0 != c 0 || ms 'at 1 != c 1 ? (window-warp win (c 0) (c 1)) 0)) 0)
                again (filter (c \ held c != ()) due)
                _ (each again (c \ pin held c [(held c 0) (now + rep 1)]))
                (pressed + map (c \ held c 0) again))
