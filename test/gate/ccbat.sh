@@ -595,6 +595,207 @@ if [ $tgt = i386 ]; then
   done
   echo "skew386: $(tail -1 "$d/skew.out"), -mstack-alignment=4 and plain, -mregparm 0 and 3"
 fi
+# a va_list crosses a call as the psABI has it: ours and CC's objects, each calling the other,
+# linked and run. va_pair CC FLAGS..
+va_pair() {
+  vcc=$1; shift
+  cat > "$d/.vl.c" <<'EOF'
+#include <stdarg.h>
+struct box { int tag; va_list ap; };
+// a double by its words: no helper, no pool
+static int five(double d) { union { double d; long long l; } u = {d}; return u.l == 0x4014LL << 48; }
+// the other's: by value, by pointer, in a struct; mine the same here
+#define TAKE(nm) long long nm(int n, va_list ap) { \
+  long long t = 0; \
+  for (int i = 0; i < n; i++) t = t * 10 + va_arg(ap, int); \
+  t += va_arg(ap, long long); return t + (five(va_arg(ap, double)) ? 5 : 0); }
+#define STEP(nm) int nm(va_list *ap) { return va_arg(*ap, int); }
+#define HELD(nm) int nm(struct box *b) { return b->tag + va_arg(b->ap, int); }
+#define ONCE(nm, via) long long nm(int n, va_list ap) { va_list c; va_copy(c, ap); long long r = via(n, ap) + via(n, c); va_end(c); return r; }
+TAKE(P(take)) STEP(P(step)) HELD(P(held))
+extern long long Q(take)(int, va_list), Q(twice)(int, va_list);
+extern int Q(step)(va_list *), Q(held)(struct box *);
+ONCE(P(twice), Q(take))
+long long P(call)(int n, ...) {
+  va_list ap, b; struct box k; k.tag = 7;
+  va_start(ap, n);
+  long long r = Q(take)(n, ap);                      // 528, the caller's list where it was
+  if (Q(take)(n, ap) != r || Q(twice)(n, ap) != 2 * r) return -1;
+  va_copy(b, ap);
+  if (Q(step)(&b) != 1 || va_arg(b, int) != 2 || Q(step)(&b) != 3) return -2;
+  if (va_arg(b, long long) != 400 || !five(va_arg(b, double))) return -3;
+  va_copy(k.ap, ap);
+  if (Q(held)(&k) != 8 || Q(held)(&k) != 9) return -4;
+  va_end(k.ap), va_end(b), va_end(ap);
+  return r; }
+EOF
+  printf '%s\n' '#define P(x) m_##x' '#define Q(x) g_##x' '#include ".vl.c"' \
+    'extern long long g_call(int, ...);' \
+    'int main(void) { return m_call(3, 1, 2, 3, 400LL, 5.0) == 528 && g_call(3, 1, 2, 3, 400LL, 5.0) == 528 ? 42 : 1; }' > "$d/.vm.c"
+  printf '%s\n' '#define P(x) g_##x' '#define Q(x) m_##x' '#include ".vl.c"' > "$d/.vp.c"
+  $vcc -c -O2 -w -ffreestanding -fno-stack-protector -fno-pic -fno-asynchronous-unwind-tables -fno-unwind-tables -o "$d/vp.o" "$d/.vp.c" || fail "va_list: ${vcc%% *} could not build the reference"
+  for o in "" -O2 -Os; do
+    moonrun -t $tgt $o "$@" -o "$d/vpt" "$d/.vm.c" "$d/vp.o" > "$d/vp.log" 2>&1 || { cat "$d/vp.log" >&2; fail "va_list: mooncc -t $tgt $o"; }
+    timeout 60 $a64_qemu "$d/vpt"; a=$?
+    [ $a -eq 42 ] || fail "va_list: $o against ${vcc%% *}'s object (got $a want 42)"
+  done
+  echo "va_list: ours and ${vcc%% *}'s walk each other's, -O0 -O2 -Os"
+}
+# the callee-saved file crosses a call whole: each shape of ours called from CC's stub, which
+# fills r4-r11 and d8-d15 before and reads them after. cs_file CC FLAGS..
+cs_file() {
+  scc=$1; shift
+  cat > "$d/.cg.c" <<'EOF'
+// chk fills r4-r11 and d8-d15, calls f(x), and answers f's value only if each came back
+__attribute__((naked)) int chk(int (*f)(int), int x) {
+  __asm__(
+    "push {r4-r11, lr}\n"
+    "vpush {d8-d15}\n"
+    "mov r12, r0\n"
+    "mov r0, r1\n"
+    "ldr r4, =0x44444444\n ldr r5, =0x55555555\n ldr r6, =0x66666666\n ldr r7, =0x77777777\n"
+    "ldr r8, =0x88888888\n ldr r9, =0x99999999\n ldr r10, =0xaaaaaaaa\n ldr r11, =0xbbbbbbbb\n"
+    "vmov d8, r4, r5\n vmov d9, r5, r6\n vmov d10, r6, r7\n vmov d11, r7, r8\n"
+    "vmov d12, r8, r9\n vmov d13, r9, r10\n vmov d14, r10, r11\n vmov d15, r11, r4\n"
+    "blx r12\n"
+    "ldr r1, =0x44444444\n cmp r4, r1\n movne r2, #4\n bne 9f\n"
+    "ldr r1, =0x55555555\n cmp r5, r1\n movne r2, #5\n bne 9f\n"
+    "ldr r1, =0x66666666\n cmp r6, r1\n movne r2, #6\n bne 9f\n"
+    "ldr r1, =0x77777777\n cmp r7, r1\n movne r2, #7\n bne 9f\n"
+    "ldr r1, =0x88888888\n cmp r8, r1\n movne r2, #8\n bne 9f\n"
+    "ldr r1, =0x99999999\n cmp r9, r1\n movne r2, #9\n bne 9f\n"
+    "ldr r1, =0xaaaaaaaa\n cmp r10, r1\n movne r2, #10\n bne 9f\n"
+    "ldr r1, =0xbbbbbbbb\n cmp r11, r1\n movne r2, #11\n bne 9f\n"
+    "vmov r1, r3, d8\n cmp r1, r4\n movne r2, #108\n bne 9f\n cmp r3, r5\n movne r2, #108\n bne 9f\n"
+    "vmov r1, r3, d9\n cmp r1, r5\n movne r2, #109\n bne 9f\n cmp r3, r6\n movne r2, #109\n bne 9f\n"
+    "vmov r1, r3, d10\n cmp r1, r6\n movne r2, #110\n bne 9f\n cmp r3, r7\n movne r2, #110\n bne 9f\n"
+    "vmov r1, r3, d11\n cmp r1, r7\n movne r2, #111\n bne 9f\n cmp r3, r8\n movne r2, #111\n bne 9f\n"
+    "vmov r1, r3, d12\n cmp r1, r8\n movne r2, #112\n bne 9f\n cmp r3, r9\n movne r2, #112\n bne 9f\n"
+    "vmov r1, r3, d13\n cmp r1, r9\n movne r2, #113\n bne 9f\n cmp r3, r10\n movne r2, #113\n bne 9f\n"
+    "vmov r1, r3, d14\n cmp r1, r10\n movne r2, #114\n bne 9f\n cmp r3, r11\n movne r2, #114\n bne 9f\n"
+    "vmov r1, r3, d15\n cmp r1, r11\n movne r2, #115\n bne 9f\n cmp r3, r4\n movne r2, #115\n bne 9f\n"
+    "b 8f\n"
+    "9: ldr r0, =0x0bad0000\n add r0, r0, r2\n"
+    "8: vpop {d8-d15}\n"
+    "pop {r4-r11, pc}\n"
+    ".ltorg\n");
+}
+// gcc code that keeps much live across a call into mooncc's, and is called from it
+extern int mid(int);
+int gheavy(int a, int b, int c, int d) {
+  int e = mid(a) + 1, f = mid(b) + 2, g = mid(c) + 3, h = mid(d) + 4;
+  int i = mid(e) * 3, j = mid(f) * 5, k = mid(g) * 7, l = mid(h) * 11;
+  double x = a * 1.5, y = b * 2.5, z = mid(c) * 0.5;
+  return mid(a + b + c + d) + e + f + g + h + i + j + k + l + (int) (x + y + z); }
+EOF
+  cat > "$d/.cm.c" <<'EOF'
+#include <setjmp.h>
+int chk(int (*f)(int), int x);
+int gheavy(int a, int b, int c, int d);
+__attribute__((noinline)) int mid(int x) { return x + 1; }
+__attribute__((noinline)) double midd(double x) { return x * 0.5; }
+__attribute__((noinline)) float midf(float x) { return x * 0.25f; }
+__attribute__((noinline)) int leaf(int x) { return x * 3 + 1; }
+__attribute__((noinline)) int wide(int a) {
+  int e = mid(a) + 1, f = mid(a + 1) + 2, g = mid(a + 2) + 3, h = mid(a + 3) + 4;
+  int i = mid(e) * 3, j = mid(f) * 5, k = mid(g) * 7, l = mid(h) * 11;
+  return mid(a) + e + f + g + h + i + j + k + l; }
+// doubles across calls, and a double to int at the end
+__attribute__((noinline)) int fwide(int a) {
+  double c = midd(a) * 1.5, d = midd(a + 1) * 2.5, e = midd(c) + d, f = midd(d) - c, g = midd(e) * f, h = midd(f) + e;
+  return (int) (midd(a) + c + d + e + f + g + h); }
+// the four converters, each a leaf
+__attribute__((noinline)) int cvd(int a) { volatile double d = a * 1.5; return (int) d; }
+__attribute__((noinline)) int cvu(int a) { volatile double d = a * 2.5; return (int) (unsigned) d; }
+__attribute__((noinline)) int cvf(int a) { volatile float f = a * 1.5f; return (int) f; }
+__attribute__((noinline)) int cvfu(int a) { volatile float f = a * 2.5f; return (int) (unsigned) f; }
+// a conversion, then a tail call; and one on only some paths, with two exits
+__attribute__((noinline)) int cvtail(int a) { volatile double d = a * 3.5; int k = (int) d; return mid(k); }
+__attribute__((noinline)) int cvpath(int a) {
+  if (a & 1) return a + 2;
+  volatile float f = a * 0.5f;
+  for (int i = 0; i < 3; i++) if ((int) f == i) return i;
+  return (int) f + a; }
+// singles in the odd halves, homed
+__attribute__((noinline)) float odd(float a, float b, float c, float d, float e) {
+  float *p = &b, *q = &d; return midf(a) + *p + c + *q + e; }
+__attribute__((noinline)) int cvodd(int a) { return (int) odd(a, a + 1, a + 2, a + 3, a + 4); }
+// a long long from a double goes through a helper
+__attribute__((noinline)) int cvll(int a) { volatile double d = a * 1e10; return (int) ((long long) d >> 20); }
+__attribute__((noinline)) int big(int n) {
+  int v[1500]; for (int i = 0; i < 1500; i++) v[i] = mid(i) ^ n;
+  int s = 0; for (int i = 0; i < 1500; i += 97) s += v[i];
+  return s + mid(n); }
+__attribute__((noinline)) int vla(int n) {
+  int v[n]; for (int i = 0; i < n; i++) v[i] = mid(i) * n;
+  volatile double d = n * 1.5;
+  int s = (int) d; for (int i = 0; i < n; i++) s += v[i];
+  return s + mid(n); }
+__attribute__((noinline)) int tail(int a) { int c = mid(a) + 5; return mid(c * 3); }
+jmp_buf jb;
+__attribute__((noinline)) void thrower(int x) { volatile double d = x * 1.5; if ((int) d > 3) longjmp(jb, x); }
+__attribute__((noinline)) int sj(int a) {
+  int e = mid(a) + 1, f = mid(a + 1) + 2, g = mid(a + 2) + 3, h = mid(a + 3) + 4;
+  int r = setjmp(jb);
+  if (!r) { thrower(mid(7)); return -1; }
+  return r + e + f + g + h; }
+__attribute__((noinline)) int viag(int a) { return gheavy(a, a + 1, a + 2, a + 3); }
+int (*const t[])(int) = { leaf, wide, fwide, cvd, cvu, cvf, cvfu, cvtail, cvpath, cvodd, cvll, big, vla, tail, sj, viag };
+int main(void) {
+  for (unsigned i = 0; i < sizeof t / sizeof *t; i++) {
+    int want = t[i](20 + i), got = chk(t[i], 20 + i);
+    if (want != got) return 1 + i; }
+  return 0; }
+EOF
+  $scc -c -O2 -w -ffreestanding -o "$d/cg.o" "$d/.cg.c" || fail "cs file: ${scc%% *} could not build the stub"
+  for o in "" -O2 -Os -O0 -fpic; do
+    moonrun -t $tgt $o "$@" -o "$d/cst" "$d/.cm.c" "$d/cg.o" > "$d/cs.log" 2>&1 || { cat "$d/cs.log" >&2; fail "cs file: mooncc -t $tgt $o"; }
+    timeout 60 $a64_qemu "$d/cst"; a=$?
+    [ $a -eq 0 ] || fail "cs file: $o, shape $a came back with a callee-saved register changed or a wrong value"
+  done
+  echo "cs file: r4-r11 and d8-d15 come back from 16 shapes under ${scc%% *}'s stub, -O0 -O2 -Os -fpic"
+}
+case $tgt in
+  i386) va_pair "gcc -m32" ;;
+  rv64) [ -z "$GCC" ] || va_pair "$GCC -mno-relax" ;;
+  rv32) va_pair "clang $rvf" ;;
+  mips) va_pair "clang $mpf" -os linux ;;
+esac
+[ $tgt != arm ] || cs_file "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=hard -Wa,-mimplicit-it=thumb"
+# arm's __int128 has no place past the named parameters: the va_arg and the call refuse by name;
+# a fixed one, and one to an unprototyped callee, pass
+case $tgt in arm|thumb2)
+  printf '%s\n' 'int f(int n, ...) { __builtin_va_list a; __builtin_va_start(a, n); __int128 x = __builtin_va_arg(a, __int128); __builtin_va_end(a); return (int) x; }' > "$d/.vwa.c"
+  printf '%s\n' 'int f(int n, ...); int g(__int128 x) { return f(1, x); }' > "$d/.vwc.c"
+  cat > "$d/.vwf.c" <<'EOF'
+int __attribute__((noinline)) fx(int n, __int128 x, int y) { return n == 1 && y == 42 && x >> 64 == 9 && (unsigned long long) x == 7; }
+int old();
+int main(void) {
+  __int128 v = ((__int128) 9 << 64) | 7;
+  int (*volatile p)(int, __int128, int) = fx;
+  int (*volatile q)() = fx;
+  return p(1, v, 42) && q(1, v, 42) && old(1, v, 42) ? 42 : 1; }
+int old(int n, __int128 x, int y) { return fx(n, x, y); }
+EOF
+  for tw in $tgt $([ $tgt = thumb2 ] && echo thumb1 thumb2sp); do
+    for o in "" -O2 -Os; do
+      for w in vwa vwc; do
+        moonrun -t $tw $o -c -o "$d/vw.o" "$d/.$w.c" > "$d/vw.log" 2>&1 && fail "va128: mooncc -t $tw $o took a variadic __int128 ($w)"
+        grep -q 'no lane for' "$d/vw.log" || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o $w refused without naming it"; }
+        [ $tw = thumb1 ] || grep -q 'a variadic __int128' "$d/vw.log" || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o $w refused for another reason"; }
+      done
+      [ $tw = thumb1 ] || moonrun -t $tw $o -c -o "$d/vwf.o" "$d/.vwf.c" > "$d/vw.log" 2>&1 || { cat "$d/vw.log" >&2; fail "va128: -t $tw $o a fixed __int128"; }
+    done
+  done
+  if [ $tgt = arm ]; then
+    for o in "" -O2 -Os; do
+      moonrun -t arm $o -o "$d/vwt" "$d/.vwf.c" > "$d/vw.log" 2>&1 || { cat "$d/vw.log" >&2; fail "va128: the fixed ones, $o"; }
+      timeout 60 qemu-arm "$d/vwt"; a=$?
+      [ $a -eq 42 ] || fail "va128: $o a fixed or unprototyped __int128 (got $a want 42)"
+    done
+  fi
+  echo "va128: a variadic __int128 refused by name, a fixed one passed" ;;
+esac
 if [ -n "$exitonly" ]; then
   # -ftrivial-auto-var-init=zero clears every word of a VLA and an alloca block
   cat > "$d/avz.c" <<'AVZ'
@@ -739,6 +940,7 @@ EOF
       [ $a -eq 42 ] || fail "softfp: $o against gcc's softfp object (got $a want 42)"
     done
     case $(arm-none-eabi-readelf -h "$d/fpt") in *soft-float*) ;; *) fail "softfp: the header does not say soft-float" ;; esac
+    va_pair "arm-none-eabi-gcc -mthumb -march=armv7-a -mfpu=vfpv3-d16 -mfloat-abi=softfp" -mfloat-abi=softfp -nostdlib
   fi
   moonrun -t arm -mfloat-abi=softfp -o "$d/fpr" "$d/.ga.c" "$d/.gb.c" > "$d/fpr.log" 2>&1 \
     && fail "softfp: a link that pulls moonlibc, which is hard-float, was taken"

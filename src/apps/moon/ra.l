@@ -16,7 +16,7 @@
                (xt? g) '(r0 r1 r2 r3 r5 r6 r7 r9 r10 r11)
                (mp? g) '(r0 r1 r2 r3 r5 r6 r8 r9 r10 r11)
                (v6m? g) '(r0 r1 r2 r3 r5 r6)
-               (t2? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 q4)
+               (t2c? g && !(abl? g 't2q4)) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10 q4)
                (t32? g) '(r0 r1 r2 r3 r5 r6 r7 r8 r9 r10)
                (ia32? g) '(r0 r1 r2 r5 r6 r3)
                '(r0 r1 r2 r5 r6 r7 r8 r9 r10 r3 r11 r12 r13 r14))
@@ -310,7 +310,7 @@
    ; and its copies to and from it go
    (raspill g fs sp nosp nk ssl)
     (: w (x64? g || a64? g)
-       dn (w || t2? g ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
+       dn (w || t2c? g && !(abl? g 't2lit) ? (foldl (t \ f \ (raops g f @ [_ d] (map (v \ pin t v (peep t v 0 + 1)) d) _ 0, t)) {} fs) {})
        rem (foldl (t \ f \ (f @ ((op . v . k . _) && elem v sp && peep dn v 0 = 1 &&
                                   (w ? (elem op '(li la) && k != 0) (op = 'li && charm? k)))
                                 (pin t v f) _ t)) {} fs)

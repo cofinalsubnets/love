@@ -30,7 +30,8 @@
 ;   (gpu-vis g ms ks)            kept: mark m down where ms m is 0, and ks the lights' strengths
 ;   (gpu-sun g sv sd bias)       the sun's view kept: its matrix sv and depths sd, facets's
 ;   (gpu-drop g id)
-;   (gpu-place g ps)             each [id x y z] of ps: buf id drawn moved by x y z, until laid again
+;   (gpu-place g ps)             each [id [x y z u v]] of ps: buf id drawn moved by x y z and its
+;                                texels by u v, 0 unless given, until laid again
 ;   (gpu-base g w h t)           the next frame's ground, w*h colours, below 0 bare
 ;   (gpu-under g cs ds)          the next frame laid first with a smaller one's colours cs and
 ;                                depths ds, facets's [ground cs ds]
@@ -60,7 +61,7 @@
 ;                                {'key 'make 'at 'vis 'kb}: (make ()) its bufs, each [verts tris
 ;                                name lamps [x y z r] l k gr m], laid as the scene while key is
 ;                                the same, group gr drawn after at gr batches; vis and kb gpu-vis's;
-;                                v 'offs each batch's [x y z] it is drawn moved by, or ()
+;                                v 'offs each batch's [x y z u v] it is drawn moved by, or ()
 ;                                with s 'pipe, [f c'] instead: the frame before and its c, this
 ;                                one drawn meanwhile; after a start or a stop the frame itself,
 ;                                then it once more
@@ -189,7 +190,7 @@
  (gpu-sun g sv sd bias) (: c (cask (4 * #sd)) _ ((cite 'guts 'pinf) c 0 4 sd)
     (put! g c @ o (post g ("sun \(show (shape sd 1)) \(show (shape sd 0)) \(show o) " + unwords (map num (bias . map (i \ sv i) ^16))))))
  (gpu-drop g id) (post g "drop \(show id)")
- (gpu-place g ps) (tell g "place" (catmap (p \ (p 0 . p 1)) ps))
+ (gpu-place g ps) (tell g "place" (catmap (p \ (p 0 . p 1 + map (_ \ 0.0) ^(5 - #(p 1)))) ps))
  ; ..spots [S C] for the next frame w by h, laid in its sky
  (gpu-spots g w h sp) (: I (iota (sp 0 >= 0)) ns #I c (cask (8 * ns))
    _ (ns @ 0 0 ((cite 'guts 'pinf) c 0 4 (1.0 * sp 0 I), (cite 'guts 'pinf) c (4 * ns) 4 (1.0 * sp 1 I)))
@@ -218,7 +219,7 @@
  (num x) (show (1.0 * x))
  (gpu-frame g w h mat ids o) (gpu-send g w h mat ids o, gpu-take g w h)
  (gpu-send g w h mat ids o)
-  (: l (o + map (i \ mat i) ^16 + ids) c (cask (8 * #l)) _ ((cite 'guts 'pind) c 0 (gem-tray [#l] (map (* 1.0) l)))
+  (: l (o + map (i \ mat i) ^16 + ids) c (cask (4 * #l)) _ ((cite 'guts 'pinf) c 0 4 (gem-tray [#l] (map (* 1.0) l)))
    (put! g c @ o (room! g (8 * w * h), say (g 'to) "frame \(show w) \(show h) 0 \(show #l) \(show o)\n", ())))
  (gpu-take g w h) (: e (due g) f (line (g 'from) @ () "the helper has gone" "kept \(k)" (pin g 'ks (read k), 'kept) "ok" (fdtray (g 'r) 0 (w * h) @ t (tray? t && #t = w * h ? t "the frame came short")) r r) (string? e ? e f))
  (unwords l) (foldl (\ a s (a = "" ? s (a + " " + s))) "" l)

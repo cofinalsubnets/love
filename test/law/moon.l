@@ -282,6 +282,23 @@
        (elem '(li r0 128) fs &&
         (0 = splds fs) &&
         atom? (filter (f9 \ two? f9 && elem <f9 '(si st ld imul add)) fs)))
+      ; a small array a constant memcpy fills is its elements: no frame opens; one it
+      ; may not take whole stays in memory
+      (fnf 'f <>(cgn "void *memcpy(void *, void const *, unsigned long); unsigned f(unsigned const *p) { unsigned x[4]; memcpy(x, p, sizeof x); x[0] += x[3]; return x[0] ^ x[1] ^ x[2]; } int main() { unsigned a[4]; return (int)f(a); }") @ fs
+       (0 = splds fs && !(elem '(sub sp sp 40) fs) && atom? (filter (f9 \ two? f9 && elem <f9 '(si si4 st st4 call)) fs)))
+      (all (b \ (: src "void *memcpy(void *, void const *, unsigned long); void use(void *); unsigned f(unsigned const *p) { \(b) } int main() { return 0; }"
+                   (fnf 'f <>(cgn src) @ fs
+                    (two? (filter (f9 \ two? f9 && elem <f9 '(st st4 st2 st1 si si4 call)) fs)))))
+           ["unsigned x[4]; memcpy(x, p, sizeof x); use(x); return x[0];"
+            "unsigned x[4]; memcpy(x, p, sizeof x); unsigned *q = &x[1]; use(q); return x[0];"
+            "volatile unsigned x[4]; memcpy((void *) x, p, sizeof x); return x[0];"
+            "unsigned x[4]; x[0] = p[0]; memcpy(x, x, sizeof x); return x[0];"
+            "unsigned x[4]; memcpy(x, p, 6); return x[0];"
+            "unsigned x[4]; memcpy(x, p, sizeof x); return ((char *) x)[5] + x[0];"
+            "unsigned x[4]; memcpy(x + 1, p, 8); return x[1];"
+            "unsigned char x[8]; memcpy(x, p, sizeof x); return x[0] + x[5];"
+            "union { unsigned w[2]; unsigned short h[4]; } u; memcpy(u.w, p, sizeof u.w); return u.h[1] + u.w[0];"
+            "unsigned x[4]; memcpy(x, p, p[0]); return x[0];"])
       ; a statement attribute run skips, except musttail: sibs spells the jump or the compile refuses
       (elem '(jmp rec) <>(cgn "int rec(int n){ if(n==0) return 5; __attribute__((musttail)) return rec(n-1); } int main(){ return rec(3); }"))
       (two? (cgn "int main(int c, char **v) { switch (c) { case 1: c++; __attribute__((fallthrough)); default: c++; } return c; }"))
@@ -429,16 +446,54 @@
       ((cexpp "" "sizeof(__builtin_bswap32(1))") = '(cast ulong (num 4)))
       ((cexpp "" "sizeof(__builtin_bswap64(1))") = '(cast ulong (num 8)))
       ; ..and the door bare: LP64 long holds every uint so signed wins, ilp32 long cannot
-      ((puac 1 'long 'uint) = 'long)
-      ((puac () 'long 'uint) = 'ulong)
-      ((puac 1 'int 'uint) = 'uint)
-      ((puac 1 'ulong 'int) = 'ulong)
-      ((puac () 'llong 'ulong) = 'llong)
-      ((puac 1 'char 'ushort) = 'int)
-      ((puac 1 'double 'ulong) = 'double)
-      ((puac 1 'float 'char) = 'float)
-      ((pprom 'ushort) = 'int)
-      ((pprom 'uint) = 'uint)
+      ((puac tm-lp64 'long 'uint) = 'long)
+      ((puac tm-ilp32 'long 'uint) = 'ulong)
+      ((puac tm-lp64 'int 'uint) = 'uint)
+      ((puac tm-lp64 'ulong 'int) = 'ulong)
+      ((puac tm-ilp32 'llong 'ulong) = 'llong)
+      ((puac tm-lp64 'char 'ushort) = 'int)
+      ((puac tm-lp64 'double 'ulong) = 'double)
+      ((puac tm-lp64 'float 'char) = 'float)
+      ((pprom tm-lp64 'ushort) = 'int)
+      ((pprom tm-lp64 'uint) = 'uint)
+      ; a 2-byte int: ushort promotes to uint, a long holds every uint, and a wide literal is a long
+      ((pprom '(2 4 8 4 2) 'ushort) = 'uint)
+      ((pprom '(2 4 8 4 2) 'short) = 'int)
+      ((pprom '(2 4 8 4 2) 'uchar) = 'int)
+      ((puac '(2 4 8 4 2) 'long 'uint) = 'long)
+      ((puac '(2 4 8 4 2) 'short 'ushort) = 'uint)
+      ((pprom '(2 4 8 4 2) '(bitfield uint 0 16)) = 'uint)
+      ((pprom '(2 4 8 4 2) '(bitfield uint 0 15)) = 'int)
+      ((pprom tm-lp64 '(bitfield uint 0 16)) = 'int)
+      ((pprom tm-lp64 '(bitfield uint 0 32)) = 'uint)
+      ; size_t's type and an integer literal's, by the model
+      ((tmsz tm-lp64) = 'ulong)
+      ((tmsz tm-ilp32) = 'uint)
+      ((tmsz '(2 4 8 4 2)) = 'uint)
+      ((plit '(2 4 8 4 2) ['num 32767 1]) = '(num 32767))
+      ((plit '(2 4 8 4 2) ['num 40000 1]) = '(cast long (num 40000)))
+      ((plit '(2 4 8 4 2) ['num 3000000000 1]) = '(cast llong (num 3000000000)))
+      ((plit '(2 4 8 4 2) ['unum 65535 1]) = '(cast uint (num 65535)))
+      ((plit '(2 4 8 4 2) ['unum 65536 1]) = '(cast ulong (num 65536)))
+      ((plit tm-ilp32 ['num 3000000000 1]) = '(cast llong (num 3000000000)))
+      ((plit tm-ilp32 ['ulnum 4294967296 1]) = '(cast ullong (num 4294967296)))
+      ((plit tm-lp64 ['num 3000000000 1]) = '(num 3000000000))
+      ((plit tm-lp64 ['ulnum 4294967296 1]) = '(cast ulong (num 4294967296)))
+      (elem "__SIZE_MAX__=0xffffU" (modeldefs '(2 4 8 4 2)))
+      (elem "__LONG_MAX__=0x7fffffffL" (modeldefs '(2 4 8 4 2)))
+      (elem "__SIZEOF_DOUBLE__=4" (modeldefs '(2 4 8 4 2)))
+      ((tysz '(2 4 8 4 2) {} 'int) = 2)
+      ((tysz '(2 4 8 4 2) {} 'double) = 4)
+      ((tysz '(2 4 8 4 2) {} '(ptr long)) = 2)
+      ((tysz tm-lp64 {} 'long) = 8)
+      ((tysz tm-ilp32 {} 'long) = 4)
+      ((cfold tm-lp64 '(num 40000)) = 40000)
+      ((cfty '(2 4 8 4 2) '(num 40000)) = '(40000 long))
+      ((cfty '(2 4 8 4 2) '(num 3000000000)) = '(3000000000 llong))
+      ((cfty tm-ilp32 '(num 3000000000)) = '(3000000000 llong))
+      ((cfty tm-lp64 '(num 3000000000)) = '(3000000000 long))
+      ((cfty '(2 4 8 4 2) '(bin + (num 30000) (num 30000))) = '(-5536 int))
+      ((cfty tm-lp64 '(bin + (num 30000) (num 30000))) = '(60000 int))
       (two? (cgn "struct N { long v; struct N *n; }; int main() { struct N a; a.v = 7; a.n = &a; return a.n->v; }"))
       (two? (cgn "int main() { int x = 2; switch (x) { case 1: return 9; default: return 7; } }"))
       (two? (cgn "int main() { int i = 0; do i++; while (i < 3); return i; }"))
