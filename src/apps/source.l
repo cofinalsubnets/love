@@ -172,12 +172,33 @@
              + ";; no fixpoint claimed here: a cross lay cannot BE this binary --\n"
              + ";; `love seed` on the \(xa) machine proves it.\n")))
 
+   ; can a file made here be run? android, and a noexec mount, refuse. a copy of this binary is
+   ; asked, and only a refusal is a no: any other trouble is the build's own to say
+   (seed-denied? exe)
+    (: p "out/.seedprobe"
+       _ (mkdir "out" 493)
+       c (copyfile exe p)
+       _ (chmod p 493)
+       r (c < 0 ? 0 (hark [p "true"]))
+       _ (unlink p)
+       (r = 'eacces))
+   ; where it is refused make takes this binary for its love0 and mooncc, and runs nothing it lays.
+   ; the bytes are the same where the laid tree is this binary's own
+   (seed-drive exe)
+    (? (string? (getenv "LOVE") || !(seed-denied? exe)) 0
+       (puts ";; files made here can't be run: building with this binary instead\n",
+        setenv "LOVE" exe))
    ; run in a fresh exec, since the lay's heap is never unmapped; PATH and CC ride the
    ; environment. with no path to exec, seed-lay calls this directly and keeps the heap
    (seed-wait root xa dst)
     (: exe (src-me 0)
        here (cwd 0)
        _ (!(chdir root) ? 0 (src-die "can't enter \(root)"))
+       _ (? !(string? exe) 0
+            (string? xa) (seed-drive exe)
+            (seed-denied? exe)
+             (src-die "seed: files made in \(root) can't be run, so this binary can't be rebuilt there. a seed for another machine can: `love seed \(seed-other 0)`")
+            0)
        xm (string? xa ? (show (nom xa)))     ; make's word for it
        os (seed-os 0 @ o (nom? o ? ["xos=\(o)"] ()))
        ; -j with no count: cook reads this machine's width, and answers 1 where it
@@ -265,6 +286,8 @@
               (two? s ? (map (seed-pin t <ws) s, go >ws t rest) (go >ws t (<ws . rest))))))
    ; this machine's arch: love-arch is already canonical, which is seed-arches' spelling.
    (seed-native _) love-arch
+   ; another machine it can seed for, for a refusal to name
+   (seed-other _) (<(filter (!= (seed-native 0)) seed-arches))
    ; this machine's own container
    (seed-cont _) (elem 'love-os (names ()) && (ev 'love-os = 'macos) ? 'macho 'elf)
    ; the OS a cross lay is for, named only where this machine is not a hosted OS (inle): linux
@@ -277,6 +300,7 @@
     (: exe (src-me 0)
        here (cwd 0)
        _ (!(chdir root) ? 0 (src-die "can't enter \(root)"))
+       _ (string? exe ? (seed-drive exe) 0)
        (lane x) (: s (src-run exe ["make" "-j" "xa=\(x)" "out/x-\(x)/love"]) st (two? s ? <s s)
                    (0 != st ? (src-die "the \(x) build failed (exit \(st))")))
        _ (lane "arm") _ (lane "a64")

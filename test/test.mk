@@ -193,6 +193,7 @@ hostnif_tests += test/host/glazehot.l    # a run-time closure compiles at its ca
 hostnif_tests += test/host/quit.l   # quit drains the ports; a scare gives a piped stdin back blocking
 hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector loses no block
 hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, read back by our fat and cpio
+hostnif_tests += test/host/seed.l   # love seed where a file it lays cannot be run
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
