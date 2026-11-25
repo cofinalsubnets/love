@@ -43,7 +43,10 @@
        want (map (f \ f = "mksys" ? "" f) srcs)
        es (filter (e \ elem (e 1) want) ((cite 'moon 'rtplan) rt-home tgt 'linux ()))
        _ (#es < #want && rt-die (show tgt + ": a source outside the roster in " + show srcs))
-       (cite 'holo 'write-bytes dst [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))]))
+       ; laid beside and renamed onto: a link's -rt never reads a torn group
+       tmp (dst + "." + show (getpid 0))
+       (cite 'holo 'write-bytes tmp [((cite 'holo 'arbytes) (map (m1 tgt 'linux ()) es))],
+        rename tmp dst))
    ; a group archive's members, ((name bytes)..), past the index and long-name table
    (rt-armems s)
     (: fld (cite 'holo 'ld-arfld)

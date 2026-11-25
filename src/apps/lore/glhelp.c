@@ -53,7 +53,7 @@
 //                     the eye, each vertex u along R and v along U; a glow seen as much as what is
 //                     behind it lies past it less LEAD, over SOFT, ZN ZF the view's near and far
 //   frame W H OFF N AT
-//                     N doubles from AT: CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..;
+//                     N floats from AT: CLEAR FR FG FB NEAR FAR TONE FLAGS M0 .. M15 ID ..;
 //                     the bufs drawn through clip = M * [x y z 1] (row-major), linear fog to
 //                     FR FG FB from NEAR to FAR in view depth, exposure TONE (0 none), FLAGS
 //                     facets's 8 and 128 (cull: anticlockwise in gl's y-up faces the eye; seen,
@@ -200,7 +200,7 @@ struct helper {
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
  struct buf *bufs; int nbuf, cbuf;
- GLuint prog, fb, rb, db, gb, gr; int fw, fh, dual, fglass;   // gb gr: glass's on what is bare, in floats where they blend
+ GLuint prog, fb, rb, db, gb, gr; int fw, fh, dual, fetch, fglass;   // fetch: 1 EXT's, 2 ARM's, glass's blend in the shader; gb gr: glass's on what is bare, in floats where they blend
  unsigned char *gx;   // ..read back; rb and gr textures, which the sky asks
  GLuint mk; int sky, spend; float stone, soff[3]; GLint u_fg;   // the sky drawn under the bare, over a copy of the frame's marks
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
@@ -241,11 +241,14 @@ static unsigned char *bytes(struct helper *H, size_t off, size_t n) {
   if (H->map == MAP_FAILED) H->map = NULL, H->sz = 0; }
  return H->map && off <= H->sz && n <= H->sz - off ? H->map + off : NULL; }
 
-static GLuint shader(int o, GLenum k, const char *src) {
+// ..head its first line, with what follows it there, or NULL for its own
+static GLuint headed(int o, GLenum k, const char *head, const char *src) {
  GLuint s = glCreateShader(k); GLint ok = 0;
- glShaderSource(s, 1, &src, NULL); glCompileShader(s); glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
- if (!ok) { char log[512]; glGetShaderInfoLog(s, sizeof log, NULL, log); dprintf(o, "err shader %s\n", log); return 0; }
- return s; }
+ const char *two[2] = { head, src + (head ? sizeof "#version 300 es\n" - 1 : 0) };
+ glShaderSource(s, head ? 2 : 1, head ? two : two + 1, NULL); glCompileShader(s); glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
+ if (!ok && o >= 0) { char log[512]; glGetShaderInfoLog(s, sizeof log, NULL, log); dprintf(o, "err shader %s\n", log); return 0; }
+ return ok ? s : 0; }
+static GLuint shader(int o, GLenum k, const char *src) { return headed(o, k, NULL, src); }
 
 // rows run top first: y flips in clip. the colour is the vertex's times 255 times the texel,
 // fogged by view depth, then exposed; written b g r so the bytes read back are 0x00rrggbb
@@ -331,7 +334,13 @@ static char const fsrc[] =
  "  fx = sx - fi, fy = sy - fj, z = lp.z - bias; int i = int(fi), j = int(fj);\n"
  "  float t0 = lit(i, j, z) + (lit(i + 1, j, z) - lit(i, j, z)) * fx, t1 = lit(i, j + 1, z) + (lit(i + 1, j + 1, z) - lit(i, j + 1, z)) * fx;\n"
  "  return t0 + (t1 - t0) * fy; }\n"
- "#ifdef GL_EXT_blend_func_extended\n"
+ "#if defined(FETCH_EXT)\n"
+ "inout vec4 o; vec4 o1;\n"
+ "#define LAST o\n"
+ "#elif defined(FETCH_ARM)\n"
+ "out vec4 o; vec4 o1;\n"
+ "#define LAST gl_LastFragColorARM\n"
+ "#elif defined(GL_EXT_blend_func_extended)\n"
  "layout(location = 0, index = 0) out vec4 o; layout(location = 0, index = 1) out vec4 o1;\n"
  "#else\n"
  "out vec4 o; vec4 o1;\n"
@@ -358,6 +367,10 @@ static char const fsrc[] =
  "   c = c * v / 255.0 + sh, a = 253.0 / 255.0; }\n"
  "  c = clamp(floor(c + 0.5), 0.0, 255.0) / 255.0; o = vec4(c.b, c.g, c.r, a); o1 = vec4(1.0); return; }\n"
  " c = clamp(c / 255.0, 0.0, 1.0); o1 = vec4(1.0);\n"
+ "#ifdef LAST\n"   // ..glass's blend, as mode blends it in two colours
+ " if (mode == 2) { vec4 d = LAST; o = vec4(c.bgr * d.a + d.rgb * t.bgr, d.a); return; }\n"
+ " if (mode == 3) { vec4 d = LAST; o = vec4(d.rgb * t.bgr, (c.r + c.g + c.b) / 12.0 + d.a * (t.r + t.g + t.b) / 3.0); return; }\n"
+ "#endif\n"
  " if (mode == 0) o = vec4(c.b, c.g, c.r, 1.0);\n"
  " else if (mode < 3) o = vec4(c.b, c.g, c.r, 0.0), o1 = vec4(t.b, t.g, t.r, 0.0);\n"
  " else if (mode == 3) o = vec4(0.0, 0.0, 0.0, (c.r + c.g + c.b) / 12.0), o1 = vec4(t.b, t.g, t.r, (t.r + t.g + t.b) / 3.0);\n"
@@ -415,6 +428,12 @@ static GLuint program(GLuint vs, GLuint fs) {
  glAttachShader(p, vs); glAttachShader(p, fs); glLinkProgram(p); glGetProgramiv(p, GL_LINK_STATUS, &ok);
  return ok ? p : 0; }
 
+// ..a name whole in a list of them: one is another's beginning
+static int has_ext(char const *l, char const *n) {
+ size_t const k = strlen(n);
+ for (char const *p = l; (p = strstr(p, n)); p += k) if ((p == l || p[-1] == ' ') && (!p[k] || p[k] == ' ')) return 1;
+ return 0; }
+
 static int setup(struct helper *H, int x) {
  // ..mesa's names, else android's
  void *egl = dlopen("libEGL.so.1", RTLD_NOW), *gl = dlopen("libGLESv2.so.2", RTLD_NOW);
@@ -452,8 +471,17 @@ static int setup(struct helper *H, int x) {
  EGLSurface ps = c && !eglMakeCurrent(d, NULL, NULL, c) ? eglCreatePbufferSurface(d, cf, pa) : NULL;
  if (!c || (ps && !eglMakeCurrent(d, ps, ps, c)) || (!ps && !eglMakeCurrent(d, NULL, NULL, c))) { dprintf(H->out, "err no gles 3 context\n"); return 0; }
  H->d = d, H->cf = cf, H->c = c, H->ps = ps;
- GLuint vs = shader(H->out, GL_VERTEX_SHADER, vsrc), fs = shader(H->out, GL_FRAGMENT_SHADER, fsrc);
+ char const *ex = (char const *) glGetString(0x1F03);   // GL_EXTENSIONS
+ // ..0 does without two colours, or without fetching, as a driver with none must
+ char const *du = getenv("LOVE_GPU_DUAL"), *fe = getenv("LOVE_GPU_FETCH");
+ H->dual = ex && strstr(ex, "GL_EXT_blend_func_extended") != NULL && !(du && !strcmp(du, "0"));
+ GLuint vs = shader(H->out, GL_VERTEX_SHADER, vsrc), fs = 0;
+ H->fetch = H->dual || !ex || (fe && !strcmp(fe, "0")) ? 0 : has_ext(ex, "GL_EXT_shader_framebuffer_fetch") ? 1 : has_ext(ex, "GL_ARM_shader_framebuffer_fetch") ? 2 : 0;
+ if (H->fetch && !(fs = headed(-1, GL_FRAGMENT_SHADER, H->fetch == 1 ? "#version 300 es\n#extension GL_EXT_shader_framebuffer_fetch : require\n#define FETCH_EXT\n"
+                                : "#version 300 es\n#extension GL_ARM_shader_framebuffer_fetch : require\n#define FETCH_ARM\n", fsrc))) H->fetch = 0;
+ if (!fs) fs = shader(H->out, GL_FRAGMENT_SHADER, fsrc);
  if (!vs || !fs) return 0;
+ note(H->dual ? "glass by two colours" : H->fetch == 1 ? "glass by EXT fetch" : H->fetch ? "glass by ARM fetch" : "glass a triangle at a time");
  GLuint uvs = shader(H->out, GL_VERTEX_SHADER, uvsrc), ufs = shader(H->out, GL_FRAGMENT_SHADER, ufsrc);
  if (!uvs || !ufs) return 0;
  if (!(H->prog = program(vs, fs)) || !(H->uprog = program(uvs, ufs))) { dprintf(H->out, "err link\n"); return 0; }
@@ -487,9 +515,6 @@ static int setup(struct helper *H, int x) {
  H->u_off = glGetUniformLocation(H->prog, "off"); H->u_uvo = glGetUniformLocation(H->prog, "uvo");
  H->u_li = glGetUniformLocation(H->prog, "li"); H->u_ks = glGetUniformLocation(H->prog, "ks");
  H->u_sh = glGetUniformLocation(H->prog, "sh"); glUniform1f(H->u_sh, 1);
- char const *ex = (char const *) glGetString(0x1F03);   // GL_EXTENSIONS
- char const *du = getenv("LOVE_GPU_DUAL");   // 0 does without, as a driver with none must
- H->dual = ex && strstr(ex, "GL_EXT_blend_func_extended") != NULL && !(du && !strcmp(du, "0"));
  H->fglass = ex && strstr(ex, "GL_EXT_color_buffer_float") && strstr(ex, "GL_EXT_float_blend");
  glUniform1i(H->u_tx, 0); glUniform1i(glGetUniformLocation(H->prog, "lz"), 2);
  H->u_cls = glGetUniformLocation(H->prog, "cls");
@@ -951,7 +976,7 @@ static int code(int t) { return t <= -3 - lensed ? t + lensed : t >= lensed - 1 
 static void mode(struct helper *H, int m) {
  glUniform1i(H->u_mode, m == 7 ? 6 : m);
  glDepthMask(m == 0);
- if (m == 0 || m == 5) glDisable(GL_BLEND);
+ if (m == 0 || m == 5 || (H->fetch && (m == 2 || m == 3))) glDisable(GL_BLEND);
  else glEnable(GL_BLEND);
  glColorMask(m != 4, m != 4, m != 4, 1);
  glBlendEquationSeparate(GL_FUNC_ADD, m == 4 ? GL_MAX : GL_FUNC_ADD);
@@ -961,9 +986,9 @@ static void mode(struct helper *H, int m) {
  else if (m == 6) glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_ONE);
  else if (m == 7) glBlendFuncSeparate(GL_ZERO, GL_SRC_COLOR, GL_ZERO, GL_SRC_ALPHA);
  else if (m == 4) glBlendFuncSeparate(GL_ONE, GL_ONE, GL_ONE, GL_ONE); }
-// a run of glass, m 2 or 3: in one draw, else a triangle at a time, its tint and then its colour
+// a run of glass, m 2 or 3: in one draw with two colours or a fetch, else a triangle at a time, its tint and then its colour
 static void glass(struct helper *H, int m, int n, uintptr_t at) {
- if (H->dual) { mode(H, m); glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, (void*) (4 * at)); return; }
+ if (H->dual || H->fetch) { mode(H, m); glDrawElements(GL_TRIANGLES, n, GL_UNSIGNED_INT, (void*) (4 * at)); return; }
  for (int i = 0; i + 3 <= n; i += 3)
   for (int k = 0; k < 2; k++) mode(H, k ? m : m + 4), glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (void*) (4 * (at + (uintptr_t) i))); }
 
@@ -1019,8 +1044,9 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
  enum { lead = 27 };   // w h off clear fr fg fb near far tone flags, then the 16 of m
  double v[lead + 4096];
  int n = fn < 4096 + lead - 3 ? fn + 3 : lead + 4096;
- unsigned char const *pv = fn >= lead - 3 ? bytes(H, at, 8 * (size_t) (n - 3)) : NULL;
- if (pv) v[0] = fw, v[1] = fh, v[2] = (double) foff, memcpy(v + 3, pv, 8 * (size_t) (n - 3));
+ float const *pv = fn >= lead - 3 ? (float const*) bytes(H, at, 4 * (size_t) (n - 3)) : NULL;
+ if (pv) v[0] = fw, v[1] = fh, v[2] = (double) foff;
+ for (int i = 3; pv && i < n; i++) v[i] = pv[i - 3];
  if (!pv) { dprintf(H->out, "err frame args\n"); return; }
  int w = (int) v[0], h = (int) v[1];
  unsigned char *out = w > 0 && h > 0 ? bytes(H, (size_t) v[2], 8 * (size_t) w * h) : NULL;
