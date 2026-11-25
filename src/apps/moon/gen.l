@@ -2390,7 +2390,7 @@
    ; ..and a struct's own compound literal is a whole member
    (clstru? g ty ini) (stru? ty && two? ini && <ini = 'clit && stru? <>ini && two? >>ini && tsz g <>ini = tsz g ty)
    ; ..and so is an expression of its own struct type (6.7.9p13), given a frame (env 'none: a static image)
-   (whole? g env ty val) (stru? ty && env != 'none && (peekty g env val @ t (stru? t && <t = <ty && <>t = <>ty)))
+   (sameagg? g env ty val) (stru? ty && env != 'none && (peekty g env val @ t (stru? t && <t = <ty && <>t = <>ty)))
    (unelide g env ty ini)
     (? (clarr? ty ini) (unelide g env ty <>>ini)      ; a wide literal: take its init
        !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
@@ -2410,7 +2410,7 @@
        (clarr? ty val || clstru? g ty val)          ; a wide or struct literal: the whole element, as its init
         (unelide g env ty <>>val @ w
            [(desig ? (redesig dh dk w) w) >l])
-       (whole? g env ty val) [(desig ? (redesig dh dk val) val) >l]
+       (sameagg? g env ty val) [(desig ? (redesig dh dk val) val) >l]
        (aggish? ty && !(gcplx? ty) && !(initval? val))   ; elide: fill ty from the run at val (a complex is a scalar)
         (: pr (normfill g env ty (val . >l))
            w ['init <pr]
