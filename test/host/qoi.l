@@ -5,8 +5,6 @@
 (borrow "src/apps/qoi.l")
 (: dir (cwd 0 + "/out/.qoid")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (rd p) (: q (open p "r") s (slurp q) (close q, s))
-   (put p s) (open p "w" @ q (say q s, close q))
    (bytes l) (cask #l @ c (map (i \ pin c i (l i)) (jot #l), string c))
    (image w h f)
     (cask (4 * w * h) @ c
@@ -37,9 +35,9 @@
    ; -- against PIL ---------------------------------------------------------------------
    pil? (: r (hark ["python3" "-c" "import PIL.QoiImagePlugin"]) (two? r) && (<r = 0))
    _ (each (jot #pics) (k \ (: im (pics k)
-                             (put (dir + "/p" + show k + ".rgba") (im 2),
-                              put (dir + "/p" + show k + ".qoi") (qoi-encode (im 0) (im 1) (im 2))))))
-   _ (put (dir + "/q.py") """
+                             (uwrite (dir + "/p" + show k + ".rgba") (im 2),
+                              uwrite (dir + "/p" + show k + ".qoi") (qoi-encode (im 0) (im 1) (im 2))))))
+   _ (uwrite (dir + "/q.py") """
      import sys
      from PIL import Image
      d, n = sys.argv[1], int(sys.argv[2]); bad = 0
@@ -54,11 +52,10 @@
      """)
    _ (pil? ? (: r (hark ["python3" (dir + "/q.py") dir (show #pics)])
                 (test (<r = 0)
-                      (atom? (filter (k \ !(qoi-decode (rd (dir + "/pil" + show k + ".qoi")) = pics k)) (jot #pics)))))
+                      (atom? (filter (k \ !(qoi-decode (fget (dir + "/pil" + show k + ".qoi")) = pics k)) (jot #pics)))))
         (gate-partly "qoi: no python3 PIL with qoi, held to it skipped"))
 
    ; -- refusals ------------------------------------------------------------------------
-   (flip s i) (cask #s @ c (pour c 0 s 0 #s, pin c i (255 - s i), string c))
    q0 (qoi-encode (pics 2 0) (pics 2 1) (pics 2 2))
    (test (qoi-decode "hello there, world" = "not a qoi") (qoi-size "qoif" = "not a qoi")
          (qoi-decode (snip want 0 20) = "cut short")
@@ -66,7 +63,7 @@
          (qoi-decode ("qoif" + bytes [0 0 0 0 0 0 0 1 4 0]) = "not a qoi")
          (qoi-encode 2 2 "abc" = ()) (qoi-encode 0 1 "" = ())
          ; a flipped byte answers why, or a picture of its size
-         (atom? (filter (i \ !(qoi-decode (flip q0 i) @ d (string? d || (two? d && #(d 2) = 4 * d 0 * d 1)))) (jot #q0))),
+         (atom? (filter (i \ !(qoi-decode (flipb q0 i) @ d (string? d || (two? d && #(d 2) = 4 * d 0 * d 1)))) (jot #q0))),
     hark ["rm" "-rf" dir],
     0))
 

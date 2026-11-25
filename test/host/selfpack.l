@@ -6,18 +6,17 @@
    pk (cwd 0 + "/src/tools/selfpack.l")
    lv (cwd 0 + "/out/love")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
    ; a file in every section; src/apps rides as a link so the borrows find it, and drops
    (tree d) (: r (dir + "/" + d)
                _ (each ["" "/src" "/src/x" "/w"] (s \ mkdir (r + s) 448))
                _ (each [["/VERSION" "0.4\n"] ["/README" "r\n"] ["/src/x/k.l" "1\n"] ["/src/x/f.l" "2\n"]
-                        ["/src/x/g.c" "int x;\n"] ["/.sbignore" "w/*.bin\n"]] (p \ put (r + <p) <>p))
+                        ["/src/x/g.c" "int x;\n"] ["/.sbignore" "w/*.bin\n"]] (p \ uwrite (r + <p) <>p))
                _ (hark ["ln" "-s" (cwd 0 + "/src/apps") (r + "/src/apps")])
                r)
    a (tree "a")
    b (tree "b")
-   _ (mkdir (a + "/c") 448, mkdir (a + "/c/d") 448, put (a + "/w/z.bin") "z\n")
-   _ (put (dir + "/ros") "src/x/k.l\n")
+   _ (mkdir (a + "/c") 448, mkdir (a + "/c/d") 448, uwrite (a + "/w/z.bin") "z\n")
+   _ (uwrite (dir + "/ros") "src/x/k.l\n")
    (pack r) (: t (r + ".tree")
                rc (hark ["sh" "-c" ("cd '" + r + "' && LOVE_NO_IMAGE= '" + lv + "' '" + pk + "' '" + t
                                     + "' love-x 1000000 '" + dir + "/ros' src/apps >/dev/null")])

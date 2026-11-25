@@ -8,42 +8,37 @@
 (borrow "src/apps/pnm.l")
 (: dir (cwd 0 + "/out/.pnmd")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (rd p) (: q (open p "r") s (slurp q) (close q, s))
-   (put p s) (open p "w" @ q (say q s, close q))
-   (nib c) (? (c < 58) (c - 48) (c - 87))
-   (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
-                               string c))
    (px d) (map (d 2) (jot #(d 2)))
 
    ; -- fixtures --
-   p1-pbm (unx (cats [
+   p1-pbm (hexbytes (cats [
      "50310a3720350a312031203120312030203020300a312031203120312030203020300a31203120312031"
      "2030203020300a312031203120312030203020300a312031203120302030203020300a"
      ]))
    p1-pbm-sum "84b23f2e298a168f15d607132b643a125edc86bb03fe48afeb285a97f1e138b3"  ; 77 bytes, 35 px
-   p2-pgm (unx (cats [
+   p2-pgm (hexbytes (cats [
      "50320a3720350a3235350a33352034332039362038342031313420313433203139390a31302035332036"
      "312039332031353720313832203137300a3334203434203130372039332031323720313634203137330a"
      "35352034332038382039362031333220313735203231360a333120353520313032203131342031333220"
      "313638203231340a"
      ]))
    p2-pgm-sum "dcc4600b4a32488c54304e42ada9f415cd72d04225112bf016190c6052a336a0"  ; 134 bytes, 35 px
-   p4-pbm (unx (cats [
+   p4-pbm (hexbytes (cats [
      "50340a3720350ad8f4d2a8d8"
      ]))
    p4-pbm-sum "80d6f7a6833d6e459509a52aa19bbf9062a2f6b7752e7cf6130e4e26138aa447"  ; 12 bytes, 35 px
-   p6-ppm (unx (cats [
+   p6-ppm (hexbytes (cats [
      "50360a3720350a3235350aa500004d2500ca4a00186f0025940030b900bbde001d00356d2535134a352c"
      "6f35de9435d6b93523de357b006a2e256ad94a6a1e6f6a3f946a72b96a1fde6acb009f19259f714a9f17"
      "6f9f44949f94b99fd6de9f4900d43c25d49d4ad45c6fd43494d460b9d4beded4"
      ]))
    p6-ppm-sum "2dd82c2130dc85d76cd20f442798ab95593552987be2a902ed5098ea31adf904"  ; 116 bytes, 35 px
-   p5d16-pgm (unx (cats [
+   p5d16-pgm (hexbytes (cats [
      "50350a3720350a36353533350a233a2b01604154d172288f12c74f0a0835ad3d075ced9d7eb659aab321"
      "f12c116b235dc77f63a4d7adaf36dc2b6c58c66020844caff1d8981ef336bd660272b284b9a8aed750"
      ]))
    p5d16-pgm-sum "dcc4600b4a32488c54304e42ada9f415cd72d04225112bf016190c6052a336a0"  ; 83 bytes, 35 px
-   p3d16-ppm (unx (cats [
+   p3d16-ppm (hexbytes (cats [
      "50330a3720350a36353533350a3432343035203020302031393738392039353039203020353139313420"
      "3139303138203020363136382032383532372030203935303920333830333620300a3132333336203437"
      "353435203020343830353920353730353420302037343533203020313336323120323830313320393530"
@@ -60,7 +55,7 @@
      "343637322034373534352035343438342034383833302035373035342035343438340a"
      ]))
    p3d16-ppm-sum "2dd82c2130dc85d76cd20f442798ab95593552987be2a902ed5098ea31adf904"  ; 581 bytes, 35 px
-   pam-rgba-pam (unx (cats [
+   pam-rgba-pam (hexbytes (cats [
      "50370a574944544820370a48454947485420350a444550544820340a4d415856414c203235350a545550"
      "4c54595045205247425f414c5048410a454e444844520a310000ff202500ff1e4a00ff696f0080da9400"
      "80eeb900ffe8de0080990035005c2535ff7c4a3500996f35fffd943580e5b9358025de3500d6006a00af"
@@ -68,7 +63,7 @@
      "009eb99fffe4de9f80c500d4ffb125d400ec4ad480566fd4ff3b94d4801eb9d40093ded400"
      ]))
    pam-rgba-pam-sum "67e68fe5d914fca6f22f3f59a51c10d12ee7ecbd929eca76008ce2ee35d37976"  ; 205 bytes, 35 px
-   pam-greya-pam (unx (cats [
+   pam-greya-pam (hexbytes (cats [
      "50370a574944544820370a48454947485420350a444550544820320a4d415856414c203235350a545550"
      "4c5459504520475241595343414c455f414c5048410a454e444844520a0aff21ff3bff66809880b7ffd0"
      "80240032ff530074ffa380b980aa003500470072805bff7affae80ccff41ff57004a808eff7c00b1ffdb"
@@ -102,7 +97,7 @@
 
    ; -- against PIL --
    pil? (: r (hark ["python3" "-c" "import PIL"]) (two? r) && (<r = 0))
-   _ (put (dir + "/mk.py") "import sys, random, shutil, subprocess
+   _ (uwrite (dir + "/mk.py") "import sys, random, shutil, subprocess
 from PIL import Image
 d = sys.argv[1]; random.seed(7); mg = shutil.which('magick')
 def pic(w, h, a):
@@ -138,15 +133,14 @@ for w, h in [(7, 5), (13, 9), (1, 1), (33, 17)]:
             m = t + '-' + n; mk(m, args, src); ref(m, 'mg')
 open(d + '/manifest', 'w').write(chr(10).join(man) + chr(10))
 ")
-   (same l) (: ws (split " " l) nm (ws 0) d (pnm-decode (rd (dir + "/" + nm)))
-               (two? d && d 0 = <(sound (ws 1)) && d 1 = <(sound (ws 2)) && d 2 = rd (dir + "/" + nm + ".rgba")))
+   (same l) (: ws (split " " l) nm (ws 0) d (pnm-decode (fget (dir + "/" + nm)))
+               (two? d && d 0 = <(sound (ws 1)) && d 1 = <(sound (ws 2)) && d 2 = fget (dir + "/" + nm + ".rgba")))
    _ (pil? ? (: r (hark ["python3" (dir + "/mk.py") dir])
-                ls (filter (l \ 0 < #l) (split "\n" (rd (dir + "/manifest"))))
+                ls (filter (l \ 0 < #l) (split "\n" (fget (dir + "/manifest"))))
                 (test (<r = 0) (10 < #ls) (atom? (filter (l \ !(same l)) ls))))
         (gate-partly "pnm: no python3 PIL, its pictures skipped"))
 
    ; -- the refusals --
-   (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
    (sane d) (string? d || two? d)
    (test (pnm-decode "hello" = "not a pnm") (pnm-size "P8 1 1 255\n" = "not a pnm")
          (pnm-decode "P6 2 2 255\n" = "cut short") (pnm-decode "P6 2" = "cut short")
@@ -157,10 +151,10 @@ open(d + '/manifest', 'w').write(chr(10).join(man) + chr(10))
          (pnm-decode "P7\nWIDTH x\nENDHDR\n" = "a bad pam header at WIDTH")
          ; every cut and every flipped byte answers why, or a picture, and never takes the process down
          (atom? (filter (i \ !(sane (pnm-decode (snip p6-ppm 0 i)))) (jot #p6-ppm)))
-         (atom? (filter (i \ !(sane (pnm-decode (flip p6-ppm i)))) (jot #p6-ppm)))
-         (atom? (filter (i \ !(sane (pnm-decode (flip p1-pbm i)))) (jot #p1-pbm)))
-         (atom? (filter (i \ !(sane (pnm-decode (flip pam-greya-pam i)))) (jot #pam-greya-pam)))
-         (atom? (filter (i \ !(sane (pnm-decode (flip p5d16-pgm i)))) (jot #p5d16-pgm))),
+         (atom? (filter (i \ !(sane (pnm-decode (flipb p6-ppm i)))) (jot #p6-ppm)))
+         (atom? (filter (i \ !(sane (pnm-decode (flipb p1-pbm i)))) (jot #p1-pbm)))
+         (atom? (filter (i \ !(sane (pnm-decode (flipb pam-greya-pam i)))) (jot #pam-greya-pam)))
+         (atom? (filter (i \ !(sane (pnm-decode (flipb p5d16-pgm i)))) (jot #p5d16-pgm))),
     hark ["rm" "-rf" dir],
     0))
 

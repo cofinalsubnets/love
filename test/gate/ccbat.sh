@@ -156,16 +156,7 @@ case $tgt in
     # main(argc, argv) gets a hosted run's 1 and its name, so an argc a program reads is no register's leftover
     { echo 'int cc_main(int, char **);'
       echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
-      echo 'void *memset(void *p, int c, unsigned long n){'
-      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
-      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
-      echo 'void *memmove(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b;'
-      echo ' if (x < y) { while (n--) *x++ = *y++; }'
-      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
-      echo 'int strcmp(const char *a, const char *b){'
-      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+      cc_floor
     } > "$d/run.c"
     { echo 'int main(void);'
       echo 'void _start(void){ int r = main();'
@@ -208,16 +199,7 @@ case $tgt in
     mpf="--target=mips-unknown-elf -march=mips32r2 -msoft-float -mno-abicalls -fno-pic -G0"   # no gp: no small data
     { echo 'int cc_main(int, char **);'
       echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
-      echo 'void *memset(void *p, int c, unsigned long n){'
-      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
-      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
-      echo 'void *memmove(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b;'
-      echo ' if (x < y) { while (n--) *x++ = *y++; }'
-      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
-      echo 'int strcmp(const char *a, const char *b){'
-      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+      cc_floor
     } > "$d/run.c"
     # exit's status in a0 (holo's r2), 4001 in v0 (r0)
     { echo 'int main(void);'
@@ -265,16 +247,7 @@ case $tgt in
       356-vafnval 390-qualon"
     { echo 'int cc_main(int, char **);'
       echo 'int main(void){ static char n[] = "t", *av[] = { n, 0 }; return cc_main(1, av); }'
-      echo 'void *memset(void *p, int c, unsigned long n){'
-      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
-      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
-      echo 'void *memmove(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b;'
-      echo ' if (x < y) { while (n--) *x++ = *y++; }'
-      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
-      echo 'int strcmp(const char *a, const char *b){'
-      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+      cc_floor
     } > "$d/run.c"
     # exit_group is 119, its argument in a6 (holo's r4, the frame base: no clobber names it; the call never returns)
     { echo 'int main(void);'
@@ -313,16 +286,7 @@ case $tgt in
     # main is renamed cc_main for `run`; mem* and strcmp are the floor a compiler may call
     { echo 'int cc_main(void);'
       echo 'int run(void){ return cc_main(); }'
-      echo 'void *memset(void *p, int c, unsigned long n){'
-      echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
-      echo 'void *memcpy(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
-      echo 'void *memmove(void *a, const void *b, unsigned long n){'
-      echo ' unsigned char *x = a; const unsigned char *y = b;'
-      echo ' if (x < y) { while (n--) *x++ = *y++; }'
-      echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
-      echo 'int strcmp(const char *a, const char *b){'
-      echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+      cc_floor
     } > "$d/run.c"
     arm-none-eabi-gcc $cpu -ffreestanding -O2 -c "$d/run.c" -o "$d/run.o" || fail "gcc run.c"
     blink() { arm-none-eabi-ld -T "$d/link.ld" "$d/start.o" "$d/run.o" "$1" "$lg" -o "$2"; }

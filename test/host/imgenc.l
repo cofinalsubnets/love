@@ -5,7 +5,6 @@
 (borrow "src/apps/png.l")
 (: dir (cwd 0 + "/out/.imgenc")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
    ; f x y -> [r g b a]
    (image w h f)
     (cask (4 * w * h) @ c
@@ -59,17 +58,17 @@
                               (a i - b i @ d (go (i + 1) (acc + d * d))))
                 (go 0 0))
    (round nm im)
-    (dir + "/" + nm + ".gif" @ f (put f (gif im), back f))
+    (dir + "/" + nm + ".gif" @ f (uwrite f (gif im), back f))
    (pround nm im)
-    (dir + "/" + nm + ".png" @ f (put f (png im), back f))
+    (dir + "/" + nm + ".png" @ f (uwrite f (png im), back f))
    (jround nm im q)
-    (dir + "/" + nm + ".jpg" @ f (put f (jpeg im q), back f))
+    (dir + "/" + nm + ".jpg" @ f (uwrite f (jpeg im q), back f))
    ((magick? ?
        (: g1 (round "checker" checker) g2 (round "keyed" keyed) g3 (round "dot" dot)
           g4 (round "noise" noise) g5 (round "grad" grad)
           j1 (jround "grad90" grad 90) j2 (jround "noise90" noise 90) j3 (jround "grad20" grad 20)
           ; 3072 colours cut to 256 measure 35 db, a q90 jpeg 49 and a q20 one 34
-          an (dir + "/anim.gif" @ f (put f anim, hark ["magick" "identify" "-format" "%T " f]))
+          an (dir + "/anim.gif" @ f (uwrite f anim, hark ["magick" "identify" "-format" "%T " f]))
           (test (two? an && <an = 0 && >an = "10 25 4 3 ")
                 (g1 = checker 2) (g2 = keyed 2) (g3 = dot 2) (g4 = noise 2)
                 (pround "keyed" keyed = keyed 2) (pround "dot" dot = dot 2)
