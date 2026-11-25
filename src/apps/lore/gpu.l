@@ -116,7 +116,7 @@
  ; ..a line from the helper, its newline gone; () once it has gone
  (line q) (: (go acc) (see q @ c (c < 0 ? (acc = "" ? () acc) (c = 10 ? acc (go (acc + string [c]))))) (go ""))
  ; ..LOVE_GPU_TIME, the ms past which a frame's helper says where it went, time-on when not set, () never
- time-on ()
+ time-on 40
  (time-at _) (getenv "LOVE_GPU_TIME" @ t (string? t && 0 < #t ? (read t) time-on))
  (timed g) (tablet? g && charm? (time-at ()) ? (post g "time \(show (time-at ()))", g) g)
  (answer g) (line (g 'from) @ () "the helper has gone" "ok" () r r)
