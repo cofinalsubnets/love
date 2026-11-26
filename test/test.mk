@@ -10,7 +10,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
-  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_hearts_x64 test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_love0_tco0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
@@ -808,6 +808,11 @@ test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST test/gate/hearts-boot.sh
 	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l $(ko)/love-a64.elf
+# test_hearts_x64 -- the x86_64 defconfig bzImage by mooncc, started by OVMF as its own EFI program and
+# booted to init under q35; heavy, opt-in
+test_hearts_x64: host
+	@echo TEST test/gate/hearts-x64.sh
+	@DL=$(dl) $(gsh) test/gate/hearts-x64.sh $(ho)/love
 # test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
 test_hearts_objtool: host
 	@echo TEST test/gate/hearts-objtool.sh
