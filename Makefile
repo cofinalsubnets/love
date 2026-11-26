@@ -426,7 +426,7 @@ picfiles = src/apps/pic/grap.l src/apps/pic/gpic.l src/apps/pic/chem.l src/apps/
 # exec) is the -ini tests', borrowed by path, never carried as a unit
 cajafiles = src/apps/tfm.l src/apps/caja/box.l src/apps/caja/par.l src/apps/caja/page.l src/apps/caja/doc.l src/apps/caja/cell.l
 # kanren and uu: the provers, which only tests, tools and the bench borrow
-carryfiles = src/apps/kanren.l src/apps/uu.l $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
+carryfiles = src/apps/kanren.l src/apps/uu.l src/apps/lore/tumble.l $(helmfiles) $(satfiles) $(manifestfiles) $(chuchofiles) $(picfiles) $(cajafiles) $(filter-out src/apps/lux/wire.l,$(luxfiles))
 $(ho)/.dist.list: force_dist_list
 	@mkdir -p $(dir $@)
 	@tf=$@.$$$$.tmp; echo '$(distfiles)' > $$tf; \
