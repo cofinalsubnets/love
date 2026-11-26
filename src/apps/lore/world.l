@@ -2294,13 +2294,22 @@
    _ (pins b 'held 0 'rest 0 'kt (st 'mt) 'p p 'pk ()
            'v (c+ (c* v (look-way st)) [(peep st 'vx 0.0) 0.0 (peep st 'vz 0.0)]))
    (pin st 'wind ()))
+ ; ..each door's leaf as a wall in the plan [x0 z0 x1 z1 top foot]: slid along its wall as
+ ; far as it is open, or one opened by hand swung on its hinge away from who opened it
+ (door-segs st) (: lv (st 'lvl) sw (peep st 'swing {})
+   (map (i \ (: d (lv 'doors i) t (st 'doors i) w (d 'w) l0 (d 'c - 0.5 * w) m (0.5 * (d 'a + d 'b))
+               (xz al ac) (d 'ax @ 'z [al ac] [ac al])
+               ab (? (d 'hand = 1) (: an (peep sw i 1.0 * t * swing-wide) [(xz l0 m) (xz (l0 + w * cos an) (m + w * sin an))])
+                     (: o (t * (w - 0.05)) [(xz (l0 + o) m) (xz (l0 + o + w) m)]))
+               [(ab 0 0) (ab 0 1) (ab 1 0) (ab 1 1) (d 'y + d 'h) (d 'y)]))
+        ^#(lv 'doors)))
  ; ..what in the level moves, each a box [lo hi] in the same order frame to frame: the gates'
- ; leaves and the lifts' parts. one that moved since the last frame wakes what rests where it
+ ; and doors' leaves and the lifts' parts. one that moved since the last frame wakes what rests where it
  ; was or is, so the rest falls or is pushed as anywhere; a new kind of thing that moves lists
  ; its boxes here and nothing else
  (moving-boxes st) (: lv (st 'lvl)
    (seg-box q) [[(min (q 0) (q 2)) (q 5) (min (q 1) (q 3))] [(max (q 0) (q 2)) (q 4) (max (q 1) (q 3))]]
-   (map (i \ seg-box (gate-seg (lv 'gates i) (st 'gates i))) ^#(lv 'gates)
+   (map (i \ seg-box (gate-seg (lv 'gates i) (st 'gates i))) ^#(lv 'gates) + map seg-box (door-segs st)
     + catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))
  (wake-moved! st) (: now (moving-boxes st) was (peep st 'mvb ()) _ (pin st 'mvb now)
    ch (? (#now != #was) () (filter two? (map (i \ (now i = was i ? () [(map (k \ min (now i 0 k) (was i 0 k)) ^3) (map (k \ max (now i 1 k) (was i 1 k)) ^3)])) ^#now)))
@@ -2357,11 +2366,12 @@
     + map (q \ bx [(x + q 0 * (h - r)) (y + 0.5 * H) (z + q 1 * (h - r))] [r (0.5 * H) r]) [[-1 -1] [1 -1] [1 1] [-1 1]]
     + catmap (u \ [(bx [x (y + u) (z - h + r)] [h r r]) (bx [x (y + u) (z + h - r)] [h r r])]) [0.55 (H - r)]))
  ; ..what a body keeps a hand from near p but no brush is, among W's brushes: the walls in the
- ; plan, the trees' trunks, the lifts; laid again only as they change, a gate swinging, a lift
+ ; plan, the doors' leaves, the trees' trunks, the lifts; laid again only as they change, a gate swinging, a lift
  ; rising
  (ball-walls! st W p) (: lv (st 'lvl) x (p 0) z (p 2)
    (near? lo hi) (lo 0 - 1.0 < x && x < hi 0 + 1.0 && lo 2 - 1.0 < z && z < hi 2 + 1.0)
-   ws (filter (s \ 2 (s 2 - s 0) + 2 (s 3 - s 1) > 1e-6) (walls-near st x z))
+   ws (filter (s \ 2 (s 2 - s 0) + 2 (s 3 - s 1) > 1e-6 && near? [(min (s 0) (s 2)) 0.0 (min (s 1) (s 3))] [(max (s 0) (s 2)) 0.0 (max (s 1) (s 3))])
+              (walls-near st x z + door-segs st))
    tk (filter (q \ (: s (q 0) near? (map (k \ min (s 0 k) (s 1 k) - s 2) ^3) (map (k \ max (s 0 k) (s 1 k) + s 2) ^3)))
               (catmap (t \ (: l (peep t 'trunk ()) (map (i \ [(l i) (i = 0 ? 1.0 0.0)]) ^#l))) (peep lv 'trees ())))
    lb (filter (q \ near? (q 0) (q 1)) (catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))

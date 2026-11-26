@@ -1103,6 +1103,13 @@
    _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (k / 30.0), lgo 1))) _ (lgo 30) l1 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
    _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (1.0 - k / 60.0), lgo 1))) _ (lgo 60) l2 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
  (test (l0 1 = 1) (mag (l0 0 - 0.3 - lc 'r) < 0.02) (l1 1 = 1) (mag (l1 0 - 0.3 - lc 'r) < 0.02) (l2 1 = 1) (mag (l2 0 - 0.3 - lc 'r) < 0.02)))
+; a ball thrown at a door comes back off its leaf while it is shut, and goes through once it
+; is open: slid into its wall as the body comes near, or one opened by hand swung on its hinge
+(: (dshot d at op) (: l (lv ("(room [0 0 0] [6 2 2]) (room [0 0 2.2] [6 2 4]) " + d + " (ball [1 0 1.2]) (start " + at + " 0 0)"))
+      s (world-new 40 24 l "") _ (op ? (pins s 'opened {0 1} 'swing {0 1.0}) 0) (go n) (each ^n (_ \ (pin s 'dt (1.0 / 30.0), world-move s)))
+      _ (go 40) b (s 'balls 0) _ (pins b 'p [1.0 0.5 1.2] 'v [0.0 1.0 4.0] 'rest 0) _ (go 30) (b 'p 2))
+   dr "(door [1 0 2.1] 0.9 2)" dh "(by-hand (door [1 0 2.1] 0.9 2))"
+ (test (dshot dr "[5.5 0 0.5]" 0 < 2.0) (dshot dr "[1.5 0 1.0]" 0 > 2.3) (dshot dh "[5.5 0 0.5]" 0 < 2.0) (dshot dh "[5.5 0 0.5]" 1 > 2.3)))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
