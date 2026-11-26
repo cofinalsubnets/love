@@ -1627,7 +1627,7 @@
                                       (loeb g 'int x 8 ((pcs 1) 2) @ [w1 f1]
                                          [(ngp g) fi (rg + [[(argr g gi) w0]]) (sk + [['w ['long w1 ()] 8]]) (pre + f0 + f1)]))
                                   ; whole to the block; AAPCS64 then closes the file it wanted
-                                  [(a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
+                                  [(a64? g && 0 < ng ? (ngp g) gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
                     (lofr? x) (fi < 8 ? [gi (fi + 1) (rg + [[(xmmreg fi) x]]) sk pre] [gi fi rg (sk + [['w v 8]]) pre])
                     (gi < ngp g) [(gi + 1) fi (rg + [[(argr g gi) x]]) sk pre]
                     [gi fi rg (sk + [['w v (wsize g)]]) pre]))))
@@ -2317,7 +2317,7 @@
                                       (ntmp g ty @ off (lomk g @ t
                                          (go u (ngp g) fi (ov + 1) ([nm 'm off ty] . env)
                                              (acc + [['st 'r4 off (argr g gi)] ['ld t 'r4 (ovo + 8 * ov)] ['st 'r4 (off + 8) t]]) post)))
-                                     (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
+                                     (go u (a64? g && 0 < ng ? (ngp g) gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
                                          ((nm . ovm ty ov) . env) acc post)))))
                     (lofl? ty ? (8 <= fi) (ngp g <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
                     (: fl (lofl? ty) A (fl ? (xmmreg fi) (argr g gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)
