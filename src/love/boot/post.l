@@ -2391,7 +2391,8 @@
              _ (edrender (edreprompt t (rlabel q (<fs 2))) t)
              c (edkey ip)
              (more q2 k) (hfrom q2 k @ m (hunt i draft sv ([q2 (m < 0 ? j m) (0 <= m)] . fs)))
-             (? (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
+             (? (c == 0) (hunt i draft sv fs)                  ; a terminal's report, no key
+                (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
                 (c = 18) (q = "" ? (hunt i draft sv fs) (more q (j + 1)))
                 (c = 127 || c = 8) (hunt i draft sv (two? >fs ? >fs fs))
                 (c = 7) (edload t sv, edreprompt t pr, loop i draft)

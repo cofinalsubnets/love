@@ -53,12 +53,16 @@
   type x "\e[Z", test (shows x ((LS + "alphabet") . menu) [0 15]),
   type x "\e[Z", test (shows x ((LS + "alpha-two") . menu) [0 16]))))
 
-; a terminal's report coming late is no key: the list stays, and tab goes on from it
-(with 12 60 (x \
-(  type x "ls al\t\t", test (shows x ((LS + "alpha") . menu) [0 12]),
-  type x "\e[?2027;1$y", rest 300, test (shows x ((LS + "alpha") . menu) [0 12]),
-  type x "\t", test (shows x ((LS + "alpha\\ sp") . menu) [0 16]),
-  type x "\e[?2027;1$y\t", test (shows x ((LS + "alpha-dir/") . menu) [0 17]))))
+; a terminal's report coming late is no key, on the line, with the list up, in a search:
+; the screen stays, and the next key goes on from it
+(each ["\e[?2027;1$y" "\e[?1;2c"] (r \
+  each [["ls al" [(LS + "al")] [0 9] "x" [(LS + "alx")] [0 10]]
+        ["ls al\t\t" ((LS + "alpha") . menu) [0 12] "\t" ((LS + "alpha\\ sp") . menu) [0 16]]
+        ["ls al\t\t\x12" ["(reverse-i-search)`': ls alpha"] () "\x07" [(LS + "alpha")] [0 12]]]
+       ([k a ac n b bc] \ with 12 60 (x \
+(         type x k, test (shows x a ac),
+          type x r, rest 300, test (shows x a ac),
+          type x (r + n), test (shows x b bc))))))
 
 ; shift-tab from the bare list is the last one
 (with 12 60 (x \ (type x "ls al\t\t\e[Z", test (shows x ((LS + "alphabet") . menu) ()))))
@@ -89,7 +93,7 @@
     type x k,
     test (until (_ \ #(look <x) < 2) 3000))))))
 (with 12 60 (x \ (type x "ls al\t\t\x03", test (shows x [(LS + "alpha^C") "~ $"] [1 4]))))
-(with 12 60 (x \ (type x "ls al\t\t\x12", test (until (_ \ look <x = ["(reverse-i-search)`': ls alpha"]) 3000),
+(with 12 60 (x \ (type x "ls al\t\t\x12", test (shows x ["(reverse-i-search)`': ls alpha"] ()),
                  type x "\x07", test (shows x [(LS + "alpha")] [0 12]))))
 
 ; on the last row the screen gives way by the list's rows; the line goes on from there
