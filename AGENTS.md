@@ -216,7 +216,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
 - `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
 - `src/love/holo/xtensa.l`, `test/holo/xtrun.l`, `test/holo/xtlink.l`, `test/holo/xtdata.c` -> `test_xtensa` `test_ccxtensa`
-- `src/love/holo/avr.l`, `src/love/holo/decode.l`, `test/holo/avrrun.l`, `test/holo/avrlaw.l`, `test/holo/avrcodec.l`, `test/holo/avrqemu.l`, `test/gate/avr.sh` -> `test_avr`
+- `src/love/holo/avr.l`, `src/love/holo/decode.l`, `test/holo/avrrun.l`, `test/holo/avrlaw.l`, `test/holo/avrcodec.l`, `test/holo/avrqemu.l`, `test/holo/avrobj.l`, `test/gate/avr.sh` -> `test_avr`
 - `src/love/holo/mips.l`, `src/love/holo/decode.l`, `test/holo/mipsrun.l`, `test/holo/mipscodec.l`, `test/holo/mipslink.l`, `test/holo/mipsrel.c`, `test/holo/mipsrela.s`, `test/holo/mipsrelg.s`, `test/holo/mipsrelb.c`, `test/holo/mipsrelm.c`, `test/holo/mipstp.c`, `test/gate/mips.sh` -> `test_mips` `test_ccmips`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`

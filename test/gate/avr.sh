@@ -3,7 +3,8 @@
 # flags and the refusals of a family; test/holo/avrcodec.l lays a corpus of every row of avr-tab, which
 # llvm-mc assembles and llvm-objdump reads back as decode.l does; test/holo/avrqemu.l runs one image in
 # the interpreter and on qemu's uno, whose bytes out the uart must agree; kore's objdump -d reads
-# clang's object as llvm-objdump does
+# clang's object as llvm-objdump does; test/holo/avrobj.l lays an object
+# whose relocations are llvm-mc's, which lld links alike
 # usage: avr.sh LOVE OUTDIR
 . test/gate/skip.sh
 set -u
@@ -69,4 +70,63 @@ if [ -z "$kr" ]; then
 else
   gate_partly "$name: kore's objdump unchecked ($kr)"; kr=""
 fi
-echo "$name: the interpreter's flags and refusals by the manual$co$qe$kr"
+ob=""
+osrc="src/love/holo/holo.l src/love/holo/elf.l src/love/holo/avr.l src/love/holo/obj.l"
+for t in llvm-mc llvm-readelf llvm-objcopy; do command -v $t > /dev/null 2>&1 || ob="no $t"; done
+for p in avr5:atmega32u4 avr25:attiny85; do
+  f=${p%%:*}; c=${p##*:}
+  cat $osrc test/holo/avrobj.l | AVR_FAM=$f AVR_OBJ="$d/$f.our.o" $love > "$d/$f.obj.log" 2>&1 || { cat "$d/$f.obj.log"; fail "avrobj.l could not lay $f"; }
+  grep -q 'avrobj: ok' "$d/$f.obj.log" || { cat "$d/$f.obj.log"; fail "avrobj.l did not finish"; }
+  [ -z "$ob" ] || continue
+  far=""; [ $f = avr5 ] && far='call ext
+ call f
+ jmp ext+6'
+  cat > "$d/$f.ref.s" <<EOF
+.text
+.global f
+f: rjmp f
+ rjmp ext
+ rjmp ext+4
+ breq loc
+ brne ext
+ $far
+ ldi r24, lo8(v+5)
+ ldi r25, hi8(v+5)
+ ldi r24, lo8(v-3)
+ ldi r25, hi8(v-3)
+ ldi r24, lo8(-(v+5))
+ ldi r25, hi8(-(v+5))
+ ldi r30, pm_lo8(ext)
+ ldi r31, pm_hi8(ext)
+ .word ext
+loc: ret
+.data
+.global v
+v: .word ext
+ .word v+2
+ .word pm(ext)
+ .long ext
+ .byte v
+ .byte 0
+EOF
+  llvm-mc --triple=avr --mcpu=$c -filetype=obj "$d/$f.ref.s" -o "$d/$f.ref.o" || fail "llvm-mc refused the $f object"
+  for x in our ref; do
+    llvm-readelf -rW "$d/$f.$x.o" | awk '/R_AVR/ { print $1, $3, $5, $6, $7 } /^Relocation/ { print $3 }' > "$d/$f.$x.rel"
+    for q in text data; do llvm-objcopy -O binary -j .$q "$d/$f.$x.o" "$d/$f.$x.$q" || fail "llvm-objcopy"; done
+    llvm-readelf -h "$d/$f.$x.o" | sed -n 's/.*Flags: *\(0x[0-9a-fA-F]*\).*/\1/p' > "$d/$f.$x.fl"
+  done
+  [ -s "$d/$f.ref.rel" ] && cmp -s "$d/$f.our.rel" "$d/$f.ref.rel" || { diff "$d/$f.ref.rel" "$d/$f.our.rel"; fail "our $f object's relocations are not llvm-mc's"; }
+  # lld reads either; a branch's and an address's own field is the linker's, so a link tells the rest
+  if command -v ld.lld > /dev/null 2>&1; then
+    printf '.text\n.global ext\next: ret\n' > "$d/ext.s"; llvm-mc --triple=avr --mcpu=$c -filetype=obj "$d/ext.s" -o "$d/ext.o"
+    for x in our ref; do ld.lld --image-base=0 -Ttext=0 -Tdata=0x80 -e f "$d/$f.$x.o" "$d/ext.o" -o "$d/$f.$x.elf" 2> "$d/lld.log" || { cat "$d/lld.log"; fail "lld refused $f $x"; }
+      llvm-objcopy -O binary -j .text "$d/$f.$x.elf" "$d/$f.$x.lt" && llvm-objcopy -O binary -j .data "$d/$f.$x.elf" "$d/$f.$x.ld"; done
+    cmp "$d/$f.our.lt" "$d/$f.ref.lt" && cmp "$d/$f.our.ld" "$d/$f.ref.ld" || fail "lld lays the $f objects differently"
+  else
+    gate_partly "$name: no link of the objects (no ld.lld)"
+  fi
+  # ours clears the relaxable bit, 0x80
+  [ "$(printf '%d' $(cat "$d/$f.our.fl"))" = "$(( $(cat "$d/$f.ref.fl") & 127 ))" ] || fail "$f e_flags $(cat "$d/$f.our.fl") against $(cat "$d/$f.ref.fl")"
+done
+[ -z "$ob" ] && ob="; objects as llvm-mc's, linked alike by lld" || { gate_partly "$name: objects unchecked ($ob)"; ob=""; }
+echo "$name: the interpreter's flags and refusals by the manual$co$qe$kr$ob"
