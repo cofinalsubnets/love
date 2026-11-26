@@ -1326,7 +1326,7 @@
    (src f) (uread f)
    m0 (scene-made src) m1 (scene-made (f \ f = "src/apps/lore/brush.l" ? [0 "x"] (src f))) m2 (scene-made (_ \ ()))
    ; ..and no level's maker borrows a library of lore's that is neither listed nor known not to make
-   exempt ['lore 'rove 'console 'gpu 'walk 'mixer 'gesture 'decay 'flicker]
+   exempt ['lore 'rove 'console 'gpu 'walk 'mixer 'gesture 'decay 'flicker 'tumble]
    (names l) (: (go i w a) ((i = #l || l i = 41) ? (w = "" ? a (w . a)) (: c (l i) ((96 < c && c < 123) || c = 45 ? (go (i + 1) (w + snip l i (i + 1)) a) (go (i + 1) "" (w = "" ? a (w . a)))))) (go 0 "" ()))
    (bors f) (catmap (l \ (#l > 9 && snip l 0 8 = "(borrow " ? (names (snip l 8 #l)) ())) (lines <>(src f)))
    bad (catmap (f \ filter (n \ two? (src "src/apps/lore/\(n).l") && !(elem n (map string exempt)) && !(elem "src/apps/lore/\(n).l" scene-by)) (bors f)) (filter (f \ snip f 0 13 = "src/apps/lore") scene-by))

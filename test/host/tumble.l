@@ -3,7 +3,8 @@
 ; edge falls flat, friction holds a box on a gentle slope and lets it go on a steep one; and
 ; bodies meet: two balls trade their speed, momentum is kept, three boxes stack, a ball lands
 ; on a box, a sleeping box is woken by a blow; and C's step (tumble-step) answers as the
-; love one does, a mixed scene a second on, and a ring of balls into a big box past the grid's cells.
+; love one does, a mixed scene a second on, and a ring of balls into a big box past the grid's cells;
+; and a level's faces: rest on a ledge, roll off it, a face pushing only out of its solid.
 ; run: cat test/00-init.l test/host/tumble.l | out/love
 (borrow 'tumble)
 (borrow 'vec)
@@ -110,6 +111,35 @@
    ; ..the balls met the box and each other: some ended moving outward
    out (net (map (b \ dot (c- (b 'p) [-7.0 0.0 -7.0]) (b 'v) > 0.0) >L))
  (test (gap < 1e-9) (map (b \ b 'still) L = map (b \ b 'still) C) (out > 0)))
+
+
+; --- faces: a level's surfaces as convex polygons, solid behind. a ledge half a metre up
+; over a floor, its top, its wall, and the floor beyond it ---
+(: top [[-1.0 0.5 -1.0] [0.0 0.5 -1.0] [0.0 0.5 1.0] [-1.0 0.5 1.0]]
+   wall [[0.0 0.0 -1.0] [0.0 0.5 -1.0] [0.0 0.5 1.0] [0.0 0.0 1.0]]
+   floor [[0.0 0.0 -1.0] [3.0 0.0 -1.0] [3.0 0.0 1.0] [0.0 0.0 1.0]]
+   fs [[top [0.0 1.0 0.0]] [wall [1.0 0.0 0.0]] [floor [0.0 1.0 0.0]]]
+   (run e bs t) (: W (tb-faces (pin (tb-world bs ()) 'engine e) fs) (tb-step W t, bs))
+   ; ..a ball and a box let fall on the top rest on it and sleep
+   a (run 'c [(tb-sphere [-0.5 1.0 0.0] 0.2 1.0)] 2.0)
+   b (run 'c [(pins (tb-box [-0.5 1.0 0.1] [0.2 0.15 0.25] 1.0) 'q (qaxis [1.0 0.2 0.4] 0.6))] 2.5)
+   ; ..a ball rolled off the top's edge comes down on the floor past the wall
+   c (run 'c [(pins (tb-sphere [-0.6 0.7 0.0] 0.2 1.0) 'v [1.5 0.0 0.0])] 2.0)
+   ; ..one under the top, in its solid, is let fall: a face pushes only out of its solid side
+   d (run 'c [(tb-sphere [-0.5 0.3 0.0] 0.1 1.0)] 0.5)
+   ; ..a ball thrown at the wall's foot comes back off it
+   f (run 'c [(pins (tb-sphere [1.5 0.2 0.3] 0.2 1.0) 'v [-3.0 0.0 0.0] 'e 0.8)] 1.0)
+   ; ..and C answers as love does, a ball and a box on the ledge going over its edge
+   (mixed _) [(pins (tb-box [-0.3 0.8 0.0] [0.2 0.15 0.2] 1.0) 'q (qaxis [0.3 0.1 1.0] 0.5) 'v [1.0 0.0 0.2])
+              (pins (tb-sphere [-0.7 0.8 0.3] 0.15 1.0) 'v [2.0 0.0 0.0])]
+   L (run 'love (mixed ()) 1.5) C (run 'c (mixed ()) 1.5)
+   gap (foldl max 0.0 (catmap (i \ catmap (k \ map (j \ mag (L i k j - C i k j)) ^(k = 'q ? 4 3)) ['p 'q 'v 'w]) ^#L))
+ (test (mag (a 0 'p 1 - 0.7) < 0.005) (a 0 'still = 1)
+       (mag (b 0 'p 1 - 0.65) < 0.11) (b 0 'p 1 > 0.6) (b 0 'still = 1)
+       (c 0 'p 0 > 0.2) (mag (c 0 'p 1 - 0.2) < 0.01)
+       (d 0 'p 1 < 0.0)
+       (f 0 'v 0 > 0.5)
+       (gap < 1e-9) (map (b \ b 'still) L = map (b \ b 'still) C) (C 0 'p 0 > 0.0)))
 
 (test_fin ())
 (puts "tumble: ok\n")
