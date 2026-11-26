@@ -8,7 +8,6 @@
    _ (magick? ? 0 (gate-skip "kitpng: ok (no magick, skipped)"))
    dir (cwd 0 + "/out/.kitpng")
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
    (rd p) (uread p @ r (two? r ? <>r ""))
    abc "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
    (b64 s) (: n #s
@@ -26,7 +25,7 @@
                      (pins c o (x * 19) (o + 1) (200 - y * 20) (o + 2) (y * 36) (o + 3) (x * 20 + 5))))
              (jot (W * H)),
          string c))
-   _ (put (dir + "/src.rgba") src)
+   _ (uwrite (dir + "/src.rgba") src)
    (make nm flags) (dir + "/" + nm + ".png" @ f
                     (hark (["magick" "-size" "13x7" "-depth" "8" ("rgba:" + dir + "/src.rgba")] + flags + [f]),
                      f))

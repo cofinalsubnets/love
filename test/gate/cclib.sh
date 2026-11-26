@@ -42,3 +42,16 @@ hdrdecls() {
   echo '  0 };'
   echo 'int main(void) { return __refs[0] == (void *) 1 ? 1 : 0; }'
 }
+# the floor a compiler may call from freestanding code, as C on stdout
+cc_floor() {
+  echo 'void *memset(void *p, int c, unsigned long n){'
+  echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
+  echo 'void *memcpy(void *a, const void *b, unsigned long n){'
+  echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
+  echo 'void *memmove(void *a, const void *b, unsigned long n){'
+  echo ' unsigned char *x = a; const unsigned char *y = b;'
+  echo ' if (x < y) { while (n--) *x++ = *y++; }'
+  echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
+  echo 'int strcmp(const char *a, const char *b){'
+  echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+}
