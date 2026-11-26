@@ -179,6 +179,7 @@ hostnif_tests += test/host/manifest.l   # the spreadsheet, raised off /love
 hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
 hostnif_tests += test/host/grap.l test/host/chem.l   # grap and chem without plan 9 or groff
+hostnif_tests += test/host/tumble.l   # rigid bodies: rest, roll, friction, energy
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_tests += test/host/deflate.l   # deflate streams off the format's description, through every decoder
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
