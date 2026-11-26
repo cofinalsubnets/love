@@ -26,8 +26,14 @@
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
    (dop1 v) (v @ ['chain a _] a ['np1 v])
    (dop2 v) (v @ ['chain _ b] b ['np2 v])
+   ; a step that reads its recursive result only under a lambda or a branch gets a memo cell
    (donr P z s m) (charm? m ?
-    (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
+    (m = 0 ? z
+     (: m1 (vapp s (m - 1))  k (m1 @ ['lam q] (kof q) 0)
+        (go i acc) (i = (m - 1) ? acc (go (i + 1) (vapp (vapp s i) acc)))
+      (? (k = 1) (vapp m1 0)
+         (k = 2) (vapp m1 (lzy (_ \ donr P z s (m - 1))))
+         (vapp m1 (go 0 z)))))
     (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
    ; a step that never reads its recursive result needs none computed, a case and no fold:
    ; a double recursion, natgtb or natminus, costs a sum of its literals and not their binomial
@@ -102,7 +108,7 @@
          ['ii2 b]               (comp b @ ca (en \ ['i2 (ca en)]))
          (: cf (comp <t) cas (map comp >t) (en \ spine en (cf en) cas))))
 
-   (spine en f cas) (cas @ (a . u) (spine en (vapp f (a en)) u) f)
+   (spine en f cas) (cas @ [a] (vapp f (a en)) (a . u) (spine en (vapp f (a en)) u) f)
 
    vof (flip comp)                               ; compile, then run
 

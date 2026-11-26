@@ -27,6 +27,31 @@
  (defn uu-skip (pi p (paths nat 0 0) nat) (lam p 3))
  (3 = vof 0 '(uu-skip (idpath 0))))
 
+; a recursor's literal fold runs a step's recursive result when it is read under a branch, and once:
+; tick counts its calls
+(: uu-ticks {}
+   uu-tick ['lam ['clo (v \ (: _ (pin uu-ticks 0 (1 + uu-ticks 0)) v))]]
+   (uu-recs n s) (: _ (pin uu-ticks 0 0)
+                    v (vof [['tick uu-tick] ['x ['nv 'x]] ['named (vof [['tick uu-tick]] '(lam k (lam ih (tick k))))]]
+                        ['nat_rect '(lam q nat) 0 s n])
+                    [v (uu-ticks 0)])
+   (uu-rec n b) (uu-recs n ['lam 'k ['lam 'ih b]]))
+(test
+ ('(7 1) = uu-rec 9 '(bool_rect (lam b nat) (pr2 (tpair (tick k) 7)) ih true))
+ ('(9 9) = uu-rec 9 '(bool_rect (lam b nat) (succ (tick ih)) 0 true))
+ ('(20 20) = uu-rec 20 '(bool_rect (lam b nat) (succ (pr1 (tpair ih (tick ih)))) 0 true))
+ ('(9 9) = uu-rec 9 '(succ (tick ih)))
+ ('(0 0) = uu-rec 0 '(bool_rect (lam b nat) (tick ih) ih true))
+ ; a step that is a name and reads nothing runs once
+ ('(8 1) = uu-recs 9 'named)
+ ; how a step reads its result may change with the number: at 0 never, past it under a branch or at once
+ ('(11 0) = uu-recs 5 '(lam k (bool_rect (lam b (pi i nat nat)) (lam ih 7) (lam ih (bool_rect (lam b nat) (succ ih) 0 true))
+                                (nat_rect (lam q bool) true (lam a (lam b false)) k))))
+ ('(11 0) = uu-recs 5 '(lam k (bool_rect (lam b (pi i nat nat)) (lam ih (bool_rect (lam b nat) 7 ih true)) (lam ih (succ ih))
+                                (nat_rect (lam q bool) true (lam a (lam b false)) k))))
+ ; a symbolic bound steps once for each succ
+ (uu-rec '(succ (succ x)) '(bool_rect (lam b nat) (succ ih) 0 true) @ [['succ ['succ ['nnr _ _ _ _]]] 0] 1 0))
+
 ; --- UniMath Foundations PartA. definitions and statements from here down are ported from
 ; --- UniMath (https://github.com/UniMath/UniMath, Foundations/PartA.v et al), mit license,
 ; --- copyright (c) 2015 the UniMath Development Team. the kernel is our own ---

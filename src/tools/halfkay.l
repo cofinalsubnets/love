@@ -3,7 +3,8 @@
 ;   love src/tools/halfkay.l find              the board's hidraw node and its output report's size
 ;   love src/tools/halfkay.l frame IN.bin OUT  the reports a write would send, end to end; no device
 ;   love src/tools/halfkay.l write IN.bin      wait for the board, write, start the program
-;   love src/tools/halfkay.l start             start the program the flash holds; no write
+;   love src/tools/halfkay.l start [DEV]       start the program the flash holds; no write
+; DEV is a usb device's sysfs directory: with it only a board there is taken, never another
 ; the board is in HalfKay after its button, or after its running usb serial is set to 134 baud. an
 ; output report is 1088 bytes: the flash offset in three bytes low first, 61 zeros, 1024 of the
 ; image. the first write erases the whole flash, so block 0 always goes; after it a block of FFs
@@ -42,7 +43,11 @@
    sys "/sys/class/hidraw/"
    ; the hidraw nodes that are PJRC's HalfKay (16C0:0478)
    (nodes _) (readdir sys @ l (two? l ? (filter (n \ uread (sys + n + "/device/uevent") @ [1 t] (t @ (a + "HID_ID=0003:000016C0:00000478\n" + b) 1 _ 0) _ 0) (sort l)) ()))
-   (await t) (nodes 0 @ l (? (two? l) <l (clock 0 < t) (rest 100, await t) ()))
+   ; the same below one usb device: its ids, then its interfaces' hid devices' nodes
+   (kids p) (readdir p @ l (two? l ? (sort l) ()))
+   (ids dev) (uread (dev + "/idVendor") @ [1 "16c0\n"] (uread (dev + "/idProduct") @ [1 "0478\n"] 1 _ 0) _ 0)
+   (below dev) (ids dev ? (catmap (i \ catmap (h \ kids (dev + "/" + i + "/" + h + "/hidraw")) (kids (dev + "/" + i))) (kids dev)) ())
+   (await dev t) ((dev ? (below dev) (nodes 0)) @ l (? (two? l) <l (clock 0 < t) (rest 100, await dev t) ()))
    (gone node t) (? (two? (stat ("/dev/" + node))) (clock 0 < t ? (rest 50, gone node t) 0) 1)
    ; the start report, sent until the board leaves: it refuses one while it still writes, and
    ; detaches as it takes one, so the write's own answer says nothing
@@ -69,7 +74,7 @@
    (write p)
     (: s (image p) fs (frames s)
        (from tries)
-        (: node (await (clock 0 + t-node) @ n (string? n ? n (die "no board in HalfKay (press its button, or set its usb serial to 134 baud)")))
+        (: node (await 0 (clock 0 + t-node) @ n (string? n ? n (die "no board in HalfKay (press its button, or set its usb serial to 134 baud)")))
            _ (fits node)
            fd (opn node (clock 0 + t-open))
            t0 (clock 0)
@@ -88,8 +93,10 @@
               (start fd (fs (#fs - 1)) node (clock 0 + t-gone)) (say out "halfkay: \(k) blocks of \((#s + blk - 1) // blk) written from \(p) in \(ms) ms (write \(held 'k) waited \(held 'ms) ms), started\n", flush out, 0)
               (die "\(k) blocks written, but \(node) is still in HalfKay")))
        (from 3))
-   (boot _)
-    (: node (await (clock 0 + t-node) @ n (string? n ? n (die "no board in HalfKay")))
+   (boot dev)
+    (: _ (? (dev = 0) 0 !(two? (stat dev)) (die "no usb device at \(dev): nothing sent")
+            (ids dev) 0 (die "the usb device at \(dev) is not in HalfKay: nothing sent"))
+       node (await dev (clock 0 + t-node) @ n (string? n ? n (die (dev ? "no board in HalfKay at \(dev): nothing sent" "no board in HalfKay"))))
        _ (fits node)
        fd (opn node (clock 0 + t-open))
        (start fd (report 0xFFFFFF zz) node (clock 0 + t-gone) ? (say out "halfkay: started\n", flush out, 0)
@@ -99,5 +106,6 @@
           ["frame" p q] (frames (image p) @ fs (uwrite q (join "" fs) ? 0 (die ("cannot write " + q))))
           ["write" p] (write p)
           ["start"] (boot 0)
-          _ (die "usage: love src/tools/halfkay.l find | frame IN.bin OUT | write IN.bin | start"))
+          ["start" dev] (boot dev)
+          _ (die "usage: love src/tools/halfkay.l find | frame IN.bin OUT | write IN.bin | start [DEV]"))
    (main >argv))

@@ -105,11 +105,11 @@
            (cqrun t @ [w b] (cptr? b ? (cty-dtor (cqw (cpq b) <>b) "*\(sepby " " w) \(s)" 1) (cty-dtor b s p)))
           'arr (cty-dtor a "\(p ? "(\(s))" s)[\(cdim <u)]" 0)
           'varr (cty-dtor a "\(p ? "(\(s))" s)[\(ce <u 0)]" 0)
-          'fn (cty-dtor a "\(p ? "(\(s))" s)\(cptys <u)" 0)))
+          'fn (cty-dtor a "\(p ? "(\(s))" s)\(cptys u)" 0)))
    ; an array bound: a charm, 0 for `[]`, else a clay expression
    (cdim n) (charm? n ? (n @ 0 "" (show n)) (ce n 0))
-   ; a function type's param types; none is C's unspecified `()`
-   (cptys l) (two? l ? "(\(sepby ", " (map (t \ cty t "") l)))" "()")
+   ; a function type's (params flag): none is C's unspecified `()`, 'va a `...`
+   (cptys u) (: l <u (two? l ? "(\(sepby ", " (map (t \ cty t "") l))\(two? >u && elem <>u '(va msva) ? ", ..." ""))" "()"))
    ; a full declaration around s; s empty is a cast's abstract declarator
    (cty t s) (: d (cty-dtor t s 0) b (cty-base t) (d @ "" b "\(b) \(d)"))
 

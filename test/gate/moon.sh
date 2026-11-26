@@ -499,6 +499,17 @@ moonrun -o "$ho/.msabi" test/cc/msabi/host.c "$ho/.peerms.o" > "$ho/.msabi.log" 
   || { cat "$ho/.msabi.log" >&2; fail "msabi: mooncc could not build or link host.c"; }
 "$ho/.msabi"; b=$?
 [ $b -eq 0 ] || fail "msabi: mooncc and gcc disagree on ms_abi (bits $b)"
+# calls through function types against gcc's callees, and clang's where it is
+for pc in "$cc_g" clang; do
+  command -v ${pc%% *} > /dev/null 2>&1 || continue
+  $pc -std=gnu17 -O2 -w -ffreestanding -fno-stack-protector -fno-pie -c -o "$ho/.fnptr.o" test/cc/fnptr/peer.c || fail "fnptr: $pc could not build peer.c"
+  for o in "" -O2 -Os; do
+    moonrun $o -o "$ho/.fnptr" test/cc/fnptr/host.c "$ho/.fnptr.o" > "$ho/.fnptr.log" 2>&1 || { cat "$ho/.fnptr.log" >&2; fail "fnptr: mooncc $o"; }
+    "$ho/.fnptr"; b=$?
+    [ $b -eq 42 ] || fail "fnptr: $o against $pc's object (check $b)"
+  done
+done
+echo "fnptr: ours call the host's through every function type, -O0 -O2 -Os"
 
 # the float fuzz at -Os too: its exit folds every result's bits
 $cc_g -O0 -o "$ho/.f32g" test/cc/278-f32-fuzz.c && { "$ho/.f32g"; b=$?; } || fail "gcc on the float fuzz"
