@@ -3,7 +3,7 @@
 ; edge falls flat, friction holds a box on a gentle slope and lets it go on a steep one; and
 ; bodies meet: two balls trade their speed, momentum is kept, three boxes stack, a ball lands
 ; on a box, a sleeping box is woken by a blow; and C's step (tumble-step) answers as the
-; love one does, a mixed scene a second on.
+; love one does, a mixed scene a second on, and a ring of balls into a big box past the grid's cells.
 ; run: cat test/00-init.l test/host/tumble.l | out/love
 (borrow 'tumble)
 (borrow 'vec)
@@ -95,6 +95,21 @@
  (test (gap < 1e-9) (map (b \ b 'still) L = map (b \ b 'still) C)
        ; ..and it moved: the falling box is no longer where it started
        (C 0 'p 1 < 0.8)))
+
+
+; --- the grid: pairs met across cell edges, below zero, and a big box among small balls ---
+(: flat (tb-floor [0.0 1.0 0.0] -3.0)
+   (scene _) ([(pins (tb-box [-7.0 -1.5 -7.0] [1.5 1.0 1.5] 8.0) 'w [0.0 0.3 0.0])]
+              + map (i \ (: a (0.7 * i) r (6.0 + 0.5 * (i % 3))
+                             (pins (tb-sphere [(r * cos a - 7.0) (-2.0 + 0.3 * (i % 4)) (r * sin a - 7.0)] (0.15 + 0.05 * (i % 2)) 1.0)
+                                   'v [(-4.0 * cos a) 0.0 (-4.0 * sin a)])))
+                    ^24)
+   (run e) (: bs (scene ()) (tb-step (pin (tb-world bs [flat]) 'engine e) 1.5, bs))
+   L (run 'love) C (run 'c)
+   gap (foldl max 0.0 (catmap (i \ catmap (k \ map (j \ mag (L i k j - C i k j)) ^(k = 'q ? 4 3)) ['p 'q 'v 'w]) ^#L))
+   ; ..the balls met the box and each other: some ended moving outward
+   out (net (map (b \ dot (c- (b 'p) [-7.0 0.0 -7.0]) (b 'v) > 0.0) >L))
+ (test (gap < 1e-9) (map (b \ b 'still) L = map (b \ b 'still) C) (out > 0)))
 
 (test_fin ())
 (puts "tumble: ok\n")

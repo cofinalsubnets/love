@@ -214,22 +214,106 @@ static int tb_touching(struct tpt *o, struct tbody const *a, struct tbody const 
  return tb_box_box(o, a, b); }
 static void tb_wake(struct tbody *b) { b->still = 0, b->idle = 0; }
 static flo_t tb_moving(struct tbody const *b) { return tb_len3(b->v) + tb_len3(b->w) * tb_reach(b); }
-static void tb_pairs(struct tset *S, struct tbody *bs, uintptr_t n) {
+// ..the pairs near enough, found by a grid of cells twice the widest reach: each body's reach
+// cube marks the cells it covers in a hash, and each body i in turn meets the j > i that share
+// a cell with it, in order, as a sweep of every pair would
+struct tgrid { uint64_t *hk; intptr_t *hh, *nx, *ent; uintptr_t *ej, *mark, *nb; intptr_t (*lo)[3], (*hi)[3];
+               uintptr_t hc, cx, ce, cb, n; };
+#define tb_lim 262144
+static intptr_t tb_cell(flo_t x, flo_t c) {
+ flo_t f = x / c;
+ if (!(f > -tb_lim)) f = -tb_lim;
+ if (!(f < tb_lim)) f = tb_lim;
+ intptr_t i = (intptr_t) f;
+ return (flo_t) i > f ? i - 1 : i; }
+static uint64_t tb_key(intptr_t x, intptr_t y, intptr_t z) {
+ return (uint64_t) (x + tb_lim) << 40 | (uint64_t) (y + tb_lim) << 20 | (uint64_t) (z + tb_lim); }
+static uintptr_t tb_slot(struct tgrid const *G, uint64_t k) {
+ uint64_t h = k * 0x9e3779b97f4a7c15u;
+ uintptr_t i = (uintptr_t) (h >> 32) & (G->hc - 1);
+ while (G->hh[i] >= 0 && G->hk[i] != k) i = (i + 1) & (G->hc - 1);
+ return i; }
+static int tb_grow(void **p, uintptr_t *cap, uintptr_t need, uintptr_t size) {
+ if (need <= *cap) return 1;
+ uintptr_t c = *cap ? *cap : 64;
+ while (c < need) c *= 2;
+ void *q = realloc(*p, c * size);
+ if (!q) return 0;
+ *p = q, *cap = c;
+ return 1; }
+static void tb_gfree(struct tgrid *G) {
+ free(G->hk), free(G->hh), free(G->nx), free(G->ent), free(G->ej), free(G->mark), free(G->nb), free(G->lo), free(G->hi); }
+static int tb_ginit(struct tgrid *G, uintptr_t n) {
+ G->n = n;
+ uintptr_t const m = n ? n : 1;
+ G->mark = malloc(m * sizeof *G->mark), G->lo = malloc(m * sizeof *G->lo), G->hi = malloc(m * sizeof *G->hi);
+ return G->mark && G->lo && G->hi; }
+// ..the cells, filled once a substep: hh a cell's first entry, nx the next, ent the body
+static int tb_fill(struct tgrid *G, struct tbody const *bs) {
+ uintptr_t const n = G->n;
+ flo_t c = 0.0;
+ for (uintptr_t i = 0; i < n; i++) c = tb_fmax2(c, tb_reach(bs + i));
+ c = c > 0.0 ? 2.0 * c : 1.0;
+ uintptr_t ne = 0;
+ for (uintptr_t i = 0; i < n; i++) {
+  flo_t const r = tb_reach(bs + i);
+  for (int k = 0; k < 3; k++) G->lo[i][k] = tb_cell(bs[i].p[k] - r, c), G->hi[i][k] = tb_cell(bs[i].p[k] + r, c);
+  ne += (uintptr_t) ((G->hi[i][0] - G->lo[i][0] + 1) * (G->hi[i][1] - G->lo[i][1] + 1) * (G->hi[i][2] - G->lo[i][2] + 1)); }
+ uintptr_t hc = 16;
+ while (hc < 2 * ne) hc *= 2;
+ if (hc != G->hc) {
+  free(G->hk), free(G->hh);
+  G->hk = malloc(hc * sizeof *G->hk), G->hh = malloc(hc * sizeof *G->hh), G->hc = hc;
+  if (!G->hk || !G->hh) return G->hc = 0, 0; }
+ for (uintptr_t i = 0; i < hc; i++) G->hh[i] = -1;
+ if (!tb_grow((void **) &G->nx, &G->cx, ne, sizeof *G->nx) || !tb_grow((void **) &G->ent, &G->ce, ne, sizeof *G->ent)) return 0;
+ uintptr_t e = 0;
+ for (uintptr_t i = 0; i < n; i++)
+  for (intptr_t x = G->lo[i][0]; x <= G->hi[i][0]; x++)
+   for (intptr_t y = G->lo[i][1]; y <= G->hi[i][1]; y++)
+    for (intptr_t z = G->lo[i][2]; z <= G->hi[i][2]; z++) {
+     uint64_t const k = tb_key(x, y, z);
+     uintptr_t const s = tb_slot(G, k);
+     if (G->hh[s] < 0) G->hk[s] = k, G->nx[e] = -1;
+     else G->nx[e] = G->hh[s];
+     G->ent[e] = (intptr_t) i, G->hh[s] = (intptr_t) e++; }
+ for (uintptr_t i = 0; i < n; i++) G->mark[i] = (uintptr_t) -1;
+ return 1; }
+// ..the j > i sharing a cell with i, rising, into nb; their number
+static uintptr_t tb_near(struct tgrid *G, uintptr_t i) {
+ uintptr_t m = 0;
+ for (intptr_t x = G->lo[i][0]; x <= G->hi[i][0]; x++)
+  for (intptr_t y = G->lo[i][1]; y <= G->hi[i][1]; y++)
+   for (intptr_t z = G->lo[i][2]; z <= G->hi[i][2]; z++)
+    for (intptr_t e = G->hh[tb_slot(G, tb_key(x, y, z))]; e >= 0; e = G->nx[e]) {
+     uintptr_t const j = (uintptr_t) G->ent[e];
+     if (j <= i || G->mark[j] == i) continue;
+     G->mark[j] = i;
+     if (!tb_grow((void **) &G->nb, &G->cb, m + 1, sizeof *G->nb)) return (uintptr_t) -1;
+     uintptr_t t = m++;
+     for (; t > 0 && G->nb[t - 1] > j; t--) G->nb[t] = G->nb[t - 1];
+     G->nb[t] = j; }
+ return m; }
+static void tb_pairs(struct tset *S, struct tgrid *G, struct tbody *bs, uintptr_t n) {
  struct tpt ts[16];
- for (uintptr_t i = 0; i < n; i++) for (uintptr_t j = i + 1; j < n; j++) {
-  struct tbody *a = bs + i, *b = bs + j;
-  if (a->still == 1 && b->still == 1) continue;
-  v3 u; for (int k = 0; k < 3; k++) u[k] = a->p[k] - b->p[k];
-  flo_t const r = tb_reach(a) + tb_reach(b);
-  if (tb_dot3(u, u) > r * r) continue;
-  int const m = tb_touching(ts, a, b);
-  if (!m) continue;
-  if (a->still == 1 && tb_moving(b) > tb_wakev) { tb_wake(a); continue; }
-  if (b->still == 1 && tb_moving(a) > tb_wakev) { tb_wake(b); continue; }
-  for (int t = 0; t < m; t++) {
-   if (a->still == 1) { v3 nn = { -ts[t].n[0], -ts[t].n[1], -ts[t].n[2] }; tb_add(S, b, 0, nn, ts[t].x, ts[t].d); }
-   else if (b->still == 1) tb_add(S, a, 0, ts[t].n, ts[t].x, ts[t].d);
-   else tb_add(S, a, b, ts[t].n, ts[t].x, ts[t].d); } } }
+ if (!tb_fill(G, bs)) { S->bad = 1; return; }
+ for (uintptr_t i = 0; i < n; i++) {
+  uintptr_t const m = tb_near(G, i);
+  if (m == (uintptr_t) -1) { S->bad = 1; return; }
+  for (uintptr_t q = 0; q < m; q++) {
+   struct tbody *a = bs + i, *b = bs + G->nb[q];
+   if (a->still == 1 && b->still == 1) continue;
+   v3 u; for (int k = 0; k < 3; k++) u[k] = a->p[k] - b->p[k];
+   flo_t const r = tb_reach(a) + tb_reach(b);
+   if (tb_dot3(u, u) > r * r) continue;
+   int const mt = tb_touching(ts, a, b);
+   if (!mt) continue;
+   if (a->still == 1 && tb_moving(b) > tb_wakev) { tb_wake(a); continue; }
+   if (b->still == 1 && tb_moving(a) > tb_wakev) { tb_wake(b); continue; }
+   for (int t = 0; t < mt; t++) {
+    if (a->still == 1) { v3 nn = { -ts[t].n[0], -ts[t].n[1], -ts[t].n[2] }; tb_add(S, b, 0, nn, ts[t].x, ts[t].d); }
+    else if (b->still == 1) tb_add(S, a, 0, ts[t].n, ts[t].x, ts[t].d);
+    else tb_add(S, a, b, ts[t].n, ts[t].x, ts[t].d); } } } }
 
 // --- the solve ---
 static void tb_push1(struct tbody *b, v3 const r, v3 const J) {
@@ -252,21 +336,17 @@ static void tb_solve1(struct tcon *c) {
   *ja = j;
   for (int k = 0; k < 3; k++) J[k] = dj * t[k];
   tb_push2(c, J); } }
-static uintptr_t tb_count(struct tset const *S, struct tbody const *o) {
- uintptr_t n = 0;
- for (uintptr_t i = 0; i < S->n; i++) n += S->c[i].a == o || S->c[i].b == o;
- return n; }
-static void tb_unsink(struct tset *S) {
+static void tb_unsink(struct tset *S, struct tbody const *bs, uintptr_t const *cn) {
  for (uintptr_t i = 0; i < S->n; i++) {
   struct tcon *c = S->c + i;
   if (!(c->d > tb_slop)) continue;
   struct tbody *a = c->a, *b = c->b;
-  flo_t const m = b ? b->im : 0.0, s = tb_fixk * (c->d - tb_slop) / (a->im + m), fa = s * a->im / (flo_t) tb_count(S, a);
+  flo_t const m = b ? b->im : 0.0, s = tb_fixk * (c->d - tb_slop) / (a->im + m), fa = s * a->im / (flo_t) cn[a - bs];
   for (int k = 0; k < 3; k++) a->p[k] += fa * c->n[k];
-  if (b) { flo_t const fb = 0.0 - s * m / (flo_t) tb_count(S, b); for (int k = 0; k < 3; k++) b->p[k] += fb * c->n[k]; } } }
+  if (b) { flo_t const fb = 0.0 - s * m / (flo_t) cn[b - bs]; for (int k = 0; k < 3; k++) b->p[k] += fb * c->n[k]; } } }
 
 // --- a substep of h ---
-static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, v3 const g, flo_t h, struct tset *S, char *awake) {
+static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, v3 const g, flo_t h, struct tset *S, struct tgrid *G, char *awake, uintptr_t *cn) {
  S->n = 0;
  for (uintptr_t i = 0; i < n; i++) tb_rot(bs + i), awake[i] = bs[i].still != 1;
  for (uintptr_t i = 0; i < n; i++) if (awake[i]) for (int k = 0; k < 3; k++) bs[i].v[k] += h * g[k];
@@ -274,15 +354,17 @@ static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, v
   for (uintptr_t a = 0, z; a < np; a = z) {
    for (z = a + 1; z < np && P[5 * z + 4] == P[5 * a + 4]; z++);
    tb_brush(S, bs + i, P + 5 * a, z - a); }
- tb_pairs(S, bs, n);
+ tb_pairs(S, G, bs, n);
  if (S->bad) return 0;
+ // ..each body's contacts, counted once: the share of a sinking it takes back, and touching at all
+ for (uintptr_t i = 0; i < n; i++) cn[i] = 0;
+ for (uintptr_t i = 0; i < S->n; i++) { cn[S->c[i].a - bs]++; if (S->c[i].b && S->c[i].b != S->c[i].a) cn[S->c[i].b - bs]++; }
  for (int it = 0; it < tb_iters; it++) for (uintptr_t i = 0; i < S->n; i++) tb_solve1(S->c + i);
- tb_unsink(S);
+ tb_unsink(S, bs, cn);
  for (uintptr_t i = 0; i < n; i++) {
   if (!awake[i]) continue;
   struct tbody *b = bs + i;
-  int touch = 0;
-  for (uintptr_t j = 0; j < S->n && !touch; j++) touch = S->c[j].a == b || S->c[j].b == b;
+  int const touch = cn[i] > 0;
   if (touch && b->roll > 0.0) { flo_t const f = tb_fmax2(0.0, 1.0 - b->roll * 9.81 * h / b->s[0]); for (int k = 0; k < 3; k++) b->w[k] *= f; }
   for (int k = 0; k < 3; k++) b->p[k] += h * b->v[k];
   flo_t const w0 = 0.0, w1 = b->w[0], w2 = b->w[1], w3 = b->w[2], *q = b->q,
@@ -324,8 +406,10 @@ static lvm(lvm_tumble_step) {
  struct tbody *bs = malloc((n ? n : 1) * sizeof *bs);
  flo_t *pl = malloc((np ? np : 1) * 5 * sizeof *pl);
  char *aw = malloc(n ? n : 1);
+ uintptr_t *cn = malloc((n ? n : 1) * sizeof *cn);
  struct tset S = { 0 };
- int good = bs && pl && aw;
+ struct tgrid G = { 0 };
+ int good = bs && pl && aw && cn && tb_ginit(&G, n);
  if (good) {
   for (uintptr_t i = 0; i < np * 5; i++) pl[i] = tray_get_flo(tray(Sp[1]), i);
   struct tray *const to = tray(Sp[2]);
@@ -334,9 +418,9 @@ static lvm(lvm_tumble_step) {
   intptr_t steps = (intptr_t) (dt / tb_h + 0.999);
   if (steps < 1) steps = 1;
   for (uintptr_t i = 0; i < n; i++) tb_load(bs + i, d + i * tb_nb);
-  for (intptr_t s = 0; s < steps && good; s++) good = tb_sub(bs, n, pl, np, g, dt / (flo_t) steps, &S, aw);
+  for (intptr_t s = 0; s < steps && good; s++) good = tb_sub(bs, n, pl, np, g, dt / (flo_t) steps, &S, &G, aw, cn);
   for (uintptr_t i = 0; i < n; i++) tb_keep(d + i * tb_nb, bs + i); }
- free(S.c), free(aw), free(pl), free(bs);
+ tb_gfree(&G), free(S.c), free(cn), free(aw), free(pl), free(bs);
  love_musttail return Answerp(2, good ? word(o) : ZeroPoint); }
 
 LvDef("tumble-step", tumble_step, 3, "lore");
