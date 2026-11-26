@@ -1,5 +1,5 @@
 ; test/cc/abi/gen.l -- calls between two compilers, drawn from a seed: a caller and a callee.
-;   love gen.l EXPECT SEED N DIR   EXPECT names the kinds mooncc refuses or lays otherwise
+;   love gen.l TARGET EXPECT SEED N DIR   TARGET x64 or i386; EXPECT names the kinds mooncc refuses or lays otherwise
 ; every kind is swept through each place first, so coverage does not rest on the seed.
 ; DIR/GROUP-caller.c GROUP-callee.c, layout.c, report.c (the names) and kinds
 (borrow 'posix)
@@ -23,7 +23,7 @@
    kinds [(sc "bool" "_Bool" "I" "b") (sc "char" "char" "I" "c") (sc "schar" "signed char" "I" "c")
           (sc "uchar" "unsigned char" "I" "uc") (sc "short" "short" "I" "s") (sc "ushort" "unsigned short" "I" "us")
           (sc "int" "int" "I" "i") (sc "uint" "unsigned" "I" "ui") (sc "long" "long" "I" "l")
-          (sc "ulong" "unsigned long" "I" "ul") (sc "llong" "long long" "I" "l")
+          (sc "ulong" "unsigned long" "I" "ul") (sc "llong" "long long" "I" "ll")
           (k "enum" "enum e" "I" [["" "e"]] "enum e { e0, e1 = 0x7fffffff };")
           (k "enumneg" "enum en" "I" [["" "i"]] "enum en { en0 = -1, en1 = 5 };")
           (sc "ptr" "char *" "I" "p") (sc "float" "float" "S" "f") (sc "double" "double" "S" "d")
@@ -53,7 +53,7 @@
           (st "al16" "II" [[".a" "l"] [".b" "i"]] "{ long a; int b; } __attribute__((aligned(16)))")
           (st "al16m" "M" (fs ["a" "b" "c"] "l") "{ long a, b, c; } __attribute__((aligned(16)))")
           (st "bf1" "I" [[".a" "#5"] [".b" "#-3"] [".c" "#20"]] "{ unsigned a : 5; int b : 3; unsigned c : 20; }")
-          (st "bf2" "II" [[".a" "#33"] [".b" "#31"] [".c" "c"]] "{ unsigned long a : 33, b : 31; signed char c; }")
+          (st "bf2" "II" [[".a" "#33"] [".b" "#31"] [".c" "c"]] "{ unsigned long long a : 33, b : 31; signed char c; }")
           (st "bf3" "II" [[".a" "l"] [".b" "#7"]] "{ long a; unsigned b : 7; }")
           (un "uif" "I" [[".a" "i"]] "{ int a; float b; }") (un "udl" "I" [[".a" "d"]] "{ double a; long b; }")
           (un "ufd" "S" [[".a" "d"]] "{ double a; float b; }") (un "u12" "II" (arr ".a" 3 "i") "{ int a[3]; float b; }")
@@ -67,17 +67,18 @@
    (digit s) (string (s (rand #s)))
    (hex n) (glue (times n (_ \ digit "0123456789abcdef")))
    cty {"c" "signed char" "uc" "unsigned char" "s" "short" "us" "unsigned short" "i" "int" "ui" "unsigned"
-        "l" "long" "ul" "unsigned long"}
-   wid {"c" 2 "uc" 2 "s" 4 "us" 4 "i" 8 "ui" 8 "l" 16 "ul" 16}
-   (fb _) ("0x" + digit "4c" + digit "1234" + hex 6 + "ul")
-   (db _) ("0x" + digit "4c" + digit "01" + digit "159" + hex 13 + "ul")
-   (word _) ("0x" + hex 16 + "ul")
+        "l" "long" "ul" "unsigned long" "ll" "long long"}
+   ; hex digits by type; a long's are the target's, pinned in main
+   wid {"c" 2 "uc" 2 "s" 4 "us" 4 "i" 8 "ui" 8 "l" 16 "ul" 16 "ll" 16}
+   (fb _) ("0x" + digit "4c" + digit "1234" + hex 6 + "ull")
+   (db _) ("0x" + digit "4c" + digit "01" + digit "159" + hex 13 + "ull")
+   (word _) ("0x" + hex 16 + "ull")
    (bitw t) (read (snip t (t 1 = 45 ? 2 1) #t))
    (draw t)
-    (? (t = "b") [("(_Bool)" + digit "01")] (t = "p") [("(char *)" + word 0)] (t = "e") ["e1"]
+    (? (t = "b") [("(_Bool)" + digit "01")] (t = "p") [("(char *)0x" + hex (wid "l") + "ull")] (t = "e") ["e1"]
        (t = "f") [(fb 0)] (t = "d" || t = "E") [(db 0)] (t = "cf") [(fb 0) (fb 0)] (t = "cd") [(db 0) (db 0)]
        (t = "w") [(word 0) (word 0)]
-       (t 0 = 35) (show (64 - bitw t) @ n [("(" + (t 1 = 45 ? "(long)" "") + "(" + word 0 + " << " + n + ") >> " + n + ")")])
+       (t 0 = 35) (show (64 - bitw t) @ n [("(" + (t 1 = 45 ? "(long long)" "") + "(" + word 0 + " << " + n + ") >> " + n + ")")])
        [("(" + cty t + ")0x" + hex (wid t))])
    ; a leaf's words: each got laid in G, each float taken from V, both the linking side's tables
    (gots t x)
@@ -85,6 +86,7 @@
        (t = "cf") (map (i \ ".f=((float *)&" + x + ")[" + i + "]") ["0" "1"])
        (t = "cd") (map (i \ ".d=((double *)&" + x + ")[" + i + "]") ["0" "1"])
        (t = "w") [(".u=(ul)(" + x + " >> 64)") (".u=(ul)" + x)]
+       (t = "p") [(".u=(ul)(unsigned long)" + x)]
        [(".u=(ul)" + x)])
    (sets t x v n)
     (: (f i) ("V[" + show (n + i) + "]")
@@ -107,7 +109,8 @@
    (zapk kd x) (glue (map (l \ (elem (l 1) ["cf" "cd"]) ? "" (x + l 0 + "=0;")) (kd 'lv)))
 
    ; where the psABI puts each: reg, last (its file's last register), spill (too few left,
-   ; one still free), stack. a name for the report and the coverage floor, nothing is laid by it
+   ; one still free), stack; i386 passes all on the stack. a name for the report and the floor, nothing is laid by it
+   tgt {}
    (count c s) (tally (filter (x \ x = c) (bytes s)))
    (bytes s) (map (i \ s i) ^(#s))
    (placed ks) (: (go l ni ns) (? (nil? l) ()
@@ -116,7 +119,7 @@
                            (cl = "M" || (i = 0 || ni = 6) && (f = 0 || ns = 8)) ("stack" . go >l ni ns)
                            (6 < ni + i || 8 < ns + f) ("spill" . go >l ni ns)
                            (((0 < i && ni + i = 6) || (0 < f && ns + f = 8) ? "last" "reg") . go >l (ni + i) (ns + f)))))
-                  (go ks 0 0))
+                  (tgt 0 = "i386" ? (map (x \ x 'cls = "" ? "none" "stack") ks) (go ks 0 0)))
 
    ; one signature: rt and ks kinds, nn named (the rest after `...`)
    names {} seen {}
@@ -148,22 +151,24 @@
    ; the values the tables hold, and each word's (argument word)
    (allv s) (catmap (catmap id) (s 'vs) + catmap id (s 'rv))
    ; a word of V with other bits above its type's
+   ; a value as a word; a pointer by way of an integer its width, so no compiler sign-extends it
+   (cellw v) ("{(ul)(" + (v @ ("(char *)" + _) ("(unsigned long)" + v) v) + ")}")
    (widen t v) (: n (4 * peep wid t 16)
-                (n = 64 ? ("{(ul)(" + v + ")}")
-                 ("{((ul)(" + v + ") & 0x" + glue (times (n // 4) (_ \ "f")) + "ul) | 0x5a5a5a5a5a5a5a5aul << " + show n + "}")))
+                (n = 64 ? (cellw v)
+                 ("{((ul)(" + v + ") & 0x" + glue (times (n // 4) (_ \ "f")) + "ull) | 0x5a5a5a5a5a5a5a5aull << " + show n + "}")))
    (leaft s) (catmap (x \ catmap (l \ elem (l 1) ["cf" "cd" "w"] ? [(l 1) (l 1)] [(l 1)]) (x 'lv)) (s 'ks + [(s 'rt)]))
    (where s) (: (go l j) (two? l ? ((: ws (catmap id <l) (map (i \ show j + "," + show i) ^(#ws))) + go >l (j + 1)) ())
                  (go (s 'vs) 0 + (: ws (catmap id (s 'rv)) (map (i \ "99," + show i) ^(#ws)))))
 
-   prelude ("typedef unsigned long ul;" + nl
+   (prelude _) ("typedef unsigned long long ul;" + nl
      + "typedef union { ul u; float f; double d; } cell;" + nl
      + "extern cell G[]; extern const cell V[], W[]; extern void ck(int, int, int), keep(void *);" + nl
-     + glue (map (x \ x 'decl = "" ? "" (x 'decl + nl)) kinds))
+     + glue (map (x \ x 'decl = "" ? "" (x 'decl + nl)) (tgt 1)))
    (group dir nm ss)
     (: ds (glue (map (s \ decl s + ";" + nl) ss))
-       _ (write (dir + "/" + nm + "-callee.c") (prelude + ds + glue (map callee ss)))
+       _ (write (dir + "/" + nm + "-callee.c") (prelude 0 + ds + glue (map callee ss)))
        (write (dir + "/" + nm + "-caller.c")
-        (prelude + ds + glue (map caller ss)
+        (prelude 0 + ds + glue (map caller ss)
          + "void run_" + nm + "(void){" + glue (map (s \ "t" + show (s 'q) + "();") ss) + "}" + nl)))
 
    ; sizeof, alignof and each member's place, as numbers to compare
@@ -171,12 +176,18 @@
    (lays kd) ([["sizeof" ("sizeof(" + kd 'ty + ")")] ["align" ("_Alignof(" + kd 'ty + ")")]]
               + map (l \ [(l 0) ("(long)&((" + kd 'ty + " *)0)->" + snip (l 0) 1 #(l 0))]) (filter (l \ member? (l 0) && !(l 1 0 = 35)) (kd 'lv)))
    (main a)
-    (: ex (map (l \ split " " l) (filter (l \ !(l 0 = 35)) (lines (slurpf (a 1)))))
+    (: t (a 1) _ (pin tgt 0 t)
+       _ (elem t ["x64" "i386"] || (say out ("abi: no target " + t + nl), quit 1))
+       _ (t = "i386" ? (pin wid "l" 8, pin wid "ul" 8) 0)
+       ex (map (l \ split " " l) (filter (l \ !(l 0 = 35)) (lines (slurpf (a 2)))))
        (exp w) (map (l \ l 1) (filter (l \ <l = w) ex))
        refuse (exp "varefuse") differ (catmap exp ["pass" "wrong" "split"])
-       seed (read (a 2)) n (read (a 3)) dir (a 4)
+       seed (read (a 3)) n (read (a 4)) dir (a 5)
        _ (rng-set (wheel seed))
        b byname
+       ; the kinds the target has
+       kt (t = "i386" ? (filter (x \ !(elem (x 'nm) ["i128" "w1"])) kinds) kinds)
+       _ (pin tgt 1 kt)
        qn {} sigs {}
        (q! _) (: v (peep qn 0 0) (pin qn 0 (v + 1), v))
        (sig rt ks nn) (: s (mksig (q! 0) rt ks nn)
@@ -185,7 +196,7 @@
        lng (b "long") dbl (b "double") int (b "int") ch (b "schar")
        (reps m x) (times m (_ \ x))
        odd? (x \ elem (x 'nm) differ)
-       plain (filter (x \ !(odd? x)) kinds)
+       plain (filter (x \ !(odd? x)) kt)
        (fsig rt ks) (sig rt ks #ks)
        (sweep x) [(fsig x (reps 4 lng + [x lng lng x ch x]))
                   (fsig x (reps 7 dbl + [x dbl x ch x]))
@@ -193,10 +204,10 @@
        narrow? (x \ elem (x 'nm) ["bool" "char" "schar" "uchar" "short" "ushort" "float"])
        (vsweep x) [(sig int ([int x] + reps 3 lng + [x dbl x] + reps 7 dbl + [x int x]) 1)]
        vok (filter (x \ !(narrow? x)) plain)
-       oddv (filter (x \ odd? x && !(narrow? x)) kinds)
+       oddv (filter (x \ odd? x && !(narrow? x)) kt)
        refused? (x \ elem (x 'nm) refuse)
        _ (write (dir + "/refuse") (join nl (map (x \ x 'nm) (filter refused? vok + oddv)) + nl))
-       _ (write (dir + "/odd") (join nl (map (x \ x 'nm) (filter odd? kinds)) + nl))
+       _ (write (dir + "/odd") (join nl (map (x \ x 'nm) (filter odd? kt)) + nl))
        (one _) (: ks (times (1 + rand 14) (_ \ pick plain)) (sig (pick plain) ks #ks))
        (vone _) (: nn (1 + rand 8) ks (times nn (_ \ pick plain) + times (1 + rand 8) (_ \ pick (filter (x \ !(refused? x)) vok)))
                    (sig (pick plain) ks nn))
@@ -204,22 +215,22 @@
        va (catmap vsweep (filter (x \ !(refused? x)) vok) + times (n - n * 3 // 4) vone)
        _ (group dir "fix" fix) _ (group dir "va" va)
        _ (each (filter refused? vok + oddv) (x \ group dir ("vax_" + x 'nm) (vsweep x)))
-       _ (each (filter odd? kinds) (x \ group dir ("odd_" + x 'nm) (sweep x)))
+       _ (each (filter odd? kt) (x \ group dir ("odd_" + x 'nm) (sweep x)))
        ; the floor: each kind that has registers is seen at each place it can be
        _ (each (fix + va) (s \ map2 (x \ p \ pin seen (x 'nm + " " + p) 1) (s 'ks) (placed (s 'ks))))
-       (want x) (x 'cls = "" ? ["none"] (x 'cls = "M") ["stack"] (#(x 'cls) = 1) ["reg" "last" "stack"] ["reg" "last" "spill" "stack"])
+       (want x) (x 'cls = "" ? ["none"] (x 'cls = "M" || t = "i386") ["stack"] (#(x 'cls) = 1) ["reg" "last" "stack"] ["reg" "last" "spill" "stack"])
        short (catmap (x \ filter (w \ !(peep seen w 0)) (map (w \ x 'nm + " " + w) (want x))) plain)
-       ls (catmap (x \ map (t \ [(x 'nm + (t 0 0 = 46 ? (t 0) ("." + t 0))) (t 1)]) (lays x)) kinds)
-       _ (write (dir + "/layout.c") (prelude + "const ul lay[]={" + join "," (map (l \ "(ul)(" + l 1 + ")") ls) + "};" + nl))
+       ls (catmap (x \ map (t \ [(x 'nm + (t 0 0 = 46 ? (t 0) ("." + t 0))) (t 1)]) (lays x)) kt)
+       _ (write (dir + "/layout.c") (prelude 0 + "const ul lay[]={" + join "," (map (l \ "(ul)(" + l 1 + ")") ls) + "};" + nl))
        _ (write (dir + "/report.h")
           ("static const char *const sigs[]={" + join ("," + nl) (map (i \ "\"" + names i + "\"") ^(peep qn 0 0)) + "};" + nl
            + "static const char *const lays[]={" + join ("," + nl) (map (l \ "\"" + l 0 + "\"") ls) + "};" + nl
            + "#define e1 0x7fffffff" + nl
-           + "cell G[256]; const cell V[]={" + join ("," + nl) (map (i \ join "," (map (v \ "{(ul)(" + v + ")}") (allv (sigs i)))) ^(peep qn 0 0)) + "};" + nl
+           + "cell G[256]; const cell V[]={" + join ("," + nl) (map (i \ join "," (map cellw (allv (sigs i)))) ^(peep qn 0 0)) + "};" + nl
            + "const cell W[]={" + join ("," + nl) (map (i \ join "," (map2 widen (leaft (sigs i)) (allv (sigs i)))) ^(peep qn 0 0)) + "};" + nl
            + "static const struct { short at, n, na; } at[]={" + join "," (map (i \ "{" + show (sigs i 'at) + "," + show (#(allv (sigs i))) + "," + show (sigs i 'na) + "}") ^(peep qn 0 0)) + "};" + nl
            + "static const short wh[][2]={" + join ("," + nl) (map (i \ join "," (map (t \ "{" + t + "}") (where (sigs i)))) ^(peep qn 0 0)) + "};" + nl))
-       _ (say out ("abi: seed " + show seed + ", " + show #kinds + " kinds, " + show #fix + " fixed and " + show #va
+       _ (say out ("abi: seed " + show seed + ", " + show #kt + " kinds, " + show #fix + " fixed and " + show #va
                    + " variadic signatures, " + show #ls + " layout words" + nl))
        (nil? short ? 0 (say out ("abi: never placed: " + join ", " short + nl), quit 1)))
    (main argv))
