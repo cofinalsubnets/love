@@ -743,6 +743,21 @@ fn_pair() {
   done
   echo "fnptr: ours call ${vcc%% *}'s through every function type, -O0 -O2 -Os"
 }
+# riscv reads and writes a packed member by bytes: no wider load or store off the frame, unless -mno-strict-align
+pk_chunk() {
+  for o in "" -O2 -Os; do
+    for f in "" "-mstrict-align -DSTRICT" -mno-strict-align; do
+      moonrun -t $tgt $o $f -c -o "$d/pk.o" test/cc/packed/access.c > "$d/pk.log" 2>&1 || { cat "$d/pk.log" >&2; fail "packed: mooncc -t $tgt $o $f"; }
+      LOVE_NO_IMAGE= "$m" objdump -d "$d/pk.o" | grep -E '[[:space:]](c\.)?f?[ls][hwd]u?[[:space:]]' | grep -vE '\((sp|s0)\)' > "$d/pk.wide"
+      case $f in
+        -mno*) [ -s "$d/pk.wide" ] || fail "packed: $o $f laid no wide access" ;;
+        *) [ ! -s "$d/pk.wide" ] || { cat "$d/pk.wide" >&2; fail "packed: $o $f laid a wide access"; } ;;
+      esac
+    done
+  done
+  echo "packed: a member's loads and stores go by bytes, -O0 -O2 -Os, and whole under -mno-strict-align"
+}
+case $tgt in rv64|rv32) pk_chunk ;; esac
 case $tgt in
   i386) va_pair "gcc -m32"; fn_pair "gcc -m32" ;;
   rv64) [ -z "$GCC" ] || { va_pair "$GCC -mno-relax"; fn_pair "$GCC -mno-relax"; } ;;

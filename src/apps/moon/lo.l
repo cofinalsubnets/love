@@ -564,8 +564,8 @@
    (lobfst g bt b off u a)
     (bfpk? bt || a ? (lostu g b off (tsz g bt) (lobfal g a) u)
        [[(stop <>bt) b off u]])
-   ; what a packed unit's chunks may assume: v6-M and xtensa take no word off its alignment
-   (lobfal g a) (a ? a (v6m? g || xt? g || mp? g ? 1 8))
+   ; what a packed unit's chunks may assume: v6-M, xtensa, mips and riscv take no word off its alignment
+   (lobfal g a) (a ? a (v6m? g || xt? g || mp? g || rvm? g && mal? g ? 1 8))
    ; a unit past the word, as two: 8 bytes as its type says, or a packed one's chunks
    (lobfwld g bt b off)
     (bfpk? bt
@@ -592,11 +592,11 @@
    (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
    ; an lvalue at an a-aligned address: a struct short of it keeps a on its type, the rest ride 'u
    (loal g av ty off a)
-    (? !(sal? g && a < salk g (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
+    (? !(mal? g && a < salk g (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
        (stru? ty) ['a av [<ty <>ty a] off]
        ['u av ty off a])
    ; ..a bitfield's unit its alignment where that falls short, else ()
-   (lobfa g bt a) (sal? g && a < salk g (tsz g bt) ? a)
+   (lobfa g bt a) (mal? g && a < salk g (tsz g bt) ? a)
    ; ..an initializer's slot in the frame, its offset all it knows
    (loelv g ty off) (loal g ['long 'r4 ()] ty off (lowb off @ 0 16 b b))
    ; n bytes at b+off by the chunks a carries, and back
@@ -675,10 +675,10 @@
           'bad)
    ; sz bytes from address s to d + doff, widest first
    (locopy g s d doff sz) (locopya g s d doff sz (wsize g))
-   ; ..no wider than an alignment a, which -mstrict-align holds it to
+   ; ..no wider than an alignment a, where a member's load keeps to its own
    (locopya g s d doff sz a)
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
-   (loch g a) (sal? g ? (salk g a) (wsize g))
+   (loch g a) (mal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
    ; a span of 16 words or more zeroes four words a turn of a loop, from the top down, the
    ; words past the last four and the bytes past the last word straight after

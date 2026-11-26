@@ -180,6 +180,7 @@
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
    (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family
+   (rvm? g) (elem (g 'tgt) '(rv64 rv32))   ; ..on riscv itself, wasm aside
    (xt? {'tgt 'xtensa}) 1          ; the esp32's lx6 on the call0 abi (ILP32, soft-float): six word args a2..a7
    (mp? {'tgt 'mips}) 1             ; mips32r2 o32, big-endian, soft-float: four word args a0..a3
    (w32s? g) (rv32? g || xt? g || mp? g)   ; the soft 32-bit word without a carry flag, rv32's shapes
@@ -1797,11 +1798,13 @@
    ; under bti a table jump's targets land on bti j and an indirect jump goes by x16, which bti c and
    ; paciasp both take from a br. the entry's bti c is btic's: only the unit knows a static's address taken
    (bp? g k) (a64? g && elem k <>(g 'mo))
-   ; -mstrict-align (a64), and always on v6-M and xtensa, which fault on any unaligned word: no access
+   ; -mstrict-align (a64, riscv), and always on v6-M and xtensa, which fault on any unaligned word: no access
    ; wider than its known alignment; a packed member's face carries its alignment and goes by chunks,
    ; r2 gathers and r3 shifts, neither ever a face's base
-   (sal? g) (a64? g && <(g 'mo) || v6m? g || xt? g || mp? g)
-   (salk g n) (v6m? g || xt? g || mp? g ? (min n 4) n)   ; the alignment an n-aligned access needs: v6-M's, xtensa's and mips's widest is a word
+   (sal? g) ((a64? g || rvm? g) && <(g 'mo) = 1 || v6m? g || xt? g || mp? g)
+   ; a packed member and a struct's copy by chunks: wherever sal? holds, and riscv's own unless -mno-strict-align
+   (mal? g) (sal? g || rvm? g && <(g 'mo) != -1)
+   (salk g n) (v6m? g || w32s? g ? (min n 4) n)   ; the alignment an n-aligned access needs: no wider than a word's where a word is the widest
    ; -mregparm=n (i386): the first n argument words ride eax edx ecx
    (rpn g) (ia32? g ? (drop 2 (g 'mo) @ r (two? r && charm? <r ? <r 0)) 0)
    (osz? g) (drop 4 (g 'mo) @ r (two? r && <r))   ; -Os: for size
