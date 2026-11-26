@@ -1678,9 +1678,9 @@
                 (xlang? w ? (flags r (pin t 'xasm ())) (udie 2 (xdie w))))
           ; -undef: none of the system's or the compiler's predefines, only the standard's
           ("-undef" . r) (flags r (pin t 'undef 1))
-          ; a64 only: no access its alignment cannot carry (gen.l)
+          ; a64 and riscv: no access its alignment cannot carry (gen.l)
           ("-mstrict-align" . r) (flags r (pin t 'sal 1))
-          ("-mno-strict-align" . r) (flags r (pin t 'sal ()))
+          ("-mno-strict-align" . r) (flags r (pin t 'sal -1))
           ; gcc's x86 widths: -m32 the i386 ABI, -m16 its 16-bit face, -m64 x86-64
           ("-m32" . r) (flags r (pin t 'tgt 'i386))
           ("-m16" . r) (flags r (pin t 'tgt 'i386m16))
@@ -1780,8 +1780,9 @@
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF
        _ (f 'tgt = 'x64 && !(f 'os) && elem 'love-os (names ()) && host-os 0 = 'macos && pin f 'os 'macos)
-       _ ((f 'sal || two? (f 'bp)) && f 'tgt != 'a64 &&
-          udie 2 "cc: -mstrict-align and -mbranch-protection lay on a64 only")
+       _ (f 'sal = 1 && !(elem (f 'tgt) '(a64 rv64 rv32)) &&
+          udie 2 "cc: -mstrict-align lays on a64, rv64 and rv32 only")
+       _ (two? (f 'bp) && f 'tgt != 'a64 && udie 2 "cc: -mbranch-protection lays on a64 only")
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        _ (elem 'sa4 (f 'xk) && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mstack-alignment=4 lays on i386 only")
        _ (f 'kfp && !(elem (f 'tgt) '(a64 x64 i386)) && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
