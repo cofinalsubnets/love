@@ -6,7 +6,10 @@
    ; -- the type shapes --
    (ptr? ('ptr . _)) 1
    (arr? ('arr . _)) 1
-   (fn? ('fn . _)) 1                     ; ('fn ret?) -- a function; decays to its address
+   (fn? ('fn . _)) 1                     ; ('fn ret? params? flag?) -- a function; decays to its address. flag: 'va a `...`, 'ms ms_abi, 'msva both
+   (fnold? t) (fn? t && !(2 < #t && two? (t 2)))   ; its type says no parameter
+   ; ?:'s two pointers: the first's type, or the other's where it alone has a prototype (C11 6.5.15p6)
+   (ptrjoin a b) (fn? <>b && fnold? <>a ? b a)
    (stru? ('struct . _)) 1
    (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width [n]); its lvalue is a unit address, n bytes when packed
    (cplxty? ty) (stru? ty && elem <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
