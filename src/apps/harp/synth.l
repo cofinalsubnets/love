@@ -143,11 +143,12 @@
                    (1.0 * st 'echo) (w 'ecw) 0.42 0.55 0.35
                    (1.0 * st 'rev) (w 'rvw) synth-t60 1.6 0.45
                    (1.0 * st 'shm * w 'shw)]))
- ; a fresh bus's memory is the size the kernel first answers
- (synth-space st lr)
+ ; a fresh bus's memory is the size the kernel first answers; asked twice and refused, the sound stays dry
+ (synth-space st lr) (synth-space-in st lr 1)
+ (synth-space-in st lr k)
   (? (!kspace || (!(fxon st) && st 'fxt <= 0)) lr
      (kspace <lr >lr (st 'fxm) (fxprm st) @ r
-        (? (charm? r) (pin st 'fxm (cask r), synth-space st lr)
+        (? (charm? r && k) (pin st 'fxm (cask r), synth-space-in st lr 0)
            !(two? r) lr
            (pin st 'fxt (fxon st ? (st 'shm = 1 ? synth-stail synth-ftail) (st 'fxt - #<lr)), r))))
  ; last, a limiter: under half the clip nothing moves; past it a pile of held notes bends
@@ -156,10 +157,11 @@
  synth-ceil (0.97 * 32767.0 / synth-gain)
  ; past 1.0 the ceiling comes down with the volume, so a louder horn bends sooner, never clips
  synth-lprms (map (v \ gem-tray [4] [(1.0 * song-rate) (synth-ceil / max v 1.0) 0.5 0.4]) synth-vols)
- (synth-limit st lr)
+ (synth-limit st lr) (synth-limit-in st lr 1)
+ (synth-limit-in st lr k)
   (? !klimit lr
      (klimit <lr >lr (st 'lim) (synth-lprms (st 'vol)) @ r
-        (? (charm? r) (pin st 'lim (cask r), synth-limit st lr)
+        (? (charm? r && k) (pin st 'lim (cask r), synth-limit-in st lr 0)
            (two? r) r
            lr)))
  (fxkey st kn) (: (go l) (? (atom? l) st

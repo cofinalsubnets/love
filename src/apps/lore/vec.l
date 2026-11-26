@@ -7,7 +7,7 @@
 (:
  (sat v) (min 1.0 (max 0.0 v))
  (sq v) (2 v)
- (mag v) (max v -v)              ; abs elementwise: abs of a tray is its norm
+ (mag v) (max v -v)              ; abs, elementwise
  (frac v) (v - floor v)
  (c* k a) [(k * a 0) (k * a 1) (k * a 2)]
  (cm a b) [(a 0 * b 0) (a 1 * b 1) (a 2 * b 2)]

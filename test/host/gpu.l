@@ -213,7 +213,12 @@
         _ (each ^1200 (i \ (gpu-place g [[1 [(0.001 * i) 0.0 0.0]]]))) _ (gpu-place g [[1 [0.0 0.0 0.0]]])
         _ (each ^9 (i \ (gpu-tex g (10 + i) 512 512 (iota (512 * 512) * 0 + i)))) d (f ()) _ (gpu-close g)
         [(tray? a) (string? b) (tray? c && amax (a != c) = 0) (tray? d && amax (a != d) = 0)])))
-   (test (fine? moon) (fine? cc) (near? 60 one) (near? 60 ftc) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
+   ; ..timed, a frame over the ms asked says where it went, one under it nothing, and none untimed
+   (tm v) (: _ (setenv "LOVE_GPU_TIME" v) g (gpu-open ()) _ (setenv "LOVE_GPU_TIME" "")
+     (? (two? g) 'none (: _ (gpu-buf g 1 verts tris 8) f (gpu-frame g W H mat [1] [bg 0.0 0.0 0.0 0.0 0.0 0.0 0])
+        s (peep g 'split ()) _ (gpu-close g) [(tray? f) (string? s ? (s @ "uploads \(b)" 1 0) 0)])))
+   t0 (tm "0") t1 (tm "99999") t2 (tm "")
+   (test (elem t0 ['none [1 1]]) (elem t1 ['none [1 0]]) (elem t2 ['none [1 0]]) (fine? moon) (fine? cc) (near? 60 one) (near? 60 ftc) (elem die ['none [1 () () 1]]) (elem po ['none [1 1 1 1]])))
 ; a frame's numbers laid as 4-byte floats, whatever the machine's word
 (: fw-n (cwd 0 + "/out/.gpu-frame-" + show (getpid 0)) _ (close (open fw-n "w")) fw-l (open (fw-n + ".l") "w")
    _ (gpu-send {'w (openfd fw-n 1) 'room 0 'to fw-l} 2 2 (1.5 * iota 16) [7 -9] [-1 0.5 0.0 0.0 0.0 0.0 0.0 0]) _ (close fw-l)

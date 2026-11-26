@@ -28,7 +28,8 @@
                  'i386 3 'i386m16 3                            ; EM_386, the 16-bit face's code too
                  'rv64 243 'rv32 243                         ; EM_RISCV
                  'xtensa 94                                    ; EM_XTENSA
-                 'mips 8}                                      ; EM_MIPS, big-endian
+                 'mips 8                                       ; EM_MIPS, big-endian
+                 'avr 83}                                      ; EM_AVR
 
    ;; one 56-byte program header. p_paddr differs from p_vaddr only for a kernel loaded low.
    (elf64-phdr ty fl off va pa fsz msz al)

@@ -146,9 +146,9 @@
   (: (lit c8 base chs j) (gain * c8 j * foldl (\ a i (a + ks i * chs i j)) (base j) ^#chs)
      (pins3 v ix l) (foldl (\ v k (pin v (ix + 5 + k) (l k))) v ^3)
      (pk 'buf @
-      () (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0) i (iota n * 8)
+      () (: c (pk 'cols) n (pk 'n) z (c 0 * 0.0)
            base (map (j \ z + amb j) ^3) c8 (map (j \ c (8 + j)) ^3)
-           v (pins3 (foldl (\ v k (pin v (i + k) (c k))) (iota (8 * n) * 0.0) ^5) i (lit c8 base chs))
+           v (lace (map c ^5 + map (lit c8 base chs) ^3))
            on (iota (foldl (\ a ch (a + ch 0 + ch 1 + ch 2)) z chs > 0.0)) (g t) (peep t on 0.0)
            r (filter (i \ net (chs i 0 + chs i 1 + chs i 2) > 0.0) ^#chs)
            _ (pins pk 'buf v 'live {'ix (on * 8) 'c8 (map g c8) 'base (map g base) 'chs (map (map g) chs) 'r r 'ks (map ks r)})
@@ -166,8 +166,9 @@
    (? (!(two? r) || #r > 8) ()
       (pk 'slots @ ()
          (: ix (lv 'ix) on (ix // 8) n (pk 'n) c8 (lv 'c8)
-            v (foldl (\ v j (pin v (ix + 5 + j) (c8 j * lv 'base j))) (pk 'buf) ^3)
-            cs (foldl (\ a k (foldl (\ a j (pin a (on * 24 + 3 * k + j) (c8 j * lv 'chs (r k) j))) a ^3)) (iota (24 * n) * 0.0) ^#r)
+            (pins a i l) (pin a (int (lace i)) (lace l))   ; one pin: each copies its tray
+            v (pins (pk 'buf) (map (j \ ix + 5 + j) ^3) (map (j \ c8 j * lv 'base j) ^3))
+            cs (pins (iota (24 * n) * 0.0) (map (j \ on * 24 + j) ^(3 * #r)) (map (j \ c8 (j % 3) * lv 'chs (r (j // 3)) (j % 3)) ^(3 * #r)))
             q [v (r + map (_ \ 0) ^(8 - #r)) cs]
             (pin pk 'slots q, q))
          q q)))

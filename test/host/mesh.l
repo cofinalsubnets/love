@@ -139,6 +139,13 @@
    b3 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0) _ (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 1.0] 1.0)
    c3 (peep (b3 0) (mid * 8 + 5) 0.0) b4 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [1.0 5.0] 1.0) k4 (mesh-lit-ks fl2 [1.0 5.0]) l4 (fl2 'live 'ks)
    b5 (mesh-lamps! fl2 [0.0 0.0 0.0] [ch far] [2.0 5.0] 1.0)
+   ; ..its lamps' slots for a gpu: each slot's light where that lamp is, 0 past them and where none reaches
+   fl3 (mesh-pack (mesh-sheet [-2.0 0.0 -2.0] [4.0 0.0 0.0] [0.0 0.0 4.0] 4 4 [0.0 1.0 0.0] (p \ [(p 0) (3.0 + p 2)]) -1 [0.5 1.0 0.25]))
+   cd (mesh-lamp fl3 {'at [[-2.0 1.0 -2.0]] 'c [0.2 0.7 0.4] 'r 2.0}) cu (mesh-lamp fl3 {'at [[0.0 1.0 0.0]] 'c [1.0 0.5 0.3] 'r 1.5})
+   b6 (mesh-lamps! fl3 [0.1 0.2 0.3] [cu far cd] [1.0 1.0 1.0] 1.0) sl (mesh-lamp-slots fl3) ln (fl3 'n)
+   tint (j \ fl3 'cols (8 + j))
+   slot (k \ j \ c \ tint j * c j = peep (sl 2) (iota ln * 24 + 3 * k + j) 9.0)
+   bare (j \ peep (sl 0) (fl3 'live 'ix + 5 + j) 9.0 = peep (tint j * [0.1 0.2 0.3] j) (fl3 'live 'ix // 8) 8.0)
  (test (map shape pc = [[4 8] [2 4] [1 2]]) (peep (pc 1) [0 0] 0 = 16711680) (peep (pc 1) [0 3] 0 = 255)
        (map shape r2 = [[2 2] [1 1]]) (peep (r2 0) [1 1] 0 = -1) (peep (r2 0) [0 1] 0 = 65280) (peep (r1 0) [0 0] 0 = 5592405)
        (up? sa) (up? sb)
@@ -152,7 +159,12 @@
        (c1 = peep (lm 0) (mid * 8 + 5) 0.0 / 2.0) (peep (b2 0) (mid * 8 + 5) 0.0 = 3.0 * c1)
        (b2 0 = b1 0) (lm 0 = mesh-lamps fl [0.0 0.0 0.0] [ch] [2.0] 1.0 0)
        (l4 = [1.0]) (peep (b4 0) (mid * 8 + 5) 0.0 = c3) (k4 = [1.0]) (mesh-lit-ks fl [2.0] = [2.0])
-       (peep (b5 0) (mid * 8 + 5) 0.0 = 2.0 * c3)))
+       (peep (b5 0) (mid * 8 + 5) 0.0 = 2.0 * c3)
+       (shape (b6 0) = [(8 * ln)]) (all (k \ aall (fl3 'cols k = peep (b6 0) (iota ln * 8 + k) 9.0)) ^5)
+       (all (j \ aall (tint j * ([0.1 0.2 0.3] j + cu j + far j + cd j) = peep (b6 0) (iota ln * 8 + 5 + j) 9.0)) ^3)
+       (sl 1 = [0 2 0 0 0 0 0 0]) (#(sl 2) = 24 * ln) (0 < #(fl3 'live 'ix) < ln)
+       (all (j \ aall (slot 0 j cu) && aall (slot 1 j cd) && aall (bare j) && amax (cu j) > 0.0 && amax (cd j) > 0.0) ^3)
+       (amax (peep (sl 2) (iota (18 * ln) // 18 * 24 + 6 + iota (18 * ln) % 18) 1.0) = 0.0)))
 ; --- batches: each starts with no texture, whatever the batch before it last used
 (: W 40 H 24 white [1.0 1.0 1.0]
    v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
@@ -180,12 +192,12 @@
        (j "accessors" 3 "componentType" = 5123) (: m1 [(gm 0) [(gm 1 0)]] g1 (mesh-glb-of m1 "one") (#g1 % 4 = 0 && mesh-glb g1 1 = m1 1))))
 ;; the sky asked every 4 pixels is fixed to the sky: looking up and turned, each direction
 ;; seen both ways shows the same, but for where the pixels fall across a cloud's edge
-(: wq (sky-weather 1) nq (1.0 * 1790812800 + 12.0 * 3600.0) lq (sky-light (sky-sun nq 0.0 0.65) wq nq)
+(: nw (1.0 * 1790812800 + 12.0 * 3600.0) nq (sky-rest 20727 43200.0) wq (pin (sky-weather 1) 'base (nw - nq)) lq (sky-light (sky-sun nw 0.0 0.65) wq nq)
    (sky v) (mesh-frame v [[] []] () [0 0 0 0.0 0.0] 8 0.0 (mesh-sky (sky-stars nq 0.0 0.65) lq wq [0.0 0.0 0.0] nq 0.0 4 ()))
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
-   gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
+   gap (+(map (k \ norm ((a >> k & 255) - (b >> k & 255))) [0 8 16]) / (3.0 * #both))
  (test (#both > 8000) (gap < 0.04)))
 ;; ..and its mesh for a gpu names no corner it lacks, cut and fanned quads and all, or the
 ;; gpu's helper refuses it
@@ -224,5 +236,18 @@
 (: P (frame-paint (iota 15 * 0 + 7) 5 1 (cask 60) 5) (wd v) (string [v 0 0 0])
    _ (mesh-paint (gem-tray [2] [1 2]) 2 1 P 5 3)
    (test (string P = foldr (+) "" (map wd [1 1 2 2 0  1 1 2 2 0  0 0 0 0 0]))))
+; a far wall's texture behind a near post: what the post leaves shown is drawn as with no post
+; there, its level the one the open wall has
+(: lt {'sun [0.0 1.0 0.0] 'amb [1.0 1.0 1.0] 'sunk 0.0 'sunc [1.0 1.0 1.0] 'expo 1.0}
+   (lit m) (mesh-bake (mesh-pack m) lt mesh-open 1.0)
+   W 80 H 48 v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
+   ck (mesh-tex 16 (\ x y (x % 2 = 0 ? [0.0 0.0 0.0] [1.0 1.0 1.0])))
+   wall (mesh-sheet [-30.0 -20.0 20.0] [60.0 0.0 0.0] [0.0 40.0 0.0] 1 1 [0.0 0.0 -1.0] (p \ [(p 0 * 4.0) (p 1 * 4.0)]) 0 [1.0 1.0 1.0])
+   post (mesh-box [-0.3 0.0 2.0] [0.25 3.0 0.1] 0.0 -1 [0.0 1.0 0.0] 1.0)
+   (draw m) (mesh-frame v (lit m) [ck] [0 0 0 0.0 0.0] 0 0.0 7)
+   open (draw wall) hid (draw (mesh-join [post wall])) g (hid (24 * W + 30))
+ (test (g = 39168) (#(filter (i \ hid i = g) ^(W * H)) > 400)
+       (all (i \ hid i = g || hid i = open i) ^(W * H))))
+
 (test_fin ())
 (puts "mesh: ok\n")

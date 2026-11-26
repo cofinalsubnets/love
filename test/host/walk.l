@@ -51,6 +51,18 @@
        (gc 40 0.01 200 @ l (l 29 = 1 && l 30 = 0 && ch l = 1)) ; 41 ms, under half: finer tried, 44 kept
        (gc 10 0.3 200 @ l (l 30 = 0 && l 40 = 1 && ch l = 2)))) ; 40 ms: tried, 130 over, back
 
+; ..and told the wait on a helper: frames slow in lore alone, uneven, move nothing, where untold
+; they go coarse; frames slow in the pixels step as untold, and where the wait is (), as before
+(: (gw a k w n) (: g (view-gauge [64 16 4 1] 1 33.0)
+              (go m t i) (m < n ? (: px (k * (g 'pix) i) ms (a m + px) _ (pin g 'wait (w ? (int px + 2) ()))
+                                     j (view-gauged g ms 4 0 (int t)) (j . go (m + 1) (t + ms) j)) ())
+              (go 0 0.0 1))
+   (jag m) (45 + (m % 10 = 3 ? 200 (m * 37 % 50)))
+   (worst l) (foldl max 0 l)
+ (test (worst (gw jag 0 0 400) > 1) (worst (gw jag 0 1 400) = 1)
+       (gw (_ \ 10) 5.0 1 300 = gw (_ \ 10) 5.0 0 300) (worst (gw (_ \ 10) 5.0 1 300) = 3)
+       (worst (gw (_ \ 30) 2.0 1 300) > 1)))
+
 ; a level's bindings over view's: its own win, () unbinds, view's untouched; help in list order
 (: wb (view-bind view-binds {112 'where 104 () 108 'spin})
    hl (view-help wb (view-listed ['spin 'where 'nowhere]))

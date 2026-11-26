@@ -223,6 +223,8 @@
   (land sand (shaded (rows-by xs lts 0.0)))
   ; ..heard out on it, the wind and now and then a bell; in the burnt tree's yard, a throb
   (hum 'wind [-146 -2 -60] [60 40 60]) (hum 'bells [-146 -2 -60] [60 40 60])
+  ; ..dying away across the room, from its open east side to its back wall
+  (lull [-103.7 -0.1 16.2] [-116.0 3.1 27.8])
   (hum 'throb [yx0 -1 yz0] [ye yh yz1])
   ; ..and what the glass shows over it all: grass, and the river running
   (beyond (drape grass (rows-by xs lts lift)))

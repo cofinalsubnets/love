@@ -71,6 +71,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
+#ifndef GLHELP_IN
+#include <time.h>
+#endif
 #ifdef GLHELP_IN
 int __android_log_write(int, char const *, char const *);
 static void note(char const *s) {
@@ -196,7 +199,11 @@ struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
 struct buf { int id, nv, S, glow; GLuint vao, vb, ib, lb, sb; int nrun; struct run *runs; int li[8]; float off[5]; };   // glow: its runs all glow; lb its lamps', sb its sun's; off where it is moved
 struct seen { float w, k; int id; };
+// a frame's time by what it went on, in us, while timed: the ms asked plus 1
+enum { T_READ, T_UP, T_LIGHT, T_SUN, T_SHOW, T_SETUP, T_SOLID, T_GLASS, T_SKY, T_KEEP, T_BACK, T_N };
+static char const *const t_name[T_N] = { "idle", "uploads", "lights", "sun", "show", "setup", "solid", "glass", "sky", "keep", "readback" };
 struct helper {
+ int timed; long long tus[T_N], tat;
  int fd; size_t sz; unsigned char *map;
  struct tex *texs; int ntex, ctex;
  struct buf *bufs; int nbuf, cbuf;
@@ -1040,6 +1047,36 @@ static int scene_seen(struct helper *H, float const *m, int g, int *out, float *
  for (int i = 0; i < n; i++) out[i] = q[i].id, mul[i] = q[i].k;
  return n; }
 
+#ifdef GLHELP_IN
+int clock_gettime(int, void *);
+#endif
+static long long now_us(void) {
+#ifdef GLHELP_IN
+ long t[2] = {0, 0}; clock_gettime(1, t);
+ return t[0] * 1000000LL + t[1] / 1000;
+#else
+ struct timespec t = {0}; clock_gettime(CLOCK_MONOTONIC, &t);
+ return t.tv_sec * 1000000LL + t.tv_nsec / 1000;
+#endif
+}
+static void lap(struct helper *H, int k) {
+ if (!H->timed) return;
+ long long const t = now_us();
+ H->tus[k] += t - H->tat, H->tat = t; }
+// ..a frame's answer, its split after where it was slow; the sums begun again
+static void answered(struct helper *H, char const *s) {
+ char b[400]; int n = snprintf(b, sizeof b, "%s", s);
+ long long sum = 0;
+ for (int i = T_READ + 1; i < T_N; i++) sum += H->tus[i];
+ if (H->timed && sum >= 1000LL * (H->timed - 1)) {
+  n += snprintf(b + n, sizeof b - n, " split");
+  for (int i = T_READ + 1; i < T_N; i++) n += snprintf(b + n, sizeof b - n, " %s %d", t_name[i], (int) (H->tus[i] / 100)); }
+ memset(H->tus, 0, sizeof H->tus);
+ dprintf(H->out, "%s\n", b); }
+static int kind(char const *l) {
+ return !strncmp(l, "show ", 5) ? T_SHOW : !strncmp(l, "sun", 3) ? T_SUN
+  : !strncmp(l, "lamps ", 6) || !strncmp(l, "ks ", 3) || !strncmp(l, "spots ", 6) || !strncmp(l, "glow ", 5) || !strncmp(l, "vis ", 4) ? T_LIGHT : T_UP; }
+
 static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, size_t at) {
  enum { lead = 27 };   // w h off clear fr fg fb near far tone flags, then the 16 of m
  double v[lead + 4096];
@@ -1096,6 +1133,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
  if (sun) {
   glUniformMatrix4fv(H->u_lm, 1, 1, H->lm); glUniform1f(H->u_bias, H->bias); glUniform2i(H->u_ss, H->sw, H->sh);
   glActiveTexture(GL_TEXTURE3); glBindTexture(GL_TEXTURE_2D, H->sm); glActiveTexture(GL_TEXTURE0); }
+ lap(H, T_SETUP);
  // ..seen: the lenses' nearest depths, each alone, before all; else none, as far as can be
  glBindFramebuffer(GL_FRAMEBUFFER, H->lf); glDepthMask(1); glClear(GL_DEPTH_BUFFER_BIT);
  if ((int) v[10] & 128) {
@@ -1124,6 +1162,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
  if (cs) glUniform1fv(H->u_kp, 51, H->kp), glActiveTexture(GL_TEXTURE8), glBindTexture(GL_TEXTURE_2D, H->cmt), glActiveTexture(GL_TEXTURE0);
  int glassy = 0;
  for (int pass = 0; pass < 2; pass++) {
+  if (pass) lap(H, T_SOLID);
   if (pass && ey) {
    glBindFramebuffer(GL_READ_FRAMEBUFFER, H->fb); glBindFramebuffer(GL_DRAW_FRAMEBUFFER, H->zf);
    glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
@@ -1163,6 +1202,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    mode(H, 4);
    glDrawElements(GL_TRIANGLES, b->runs[r].n, GL_UNSIGNED_INT, (void*) (4 * (uintptr_t) b->runs[r].at)); } }
  glBindVertexArray(0); mode(H, 0); glUniform1f(H->u_sh, 1); glUniform3f(H->u_off, 0, 0, 0); glUniform2f(H->u_uvo, 0, 0);
+ lap(H, T_GLASS);
  // ..and the sky, under what is bare, onto what the frame keeps there
  struct buf *sb = H->spend && H->sky >= 0 ? buf_of(H, H->sky) : NULL;
  int const ps = H->spend && H->sky < 0 && H->cmt && H->amt && H->nkp >= 50;
@@ -1193,7 +1233,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    glBindVertexArray(H->fva); glDrawArrays(GL_TRIANGLES, 0, 3);
    glUniform1i(H->u_skm, 0); glUniformMatrix4fv(H->u_m, 1, 1, m); }
   glBindVertexArray(0); mode(H, 0); glEnable(GL_DEPTH_TEST); glUniform1i(H->u_sp, 0); glUniform3f(H->u_off, 0, 0, 0); glUniform2f(H->u_uvo, 0, 0); }
- H->opend = 0;
+ H->opend = 0; lap(H, T_SKY);
  // ..with keep, left unread where no pixel is the cpu's to finish: none where the sky was
  // asked a pixel at a time, which finishes every bare one, else one asked of the gpu
  if ((int) v[10] & 512) {
@@ -1209,7 +1249,9 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    int const k = H->ks;
    glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_2D, H->kt[k]); glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
    glBindTexture(GL_TEXTURE_2D, H->mk); glActiveTexture(GL_TEXTURE0);
-   H->kv[k] = 1, H->ks = !k; dprintf(H->out, "kept %d\n", k); return; } }
+   H->kv[k] = 1, H->ks = !k; lap(H, T_KEEP);
+   char kb[24]; snprintf(kb, sizeof kb, "kept %d", k); answered(H, kb); return; } }
+ lap(H, T_KEEP);
  size_t const N = (size_t) w * h;
  glReadPixels(0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, out + 4 * N);
  if (glassy) {
@@ -1230,7 +1272,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
     x = ch(255 * f[2]) << 16 | ch(255 * f[1]) << 8 | ch(255 * f[0]) | (ch(1020 * f[3]) / 4) << 24; } }
   int64_t const o = A > 192 ? q | (int64_t) (A == 254) << 32 : q ? -1 - q : A ? -33554432 - (int64_t) x : -1;
   memcpy(out + 8 * i, &o, 8); }
- dprintf(H->out, "ok\n"); }
+ lap(H, T_BACK); answered(H, "ok"); }
 
 // a line from fd 0, its newline gone; 0 at the end
 static char *next_line(struct helper *H) {
@@ -1260,6 +1302,8 @@ static int serve(struct helper *H, char const *file, int x) {
  dprintf(H->out, "ready %s\n", glGetString(GL_RENDERER));
  for (char *l; (l = next_line(H)); ) {
   int id, a, b, c, k; long off, at; double tone;
+  if (H->timed) lap(H, T_READ);
+  if (!strncmp(l, "time ", 5) && sscanf(l + 5, "%d", &a) == 1) { H->timed = a < 0 ? 0 : a + 1, H->tat = now_us(); dprintf(H->out, "ok\n"); continue; }
   if (!strncmp(l, "tex ", 4) && sscanf(l + 4, "%d %d %d %d %ld", &id, &a, &b, &c, &off) == 5) cmd_tex(H, id, a, b, c, (size_t) off);
   else if (!strncmp(l, "buf ", 4) && (k = sscanf(l + 4, "%d %d %d %ld %d", &id, &a, &b, &off, &c)) >= 4) cmd_buf(H, id, a, b, (size_t) off, k == 5 ? c : 8);
   else if (!strncmp(l, "verts ", 6) && sscanf(l + 6, "%d %d %ld %d", &id, &a, &off, &c) == 4) cmd_verts(H, id, a, (size_t) off, c);
@@ -1288,7 +1332,8 @@ static int serve(struct helper *H, char const *file, int x) {
   else if (!strncmp(l, "scene ", 6) && sscanf(l + 6, "%d %ld", &a, &off) == 2) cmd_scene(H, a, (size_t) off);
   else if (!strncmp(l, "frame ", 6) && sscanf(l + 6, "%d %d %ld %d %ld", &a, &b, &off, &c, &at) == 5) cmd_frame(H, a, b, (size_t) off, c, (size_t) at);
   else if (!strncmp(l, "quit", 4) && (l[4] == ' ' || !l[4])) { if (l[4]) note(l + 5); break; }
-  else dprintf(H->out, "err what: %s\n", l); }
+  else dprintf(H->out, "err what: %s\n", l);
+  lap(H, strncmp(l, "frame ", 6) ? kind(l) : T_SETUP); }
  return 0; }
 
 #ifndef GLHELP_IN
