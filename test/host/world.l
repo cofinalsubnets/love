@@ -118,6 +118,25 @@
    _ (unlink p)
  (test (a = "a") (got = "b") (nl = 2) (where = [2.5 1.5]) (has? said "again") (e0 = 0)
        (c 'lvl 'name = "b") (c 'err = 1) (string? (c 'msg)) (has? (world-frame c) "not finished")))
+; ..a file written again while it is being read is read at the next watch: this one writes itself
+(: p ("/tmp/worldtest-w-" + show (getpid 0) + ".l")
+   room "(room [0 0 0] [4 3 4]) (strip-light [2 3 2]))"
+   _ (put p ("(level \"a\" " + room))
+   st (world-watch (pins (world-new 40 24 (world-load p) "/tmp/") 'path p))
+   _ (put p ("(: q (open " + show p + " \"w\") (say q " + show ("(level \"later\" " + room) + ", close q)) (level \"b\" " + room))
+   b (world-watch st) nb (b 'lvl 'name)
+   c (world-watch b)
+   _ (unlink p)
+ (test (nb = "b") (c 'lvl 'name = "later")))
+; a jump's height by the frame's length: the same arc at any, to the few millimetres a step can miss its top by
+(: lv0 (lv "(room [0 0 0] [8 6 8]) (strip-light [4 6 4])")
+   (arc dt) (: st (pins (world-new 40 24 lv0 "/tmp/") 'px 4.0 'pz 4.0)
+               _ (each ^20 (_ \ (pin st 'dt dt, world-move st)))
+               y0 (st 'py) _ (world-step st 'jump)
+               (go n top) (: _ (pin st 'dt dt) _ (world-move st)
+                             (? (n > 400) -1.0 (n > 1 && peep st 'fv 0.0 = 0.0) (top - y0) (go (n + 1) (max top (st 'py)))))
+               (go 0 y0))
+ (test (all (dt \ mag (arc dt - 0.916) < 0.005) [0.0166 0.025 0.0333 0.034 0.04 0.041 0.05])))
 ; repeat and mirror: twenty pilasters of two brushes each; a pilaster stops a walk, under a
 ; buttress's slope is air; the start's height and pitch; p shows where the player stands
 (: ribs (lv """(room [-5 0 0] [5 5 32])
@@ -319,7 +338,7 @@
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (gravity [[1]]))"))
        ((world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight (rgb 0.3 0.3 0.4)))") 'skylight = [0.3 0.3 0.4])
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight 3))"))
-       (mag (vlo - 4.4 * 4.4 / 19.6) < 0.1) (mag (vhi - 4.4 * 4.4 / 4.0) < 0.3)
+       (mag (vlo - 4.237 * 4.237 / 19.6) < 0.02) (mag (vhi - 4.237 * 4.237 / 4.0) < 0.06)
        (vw0 = ()) (vw1 != ()) (vbx > 9.6) (vax < 8.5) (vay1 > vay) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
 ; a stair shallower than a body is walked at a walk, floating steps too, at a slow frame's
 ; strides too, and one too tall is not
@@ -361,7 +380,7 @@
    _ (lput 1.5 0.0 8.5) _ (lgo 2) _ (world-step ls 'jump) (lhead i) (? (i > 30 || ls 'fv = 0.0) i (: _ (lgo 1) (lhead (i + 1))))
    lh (lhead 0) lhy (ls 'py - eye-h) _ (world-step ls 'jump) lh2 (ls 'fv)
  (test (lc0 = ["land hard 0"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
-       (lk1 = 4.4) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
+       (lk1 = 4.237) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
 ; a body caught under something, as a landing may leave it, walks out away from it and not
 ; further in, nor along it
 (: cw (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [6 5 6]) (solid (box [0 1.2 0] [2 5 6])) (start [2.1 0 3] 90 0))") "test/lore/")

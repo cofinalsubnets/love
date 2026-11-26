@@ -149,13 +149,9 @@ int main(void) {
   if (sh_call(SH_READ, (uintptr_t) rd)) { sh_puts("; short read\n"); m7_exit(4); }
   uintptr_t cl[1] = { (uintptr_t) fd };
   sh_call(SH_CLOSE, (uintptr_t) cl);
-  uintptr_t t0 = love_clock();
   struct g *g = love_image_load(buf, len, 0);
   if (!g) { sh_puts("; wake REFUSED\n"); m7_exit(5); }
   g = defn(g, defs, countof(defs));
-  if (ok(g = push(g, 1, putcharm((intptr_t) (love_clock() - t0))))) {   // born: this wake's cost
-    g = defv(g, "born");
-    if (ok(g)) g->sp++; }
   if (ok(g)) g->budget = freelist->len / 4;
 #ifdef BAKER_STONES
   sh_puts("; woke words: pool "); sh_hex(g->len); sh_puts(" major "); sh_hex(g->major_len);
@@ -232,8 +228,7 @@ int main(void) {
     "(borrow 'cli) "
 #include "fat.h"
 #endif
-    "(: _ (pull book 'born 0)"            // this boot's cost, not the image's
-    "   _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
+    "(: _ (putc 10) _ (puts \"; corpus baked -- dumping\") _ (putc 10) 0)");
   if (!ok(r)) {
     if (code_of(r) == status_scare) scare_face(r);
     m7_exit(3); }

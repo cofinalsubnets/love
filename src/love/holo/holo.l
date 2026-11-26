@@ -352,12 +352,14 @@
                      (t + (peep grows (eras l) 0 - peep grows era 0))))
             ;; ..a cmp and its branch laid as one, from the hook, where the flags die with them
             fuse-with (peep be 'fuse 0)
-            (fuse-of ins rest era pa)
-               (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
+            ; -g's marks between the two go ahead of both
+            (past l) (two? l && dlmark? <l ? (past >l) l)
+            (fuse-of ins rest0 era pa)
+               (: rest (past rest0) (? (!(lit? fuse-with) || <ins != 'cmp || !(two? rest) || <(<rest) != 'br) ()
                   (tgt-of (<rest 2) era @ t
                      (? !(imm? t) ()
                         (fuse-with ins <rest (t - pa) @ sc
-                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ())))))
+                           (two? sc && flagfree be >rest 128 && flagjump be >rest (<rest 2) 128 ? sc ()))))))
             ;; pass two: pessimistic addresses (pa) decide, final ones (fa) pin labels and pads
             (stitch p cs pa fa era items)
                (atom? p ? (rev items . labels)
@@ -365,8 +367,9 @@
                      (? (<ins = 'label)
                         (pin labels (ins 1) (label-addr ins fa), stitch >p >cs pa fa era items)
                         (two? fu)
-                        (: r (revonto fu items 0)
-                           (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r))
+                        (dlmark? <>p ? (pin labels (<>p 1) fa, stitch (ins . >>p) (<cs . >>cs) pa fa era items)
+                           (: r (revonto fu items 0)
+                              (stitch >>p >>cs (pa + k + <<>cs) (fa + <r) era >r)))
                         (<ins = 'align)
                         (pad-ins be fa ins @ pad
                            (stitch >p >cs (pa + k) (fa + tally pad) (era + 1)

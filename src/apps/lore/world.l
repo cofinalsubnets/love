@@ -209,11 +209,11 @@
  ; ..a window's opening or a doorway with no skin of its own takes the skin of what it cuts:
  ; of the last brush before it its box overlaps more than a hair, a solid before an air
  (brushes-of lv) (: (over a b) (all (k \ a 'lo k + 1e-4 < b 'hi k && b 'lo k + 1e-4 < a 'hi k) ^3)
-   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b
+   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b     ; bs the last first
                      (: os (filter (q \ two? (q 'skin) && q 'land = () && over q b) bs) s (filter (q \ q 'air = 0) os)
-                        (two? os ? (pins b 'skin (<(rev (two? s ? s os)) 'skin)) b)))
-   ws (rev (foldl (\ a b (skinned (rev a) b . a)) () (map brush-of (lv 'brushes))))
-   (ws + map (d \ skinned ws (pins (doorway d) 'opening 1)) (lv 'doors)))
+                        (two? os ? (pins b 'skin (<(two? s ? s os) 'skin)) b)))
+   sw (foldl (\ a b (skinned a b . a)) () (map brush-of (lv 'brushes)))
+   (rev sw + map (d \ skinned sw (pins (doorway d) 'opening 1)) (lv 'doors)))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
  ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
@@ -1791,7 +1791,7 @@
  ; ..how far q [x z] is from the line s, between its ends
  (seg-gap s q) (: dx (s 2 - s 0) dz (s 3 - s 1) k (max 0.0 (min 1.0 (((q 0 - s 0) * dx + (q 1 - s 1) * dz) / max 1e-9 (2 dx + 2 dz))))
    (sqrt (sq (q 0 - s 0 - k * dx) + sq (q 1 - s 1 - k * dz))))
- jump-v 4.4                               ; up near a metre
+ jump-v 4.237                             ; up 0.92 of a metre
  ; ..a jump from the ground, or a moment after leaving it; one pressed a moment before
  ; landing is kept for the landing
  coyote-t 0.12 jq-t 0.15
@@ -1906,9 +1906,9 @@
  (world-move st) (: cut (st 'cut) dt (peep st 'dt (1.0 / fps)) ct (peep st 'ct 0.0 + dt)
    (? (atom? cut) (falls! (heralds! (play-steps st))) (ct < <cut 'secs) (pin st 'ct ct)
       (atom? >cut) (play-steps (cue st)) (pins st 'cut >cut 'ct 0.0)))
- ; ..a slow frame moved in steps no longer than a thirtieth, each the frame's ways, so a long
- ; one strides no further at once than a quick one
- step-dt (1.0 / 30.0)
+ ; ..a slow frame moved in steps no longer than a twenty-fifth, each the frame's ways, so a long
+ ; one strides little further at once than a quick one, and a frame a hair late is still one step
+ step-dt 0.04
  (play-steps st) (: dt (peep st 'dt (1.0 / fps)) m (max 1 (int (ceil (dt / step-dt - 1e-6))))
    f (peep st 'mf 0) s (peep st 'ms 0) u (peep st 'mu 0)
    (? (m = 1) (play-move st)
@@ -1995,7 +1995,7 @@
          f (top (map (c \ floor-at (c 0) (c 1) (c 2) fl) bss)) v (peep st 'fv 0.0) got (num? f)
          (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min f (fl + climb-v * dt) + eye-h) 'fv 0.0 'gt (st 'mt))
             (got && v <= 0.0 && f >= fl - 0.001) (pins st 'fv 0.0 'gt (st 'mt))
-            (: v2 (max -fall-max (v - grav-at lv fl * dt)) n (fl + v2 * dt)
+            (: v2 (max -fall-max (v - grav-at lv fl * dt)) n (fl + 0.5 * (v + v2) * dt)   ; the step's mean speed: the arc the same at any step
                ; ..rising, the head stops at what is over it; falling, the feet at the first
                ; floor on the way
                g (v2 < 0.0 && !(got && n <= f) ? (top (map (c \ landing (c 0) (c 1) (c 2) fl n) bss)) ())
@@ -2619,8 +2619,8 @@
    ns (filter (q \ q 0 <= i1 && i0 < q 0 + int (q 2 * tune-ring * song-rate) + 2) (notes (k0 - 1) + notes k0))
    vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain (q 3) 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
    y (foldl (\ a q (was (q 0) @ v (two? v ? (a + v 1 ix) a))) (t * 0.0) ns)
-   (wet m) (sp y y m tune-space @ r (? (charm? r) (wet (cask r)) (two? r) [r m] [(y . y) m]))
-   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
+   (wet m k) (sp y y m tune-space @ r (? (charm? r && k) (wet (cask r) 0) (two? r) [r m] [(y . y) m]))   ; asked twice, then dry
+   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) 1 @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
  ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
  ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
  ; glass, dulled under a roof, by its lull where it has one, or sealed in glass (a lens's panes,
@@ -2721,12 +2721,16 @@
  (stamp p) (stat p @ s (two? s ? [(s 0) (s 3) (s 8)] ()))
  (files st) (: p (st 'path)
    (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters + st 'lvl 'plushes))) ()))
- (seen! st) (pin st 'stamps (map (p \ [p (stamp p)]) (files st)))
+ (stamps st) (map (p \ [p (stamp p)]) (files st))
+ (seen! st) (pin st 'stamps (stamps st))
+ ; ..stamped before the read, so a file written while the scene is made is read at the next watch;
+ ; a file the new level alone names is stamped after
+ (seen-by st now) (pin st 'stamps (map (p \ (filter (q \ q 0 = p) now @ (q . _) q _ [p (stamp p)])) (files st)))
  (world-watch st) (: was (st 'stamps)
    (? (atom? was) (seen! st)
       (all (q \ stamp (q 0) = q 1) was) st
-      (: lv (world-load (st 'path))
-         (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
+      (: now (stamps st) lv (world-load (st 'path))
+         (? (string? lv) (pins (pin st 'stamps now) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                cs (#(lv 'cars) = #(st 'cars) ? (st 'cars) (cars-new lv))
                ls (#(lv 'lifts) = #(st 'lifts) ? (st 'lifts) (lifts-new lv))
@@ -2734,8 +2738,8 @@
                sc (loader st @ tk (view-busy tk (_ \ scene lv (st 'dir) (st 'sc) tk)))
                bl (#(lv 'balls) + #(lv 'wisps) + #(lv 'plushes) = #(st 'balls) ? (st 'balls) (balls-new lv sc))
                _ (each bl (b \ pins b 'pk () 'r (b 'kind @ 'plush (sc 'plushes (b 'i) 'r) (b 'r))))
-               (seen! (pins st 'hum () 'lvl lv 'sc sc 'doors ds 'cars cs 'lifts ls 'gates gs 'balls bl 'msg ("read " + st 'path + " again")
-                               'err 0 'msg-t (st 'mt))))))))
+               (seen-by (pins st 'hum () 'lvl lv 'sc sc 'doors ds 'cars cs 'lifts ls 'gates gs 'balls bl 'msg ("read " + st 'path + " again")
+                               'err 0 'msg-t (st 'mt)) now))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i @ 47 (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---

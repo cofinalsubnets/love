@@ -7,7 +7,6 @@
    ; a meta that wants more: 'more, or how much and where
    (ap-more? x) (x = 'more || (two? x && <x = 'more))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
    (ap-fmt tag ch rate bits w) (join "" [(wrle tag 2) (wrle ch 2) (wrle rate 4) (wrle (rate * ch * w) 4)
                                         (wrle (ch * w) 2) (wrle bits 2)])
    (ap-wav fmt data) (join "" ["RIFF" (wrle (20 + #fmt + #data) 4) "WAVE" "fmt " (wrle #fmt 4) fmt
@@ -78,8 +77,8 @@
 
    ; the verb
    (run cmd) (hark ["sh" "-c" ("cd " + dir + " && HORN=none ../love aplay " + cmd + " 2>&1")])
-   _ (put (dir + "/a.wav") (ap-wav (ap-fmt 1 2 8000 16 2) (join "" (map (v \ wrle v 4) ^80))))
-   _ (put (dir + "/z.raw") (join "" (map (k \ string [0]) ^400)))
+   _ (uwrite (dir + "/a.wav") (ap-wav (ap-fmt 1 2 8000 16 2) (join "" (map (v \ wrle v 4) ^80))))
+   _ (uwrite (dir + "/z.raw") (join "" (map (k \ string [0]) ^400)))
    _ (test (run "a.wav" = (0 . "Playing WAVE 'a.wav' : Signed 16 bit Little Endian, Rate 8000 Hz, Stereo\n"))
            (run "-q a.wav z.raw" = (0 . ""))
            (run "< a.wav" = (0 . "Playing WAVE 'stdin' : Signed 16 bit Little Endian, Rate 8000 Hz, Stereo\n"))
@@ -92,7 +91,7 @@
            (run "--bogus" = (1 . "aplay: unrecognized option '--bogus'\n"))
            (run "-c 300 z.raw" = (1 . "aplay: value 300 for channels is invalid\n")))
    ; the last gulp plays too: a wav read whole is half a second of HORN=none's time
-   _ (put (dir + "/half.wav") (ap-wav (ap-fmt 1 1 8000 8 1) (join "" (map (k \ string [128]) ^4000))))
+   _ (uwrite (dir + "/half.wav") (ap-wav (ap-fmt 1 1 8000 8 1) (join "" (map (k \ string [128]) ^4000))))
    t0 (clock 0)
    _ (test (run "-q half.wav" = (0 . "")) (400 <= clock 0 - t0),
     hark ["rm" "-rf" dir],

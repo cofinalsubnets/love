@@ -204,8 +204,8 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
  flo_t const py = (flo_t) y + (flo_t) 0.5, px0 = (flo_t) xs + (flo_t) 0.5;
  flo_t a[2 + rz_na];
  for (int k = 0; k < 2 + rz_na; k++) a[k] = v0[k] + vx[k] * (px0 - x0f) + vy[k] * (py - y0f);
- int L = 0;   // the texture's level, asked again every eighth pixel, and its texels one of the first's
- flo_t us = 1;
+ int L = 0, lq = 0;   // the texture's level, asked again every eighth pixel, and its texels one of the first's
+ flo_t us = 1, e[3] = { 1, 0, 0 };   // ..as that pixel has it, hidden or not, by the first shown of its eight
  int32_t *o = r->out + y * r->W;
  float *dz = r->depth + y * r->W, *gz = r->gz ? r->gz + y * r->W : 0;
  flo_t *td = r->tz + r->TW * r->TH + (y >> 3) * r->TW;
@@ -233,9 +233,12 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
  if (plain) {
   for (intptr_t x = xs; x < xe; x++) {
    float const z = (float) a[0];
+   if (nlv > 1 && !((x - xs) & 7)) e[0] = a[1], e[1] = a[2], e[2] = a[3], lq = 1;
    if (a[0] >= -1 && a[0] <= 1 && z < dz[x]) {
     flo_t const s = persp ? 1 / a[1] : 1, u = a[2] * s, v = a[3] * s;
-    if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+    if (lq) {
+     flo_t const s0 = !((x - xs) & 7) ? s : persp ? 1 / e[0] : 1;
+     L = rz_lod(vx, vy, persp, nlv, s0, e[1] * s0, e[2] * s0), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L), lq = 0; }
     intptr_t const t = rz_fetch(lv + L, u * us, v * us);
     if (t >= 0)
      o[x] = rz_rgb((a[4] + a[7]) * s * 255 * u8[t >> 16 & 255], (a[5] + a[8]) * s * 255 * u8[t >> 8 & 255],
@@ -246,6 +249,7 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
   return; }
  for (intptr_t x = xs; x < xe; x++) {
   float const z = (float) a[0];
+  if (nlv > 1 && !((x - xs) & 7)) e[0] = a[1], e[1] = a[2], e[2] = a[3], lq = 1;
   if (a[0] >= -1 && a[0] <= 1   // inside all three edges: the run is exact
       && z < dz[x] && !(under && o[x] >= 0) && (!cls || (cls == 1 ? gz && z > gz[x] : !gz || z < gz[x]))) {
   flo_t const w = 1 / a[1], s = persp ? w : 1,
@@ -255,7 +259,9 @@ love_noinline static void rz_row(struct rz *r, struct rz_plane const *t, struct 
   flo_t tint[3] = { 1, 1, 1 };
   if (nlv) {
    flo_t const u = a[2] * s, v = a[3] * s;
-   if (nlv > 1 && !((x - xs) & 7)) L = rz_lod(vx, vy, persp, nlv, s, u, v), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L);
+   if (lq) {
+    flo_t const s0 = !((x - xs) & 7) ? s : persp ? 1 / e[0] : 1;
+    L = rz_lod(vx, vy, persp, nlv, s0, e[1] * s0, e[2] * s0), us = (flo_t) 1 / (flo_t) ((intptr_t) 1 << L), lq = 0; }
    intptr_t const t = rz_fetch(lv + L, u * us, v * us);
    if (t < 0) hole = 1;
    else if (glass) tint[0] = u8[t >> 16 & 255], tint[1] = u8[t >> 8 & 255], tint[2] = u8[t & 255];

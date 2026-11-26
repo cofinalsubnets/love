@@ -97,6 +97,7 @@
       (nif_im            "im"            1 lvm_im)
       (nif_conj          "conj"          1 lvm_conj)
       (nif_abs           "abs"           1 lvm_abs)
+      (nif_norm          "norm"          1 lvm_norm)
       (nif_arg           "arg"           1 lvm_carg)
       (nif_tray          "tray"          3 lvm_trayctor)
       (nif_iota          "iota"          1 lvm_iota)

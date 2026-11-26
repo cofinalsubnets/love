@@ -140,9 +140,10 @@
  $(twin-tray '(2) [(0 ~ 0) (1 ~ 1)])                ; the element sum (1 ~ 1) sorts positive
  !$ca-z
 
- ; --- abs of a complex array is the L2 norm over every (re, im) ---
- (5.0 = abs (twin-tray '(1) [(3 ~ 4)]))
- (near ((1 / 2) 30) (abs ca-v))
+ ; --- abs of a complex array is its moduli, norm the L2 norm over every (re, im) ---
+ (aall (abs (twin-tray '(2) [(3 ~ 4) (0 ~ -2)]) = @(5.0 2.0)))
+ (5.0 = norm (twin-tray '(1) [(3 ~ 4)]))
+ (near ((1 / 2) 30) (norm ca-v))
 
  ; --- !x iff (sat x) is 0 ---
  (0 = sat ca-z)   !ca-z

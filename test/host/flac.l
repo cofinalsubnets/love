@@ -6,10 +6,7 @@
    ; a meta that wants more, or would skip a block it need not hold
    (fl-more? x) (x = 'more || (two? x && elem <x ['more 'skip]))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (nib c) (? (c < 58) (c - 48) (c - 87))
-   (unx h) (cask (#h // 2) @ c (map (i \ pin c i (nib (h (2 * i)) * 16 + nib (h (2 * i + 1)))) (jot (#h // 2)),
-                               string c))
-   tiny (unx (cats [
+   tiny (hexbytes (cats [
      "664c6143000000220020002000006a00006a01f402f000000060c77d5c95d11ac172f2c14037fdd400cc840000362000"
      "00007265666572656e6365206c6962464c414320312e352e30203230323530323131010000000a0000005449544c453d"
      "74696e79fff86418001f1c1800001a0430f4421b0215a7688f11e7896ae546366a4ba644c92bcabef46539e501ca2204"
@@ -51,9 +48,8 @@
                      (close q, pin m 'whole 0, r))
    _ (test (fl-bad 0 = 0) (string? (fl-bad 1)))
    ; a flipped byte anywhere answers why or samples, never a crash
-   (flip s i) (cask #s @ c (map (k \ pin c k (s k)) (jot #s), pin c i (255 - s i), string c))
-   _ (test (atom? (filter (i \ !(flac-meta (flip tiny i) @ m2
-                                  (? (tablet? m2) (fl-all (flip tiny i) (m2 'at) m2 @ r (string? r || charm? r))
+   _ (test (atom? (filter (i \ !(flac-meta (flipb tiny i) @ m2
+                                  (? (tablet? m2) (fl-all (flipb tiny i) (m2 'at) m2 @ r (string? r || charm? r))
                                      (string? m2 || fl-more? m2))))
                           (jot #tiny))))
 
@@ -184,11 +180,10 @@
    wav ("RIFF" + wle (36 + #u8) 4 + "WAVEfmt " + wle 16 4 + wle 1 2 + wle 1 2 + wle 8000 4 + wle 8000 4 + wle 1 2 + wle 8 2
         + "data" + wle #u8 4 + u8)
    be (cats (map (i \ string 0 + string ((i * 5) % 200)) (jot 4096)))
-   (put p s) (open p "w" @ q (say q s, close q))
    (back c) (hark ["sh" "-c" ("cd " + dir + " && " + c)])
    _ (mkdir dir 448)
-   _ (put (dir + "/w8.wav") wav)
-   _ (put (dir + "/be.raw") be)
+   _ (uwrite (dir + "/w8.wav") wav)
+   _ (uwrite (dir + "/be.raw") be)
    _ (back "../love flac -s -f -o w8.flac w8.wav && ../love flac -s -d -f -o w8.out w8.flac")
    _ (back "../love flac -s -f --force-raw-format --endian=big --sign=signed --channels=1 --bps=16 --sample-rate=8000 -o be.flac be.raw && ../love flac -s -d -f --force-raw-format --endian=big --sign=signed -o be.out be.flac")
    (rd p) (open p "r" @ q (: s (slurp q) (close q, s)))

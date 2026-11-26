@@ -197,7 +197,7 @@
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
-   gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
+   gap (+(map (k \ norm ((a >> k & 255) - (b >> k & 255))) [0 8 16]) / (3.0 * #both))
  (test (#both > 8000) (gap < 0.04)))
 ;; ..and its mesh for a gpu names no corner it lacks, cut and fanned quads and all, or the
 ;; gpu's helper refuses it
@@ -236,5 +236,18 @@
 (: P (frame-paint (iota 15 * 0 + 7) 5 1 (cask 60) 5) (wd v) (string [v 0 0 0])
    _ (mesh-paint (gem-tray [2] [1 2]) 2 1 P 5 3)
    (test (string P = foldr (+) "" (map wd [1 1 2 2 0  1 1 2 2 0  0 0 0 0 0]))))
+; a far wall's texture behind a near post: what the post leaves shown is drawn as with no post
+; there, its level the one the open wall has
+(: lt {'sun [0.0 1.0 0.0] 'amb [1.0 1.0 1.0] 'sunk 0.0 'sunc [1.0 1.0 1.0] 'expo 1.0}
+   (lit m) (mesh-bake (mesh-pack m) lt mesh-open 1.0)
+   W 80 H 48 v (mesh-view W H [0.0 0.0 0.0] 0.0 0.0 1.4 0.1 100.0)
+   ck (mesh-tex 16 (\ x y (x % 2 = 0 ? [0.0 0.0 0.0] [1.0 1.0 1.0])))
+   wall (mesh-sheet [-30.0 -20.0 20.0] [60.0 0.0 0.0] [0.0 40.0 0.0] 1 1 [0.0 0.0 -1.0] (p \ [(p 0 * 4.0) (p 1 * 4.0)]) 0 [1.0 1.0 1.0])
+   post (mesh-box [-0.3 0.0 2.0] [0.25 3.0 0.1] 0.0 -1 [0.0 1.0 0.0] 1.0)
+   (draw m) (mesh-frame v (lit m) [ck] [0 0 0 0.0 0.0] 0 0.0 7)
+   open (draw wall) hid (draw (mesh-join [post wall])) g (hid (24 * W + 30))
+ (test (g = 39168) (#(filter (i \ hid i = g) ^(W * H)) > 400)
+       (all (i \ hid i = g || hid i = open i) ^(W * H))))
+
 (test_fin ())
 (puts "mesh: ok\n")

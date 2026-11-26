@@ -4,6 +4,7 @@ long MS peer6(long, long, long, long, long, long);
 typedef long (MS *ms8)(long, long, long, long, long, long, long, long);
 ms8 peer_get8(void);
 long peer_calls(void);
+long MS peer_va(char n, ...);
 long MS host6(long a, long b, long c, long d, long e, long f)
 { return a - b + c - d + e - f; }
 unsigned MS host1(unsigned x) { return x * 10u; }
@@ -22,5 +23,8 @@ int main(void)
 	struct tab t = { 0, peer6 };
 	bad |= (viacond(&t, 0, 1) != 91 || viacond(0, &t, 0) != 91) << 4;
 	bad |= (viacomma(&t, 0) != 56) << 5;
+	/* a variadic ms pointer: the named char narrows, the rest ride the words */
+	long (MS *volatile pv)(char, ...) = peer_va;
+	bad |= (pv(0x103, 10L, 20L, 30L, 40L, 50L) != 153) << 6;
 	return bad;
 }

@@ -52,6 +52,17 @@
                   st (view-walk (look ? (pin lv 'look (st \ dx \ dy \ st)) lv))
                   (rev (st 'log)))
  (test (lwrun 0 = [[1 'press 1] [2 'release 1] [3 'press 3]]) (lwrun 1 = ())))
+; the mouse held: a frame's moves turn by where the last came to, the first counted from the
+; middle and each after from the one before; the pointer put back once a frame, and not from the middle
+(: mv {1 [['press 1 9 9]] 2 [['move 323 200] ['move 326 201] ['move 329 203]] 3 [['move 322 200]] 4 [['move 320 200]] 6 [['down 16]]}
+   win {'w 640 'h 400 'paper (cask (640 * 400 * 4)) 'evq () 'holds 1}
+   lv {'new (w \ h \ {'w w 'h h 't 0 'log ()})
+       'size (st \ w \ r \ pins st 'w w 'h (2 * r)) 'frame (st \ "") 'key (st \ a \ st)
+       'look (st \ dx \ dy \ pin st 'log ([(st 't) dx dy] . st 'log))
+       'tick (st \ pin win 'evq (peep mv (st 't + 1) ()))
+       'fps 100 'linger 0 'next () 'song (_ \ ()) 'win win}
+   st (view-walk lv)
+ (test (rev (st 'log) = [[2 9 3] [3 2 0]]) (win 'warps = [[320 200] [320 200] [320 200]])))
 
 ; the gauge: a frame resting a ms each 2560 pixels at its scale, 25 ms at 2 for a 20 ms goal,
 ; steps once to 4 and holds there; a key by hand stops it, and 1 holds though it is over

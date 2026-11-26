@@ -355,7 +355,8 @@
    ;; vfp: f0..f15 -> d0..d15 (fpv5-d16). the IR's two-address d = op(d, s) repeats d as the
    ;; first source. a single in fN is S[2n], the low half of Dn; f16..f31 name the odd singles,
    ;; f(16+n) S[2n+1], which only single ops take: a double op scares on one.
-   ;; s30 is the converters' scratch: f15 is reserved. movqxr/movqrx move the gp pair r, r+1
+   ;; s30 is the converters' scratch: f15 is reserved, and saved by the function that uses it.
+   ;; movqxr/movqrx move the gp pair r, r+1
    thumb-fregs (fregs 16)
    (frn r) (look thumb-fregs r 'badfreg)
    thumb-sregs (foldl (t \ i \ pin t (intern ("f" + show i)) (i < 16 ? (2 * i) (2 * i - 31))) {} ^32)

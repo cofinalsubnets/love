@@ -43,6 +43,19 @@
    mr-hi16  5                                       ; R_MIPS_HI16       S + A's high half, carried for lo16's sign
    mr-lo16  6                                       ; R_MIPS_LO16       S + A's low half
    mr-pc16  10                                      ; R_MIPS_PC16       (S + A - P) >> 2 into a branch's offset
+   ; ... avr: a fixup's kind and R_AVR_'s number. a branch counts from P + 2, which the linker
+   ; takes off; pm is a word address, neg the negated one
+   avr-rels {'av7 2 'av13 3 'av16pm 5 'avcall 18
+             'avlo8 6 'avhi8 7 'avlo8neg 9 'avhi8neg 10 'avlo8pm 12 'avhi8pm 13}
+   ; every R_AVR_ by number
+   avr-rnames ["NONE" "32" "7_PCREL" "13_PCREL" "16" "16_PM" "LO8_LDI" "HI8_LDI" "HH8_LDI" "LO8_LDI_NEG" "HI8_LDI_NEG"
+               "HH8_LDI_NEG" "LO8_LDI_PM" "HI8_LDI_PM" "HH8_LDI_PM" "LO8_LDI_PM_NEG" "HI8_LDI_PM_NEG" "HH8_LDI_PM_NEG" "CALL"
+               "LDI" "6" "6_ADIW" "MS8_LDI" "MS8_LDI_NEG" "LO8_LDI_GS" "HI8_LDI_GS" "8" "8_LO8" "8_HI8" "8_HLO8"
+               "DIFF8" "DIFF16" "DIFF32" "LDS_STS_16" "PORT6" "PORT5"]
+   (avr-rname n) ("R_AVR_" + peep avr-rnames n (show n))
+   ; what a reader does with one: () for a kind it may apply, else a scare naming it. 32, 16 and 8 are
+   ; plain words; a gs wants a stub past 128k and a diff a relaxing linker
+   (avr-rtake n) (elem n [1 2 3 4 5 6 7 9 10 12 13 18 26] ? () (scare 'avr-reloc (avr-rname n)))
 
    (o-has? tab k) (peep tab k 'no !== 'no)
    ; a lane's file size; an item may be a blob of many bytes
@@ -89,6 +102,8 @@
                                (k == 'j18) [6 0 0]  (k == 'call0) [5 0 0]
                                ; mips: the instruction's word, its field zero
                                (elem k '(mb16 mj26 mhi16 mlo16)) (be32 (fix-a x))
+                               ; avr: the instruction's word, or the two of a call or jmp
+                               (o-has? avr-rels k) (afix-w (fix-a x) @ v (w = 4 ? (le16 (v >> 16) + le16 (v & 0xffff)) (le16 v)))
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -207,11 +222,10 @@
        wkset (o-names wknames)
        ; i386: a reach to any global stays a relocation, as gas leaves it
        gbset (x86 ? (o-names (wknames + funcnames + globnames)) wkset)
-       nsec #secs
-       _ (0 >= nsec ? (scare 'obj-no-sections target))
+       _ (atom? secs ? (scare 'obj-no-sections target))
        (exec? s) (0 < s 2 & 4)
        ; one section is one lay, an executable one through the relaxer
-       lanes (map (s \
+       lanes0 (map (s \
                 (: fm (s 4)
                    p (exec? s ?
                         (laylax @ r
@@ -221,6 +235,13 @@
                    w (o-walk be <p >p gbset (x86 || exec? s ? 1) rset)
                    [(s 0) (s 1) (s 2) (s 3) <w <>w >p]))
               secs)
+       ; -g's sections: their words reach a section and an offset, so a function's has no thumb bit
+       lanes (lanes0 + (5 < #ax && two? (ax 5) ?
+                          (map ([nm t f al bs rs lb] \ [nm t f al bs (map ([o k l a p] \ [o 'dabs32 l a p]) rs) lb])
+                               ((elem target '(thumb1 thumb2 thumb2sp) ? (o-eh lanes0 (funcnames + loc0) target 1 @ e (two? e ? [e] ())) ())
+                                + o-dwarf lanes0 (ax 5) (funcnames + loc0) funcnames target))
+                          ()))
+       nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (lnt i)
        (ln-ty l) (l 1)  (ln-bs l) (l 4)  (ln-rl l) (l 5)
@@ -293,6 +314,7 @@
         (: (go rs bs) (!(two? rs) ? bs
                          (<rs @ r
                             (go >rs (? (<>r == 'abs32 || <>r == 'abs32d) (a32k <>r <>>r <>>>r @ sl (o-put32 bs <r <>sl))
+                                       (<>r == 'dabs32) (o-where wx (<>>r) @ w (o-put32 bs <r (<>w + <>>>r)))
                                        (<>r == 'abs16) (a32k <>r <>>r <>>>r @ sl (o-putbs bs <r (le16 <>sl)))
                                        (<>r == 'abs8) (a32k <>r <>>r <>>>r @ sl (o-putbs bs <r [(<>sl & 255)]))
                                        bs))))
@@ -374,6 +396,7 @@
                'b  (o-rel32 off (fnsym lbl) r-thm-jump24)   ; a B.W tail-jump to an external/weak fn
                'bcc (o-rel32 off (fnsym lbl) r-thm-jump19)  ; a Bcc.W into another section
                ('abs32 || 'abs32d) (a32k k lbl aux @ sl (o-rel32 off <sl (x86 ? r-386-32 r-arm-abs32)))
+               'dabs32 (o-where wx lbl @ w (o-rel32 off <w (x86 ? r-386-32 r-arm-abs32)))
                'abs16 (a32k k lbl aux @ sl (o-rel32 off <sl r-386-16))
                'abs8 (a32k k lbl aux @ sl (o-rel32 off <sl r-386-8))
                ('movw16 || 'movt16)
@@ -611,10 +634,19 @@
               ((w & 0xFC000000) = 0x94000000 || (w & 0xFFFFFC1F) = 0xD63F0000 ? (body (wrote st 30)) (body st))
              ((w & 0xFFF00000) = 0xD5300000) (wr st rt)
              ((w & 0x1C000000) = 0x14000000) st
-             ; anything else writing rd: data processing, fp/simd (a gp rd too), a literal or exclusive load
+             ; anything else writing rd: data processing, fp/simd, a literal or exclusive load
              ((w & 0x1C000000) = 0x10000000 || (w & 0x0E000000) = 0x0A000000) (wr st rt)
-             ((w & 0x0E000000) = 0x0E000000) (wrote (wr st rt) (64 + rt))
-             ((w & 0x0A000000) = 0x08000000) ((w >> 22) & 1 = 1 || (w & 0x3B000000) = 0x18000000 ? (wrote (wr st rt) (64 + rt)) st)
+             ; a convert or a move to the integer file, an element's, else an fp rd
+             ((w & 0x0E000000) = 0x0E000000)
+              (: op ((w >> 16) & 7)
+                 gp (? ((w & 0x7F20FC00) = 0x1E200000) (op < 2 || op = 4 || op = 5 || op = 6)
+                       ((w & 0x7F200000) = 0x1E000000) (op < 2)
+                       ((w & 0xBFE08400) = 0x0E000400) (elem ((w >> 11) & 15) '(5 7)))
+                 (gp ? (wr st rt) (wrote st (64 + rt))))
+             ((w & 0x0A000000) = 0x08000000)
+              (? ((w >> 22) & 1 = 0 && (w & 0x3B000000) != 0x18000000) st
+                 ((w >> 26) & 1 = 1) (wrote st (64 + rt))
+                 (wr st rt))
              st)))
    ; a word's successors within lo..hi; rl the offsets a branch relocation patches (an external target)
    (o-ehnx w pc lo hi rl)
@@ -702,6 +734,303 @@
              [(x-ehst st it nm)
               (? (elem mn '(ret ud2)) () (mn = 'jmp) to (elem mn x-jcc) (nx + to) nx)
               ind])))
+   ; -- rv64's, over a reading of each instruction. .debug_frame only: code factor 1, data -8, ra
+   ; x1, the cfa sp+0. a state is as above but its sixth slot, unused, and its last, (t6 . pro):
+   ; t6 ('k n) a constant, ('a n) an address, cfa-relative, else () --
+   rv-dcie [12 0 0 0 255 255 255 255 1 0 1 120 1 12 2 0]
+   rv32-dcie [12 0 0 0 255 255 255 255 1 0 1 124 1 12 2 0]
+   rv-st0 [2 0 0 () () 0 '(() . ())]
+   ; rv64.l's r0.. and f0.., dwarf's numbers
+   rv-dwr [10 11 12 13 14 15 16 17 5 6 7 28 29 18 19 9 0 0 0 20 21 22 23 24 25 26 27]
+   rv-dwf [42 43 44 45 46 47 48 49 32 33 34 35 36 37 38 39 60 61 62 63]
+   (rv-cs? r) (elem r '(1 8 9 18 19 20 21 22 23 24 25 26 27 40 41 50 51 52 53 54 55 56 57 58 59))
+   ; an instruction, read: (length kind ..), 'ld and 'sd a whole register's, x32 rv32's. f registers are 32 and up
+   (rv-ehdec x32 s pc)
+    (: h (s pc | (s (pc + 1) << 8))
+       (bt i n) ((h >> i) & ((1 << n) - 1))
+       (pr i) (8 + bt i 3)
+       cj (o-sx ((bt 12 1 << 11) | (bt 11 1 << 4) | (bt 9 2 << 8) | (bt 8 1 << 10) | (bt 7 1 << 6) | (bt 6 1 << 7) | (bt 3 3 << 1) | (bt 2 1 << 5)) 12)
+       cb (o-sx ((bt 12 1 << 8) | (bt 10 2 << 3) | (bt 5 2 << 6) | (bt 3 2 << 1) | (bt 2 1 << 5)) 9)
+       rd (bt 7 5) r2 (bt 2 5) im6 (o-sx ((bt 12 1 << 5) | r2) 6) f3 (h >> 13)
+       (? (h & 3 != 3)
+          (2 . (h & 3 @
+             0 (: o8 ((bt 10 3 << 3) | (bt 5 2 << 6))
+                  (h = 0 ? ['trap]
+                     f3 = 0 ? ['addi (pr 2) 2 ((bt 7 4 << 6) | (bt 11 2 << 4) | (bt 5 1 << 3) | (bt 6 1 << 2))]
+                     f3 = 1 ? ['ld (32 + pr 2) (pr 7) o8]
+                     f3 = 2 ? (x32 ? ['ld (pr 2) (pr 7) ((bt 10 3 << 3) | (bt 6 1 << 2) | (bt 5 1 << 6))] ['wr (pr 2)])
+                     f3 = 3 ? (x32 ? ['no] ['ld (pr 2) (pr 7) o8])
+                     f3 = 6 && x32 ? ['sd (pr 2) (pr 7) ((bt 10 3 << 3) | (bt 6 1 << 2) | (bt 5 1 << 6))]
+                     f3 = 5 ? ['sd (32 + pr 2) (pr 7) o8]
+                     f3 = 7 && !x32 ? ['sd (pr 2) (pr 7) o8] ['no]))
+             1 (f3 = 0 ? ['addi rd rd im6]
+                f3 = 1 ? (x32 ? ['jal 1 cj] ['addiw rd rd im6])
+                f3 = 2 ? ['addi rd 0 im6]
+                f3 = 3 ? (rd = 2 ? ['addi 2 2 (o-sx ((bt 12 1 << 9) | (bt 6 1 << 4) | (bt 5 1 << 6) | (bt 3 2 << 7) | (bt 2 1 << 5)) 10)]
+                                   ['lui rd (im6 << 12)])
+                f3 = 4 ? ['wr (pr 7)]
+                f3 = 5 ? ['jal 0 cj]
+                ['br cb])
+             (f3 = 0 ? ['wr rd]
+              f3 = 1 ? ['ld (32 + rd) 2 ((bt 12 1 << 5) | (bt 5 2 << 3) | (bt 2 3 << 6))]
+              f3 = 2 ? (x32 ? ['ld rd 2 ((bt 12 1 << 5) | (bt 4 3 << 2) | (bt 2 2 << 6))] ['wr rd])
+              f3 = 6 && x32 ? ['sd r2 2 ((bt 9 4 << 2) | (bt 7 2 << 6))]
+              f3 = 3 && x32 ? ['no]
+              f3 = 7 && x32 ? ['no]
+              f3 = 3 ? ['ld rd 2 ((bt 12 1 << 5) | (bt 5 2 << 3) | (bt 2 3 << 6))]
+              f3 = 4 ? (bt 12 1 = 0 ? (r2 = 0 ? ['jalr 0 rd] ['add rd 0 r2])
+                        rd = 0 ? ['trap] r2 = 0 ? ['jalr 1 rd] ['add rd rd r2])
+              f3 = 5 ? ['sd (32 + r2) 2 ((bt 10 3 << 3) | (bt 7 3 << 6))]
+              f3 = 7 ? ['sd r2 2 ((bt 10 3 << 3) | (bt 7 3 << 6))]
+              ['no])))
+          (: w (o-w32 s pc) op (w & 127) d ((w >> 7) & 31) g3 ((w >> 12) & 7) a ((w >> 15) & 31) b ((w >> 20) & 31)
+             i (o-sx (w >> 20) 12) si (o-sx (((w >> 25) << 5) | d) 12) f7 (w >> 25)
+             (4 . (op @
+               0x13 (g3 = 0 ? ['addi d a i] ['wr d])
+               0x1B (g3 = 0 ? ['addiw d a i] ['wr d])
+               0x33 (g3 = 0 && f7 = 0 ? ['add d a b] g3 = 0 && f7 = 32 ? ['sub d a b] ['wr d])
+               0x37 ['lui d (o-sx (w & 0xFFFFF000) 32)]
+               0x03 (g3 = (x32 ? 2 3) ? ['ld d a i] ['wr d])
+               0x07 (g3 = 3 ? ['ld (32 + d) a i] ['wr (32 + d)])
+               0x23 (g3 = (x32 ? 2 3) ? ['sd b a si] ['no])
+               0x27 (g3 = 3 ? ['sd (32 + b) a si] ['no])
+               0x6F ['jal d (o-sx (((w >> 31) << 20) | (((w >> 12) & 255) << 12) | (((w >> 20) & 1) << 11) | (((w >> 21) & 1023) << 1)) 21)]
+               0x67 ['jalr d a]
+               0x63 ['br (o-sx (((w >> 31) << 12) | (((w >> 7) & 1) << 11) | (((w >> 25) & 63) << 5) | (((w >> 8) & 15) << 1)) 13)]
+               ; a compare, a convert or a move to the integer file, else an fp op
+               0x53 ['wr (elem (f7 >> 2) '(0x14 0x18 0x1C) ? d (32 + d))]
+               (0x43 || 0x47 || 0x4B || 0x4F) ['wr (32 + d)]
+               0x0F ['no]
+               0x73 (w = 0x100073 || w = 0xC0001073 ? ['trap] ['wr d])
+               _ ['wr d])))))
+   (mips-cs? r) (16 <= r <= 23 || r = 30 || r = 31)
+   ; an instruction's effect, it as read; mp: whose registers, 0 rv's 1 mips's 2 thumb2's 3 thumb1's: sp, fp, the scratch and what a callee saves
+   (rv-ehst mp st it nm)
+    (@ st [cb co sd fd sv _ (t6 . pw)]
+       (: sp ([2 29 13 13] mp) fp ([8 30 11 7] mp) sc ([31 1 12 4] mp)
+          (cs? r) (mp = 0 ? (rv-cs? r) (mp = 1) (mips-cs? r) (t-cs? r))
+          pro (pw != 'body)
+          (mk cb co sd fd sv t6 pw) [cb co sd fd sv 0 (t6 . pw)]
+          (neg v) (v = () ? () (0 - v))
+          ; what a scratch register holds: an address ['a n] or a constant ['k n]. thumb1's are the low ones, by register
+          (sc? r) (mp = 3 ? (r < 7) (r = sc))
+          (val r) (? (!(sc? r)) () (mp = 3) (filter (p \ <p = r) t6 @ (p . _) (p 1) _ ()) t6)
+          (at r) (? (r = sp) (neg sd) (r = fp) (neg fd) (val r @ ['a n] n _ ()))
+          (konst r) (? (mp < 2 && r = 0) 0 (val r @ ['k n] n _ ()))
+          (wrote st r) (@ st [cb co sd fd sv _ (t6 . pw)] (mk cb co sd fd sv t6 (pro ? (r . pw) pw)))
+          (fpw st f)
+           (@ st [cb co sd fd sv _ (t6 . pw)]
+              (? (cb != fp) (mk cb co sd f sv t6 pw)
+                 (sd = ()) (scare 'obj-eh-fp nm)
+                 (mk sp sd sd f sv t6 pw)))
+          ; a slot sp rises past is gone
+          (spw st d)
+           (@ st [cb co sd fd sv0 _ (t6 . pw)]
+              (: sv (d = () ? sv0 (filter ([_ l] \ 0 - d <= l) sv0))
+                 (? (cb != sp) (mk cb co d fd sv t6 pw)
+                    (d = ()) (scare 'obj-eh-sp nm)
+                    (mk sp d d fd sv t6 pw))))
+          (t6w st r v) (@ st [cb co sd fd sv _ (t6 . pw)]
+             (mk cb co sd fd sv (mp = 3 ? ((v = () ? () [[r v]]) + filter (p \ <p != r) t6) v) pw))
+          (wr st r) (? (mp < 2 && r = 0) st (wrote (? (r = fp) (fpw st ()) (r = sp) (spw st ()) (sc? r) (t6w st r ()) st) r))
+          (sav st r a)
+           (@ st [cb co sd fd sv _ (t6 . pw)]
+              (? (pro && a != () && cs? r && nelem r pw && !(any (p \ <p = r) sv))
+                 (mk cb co sd fd (sort ([r a] . sv)) t6 pw)
+                 st))
+          (rst st r a) (@ st [cb co sd fd sv _ (t6 . pw)] (wr (mk cb co sd fd (filter (p \ p != [r a]) sv) t6 pw) r))
+          (body st) (@ st [cb co sd fd sv _ (t6 . _)] (mk cb co sd fd sv (mp = 3 ? (filter (p \ <p = 4) t6) ()) 'body))
+          ; rd = a cfa-relative address, or () for one unknown; mv s0, sp over the saved s0: the cfa rides s0
+          (aset rd a)
+           (? (rd = sp) (spw st (neg a))
+              (rd = fp) (: s2 (wrote (fpw st (neg a)) fp)
+                          (@ s2 [cb co sd fd sv _ (t6 . pw)]
+                             (cb = sp && fd != () && any (p \ <p = fp) sv ? (mk fp fd sd fd sv t6 pw) s2)))
+              (sc? rd && a != ()) (wrote (t6w st rd ['a a]) rd)
+              (wr st rd))
+          (plus a k) (a = () || k = () ? () (a + k))
+          (it @ ['addi d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (konst a + i)]) d) (aset d (plus (at a) i)))
+                ['addiw d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (o-sx ((konst a + i) & 0xFFFFFFFF) 32)]) d) (wr st d))
+                ['ori d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k (konst a | i)]) d) (wr st d))
+                ['lui d v] (sc? d ? (wrote (t6w st d ['k v]) d) (wr st d))
+                ['add d a b] (at a = () ? (aset d (plus (at b) (konst a))) (aset d (plus (at a) (konst b))))
+                ['sub d a b] (aset d (plus (at a) (neg (konst b))))
+                ['shl d a i] (sc? d && konst a != () ? (wrote (t6w st d ['k ((konst a << i) & 0xFFFFFFFF)]) d) (wr st d))
+                ['sd r a i] (sav st r (plus (at a) i))
+                ['ld r a i] (rst st r (plus (at a) i))
+                ['wr r] (wr st r)
+                (('jal || 'jalr) . d . _) (body (wr st d))
+                ['br _] (body st)
+                _ st)))
+   ; the instruction at pc: [state successors indirect?]. a jump out of a frame is a table's, one
+   ; with the entry's state a tail call
+   (rv-ehstep x32 s pc st nm lo hi rl)
+    (: d (rv-ehdec x32 s pc) n <d it >d nx (pc + n < hi ? [(pc + n)] ())
+       (to v) (elem pc rl ? () (pc + v @ t (lo <= t && t < hi ? [t] ())))
+       [(rv-ehst 0 st it nm)
+        (it @ ['jal 0 v] (to v)
+              ['jalr 0 _] ()
+              ['br v] (nx + to v)
+              ['trap] ()
+              _ nx)
+        (it @ ['jalr 0 a] (a != 1) _ 0)])
+   ; -- mips's, the same effects over its words, big-endian: ra x31, sp x29, fp x30, at the scratch. a
+   ; branch's delay slot is the nop moon lays, part of it --
+   mips-dcie [0 0 0 12 255 255 255 255 1 0 1 124 31 12 29 0]
+   mips-st0 [29 0 0 () () 0 '(() . ())]
+   (mips-ehdec w)
+    (: op (w >> 26) a ((w >> 21) & 31) b ((w >> 16) & 31) d ((w >> 11) & 31) f (w & 63)
+       i (o-sx (w & 65535) 16) u (w & 65535) to (i * 4 + 4)
+       (op @ 0 (f @ 8 ['jalr 0 a] 9 ['jalr d a] 13 ['trap] 0x21 ['add d a b] 0x23 ['sub d a b]
+                    0x25 (b = 0 ? ['add d a 0] a = 0 ? ['add d 0 b] ['wr d])
+                    _ ['wr d])
+             1 (b & 16 = 0 ? ['br to] ['jal 31 to])
+             2 ['jal 0 ()] 3 ['jal 31 ()]
+             (4 || 5 || 6 || 7 || 20 || 21 || 22 || 23) (op = 4 && a = 0 && b = 0 ? ['jal 0 to] ['br to])
+             9 ['addi b a i]
+             13 (a = 0 || a = 1 && b = 1 ? ['ori b a u] ['wr b])
+             15 ['lui b (o-sx (u << 16) 32)]
+             17 (a = 8 ? ['br to] a = 0 || a = 2 || a = 3 ? ['wr b] ['no])
+             28 ['wr d] 31 (f = 32 ? ['wr d] ['wr b])
+             35 ['ld b a i] 43 ['sd b a i]
+             (32 || 33 || 34 || 36 || 37 || 38 || 48) ['wr b]
+             (40 || 41 || 42 || 46 || 49 || 51 || 53 || 57 || 61) ['no]
+             56 ['wr b]
+             _ ['wr b]))
+   (mips-ehstep s pc st nm lo hi rl)
+    (: (rd k) ((s k << 24) | (s (k + 1) << 16) | (s (k + 2) << 8) | s (k + 3))
+       w (rd pc) it (mips-ehdec w)
+       n (it @ (('jal || 'jalr || 'br) . _) 8 _ 4)
+       _ (n = 8 && pc + 4 < hi && rd (pc + 4) != 0 && scare 'obj-eh-slot-mips [nm pc])
+       nx (pc + n < hi ? [(pc + n)] ())
+       (to v) (v = () || elem pc rl ? () (pc + v @ t (lo <= t && t < hi ? [t] ())))
+       [(rv-ehst 1 st it nm)
+        (it @ ['jal 0 v] (to v)
+              ['jalr 0 _] ()
+              ['br v] (nx + to v)
+              ['trap] ()
+              _ nx)
+        (it @ ['jalr 0 a] (a != 31) _ 0)])
+   ; -- thumb's, the same effects: ra r14, sp r13, fp r11 (thumb2) or r7 (thumb1, whose r4 holds the frame's
+   ; low end). a reading: (bytes items to), items the effects in order, to a branch's target --
+   t-dcie [12 0 0 0 255 255 255 255 1 0 1 124 14 12 13 0]
+   t-st0 [13 0 0 () () 0 '(() . ())]
+   (t-cs? r) (4 <= r && r <= 11 || r = 14 || 264 <= r && r <= 271)
+   (t-list m) (filter (r \ m >> r & 1) ^16)
+   ; a register list at an address: stores, or loads with r13's own move after
+   (t-push rs n) (['addi 13 13 (0 - n)] . map (i \ ['sd (rs i) 13 (4 * i)]) ^#rs)
+   (t-pop rs n) (map (i \ ['ld (rs i) 13 (4 * i)]) ^#rs + [['addi 13 13 n]] + (elem 15 rs ? [['ret]] ()))
+   (t-wrs rs) (map (r \ ['wr r]) rs)
+   ; a modified immediate
+   (t-mimm v) (: b (v & 255) k (v >> 8 & 15)
+                 (? (k = 0) b (k = 1) (b << 16 | b) (k = 2) (b << 24 | b << 8) (k = 3) (b << 24 | b << 16 | b << 8 | b)
+                    (: x (128 | (v & 127)) r (v >> 7) ((x >> r | x << (32 - r)) & 0xFFFFFFFF))))
+   (t-dec16 h)
+    (: a (h & 7) b (h >> 3 & 7) d (h >> 8 & 7) i5 ((h >> 6 & 31) * 4) i8 ((h & 255) * 4)
+       (one it) [2 [it] ()]
+       (? (h < 0x1C00 || 0x1E00 <= h && h < 0x2000) (one (? (h < 0x0800) (h & 0xFFC0 = 0 ? ['addi a b 0] ['shl a b (h >> 6 & 31)])
+                                                                   (h & 0xFE00 = 0x1800) ['add a b (h >> 6 & 7)] ['wr a]))
+          (h < 0x1E00) (one (h < 0x1C00 ? ['wr a] ['addi a b (h >> 6 & 7)]))
+          (h < 0x2800) (one ['lui d (h & 255)])
+          (h < 0x3000) (one ['no])
+          (h < 0x4000) (one ['addi d d (h < 0x3800 ? (h & 255) (0 - (h & 255)))])
+          (h < 0x4400) (one (elem (h >> 6 & 15) '(8 10 11) ? ['no] ['wr a]))
+          (h < 0x4800) (: rd (a | (h >> 4 & 8)) rm (h >> 3 & 15) k (h >> 8 & 3)
+                          (? (k = 1) (one ['no])
+                             (k = 3) (one (h & 128 ? ['call] rm = 14 ? ['ret] ['jump]))
+                             (rd = 15) (one ['jump])
+                             (one (k = 2 ? ['addi rd rm 0] ['add rd rd rm]))))
+          (h < 0x5000) (one ['wr d])
+          (h < 0x6000) (one (3 <= (h >> 9 & 7) ? ['wr a] ['no]))
+          (h < 0x6800) (one ['sd a b i5])
+          (h < 0x7000) (one ['ld a b i5])
+          (h < 0x9000) (one (h & 0x0800 ? ['wr a] ['no]))
+          (h < 0x9800) (one ['sd d 13 i8])
+          (h < 0xA000) (one ['ld d 13 i8])
+          (h < 0xA800) (one ['wr d])
+          (h < 0xB000) (one ['addi d 13 i8])
+          (h < 0xB080) (one ['addi 13 13 ((h & 127) * 4)])
+          (h < 0xB100) (one ['addi 13 13 (0 - (h & 127) * 4)])
+          (h & 0xF500 = 0xB100) [2 [['br]] (4 + ((h >> 9 & 1) << 6 | (h >> 3 & 31) << 1))]
+          (h & 0xFE00 = 0xB400) (: rs (t-list (h & 255 | (h & 256) << 6)) [2 (t-push rs (4 * #rs)) ()])
+          (h & 0xFE00 = 0xBC00) (: rs (t-list (h & 255 | (h & 256) << 7)) [2 (t-pop rs (4 * #rs)) ()])
+          (h < 0xBB00) (one (h & 0xF600 = 0xB600 ? ['no] ['wr a]))
+          (h < 0xC000) (one ['no])
+          (h < 0xC800) (one ['wr d])
+          (h < 0xD000) [2 (t-wrs (d . t-list (h & 255))) ()]
+          (h < 0xDE00) [2 [['br]] (4 + o-sx (h & 255) 8 * 2)]
+          (h < 0xDF00) (one ['trap])
+          (h < 0xE000) (one ['no])
+          [2 [['jmp]] (4 + o-sx (h & 2047) 11 * 2)]))
+   (t-dec32 h k)
+    (: a (h & 15) rt (k >> 12) rd (k >> 8 & 15) i12 (k & 4095) i8 (k & 255)
+       (all its) [4 its ()]
+       (one it) (all [it])
+       (sgn u) (u ? i8 (0 - i8))
+       (? (k & 0x8000 && h & 0xF800 = 0xF000)
+           (: s (h >> 10 & 1) j1 (k >> 13 & 1) j2 (k >> 11 & 1)
+              (? (k & 0x9000 = 0x9000)
+                  [4 [[(k & 0x4000 ? 'bl 'jmp)]] (4 + o-sx (s << 24 | (1 - (j1 ^ s)) << 23 | (1 - (j2 ^ s)) << 22 | (h & 1023) << 12 | (k & 2047) << 1) 25)]
+                 (h & 0x0380 != 0x0380)
+                  [4 [['br]] (4 + o-sx (s << 20 | j2 << 19 | j1 << 18 | (h & 63) << 12 | (k & 2047) << 1) 21)]
+                 (h & 0xFFF0 = 0xF7F0) (one ['trap])
+                 (one (h & 0xFFE0 = 0xF3E0 ? ['wr rd] ['no]))))
+          (h = 0xE92D) (: rs (t-list k) (all (t-push rs (4 * #rs))))
+          (h = 0xE8BD) (: rs (t-list k) (all (t-pop rs (4 * #rs))))
+          (h & 0xFFF0 = 0xE8D0 && k & 0xFFE0 = 0xF000) (one ['jump])
+          (h & 0xFF70 = 0xE940) (all [['sd rt a (4 * sgn (h & 128))] ['sd rd a (4 * sgn (h & 128))]])
+          (h & 0xFE00 = 0xE800)
+           (? (h & 0x0040 = 0) (h & 16 ? (all (t-wrs (t-list k + (h & 32 ? [a] ()))))
+                                  (one (h & 32 ? ['wr a] ['no])))
+              ; a pair or an exclusive: what it may write
+              (h & 16) (all (t-wrs [rt rd] + (h & 32 ? [['wr a]] ())))
+              (all (t-wrs ((h & 32 ? [a] ()) + (h & 0xFFF0 = 0xE840 ? [rd] h & 0xFFF0 = 0xE8C0 ? [(k & 15)] ())))))
+          (h & 0xFFEF = 0xEA4F && k & 0x70F0 = 0) (one ['addi rd (k & 15) 0])
+          (h & 0xFE00 = 0xEA00)
+           (? (rd = 15) (one ['no])
+              (elem (h >> 5 & 15) '(8 13) && k & 0x70F0 = 0) (one [(h >> 5 & 15 = 8 ? 'add 'sub) rd a (k & 15)])
+              (one ['wr rd]))
+          (h & 0xFF30 = 0xED00 && k & 0x0F00 = 0x0B00) (one ['sd (256 + (rt | (h >> 2 & 16))) a (4 * sgn (h & 128))])
+          (h & 0xFF30 = 0xED10 && k & 0x0F00 = 0x0B00) (one ['ld (256 + (rt | (h >> 2 & 16))) a (4 * sgn (h & 128))])
+          (h & 0xFC00 = 0xEC00)
+           (? (h & 0xFFE0 = 0xEC40) (h & 16 ? (all (t-wrs [rt a])) (one ['no]))
+              (h & 0xFE00 = 0xEC00 || h & 0xFF00 = 0xED00) (one (h & 32 ? ['wr a] ['no]))
+              (h & 0xFF10 = 0xEE10 && k & 0x10 && rt != 15) (one ['wr rt])
+              (one ['no]))
+          ; add and sub of an immediate, plain and modified
+          (: m (h & 0xFBF0) v ((h >> 10 & 1) << 11 | (k >> 12 & 7) << 8 | i8)
+             (? (m = 0xF200) (one ['addi rd a v])
+                (m = 0xF2A0) (one ['addi rd a (0 - v)])
+                (h & 0xF800 = 0xF000)
+                 (? (rd = 15) (one ['no])
+                    (m & 0xFFEF = 0xF100) (one ['addi rd a (t-mimm v)])
+                    (m & 0xFFEF = 0xF1A0) (one ['addi rd a (0 - t-mimm v)])
+                    (one ['wr rd]))
+                (h & 0xFE00 = 0xF800)
+                 (: ld (h & 16) word (h & 0x0160 = 0x0040)
+                    off (? (h & 128) i12 (k & 0x0F00 = 0x0C00) (0 - i8) ())
+                    up (k & 0x0900 = 0x0900 && !(h & 128) ? 1)
+                    mv (k & 0x0200 ? i8 (0 - i8))
+                    ac (off @ () (ld ? ['wr rt] ['no]) (? (word && a != 15) [(ld ? 'ld 'sd) rt a off] ld ['wr rt] ['no]))
+                    (? (ld && rt = 15) (all (word && up && a = 13 ? (['ld 15 13 0] . [['addi 13 13 mv] ['ret]]) [['jump]]))
+                       (up && word && k & 0x0400) (all [['addi a a mv] [(ld ? 'ld 'sd) rt a 0]])
+                       (up && word) (all [[(ld ? 'ld 'sd) rt a 0] ['addi a a mv]])
+                       up (all ((ld ? [['wr rt]] ()) + [['wr a]]))
+                       (one ac)))
+                (h & 0xFF80 = 0xFB80) (all (t-wrs [rt rd]))
+                (one ['wr rd])))))
+   (t-ehstep mp s pc st nm lo hi rl)
+    (: h (s pc | s (pc + 1) << 8)
+       it (h < 0xE800 ? (t-dec16 h) (t-dec32 h (s (pc + 2) | s (pc + 3) << 8)))
+       (@ it [n is v]
+          (: nx (pc + n < hi ? [(pc + n)] ())
+             to (v = () || elem pc rl ? () (pc + v @ t (lo <= t && t < hi ? [t] ())))
+             ; thumb1's far jump is a bl, its target in the function and not its start
+             k (: c <(last is) (c != 'bl ? c mp = 3 && two? to && <to != lo ? 'jmp 'call))
+             (ef i) (i @ (('call || 'bl) . _) ['jal 14 ()] ['br] ['br 0] _ i)
+             [(foldl (\ st i (rv-ehst mp st (ef i) nm)) st is)
+              (? (elem k '(ret jump trap)) () (k = 'jmp) to (k = 'br) (nx + to) nx)
+              (k = 'jump ? 1 0)])))
    ; what a row shows of a state: the cfa, the saves, ra
    (o-ehvis st) [(st 0) (st 1) (st 4) (st 5)]
    ; a row's dwarf from the last one's; df the CIE's data factor, as a slot's size
@@ -716,20 +1045,32 @@
                                     ([17] + uleb r + sleb (l // (0 - df)))))
                         sv2)
              (cfa + os + rs + (ra != ra2 ? [45] ())))))
-   (o-ehadv d) (? (d < 64) [(64 + d)] (d < 256) [2 d] (d < 65536) (3 . le16 d) (4 . le32 d))
+   (o-ehadv x d) (? (d < 64) [(64 + d)] (d < 256) [2 d] (d < 65536) (3 . o-u2 x d) (4 . o-u4 x d))
+   (o-u2 x n) (x = 'mips ? (be16 n) (le16 n))
+   (o-u4 x n) (x = 'mips ? (be32 n) (le32 n))
    ; one step of a walk: the state after the word or instruction at pc, its successors, and
-   ; whether it is an indirect jump. x: x64, else a64
+   ; whether it is an indirect jump. x: the isa
    (o-ehstep x s pc st nm lo hi rl)
-    (x ? (x-ehstep s pc st nm lo hi rl)
+    (? (x = 'x64) (x-ehstep s pc st nm lo hi rl)
+       (x = 'thumb2 || x = 'thumb2sp) (t-ehstep 2 s pc st nm lo hi rl)
+       (x = 'thumb1) (t-ehstep 3 s pc st nm lo hi rl)
+       (x = 'mips) (mips-ehstep s pc st nm lo hi rl)
+       (x = 'rv64 || x = 'rv32) (rv-ehstep (x = 'rv32) s pc st nm lo hi rl)
        (: w (o-w32 s pc) [(o-ehst st w nm) (o-ehnx w pc lo hi rl) ((w & 0xFFFFFC1F) = 0xD61F0000)]))
-   ; paths that meet at sp heights apart while the cfa rides fp: sp's height is lost, else ()
+   ; paths that meet while the cfa rides fp: sp's height is lost where they differ. past the entry's
+   ; straight line a save one path lacks was restored there, its slot, above fp or sp, still the entry's: kept. else ()
    (o-ehjoin a b sp)
-    (: (pk st) [(st 0) (st 1) (st 3) (st 4) (st 5)]
-       (a 0 != sp && pk a = pk b ? [(a 0) (a 1) () (a 3) (a 4) (a 5) (a 6)] ()))
+    (: (pk st) [(st 0) (st 1) (st 3) (st 5)]
+       (past st) (: p (st 6) (p = 'body || two? p && >p = 'body))
+       both (uniq (sort (a 4 + b 4)))
+       low (a 2 = () || b 2 = () ? (a 3) (max (a 3) (min (a 2) (b 2))))
+       sv (? (a 4 = b 4) [(a 4)]
+             (past a && past b && !(any ([_ l] \ l < 0 - low) both)) [both] ())
+       (a 0 != sp && pk a = pk b && two? sv ? [(a 0) (a 1) (a 2 = b 2 ? (a 2) ()) (a 3) <sv (a 5) (a 6)] ()))
    ; one function's rows: s its lane's bytes, lo..hi its code, labs the lane's labels
    (o-ehrows x s lo hi rl labs nm)
     (: sts {}
-       st0 (x ? x-st0 o-st0)
+       st0 (x @ 'x64 x-st0 ('rv64 || 'rv32) rv-st0 'mips mips-st0 ('thumb1 || 'thumb2 || 'thumb2sp) t-st0 _ o-st0)
        (s6 st) (take 6 st)
        ; jst: the state at a br that is no tail call, which a table's targets share
        (walk stk jst)
@@ -747,20 +1088,20 @@
                        (ind && s6 st != s6 st0 ? st2 jst)))))
        _ (pin sts lo st0)
        jst (walk [lo] ())
-       ; a label no branch reached: a jump table's case, in the state of its br
-       _ (two? jst ? (filter (t \ lo < t && t < hi && sts t = ()) (map labs (keys labs)) @ left
-                         (walk (map (t \ (pin sts t jst, t)) (uniq (sort left))) ())) 0)
+       ; a label no branch reached, by address: a jump table's case, in the state of its br. -g's marks are none's target
+       _ (two? jst ? (filter (t \ lo < t && t < hi && sts t = ()) (map labs (filter (k \ !(starts? (show k) ".dl")) (keys labs))) @ left
+                         (foldl (\ _ t (sts t = () ? (pin sts t jst, walk [t] ()) ())) () (uniq (sort left)))) 0)
        pcs (sort (keys sts))
        (foldl (\ acc pc (@ acc [cur at bs]
-                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv (pc - at) + o-ehops (x ? 8 4) cur n)]))))
+                          (o-ehvis (sts pc) @ n (n = cur ? acc [n pc (bs + o-ehadv x (pc - at) + o-ehops (elem x '(x64 rv64) ? 8 4) cur n)]))))
               [(o-ehvis st0) lo ()] pcs @ r (r 2)))
-   ; the .eh_frame lane for the functions uw names, () where none is laid; x: x64's, else a64's.
+   ; the .eh_frame lane for the functions uw names, () where none is laid; x: the isa.
    ; df: the same rows as .debug_frame, for -g: no augmentation, each fde's cie and pc relocated
    x-dcie [20 0 0 0 255 255 255 255 1 0 1 120 16 12 7 8 144 1 0 0 0 0 0 0]
    o-dcie [12 0 0 0 255 255 255 255 1 0 1 124 30 12 31 0]
    (o-eh lanes uw x df)
     (: (at1 l) (: lb (l 6) s (string (o-flat (l 4)))
-                  rl (map cap (filter (r \ elem (r 1) (x ? '(rel32) '(b26 b19 b14))) (l 5)))
+                  rl (map cap (filter (r \ elem (r 1) (x @ 'x64 '(rel32) ('rv64 || 'rv32) '(j21 cj b13 cb pcrel) 'mips '(mj26 mb16) ('thumb1 || 'thumb2 || 'thumb2sp) '(b bcc bl b16 b8 cbz) _ '(b26 b19 b14))) (l 5)))
                   ; by address, one record where names alias
                   fs (sort (filter two? (map (nm \ (: k (name nm) e (fn-end nm)
                                                     (o-has? lb k && o-has? lb e ? [(lb k) k (lb e) s rl lb] ())))
@@ -775,13 +1116,13 @@
                     (: ins (df ? (trap (_ \ o-ehrows x s lo hi rl lb k) 0 (_ \ _ \ 'none)) (o-ehrows x s lo hi rl lb k))
                        fo #bs
                        (? (ins == 'none) acc
-                          df (: n (20 + #ins) pad ((8 - (4 + n) % 8) % 8)
-                                [(bs + le32 (n + pad) + le32 0 + le64 0 + le64 (hi - lo) + ins + o-zeros pad)
-                                 ([(fo + 8) 'abs64 k 0 0] . [(fo + 4) 'abs32 (name ".dbg.frame") 0 0] . rs)])
+                          df (: z (elem x '(x64 a64 rv64) ? 8 4) n (4 + 2 * z + #ins) pad ((z - (4 + n) % z) % z)
+                                [(bs + o-u4 x (n + pad) + le32 0 + o-zeros z + (z = 8 ? (le64 (hi - lo)) (o-u4 x (hi - lo))) + ins + o-zeros pad)
+                                 ([(fo + 8) (z = 8 ? 'abs64 'abs32) k 0 0] . [(fo + 4) 'abs32 (name ".dbg.frame") 0 0] . rs)])
                           (: n (13 + #ins) pad ((4 - n % 4) % 4)
                              [(bs + le32 (n + pad) + le32 (fo + 4) + le32 0 + le32 (hi - lo) + [0] + ins + o-zeros pad)
                               ([(fo + 8) 'secrel32 k 0 0] . rs)])))))
-             r (foldl one [(? df (x ? x-dcie o-dcie) (x ? x-cie o-cie)) ()] fns)
+             r (foldl one [(? df (x @ 'x64 x-dcie 'rv64 rv-dcie 'rv32 rv32-dcie 'mips mips-dcie ('thumb1 || 'thumb2 || 'thumb2sp) t-dcie _ o-dcie) (x = 'x64 ? x-cie o-cie)) ()] fns)
              (? df [".debug_frame" 1 0 8 <r (rev <>r) {(name ".dbg.frame") 0}]
                 [".eh_frame" 1 2 8 <r (rev <>r) {}]))))
 
@@ -789,8 +1130,11 @@
    ; body's `{`), each code lane with one a sequence, and a compile unit (name, dir, the lanes
    ; as its ranges) over them, a subprogram for each function laid, at its body's `{`, its
    ; types and globals. dl: (unit dir eh? (types vars sigs)), moon's dwtys; gfn the global functions
-   (o-dwarf lanes dl fnl gfn a64?)
-    (: (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(c):\(n):\(f)" [o 0 (read c) (read n) f] ())
+   (o-dwarf lanes dl fnl gfn isa)
+    (: ; an address's size and reloc, the words in the target's order
+       asz (elem isa '(x64 a64 rv64) ? 8 4) az (o-zeros asz) ak (asz = 8 ? 'abs64 'abs32)
+       u2 (o-u2 isa) u4 (o-u4 isa)
+       (row k o) (show k @ s (? (starts? s ".dlf.") (s @ ".dlf.\(c):\(n):\(f)" [o 0 (read c) (read n) f] ())
                                 (starts? s ".dl.") (s @ ".dl.\(c):\(n):\(f)" [o 1 (read c) (read n) f] ())
                                 ()))
        ; a lane's marks, (offset kind count line file label), by its index, read once
@@ -828,16 +1172,16 @@
                                       + (<r = pc ? () (2 . uleb (<r - pc))) + [1]) . b)
                                    f2 (r 1) <r]))
                  st (foldl step [() 1 1 0] rows)
-                 [(bs + [0 9 2] + o-zeros 8 + catall (rev <st) + (n = st 3 ? () (2 . uleb (n - st 3))) + [0 1 1])
-                  ([(#bs + 3) 'abs64 k (0 - a0) 0] . rels)])))
+                 [(bs + [0 (asz + 1) 2] + az + catall (rev <st) + (n = st 3 ? () (2 . uleb (n - st 3))) + [0 1 1])
+                  ([(#bs + 3) ak k (0 - a0) 0] . rels)])))
        pr (foldl prog [() ()] sqs)
-       body (le16 4 + le32 #hdr + hdr + <pr)
-       ln [".debug_line" 1 0 1 (le32 #body + body) (map (r \ (@ r [o k l a p] [(o + 10 + #hdr) k l a p])) (rev <>pr)) {(name ".dbg.line") 0}]
+       body (u2 4 + u4 #hdr + hdr + <pr)
+       ln [".debug_line" 1 0 1 (u4 #body + body) (map (r \ (@ r [o k l a p] [(o + 10 + #hdr) k l a p])) (rev <>pr)) {(name ".dbg.line") 0}]
        ; a v5 list section's head: its length, version, address size
-       (o-v5 bs) (le32 (8 + #bs) + le16 5 + [8 0] + le32 0 + bs)
+       (o-v5 bs) (u4 (8 + #bs) + u2 5 + [asz 0] + u4 0 + bs)
        rg (foldl (\ a q (@ a [bs rels]
                            (: k (q 2) a0 (peep ((lanes (q 0)) 6) k 0)
-                              [(bs + [7] + o-zeros 8 + uleb (q 1)) ([(13 + #bs) 'abs64 k (0 - a0) 0] . rels)])))
+                              [(bs + [7] + az + uleb (q 1)) ([(13 + #bs) ak k (0 - a0) 0] . rels)])))
                  [() ()] sqs)
        rgl [".debug_rnglists" 1 0 1 (o-v5 (<rg + [0])) (rev <>rg) {(name ".dbg.ranges") 12}]
        ; the abbrevs, by code: 1 the unit; 2..5 a function, global or static, typed or void: name,
@@ -872,8 +1216,8 @@
                              [[lo k (hi - lo) nm (two? d ? [(peep fix (d 4) 1) (d 3)] [1 0]) (elem nm gfn) lb (lst (in al lo hi))]])))
            (sort (catmap one (uniq fnl))))
        fs (catmap (\ q (fns (q 0) (lanes (q 0)))) sqs)
-       pre (le16 5 + [1 8] + le32 0 + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
-       cu0 (pre + le32 0 + le64 0 + le32 0)
+       pre (u2 5 + [1 asz] + u4 0 + uleb 1 + str "mooncc" + [12] + str <dl + str <>dl)
+       cu0 (pre + u4 0 + az + u4 0)
        dt (3 < #dl ? (dl 3) [() () {} {}])
        ; a type's die, its refs by r: each is ref4, so its size never waits on where the rest go
        (ty r e)
@@ -888,9 +1232,9 @@
              ('fn j) (j = () ? [22] ([21] + r j))
              ('unspec nm) ([20] + str nm))
        tys (dt 0)
-       tof (rev >(foldl (\ a e ((<a + #(ty (_ \ le32 0) e)) . a)) [(4 + #cu0)] tys))
+       tof (rev >(foldl (\ a e ((<a + #(ty (_ \ u4 0) e)) . a)) [(4 + #cu0)] tys))
        tot (foldl (t \ o \ (pin t (t 'n) o, pin t 'n (t 'n + 1))) (pin {} 'n 0) tof)
-       (ref j) (le32 (tot j))
+       (ref j) (u4 (tot j))
        tyb (catmap (ty ref) tys)
        ; a variable laid here, at its label
        lbs (map (l \ l 6) lanes)
@@ -898,8 +1242,8 @@
        (var acc v)
         (@ acc [bs rels]
            (@ v [nm j ex] (? (j = () || !(laid? nm)) acc
-                             (: b0 ([(ex ? 17 18)] + str nm + ref j + [9 3])
-                                [(bs + b0 + o-zeros 8) ([(4 + #bs + #b0) 'abs64 (name nm) 0 0] . rels)]))))
+                             (: b0 ([(ex ? 17 18)] + str nm + ref j + [(asz + 1) 3])
+                                [(bs + b0 + az) ([(4 + #bs + #b0) ak (name nm) 0 0] . rels)]))))
        vs0 (foldl var [(cu0 + tyb) ()] (dt 1))
        ; the functions inlined, by name their dies' places
        ino {}
@@ -912,12 +1256,17 @@
        inb (foldl inl [(4 + #(<vs0)) ()] (uniq (catmap (f \ catmap (s \ s 3 @ (nm . _) [nm] _ ()) (<(peep (dt 3) (f 3) [() ()]))) fs)))
        vs [(<vs0 + catall (rev (inb 1))) (vs0 1)]
        ; a home's location: the cfa's offset, the address kept there, a label's
-       (homed h) (h @ ('f o) (: e ([145] + sleb o) (#e . e)) ('d o) (: e ([145] + sleb o + [6]) (#e . e)) ('g _) ([9 3] + o-zeros 8) _ ())
+       (homed h) (h @ ('f o) (: e ([145] + sleb o) (#e . e)) ('d o) (: e ([145] + sleb o + [6]) (#e . e)) ('g _) ([(asz + 1) 3] + az) _ ())
        ; a vreg's lists by its states: ss, the function's (offset state) by address, hi its end; where
        ; a state names no home for it there is none. .debug_loclists grows in lc: (length bytes relocs), newest first
        lc (pin {} 'n 0)
        (dwreg r) (show r @ s (: i (read (snip s 1 #s))
-                                (s 0 = 102 ? (i + (a64? ? 64 17)) a64? i ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))
+                                (? (isa = 'rv64 || isa = 'rv32) ((s 0 = 102 ? rv-dwf rv-dwr) i)
+                                   (isa = 'mips) ([2 3 4 5 6 7 8 9 16 17 18 19] i)
+                                   (elem isa '(thumb1 thumb2 thumb2sp)) (? (s 0 = 102) (i < 16 ? (256 + i) (33 + 2 * i)) i)
+                                   (s 0 = 102) (i + (isa = 'a64 ? 64 17))
+                                   (isa = 'a64) i
+                                   ([0 2 1 3 6 4 5 8 9 10 11 12 13 14 15] i))))
        (hexp h) (h @ ['r r] (: d (dwreg r) (? (d < 32) [(80 + d)] (144 . uleb d))) ['f o] ([145] + sleb o))
        ; a function's states by vreg: each (from to home), in order, one run joined
        (hidx ss hi)
@@ -933,16 +1282,16 @@
        (loclist v f)
         (@ f [f0 fk lb scs ss hi _]
            (rev (peep ss v ()) @ () ()
-              hs (: b ([6] + le64 0 + catmap ([a e h] \ (hexp h @ x ([4] + uleb (a - f0) + uleb (e - f0) + uleb #x + x))) hs + [0])
+              hs (: b ([6] + az + catmap ([a e h] \ (hexp h @ x ([4] + uleb (a - f0) + uleb (e - f0) + uleb #x + x))) hs + [0])
                     n (lc 'n)
-                    (pins lc 'n (n + #b) 'b (b . lc 'b) 'r ([(n + 13) 'abs64 fk 0 0] . lc 'r), n))))
+                    (pins lc 'n (n + #b) 'b (b . lc 'b) 'r ([(n + 13) ak fk 0 0] . lc 'r), n))))
        ; a local, its label's reloc where it is a static: () for a static not laid
        ; with hd its name and type: its abbrev's code, a home's bytes and its reloc. codes: none, by
        ; expression, by list
        (homef f h hd codes)
         (h @ ['v v] (loclist v f @ () [((codes 0) . hd) ()]
-                                   n (: b ((codes 2) . hd) [(b + le32 0) [[#b 'abs32 (name ".dbg.loc") n 0]]]))
-             ['g l] (: b ((codes 1) . hd) [(b + homed h) [[(#b + 2) 'abs64 (name l) 0 0]]])
+                                   n (: b ((codes 2) . hd) [(b + u4 0) [[#b 'abs32 (name ".dbg.loc") n 0]]]))
+             ['g l] (: b ((codes 1) . hd) [(b + homed h) [[(#b + 2) ak (name l) 0 0]]])
              () [((codes 0) . hd) ()]
              _ [((codes 1) . hd + homed h) ()])
        (loc1 f ps acc v)
@@ -970,10 +1319,10 @@
                      (? (e <= b) st
                         (@ acc [n bl rels]
                            (: in (peep (scs 0) (c 2) () @ (s . _) (s 3) ())
-                              hd (in @ (nm . _) ([30] + le32 (ino nm)) _ [25])
+                              hd (in @ (nm . _) ([30] + u4 (ino nm)) _ [25])
                               pl (in @ [_ cf cl] (uleb (peep fix cf 1) + uleb cl) _ ())
-                              h2 (hd + le64 0 + le32 (e - b) + pl)
-                              a2 (scope [(n + #h2) (h2 . bl) ([(n + #hd) 'abs64 fk (b - f0) 0] . rels)] f (c 2) b e)
+                              h2 (hd + az + u4 (e - b) + pl)
+                              a2 (scope [(n + #h2) (h2 . bl) ([(n + #hd) ak fk (b - f0) 0] . rels)] f (c 2) b e)
                               [[(<a2 + 1) ([0] . a2 1) (a2 2)] e])))))
               <(foldl kid [a1 lo] kids)))
        (die acc f)
@@ -990,18 +1339,18 @@
                                    (@ (homef fr h (str <p + ref (p 1)) [6 23 26]) [b r2]
                                       [(bs + b) (map (r \ ((<r + #bs) . >r)) r2 + rs)])))
                  hd (uleb (? (<sg = ()) (ex ? 4 5) (ex ? 2 3)) + str nm)
-                 b0 (hd + le64 0 + le32 n + uleb <fl + uleb (fl 1)
+                 b0 (hd + az + u4 n + uleb <fl + uleb (fl 1)
                       + (<sg = () ? () (ref <sg)) + [1 156])
                  p0 (foldl par [b0 ()] (filter (p \ p 1 != ()) (sg 1)))
                  r (scope [#(<p0) [<p0] (p0 1)] fr 0 f0 (f0 + n))
                  o (4 + bn)
                  [(bn + <r + 1) ([0] . (r 1 + bl))
-                  (map (r \ ((<r + o) . >r)) (r 2) + ([(o + #hd) 'abs64 k 0 0] . rels))])))
+                  (map (r \ ((<r + o) . >r)) (r 2) + ([(o + #hd) ak k 0 0] . rels))])))
        ds (foldl die [#(<vs) [<vs] <>vs] fs)
        cu (catall (rev (ds 1)) + [0])
-       inf [".debug_info" 1 0 1 (le32 #cu + cu)
+       inf [".debug_info" 1 0 1 (u4 #cu + cu)
               ([[8 'abs32 (name ".dbg.abbrev") 0 0] [(4 + #pre) 'abs32 (name ".dbg.line") 0 0]
-                [(16 + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev (ds 2)) {}]
+                [(8 + asz + #pre) 'abs32 (name ".dbg.ranges") 0 0]] + rev (ds 2)) {}]
        lcl [".debug_loclists" 1 0 1 (o-v5 (catall (rev (lc 'b)))) (rev (lc 'r)) {(name ".dbg.loc") 12}]
        (atom? sqs ? () ([ab inf ln rgl] + (lc 'n = 0 ? () [lcl]))))
 
@@ -1019,16 +1368,18 @@
        adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
-       ; rv32, xtensa and mips lay this same RELA shape in the ELF32 class
+       ; rv32, xtensa, mips and avr lay this same RELA shape in the ELF32 class
        xt (target = 'xtensa)
        mp (target = 'mips)
-       w32 (target = 'rv32 || xt || mp)
+       av (target = 'avr)
+       w32 (target = 'rv32 || xt || mp || av)
        rv (target = 'rv64 || target = 'rv32)
-       _ (target = 'x64 || a64 || rv || xt || mp ? 0 (scare 'obj-target target))
+       _ (target = 'x64 || a64 || rv || xt || mp || av ? 0 (scare 'obj-target target))
        esym (w32 ? elf-sym32 elf-sym)  eshdr (w32 ? elf-shdr32 elf-shdr)  erela (w32 ? o-rela32 o-rela)
        symz (w32 ? 16 24)  rlz (w32 ? 12 24)  shz (w32 ? 40 64)  wa (w32 ? 4 8)
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
        rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) xt '(j18 call0 l32r) mp '(mb16)
+                av ()                                    ; every avr reach stays a relocation
                 '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
@@ -1056,8 +1407,8 @@
               secs)
        ; -g's third word: the unit's unwind tables are .eh_frame, else -g lays .debug_frame
        df (5 < #ax && two? (ax 5) && !(ax 5 2))
-       lanes1 ((a64 || target = 'x64) && two? uw ? (o-eh lanes0 uw (target = 'x64) df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
-       lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0) funcnames (target = 'a64)) lanes1)
+       lanes1 ((a64 || target = 'x64 || elem target '(rv64 rv32 mips) && df) && two? uw ? (o-eh lanes0 uw target df @ e (two? e ? (lanes0 + [e]) lanes0)) lanes0)
+       lanes (5 < #ax && two? (ax 5) ? (lanes1 + o-dwarf lanes1 (ax 5) (funcnames + loc0) funcnames target) lanes1)
        nsec #lanes
        wx (o-wix lanes) lnt (o-rows lanes)
        (ln i) (lnt i)
@@ -1147,10 +1498,10 @@
                  ['elf n] (erela off si n (sa + aux))                     ; a relocation by number, as `.reloc` gives it
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (erela off si rabs (sa + aux))
-                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 r-32) (sa + aux))
+                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 av 1 r-32) (sa + aux))
                  ('abs32s || 'abs32d) (erela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
-                 'abs16 (erela off si r-16 (sa + aux))
-                 'abs8 (erela off si r-8 (sa + aux))
+                 'abs16 (erela off si (av ? 4 r-16) (sa + aux))
+                 'abs8 (erela off si (av ? 26 r-8) (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (erela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
@@ -1182,6 +1533,7 @@
                  ; a branch's field counts from its delay slot, P + 4
                  'mb16 (erela off si mr-pc16 (sa - 4))
                  'mj26 (erela off si mr-26 sa) 'mhi16 (erela off si mr-hi16 sa) 'mlo16 (erela off si mr-lo16 sa)
+                 (k && o-has? avr-rels k) (erela off si (avr-rels k) (sa + afix-ad aux))
                  (scare 'obj-fix k))))
            rs))
        relas (map (o-rels * ln-rl) lanes)
@@ -1233,7 +1585,7 @@
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
              (w32 ? (le32 0 + le32 0 + le32 sht-off)                      ; e_entry=0, e_phoff=0, e_shoff
                  (le64 0 + le64 0 + le64 sht-off))
-             (le32 (? xt 768 mp 0x70001001 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit; mips32r2 o32 noreorder), e_ehsize, e_phentsize=0
+             (le32 (? xt 768 mp 0x70001001 av (be 'eflags) w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit; mips32r2 o32 noreorder; avr its backend's family number, the relaxable 0x80 clear), e_ehsize, e_phentsize=0
              (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (elf-order machine

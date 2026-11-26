@@ -26,8 +26,14 @@
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
    (dop1 v) (v @ ['chain a _] a ['np1 v])
    (dop2 v) (v @ ['chain _ b] b ['np2 v])
+   ; a step that reads its recursive result only under a lambda or a branch gets a memo cell
    (donr P z s m) (charm? m ?
-    (: (go k acc) (k = m ? acc (go (k + 1) (vapp (vapp s k) acc))) (go 0 z))
+    (m = 0 ? z
+     (: m1 (vapp s (m - 1))  k (m1 @ ['lam q] (kof q) 0)
+        (go i acc) (i = (m - 1) ? acc (go (i + 1) (vapp (vapp s i) acc)))
+      (? (k = 1) (vapp m1 0)
+         (k = 2) (vapp m1 (lzy (_ \ donr P z s (m - 1))))
+         (vapp m1 (go 0 z)))))
     (m @ ['succ n] (vapp (vapp s n) (donr P z s n)) ['nnr P z s m]))
    ; a step that never reads its recursive result needs none computed, a case and no fold:
    ; a double recursion, natgtb or natminus, costs a sum of its literals and not their binomial
@@ -102,7 +108,7 @@
          ['ii2 b]               (comp b @ ca (en \ ['i2 (ca en)]))
          (: cf (comp <t) cas (map comp >t) (en \ spine en (cf en) cas))))
 
-   (spine en f cas) (cas @ (a . u) (spine en (vapp f (a en)) u) f)
+   (spine en f cas) (cas @ [a] (vapp f (a en)) (a . u) (spine en (vapp f (a en)) u) f)
 
    vof (flip comp)                               ; compile, then run
 
@@ -372,38 +378,41 @@
      (pin CX nm (name? <r ? (cx-of <r + map own >r) (map own r)), nm)))
 
 ; thunk expecting the kernel to refuse
-; a family's names are its own: nothing pins over them
+; a name is pinned once, asked before anything is laid: a value is read when a closure runs, so
+; a second would change what a sealed type says
 ; a statement and its term have their bare UUs made level vars; the source keeps them bare
-(: (gpin nm v) (IND nm == () ? (pin GLOB nm v) (scare 'uu-defind-owns nm))
+(: (gnew nm) (? (IND nm != ()) (scare 'uu-defind-owns nm)
+                (peep GLOB nm () != ()) (scare 'uu-taken nm)
+                (ureset nm))
    (ulabs t) (uon? 0 ? (ulab t) t)
    (defn nm T0 t0)
-   (: _ (ureset nm) t (sugar t0) T (ulabs (sugar T0)) u (ulabs t) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) t (sugar t0) T (ulabs (sugar T0)) u (ulabs t) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      upoly nm T (ucommit nm),
-     gpin nm [Tv (vof 0 u)],
+     pin GLOB nm [Tv (vof 0 u)],
      pin SRC nm [t],
      nm))
    (axm nm T0)
-   (: _ (ureset nm) T (ulabs (sugar T0))
+   (: _ (gnew nm) T (ulabs (sugar T0))
     (usort 0 0 0 T,
      upoly nm T (ucommit nm),
-     gpin nm [(vof 0 T) ['nv nm]],
+     pin GLOB nm [(vof 0 T) ['nv nm]],
      nm))
    ; Qed: checked like defn, then sealed with its own neutral as value, so applying the proof
    ; never builds its beta-normal form
    (defq nm T0 t0)
-   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      upoly nm T (ucommit nm),
-     gpin nm [Tv ['nv nm]],
+     pin GLOB nm [Tv ['nv nm]],
      nm))
    ; an obligation no one cites: checked, its type not kept. the mark tells the exporters it
    ; ran, and a cite of it is unbound
    (defvc nm T0 t0)
-   (: _ (ureset nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
+   (: _ (gnew nm) T (ulabs (sugar T0)) u (ulabs (sugar t0)) Tv (usort 0 0 0 T, vof 0 T)
     (chk 0 0 0 u Tv,
      ucompact () (ucommit nm),
-     gpin nm 1,
+     pin GLOB nm 1,
      nm))
    ; a run under one context and binders: (defvcs nm i cx (x A ..) goal proof ..) is nm-i, nm-i+1 ..
    (vcs-of l)

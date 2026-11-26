@@ -93,8 +93,11 @@ kill $pa; wait $pa 2> /dev/null; rm -f "$PN"
 for c in -b -k -m -t -w -tw; do
   free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$g"; korerun free $c | awk 'NR == 1 { print; next } { print $1, $2 }' > "$o"; same "free $c"
 done
-# uptime -p and -s (btime, TZ=UTC0); hostname -s -f
-[ "$(uptime -p)" = "$(korerun uptime -p)" ] || fail "kore uptime -p: $(korerun uptime -p)"
+# uptime -p and -s (btime, TZ=UTC0); hostname -s -f. the system's ", 0 minute" in an hour's
+# first minute is not said here; asked before and after, a minute may turn between
+up() { uptime -p | sed 's/, 0 minutes*$//'; }
+u0=$(up); ku=$(korerun uptime -p); u1=$(up)
+[ "$ku" = "$u0" ] || [ "$ku" = "$u1" ] || fail "kore uptime -p: $ku"
 [ "$(TZ=UTC0 uptime -s)" = "$(korerun uptime -s)" ] || fail "kore uptime -s: $(korerun uptime -s)"
 for c in "-s" "-f" "--fqdn"; do [ "$(hostname $c)" = "$(korerun hostname $c)" ] || fail "kore hostname $c"; done
 echo "kore: the /proc family (ps/free/uptime/pidof/pgrep/pkill/killall/pwdx vs procps) ok"

@@ -139,8 +139,8 @@ $(ho)/liblove.a: $(h_o)
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/noblob.c $(love_c))
-out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/user/main0.o out/00/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
+out/0/love/cb.o out/00/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 # love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
 # pinned to out/0 and shared, keeps the compiler it was built with (L0CC, cc unless given)
 ifeq ($(HCC),)
@@ -149,7 +149,12 @@ else
 L0CC ?= cc
 l0cc = $(L0CC)
 endif
-boot_cc = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+# tail-threaded where that cc has musttail, else the trampoline; the twins out/00/love0 and
+# out/gcs0/love0, for the gates, are the trampoline under any cc
+l0tco := $(shell printf 'int f(int);\nint g(int x) { __attribute__((musttail)) return f(x); }\n' | $(l0cc) -Werror -x c -c -o /dev/null - 2>/dev/null && echo 1 || echo 0)
+boot_as = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=$(1) -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+boot_cc = $(call boot_as,$(l0tco))
+boot_cc0 = $(call boot_as,0)
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -160,13 +165,23 @@ out/0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
+# love0 at tco=0, for test_love0_tco0: its objects beside out/0's and its link the same
+love00_o = $(patsubst out/0/%,out/00/%,$(love0_o))
+out/00/%.o: $(S)/%.c $(love_h) out/0/.love0cc
+	@echo '$(t_cc)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(boot_cc0) -c $< -o $@
+out/00/love0: $(love00_o)
+	@echo '$(t_ld)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love00_o)
 # love0 under LvGcStress, for test_gcstress: boot_cc carries no GCDBG, so the stress lane's
 # bootstrap is this twin, its objects beside out/0's and its link the same
 love0s_o = $(patsubst out/0/%,out/gcs0/%,$(love0_o))
 out/gcs0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_cc) -DLvGcStress -c $< -o $@
+	@LOVE_NO_IMAGE= $(boot_cc0) -DLvGcStress -c $< -o $@
 out/gcs0/love0: $(love0s_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
@@ -299,19 +314,19 @@ moonlibc_src = $(wildcard src/apps/moon/lib/moonlibc/*.c src/apps/moon/lib/moonl
 $(ho)/love.raw $(ho)/love.cand.raw: out/moonlibc.o $(moon_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -rt out/rt -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # love for macos: love.raw's objects in its order, as dyld's mach-o (the horn reaches AudioToolbox through
 # libSystem's dlopen), so the code is the same bytes in both. unbaked -- the image is its own binary's,
 # so the bake runs on the box (test_macos_love)
 $(ho)/love-macos.raw: out/moonlibc.o $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -os macos -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -rt out/rt -os macos -pie $(moon_o) $(kart_doom_o) out/src.o out/rootfs.o out/moonlibc.o -o $@
 # prof_raw: love.raw less the hot.prof and hot.calls it carries
 $(ho)/love.praw: out/moonlibc.o $(moon_o) out/prof/src.o out/rootfs.o $(moonlibc_src)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@$(moon0) -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -o $@
+	@$(moon0) -rt out/rt -pie $(moon_o) $(kart_doom_o) out/prof/src.o out/rootfs.o out/moonlibc.o -o $@
 endif
 
 $(ho)/love.1 $(ho)/cook.1 $(ho)/lush.1: $(ho)/%.1: doc/%.md src/tools/mkman.l src/apps/lapiz.l out/lib/love_version.h $(mdep)
@@ -332,7 +347,7 @@ kore_head = src/apps/kore/text.l src/apps/kore/u.l src/apps/kore/core.l src/apps
 # the backends: one file per ISA, then the text faces they share
 holo_be = src/love/holo/x64.l src/love/holo/a64.l src/love/holo/thumb2.l src/love/holo/rv64.l \
   src/love/holo/thumb1.l src/love/holo/i386.l src/love/holo/reach.l src/love/holo/wasm.l src/love/holo/wasmfn.l src/love/holo/xtensa.l \
-  src/love/holo/mips.l src/love/holo/text.l src/love/holo/dialect.l
+  src/love/holo/mips.l src/love/holo/avr.l src/love/holo/text.l src/love/holo/dialect.l
 # the object floor every reader of a backend goes out through
 holo_obj = src/love/holo/elf.l src/love/holo/obj.l src/love/holo/lds.l src/love/holo/link.l src/love/holo/macho.l
 # the kernel's link: kore's alone, mooncc never reads it
@@ -575,7 +590,7 @@ $(xd)/moonlibc.o: $(rt_a) $(rt_slice) src/tools/mkrt.l $(rtlove_dep) $(love0)
 	@$(rtlove) src/tools/mkrt.l $@ $(xa) $(rt_a)
 $(xd)/love: $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o
 	@echo 'MOON	'$@
-	@$(moonx) $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -o $@
+	@$(moonx) -rt out/rt $(if $(filter arm,$(xa)),,-pie) $(x_o) $(xd)/src.o $(xd)/rootfs.o $(xd)/moonlibc.o -o $@
 # baked where it runs, so a kernel transposed from it wakes as the host lane's does
 $(xd)/love.baked: $(xd)/love $(ho)/.dist-cat.l src/tools/xbake.sh $(ho)/love
 	@echo 'BAKE	'$@

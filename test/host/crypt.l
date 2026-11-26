@@ -44,5 +44,7 @@
            (nil? (crypt-hash "pw" "$y$j9T"))
            (crypt-d64 "LdJMENpBABJJ3hIHjB1Bi." @ b (crypt-e64 b = "LdJMENpBABJJ3hIHjB1Bi."))
            (nil? (kdf "pw" "" [0 15 1 1 0])) (nil? (kdf "pw" "" [7 16 1 1 0])) (nil? (kdf "pw" "" [0 16 1 1 1]))
-           (nil? (yescrypt-kdf (cask 64) "pw" "" [0 16 1 1 0])))  ; a cask too small
-   (puts "crypt: ok\n"))
+           (nil? (yescrypt-kdf (cask 64) "pw" "" [0 16 1 1 0]))  ; a cask too small
+           (all (k \ (: _ (map (j \ j) ^k) (kdf "" "" [0 16 1 1 0] = hex2b "77d6576238657b203b19ca42c18a0497f16b4844e3074ae8dfdffa3fede21442"))) ^40)   ; wherever its cask lies
+           (all (k \ (: _ (map (j \ j) ^k) (crypt-check "pleaseletmein" "$y$.75$abcd$6pIrSV1uZArvzUpjI2qvCJpArYP2n.h0hFDzjAA0j43"))) ^40))
+   (test_fin (), puts "crypt: ok\n"))

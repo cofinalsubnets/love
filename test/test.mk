@@ -12,12 +12,12 @@
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
-  test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
+  test_kverb test_libc test_love0 test_love0_tco0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32 test_esp32_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
   test_doomwasm test_dwarf test_dwarfcode test_nestwasm test_seedwasm test_selfhost test_slow test_softfp test_spin test_stdinbuf test_stdincorpus test_tco0 test_teensy41 test_thumb1 \
-  test_thumb2 test_thumb2sp test_xtensa test_mips test_mips_router test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
+  test_thumb2 test_thumb2sp test_xtensa test_mips test_avr test_mips_router test_tools test_uefi test_uefi_a64 test_uefi_stay test_uefi_stay_a64 test_ulp test_uugen \
   test_uuhomgen test_uukind test_uulean test_uumx test_uusplgen test_uuvallaw test_uuwm \
   test_vec test_vi test_virt test_virt_build test_wake test_walkroom test_hashrun test_xfixpoint uuhomgen uukind uumx uusplgen \
   uuvallaw uuwm vmret waits test_doomx test_doomx-run test_doomwasm-run test_gcstress_bake test_kernel_uproc test_web test_wgetnet
@@ -27,11 +27,11 @@
 export LOVE_GLAZE_HOT = eager
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
-test_phases = test_host test_love0
+test_phases = test_host test_love0 test_love0_tco0
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
+test_slow: test_host test_love0 test_love0_tco0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
 
 # the core's gate: test_extra's local, unheavy lanes
 test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
@@ -55,7 +55,7 @@ test_extra: test_filemode test_walkroom test_hashrun waits test_front test_proof
 	test_asmops test_dtb test_ffalloc test_rvboot test_elf32 test_objcopy test_distboot test_fat \
 	test_cca64 test_cci386 test_cci386m16 test_ccarm test_ccrv64 test_ccrv32 test_ccxtensa test_ccmips test_ccwasm test_ccthumb1 test_ccthumb2 test_ccport test_cts_a64 test_cts_rv64 test_cts_wasm \
 	test_raw_a64 test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
-	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips \
+	test_virt test_thumb1 test_thumb2 test_thumb2sp test_xtensa test_mips test_avr \
 	test_mps2 test_mps2_t1 test_mps2_wake test_nucleo446_smoke test_rp2040_board test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32_board test_esp32s3_board test_esp32c6_board test_links \
 	test_freebsd test_netbsd test_freebsd_a64 test_netbsd_a64 test_freebsd_rv64 test_netbsd_rv64 \
 	test_inle
@@ -68,6 +68,12 @@ test_love0: $(love0) out/lib/corpus.list
 	@{ $(love0) </dev/null; echo $$? > out/.test_love0.rc; } | tee out/.test_love0.out; \
 	  s=$$(cat out/.test_love0.rc); \
 	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love0.out` -eq 2 ]
+# test_love0_tco0 -- the same of love0's trampoline twin
+test_love0_tco0: out/00/love0 out/lib/corpus.list
+	@echo TEST out/00/love0
+	@{ out/00/love0 </dev/null; echo $$? > out/.test_love00.rc; } | tee out/.test_love00.out; \
+	  s=$$(cat out/.test_love00.rc); \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love00.out` -eq 2 ]
 # test_filemode -- file mode is terminal: a missing name errs and exits 1, and nothing after runs
 test_filemode: $(ho)/love
 	@echo TEST file mode is terminal
@@ -195,9 +201,13 @@ hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector lose
 hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, read back by our fat and cpio
 hostnif_tests += test/host/seed.l   # love seed where a file it lays cannot be run
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
+hostnif_tests += test/host/casks.l   # a state at any word, moved by majors: the sound nifs, in children
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
 hostnif_tests += test/host/wchisp.l   # wch's usb isp: a flash session's bulk requests to the byte, the key by hand
+hostnif_tests += test/host/edln.l   # lush's tab on a pty: keys typed, a quay screen's cells read
+hostnif_tests += test/host/avrprog.l   # the avr programmer against bootloaders played on a pty
+hostnif_tests += test/host/halfkay.l   # halfkay's reports to the byte, and its device argument
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -463,6 +473,9 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@LOVE_BUDGET_MB=400 timeout 600 $m -l test/gate/moonfuzz.l < /dev/null || { $(fuzzlate); exit 1; }
+# calls between mooncc and gcc, clang on x64, drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
+test_abi: host
+	@$(gsh) test/gate/abi.sh $(ho) $m $${ABI_N:-200} $${ABI_SEED:-1}
 # test_forge -- love-written nifs via holo agree with the C nif they deopt into; none fitted fails
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
@@ -616,6 +629,9 @@ test_xtensa: host
 # holo's mips backend: its law as one big-endian linux program on qemu-mips, its table against llvm
 test_mips: host
 	@$(gsh) test/gate/mips.sh "$m" $(ho)
+# holo's avr: its table against llvm, its interpreter by the manual's flags and qemu's uno
+test_avr: host
+	@$(gsh) test/gate/avr.sh "$m" $(ho)
 # ..by hand, not in test_extra: test_ccmips's hosted programs on a mips-exec box, a router, held to qemu-mips
 test_mips_router: test_ccmips
 	@$(gsh) test/gate/mipsrouter.sh $(ho)/love $(ho)

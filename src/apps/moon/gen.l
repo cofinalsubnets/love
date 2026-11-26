@@ -89,13 +89,14 @@
    ; ('g label), ('v vreg) by the states, (k ((vreg home)..)) at the mark .dls.K. csframe's shift is in, and the link sits 16 or 32 under the cfa
    (dlfin g nm)
     (: ln (dlcfa g) sh (g 'dlfd)
-       (at o) ((? (o < 0 - <sh) (o - <>sh) o) - ln)
+       ; under t2pm's list a local lies below it
+       (at o) (: o2 (? (o < 0 - <sh) (o - <>sh) o) ((o2 < 0 ? (o2 - g 'dlpm) o2) - ln))
        (home b) (b @ ([_ 'm o ty] && ln) [['f (at o)] ty] ([_ 'p o ty] && ln) [['d (at o)] ty]
                      [_ 'g l ty] [['g l] ty] ([_ 'v v ty] && ln && !(two? v)) [['v v] ty] _ [() (last b)])
        (pin g 'dlv ([nm (map ([k par bs in sp] \ [k par (map (b \ (<b . home b)) bs) in sp]) (g 'dlsc))
                   (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
    ; the frame base's distance under the cfa, () where no cfa is described
-   (dlcfa g) (g 'tgt @ 'x64 16 'a64 32 _ ())
+   (dlcfa g) (g 'tgt @ 'x64 16 ('a64 || 'rv64 || 'rv32 || 'mips) 32 ('thumb2 || 'thumb2sp) 8 'thumb1 12 _ ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -175,6 +176,7 @@
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
    (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
+   (t2c? g) (elem (g 'tgt) '(thumb2 thumb2sp arm))   ; thumb2's code, linux's arm with it: the list frame, q4, the literal's respill
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
    (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family
@@ -209,7 +211,12 @@
    (m16b g) (m16? g ? [102] ())                    ; a raw 32-bit operation's operand-size prefix in a 16-bit segment
    (m16a g) (m16? g ? [103] ())                    ; ..and a raw memory operand's address-size prefix
    (acw g w) (m16? g ? (w @ 4 [102] ()) (w @ 2 [102] 8 [72] ()))   ; a cmpxchg's width prefix: a 16-bit segment reads 16 bits bare
-   (wsize g) (ilp32? g ? 4 8)                       ; a pointer, a gp scalar, a stack cell
+   (gtm g) (tmof (peep g 'tgt 'x64))                ; the target's type model
+   (wsize g) (tmptr (gtm g))                       ; a pointer, a gp scalar, a stack cell
+   (iword? g) (tmint (gtm g) = wsize g)             ; an int fills a register
+   (llp? g) (wsize g < tmll (gtm g))                ; a long long is wider than a register
+   (dp? g) (wsize g < tmdbl (gtm g))                ; a double's bits are
+   (no128? g) (wsize g < 8)                         ; no __int128
    (argr g) (? (a8? g || rv32? g) argregs-a64 (xt? g) argregs-xt (mp? g) argregs-mp (t32? g) argregs-t32 (ia32? g) (take (rpn g) '(r0 r2 r1)) argregs)   ; riscv a0..a7 map onto the same r0..r7; i386 -mregparm's eax edx ecx
    ; [lo hi] of a pair in argument words i and i+1, and of a returned pair: big-endian o32 lays the high word first
    (ap g i) (mp? g ? [(argr g (i + 1)) (argr g i)] [(argr g i) (argr g (i + 1))])
@@ -267,8 +274,8 @@
                        (immok g 'log n || t32? g && !(v6m? g) && elem op '(and or) && -2147483648 <= n < 4294967296
                         && (t2imm? (-1 - n) || op = 'and && 0 < n && 0 = n & (n + 1))))   ; bic, orn, a low run's ubfx
    (uldop sz) (sz @ 1 'ldu1 2 'ldu2 4 'ldu4 'ld)
-   (fnty g nm) (g 'sigs nm @ sig        ; return and params riding when sig'd, a variadic's as an unprototyped one's
-                (two? sig ? ['fn <sig (sig 2 ? () <>sig)] '(fn)))
+   (fnty g nm) (g 'sigs nm @ sig        ; return, params and the `...` riding when sig'd
+                (two? sig ? (sig 2 ? ['fn <sig <>sig 'va] ['fn <sig <>sig]) '(fn)))
    ; the eightbyte classes of a by-value aggregate (its value is its address in r0): '(int) /
    ; '(sse) at <=8 bytes, two symbols at 9..16, () for a scalar, an unsized tag or >16 (memory)
    (aclass g ty)
@@ -335,13 +342,13 @@
    (llt? ty) (ty = 'llong || ty = 'ullong)
    ; the signedness is C's (6.3.1.8): a strictly wider signed type
    ; keeps the common type signed. the width is still the accumulator's, not C's
-   (ubin w64 ta tb)
-    (puac w64 ta tb @ c
+   (ubin tm ta tb)
+    (puac tm ta tb @ c
        (? (llt? ta || llt? tb) (tusg? c ? 'ullong 'llong)
           (tusg? c) 'ulong 'long))
    ; a 32-bit unsigned result wraps in C and not in a 64-bit register: rbin types every uint binary
    ; op 'uint (so a later op sees the narrow operand) and + - * << also re-narrow. 64-bit only: t32's word is 32
-   (u32? g ty) (!(ilp32? g) && ty = 'uint)
+   (u32? g ty) (!(iword? g) && ty = 'uint)
    (u32bin? g ta tb)
     (!(ptr? ta || ptr? tb) &&
      !(elem ta '(long ulong llong ullong) ||
@@ -350,8 +357,8 @@
    ; ..and under -fwrapv a 32-bit signed one: an int op int is typed 'int, + - * sign-extend again
    (wrapv? g) (drop 13 (g 'mo) @ r (two? r && <r))
    (s32? ty) (elem ty '(int short schar char cchar uchar ushort bool))
-   (s32bin? g ta tb) (wrapv? g && !(ilp32? g) && s32? ta && s32? tb)
-   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (s32bin? g ta tb) 'int (ubin !(ilp32? g) ta tb))
+   (s32bin? g ta tb) (wrapv? g && !(iword? g) && s32? ta && s32? tb)
+   (rbin g ta tb) (? (u32bin? g ta tb) 'uint (s32bin? g ta tb) 'int (ubin (gtm g) ta tb))
    ; does a 32-bit unsigned result owe its re-narrow? + - * carry out of the word; | ^ with a
    ; sign-extended operand (a signed type, a negative literal) spread its top into the result
    (u32nar? g op ta tb sx) (u32bin? g ta tb && (elem op '(+ - *) || elem op '(| ^) && sx))
@@ -381,16 +388,16 @@
                r (n & ((1 << w) - 1))
                s (r < 1 << (w - 1) ? r (r - (1 << w)))
              [s ty])
-           ('long || 'ulong) (ilp32? g ? () [n ty])))
+           ('long || 'ulong) (tmlong (gtm g) < 8 ? () [n ty])))
    (knum g e) (e @ ('num n) [n (numty n)] (cnum g e))
    ; a compare or divide takes the common converted type's signedness (puac); a pointer compares
    ; as the unsigned word. znrw: int meets uint at uint, so the 64-bit targets also owe the 32-bit narrow
    (cmpu g ta tb)
-    (ptr? ta || ptr? tb || tusg? (puac !(ilp32? g) ta tb))
+    (ptr? ta || ptr? tb || tusg? (puac (gtm g) ta tb))
    ; a case constant converts to the switch control's type (C11 6.8.4.2p5) as the register's
    ; extended pattern. no & here: the 64-bit mask is a big, and love's bitwise ops answer nothing on one
    (cfit g ty v)
-    (: m (ilp32? g || !(elem ty '(long ulong llong ullong)) ? 4294967296 18446744073709551616)
+    (: m (tmlong (gtm g) < 8 || !(elem ty '(long ulong llong ullong)) ? 4294967296 18446744073709551616)
        r (v % m)
        u (r < 0 ? (r + m) r)
        (? (usg? ty || ptr? ty) u
@@ -399,8 +406,8 @@
    (scc op unsg) (!unsg ? op (op @ 'lt 'below 'gt 'above 'le 'be 'ge 'ae op))
    (irop op) (op @ '+ 'add '- 'sub '* 'imul '& 'and '| 'or '^ 'xor 'no) ; C op -> IR mnemonic; not one of the six -> 'no
    (negrel op) (op @ 'eq 'ne 'ne 'eq 'lt 'ge 'ge 'lt 'le 'gt 'le)   ; negated: branch-if-false
-   (tsz g ty) (tysz (wsize g) (g 'stag) ty)
-   (tal g ty) (tyalign (wsize g) (? (ia32? g) 4 (t32? g) 8 16) (g 'stag) ty)
+   (tsz g ty) (tysz (gtm g) (g 'stag) ty)
+   (tal g ty) (tyalign (gtm g) (? (ia32? g) 4 (t32? g) 8 16) (g 'stag) ty)
    ; a member's (offset ty) off a struct type, | 'bad
    (fmem g ty name)
     (!(stru? ty) ? 'bad
@@ -504,7 +511,7 @@
    ; memcpy/memset with a small constant size lay straight-line, by name (declining where a local
    ; shadows it or the fn is the library's own). no memmove: bcopy interleaves loads and stores
    (meminl g) (8 * wsize g)                          ; the widest expansion: 8 words either way
-   (memk g e) (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e @ v (cint? v ? v ()))))
+   (memk g e) (knum g e @ k (two? k ? <k (cfold (gtm g) e @ v (cint? v ? v ()))))
    (memnm? g bi nm) (bi = nm && !(nobi? g nm) || bi = "__builtin_\(nm)")
    ; a spill across a nested sub-eval (which may call): a bare 8-byte push would leave rsp at
    ; 8 mod 16 across the inner call, so a whole 16-byte cell
@@ -512,7 +519,7 @@
    (spop r)  [['ld r 'sp 0] '(add sp sp 16)]
    ; the pair kit (ilp32 llong/ullong): a 64-bit value rides r0 (lo) : r1 (hi). pairs never enter
    ; the pool or the immediate lanes: every pair op runs the shuttle, r2:r3 the popped left, r12 the scratch
-   (pair? g ty) (ilp32? g && llt? ty)
+   (pair? g ty) (llp? g && llt? ty)
    ; a pair shift by a variable count in r2 (0..63): count >= 32 moves one word across, else the
    ; carry composes through r12 (count 0 skips: a 32-c shift at 0 is unpredictable). v6-M and rv32 call the helper
    (pshiftv g kind)
@@ -735,7 +742,7 @@
               ['label lo] '(li r1 1) ['label l2]])))
    (popops g w32)
     (: fold (k \ ['(mov r1 r0) ['shr 'r1 k] '(add r0 r0 r1)])
-       (w32 ? ((ilp32? g ? () '((li r2 4294967295) (and r0 r0 r2)))
+       (w32 ? ((iword? g ? () '((li r2 4294967295) (and r0 r0 r2)))
                + '((li r2 1431655765) (mov r1 r0) (shr r1 1) (and r1 r1 r2) (sub r0 r0 r1)
                    (li r2 858993459) (mov r1 r0) (shr r1 2) (and r1 r1 r2) (and r0 r0 r2) (add r0 r0 r1)
                    (li r2 252645135) (mov r1 r0) (shr r1 4) (add r0 r0 r1) (and r0 r0 r2))
@@ -1044,8 +1051,8 @@
        _ (arm unops (g \ f \ [[<>f] [<>f] 1]))
        ; vmov Df, Rlo, Rlo+1 names only the low half: qtwin spells the high one, else a dead-store sweep
        ; kills a live read
-       _ (arm '(movqxr) (g \ f \ [([<>>f] + (ilp32? g ? (qtwin <>>f) ())) () ()]))
-       _ (arm '(movqrx) (g \ f \ [() ([<>f] + (ilp32? g ? (qtwin <>f) ())) 1]))
+       _ (arm '(movqxr) (g \ f \ [([<>>f] + (dp? g ? (qtwin <>>f) ())) () ()]))
+       _ (arm '(movqrx) (g \ f \ [() ([<>f] + (dp? g ? (qtwin <>f) ())) 1]))
        _ (arm '(movrrq) (_ \ f \ [[(f 3)] [(f 1) (f 2)] 1]))
        _ (arm '(movqrr) (_ \ f \ [[(f 2) (f 3)] [(f 1)] 1]))
        ; movsnxr's s-slot write is a side effect nothing here sees: never droppable
@@ -1674,7 +1681,7 @@
    ; with pc. the saves sit just under fp (a free one pads them to an even count), so every negative fp offset
    ; moves down past them; sp-relative ones hold. a fn whose fp or exits read any other way keeps its frame
    (t2pm g fs)
-    (cz g 't2pm fs (? (!(t2? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
+    (cz g 't2pm fs (? (!(t2c? g) || g 'hasasm || abl? g 't2pm || #fs < 5) fs
                       !(take 3 >fs = '((push lr) (push fp) (lea fp sp 0))) fs
        (: r0 (drop 4 fs)
           cs '(r4 r5 r6 r7 r8 r9 r10)
@@ -1724,7 +1731,7 @@
           ; an odd list, every one written, keeps sp's eight by four more below
           sb3 (#rs % 2 = 0 ? sb2 [['sub 'sp 'sp (two? sb2 ? (<sb2 3 + 4) 4)]])
           (body = 'bad || any stale? body ? fs
-             (<fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
+             (pin g 'dlpm P, <fs . [['pushm (rs + '(fp lr))] ['lea 'fp 'sp P]] + sb3 + t2sp body (P + (two? sb3 ? (<sb3 3) 0)))))))
    ; under t2pm a frame slot rides sp where sp's depth under fp is known: a positive offset reaches 4095
    ; in one ldr.w where a negative one reaches 255. the depth walks every constant sp move and meets at
    ; labels; a move by a register, or two paths that disagree, leaves it unknown and the slot on fp
@@ -2010,7 +2017,7 @@
    ; what a call writes: x64's whole file; a64 keeps v8..v15's low half
    (fcalld g) (? (a64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31)
                  (sp64? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15 f16 f17 f18 f19 f20 f21 f22 f23 f31)
-                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 moon's own scratch
+                 (t32? g) '(f0 f1 f2 f3 f4 f5 f6 f7 f15)   ; d8-d14 callee-saved, d15 the scratch its user saves
                  fregs16)
    (fnm? g x) (nom? x && elem x fall9)
    (frd g f)                                          ; -> [reads defs] of the float file | 'bar
@@ -2117,10 +2124,12 @@
         (: (mark? f) (f = '(saves) || f = '(rests))
            (names r x) (? (atom? x) (x = r) (any (names r) x))
            fb (fbase g)
-           fcs (? (a64? g) '(f8 f9 f10 f11 f12 f13 f14 f15) (t32? g && !(v6m? g)) '(f8 f9 f10 f11 f12 f13 f14) ())
+           fcs (? (a64? g || t32f? g) '(f8 f9 f10 f11 f12 f13 f14 f15) ())
            ; wasm's registers are the function's own locals: a call leaves them, none is saved
            ; thumb2sp: an odd single's d is saved whole, by its even name
-           (named? r f) (names r f || sp64? g && elem r fcs && names (rafo g r) f)
+           ; t32's float to int converters go through s30, which no form names: they name f15 here
+           (named? r f) (names r f || sp64? g && elem r fcs && names (rafo g r) f
+                         || r = 'f15 && t32f? g && two? f && elem <f '(cvttsd2si cvttsd2ui cvttss2si cvttss2ui))
            nm (wasm? g ? () (filter (r \ any (f \ !(mark? f) && named? r f) fs) (filter (r \ r != fb) (v6m? g ? '(r5 r6) (csregs g)) + fcs)))
            r3 (x86? g && elem 'r3 nm)
            cs (filter (r \ !(r3 && r = 'r3)) nm)
@@ -2381,7 +2390,7 @@
    ; ..and a struct's own compound literal is a whole member
    (clstru? g ty ini) (stru? ty && two? ini && <ini = 'clit && stru? <>ini && two? >>ini && tsz g <>ini = tsz g ty)
    ; ..and so is an expression of its own struct type (6.7.9p13), given a frame (env 'none: a static image)
-   (whole? g env ty val) (stru? ty && env != 'none && (peekty g env val @ t (stru? t && <t = <ty && <>t = <>ty)))
+   (sameagg? g env ty val) (stru? ty && env != 'none && (peekty g env val @ t (stru? t && <t = <ty && <>t = <>ty)))
    (unelide g env ty ini)
     (? (clarr? ty ini) (unelide g env ty <>>ini)      ; a wide literal: take its init
        !(initval? ini) ini                        ; a scalar / non-brace: nothing to nest
@@ -2401,7 +2410,7 @@
        (clarr? ty val || clstru? g ty val)          ; a wide or struct literal: the whole element, as its init
         (unelide g env ty <>>val @ w
            [(desig ? (redesig dh dk w) w) >l])
-       (whole? g env ty val) [(desig ? (redesig dh dk val) val) >l]
+       (sameagg? g env ty val) [(desig ? (redesig dh dk val) val) >l]
        (aggish? ty && !(gcplx? ty) && !(initval? val))   ; elide: fill ty from the run at val (a complex is a scalar)
         (: pr (normfill g env ty (val . >l))
            w ['init <pr]
@@ -2525,10 +2534,10 @@
    ; folds, or a string or static address, which is never null
    (imsel g e)
     (: c <>e
-       v (cfold !(ilp32? g) c)
+       v (cfold (gtm g) c)
        ; an object's or function's address is never null: compared with null, or negated, it decides the test
        (addr? x) ((two? x && <x = 'str) || imaddr g x != 'no)
-       (null? x) (cfold !(ilp32? g) x @ k (cint? k && k = 0))
+       (null? x) (cfold (gtm g) x @ k (cint? k && k = 0))
        t (? (cint? v) (v != 0)
             (two? c && <c = 'str) 1
             (c @ ('bin op a b) (elem op '(eq ne)) ('un 'not _) 1 ())
@@ -2576,20 +2585,20 @@
        'no)
    ; a const float expression at image time -> gem | 'bad (love's doubles are the target's IEEE doubles).
    ; an unsigned int subtree reads mod 2^width: icfold keeps a word's pattern, and (ulong)-1 is no -1.0
-   (ffold e) (ffoldw 1 e)
+   (ffold e) (ffoldw tm-lp64 e)
    (nan? v) (elem v '(nan -nan))                    ; ffoldw's nan, with its sign
-   (ffoldw w64 e) (atom? e ? 'bad
+   (ffoldw tm e) (atom? e ? 'bad
      ; an int const subtree floats ((double)(1 << N))
      (icfold e @ iv
-        (iv != 'no ? (0.0 + (uwid w64 e @ w (? !w iv (: m (1 << w) r (iv % m) (r < 0 ? (r + m) r)))))
+        (iv != 'no ? (0.0 + (uwid tm e @ w (? !w iv (: m (1 << w) r (iv % m) (r < 0 ? (r + m) r)))))
         (<e @ 'flo <>e
             'num (0.0 + <>e)
-            'cast (flo? <>e ? (ffoldw w64 <>>e) 'bad)
-            'un (ffoldw w64 <>>e @ v (? (bad? v) 'bad (<>e != 'neg) 'bad
+            'cast (flo? <>e ? (ffoldw tm <>>e) 'bad)
+            'un (ffoldw tm <>>e @ v (? (bad? v) 'bad (<>e != 'neg) 'bad
                                         (nan? v) (v = 'nan ? '-nan 'nan)
                                         (-1.0 * v)))   ; times -1: 0.0 - 0.0 is +0.0, and -0.0 is its own value
             'bin
-            (: op <>e a (ffoldw w64 <>>e) b (ffoldw w64 <>>>e)
+            (: op <>e a (ffoldw tm <>>e) b (ffoldw tm <>>>e)
                (? (bad? a || bad? b) 'bad
                   !(elem op '(+ - * /)) 'bad
                   (nan? a) a
@@ -2598,17 +2607,17 @@
                   ((op @ '+ (a + b) '- (a - b) '* (a * b) (a / b)) @ v (gem? v ? v 'nan))))
            'bad))))
    ; a constant int expression's C type, as parse reads the source (suffixed literals arrive cast) | ()
-   (icty w64 e)
-    (: (both a b) (icty w64 a @ ta (icty w64 b @ tb (ta && tb ? (puac w64 ta tb))))
+   (icty tm e)
+    (: (both a b) (icty tm a @ ta (icty tm b @ tb (ta && tb ? (puac tm ta tb))))
        (e @ ('num v) (fits32 v ? 'int 'long)
             ('cast t _) (nom? t ? t)
-            ('un op x) (elem op '(neg bnot) ? (icty w64 x @ t (t ? (pprom t))) 'int)
-            ('bin op a b) (? (elem op '(shl shr)) (icty w64 a @ t (t ? (pprom t)))
+            ('un op x) (elem op '(neg bnot) ? (icty tm x @ t (t ? (pprom tm t))) 'int)
+            ('bin op a b) (? (elem op '(shl shr)) (icty tm a @ t (t ? (pprom tm t)))
                              (elem op '(+ - * / % & | ^)) (both a b)
                              'int)
             ('cond _ a b) (both a b)
             ()))
-   (uwid w64 e) (icty w64 e @ 'uint 32 'ulong (w64 ? 64 32) 'ullong 64 ())
+   (uwid tm e) (icty tm e @ 'uint 32 'ulong (8 * tmlong tm) 'ullong 64 ())
    (fim g ty v) ((mp? g ? rev 1) (fim0 ty v))       ; a float value's IEEE image as ty, in the target's byte order
    (fim0 ty v)                                      ; ..little-endian: 4 single bytes | 8 double bytes
     (? (nan? v) (: neg (v = '-nan) (ty = 'float ? (les 4 (neg ? 4290772992 2143289344)) (les 8 (neg ? -2251799813685248 9221120237041090560))))
@@ -2637,7 +2646,7 @@
                            (ty = 'bool) (imnum g ty (<>ini = 0 ? 0 1))   ; a bool image normalizes (C11 6.3.1.2)
                            (imnum g ty <>ini))
      (flo? ty && elem <ini '(bin un cast))       ; a const float expression: fold, then image
-      (ffoldw !(ilp32? g) ini @ v
+      (ffoldw (gtm g) ini @ v
          (bad? v ? 'bad (fim g ty v)))
      (<ini = 'str && arr? ty)
       (: t <>ini n (tsz g ty)
@@ -2649,13 +2658,13 @@
      (<ini = 'clit && !(aggish? <>ini) && two? >>ini)
       (<>>ini @ ('init (e . _)) (cgimage g ty e) (cgimage g ty <>>ini))
      (ptr? ty) (imaddr g ini @ r                    ; a data pointer: a constant address (word-sized abs label+offset),
-                   (r != 'no ? [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
+                   (r != 'no ? [['fix (wsize g) (wsize g = 4 ? 'abs32 'abs64) <r <>r]]      ; or a constant integer ((int*)0x1000, a null)
                       (icfold ini @ v (v @ 'no 'bad (imnum g ty v)))))
      ; a label cast to a word-sized integer ((intptr_t)f) is still its address, and so is one
      ; plus or minus a constant ((unsigned long)&init_stack + 16384)
      (elem <ini '(cast bin) && !(aggish? ty) && !(flo? ty) && tsz g ty = wsize g)
       (imaddr g ini @ r
-         (? (r != 'no) [['fix (wsize g) (ilp32? g ? 'abs32 'abs64) <r <>r]]
+         (? (r != 'no) [['fix (wsize g) (wsize g = 4 ? 'abs32 'abs64) <r <>r]]
             (<ini = 'bin) (imcexp g ty ini)
             (icfold ini @ v (v @ 'no (imgbytes g ty <>>ini) (imnum g ty v)))))
      (!(aggish? ty) && !(flo? ty) && elem <ini '(bin un cast)) (imcexp g ty ini)
@@ -2849,25 +2858,25 @@
    ; an integer some of whose bits no constant decides: (value unknown-mask) as 64 unsigned bits, or () -- a
    ; ?: on a runtime test keeps the bits its arms agree on, & | ^ and a shift by a constant carry the
    ; mask, any other operator wants both sides whole. nothing is evaluated that a constant is not
-   (kbits w64 e)
+   (kbits tm e)
     (: top 18446744073709551616
        (ok? n) (cint? n && 0 <= n && n < top)
        (bxor a b) ((a | b) - (a & b))
        (clr a m) (a - (a & m))
        (pair v m) (ok? v && ok? m ? [(clr v m) m] ())
-       (num2 f a b) (: x (kbits w64 a) y (kbits w64 b) (two? x && two? y ? (f (x 0) (x 1) (y 0) (y 1)) ()))
+       (num2 f a b) (: x (kbits tm a) y (kbits tm b) (two? x && two? y ? (f (x 0) (x 1) (y 0) (y 1)) ()))
        (u64 v) ['cast 'ullong ['num v]]
-       (whole op va vb) (cfold w64 ['bin op (u64 va) (u64 vb)] @ r (pair r 0))
-       (cfold w64 e @ c
+       (whole op va vb) (cfold tm ['bin op (u64 va) (u64 vb)] @ r (pair r 0))
+       (cfold tm e @ c
           (? (cint? c) (pair c 0)
              !(two? e) ()
              (e @ ('cond c9 a b)
-                   (zfold w64 c9 @ t
-                      (cint? t ? (kbits w64 (t != 0 ? a b))
+                   (zfold tm c9 @ t
+                      (cint? t ? (kbits tm (t != 0 ? a b))
                          (num2 (va \ ma \ vb \ mb \ pair va (ma | mb | bxor va vb)) a b)))
                   ('cast . t . a . _)
-                   (kbits w64 a @ x
-                      (two? x ? (pair (cfold w64 ['cast t ['num (x 0)]]) (cfold w64 ['cast t ['num (x 1)]])) ()))
+                   (kbits tm a @ x
+                      (two? x ? (pair (cfold tm ['cast t ['num (x 0)]]) (cfold tm ['cast t ['num (x 1)]])) ()))
                   ('bin . op . a . b . _)
                    (num2 (va \ ma \ vb \ mb \
                             (? (ma = 0 && mb = 0) (whole op va vb)
@@ -2880,7 +2889,7 @@
                          a b)
                   ()))))
    (asmk g env e)
-    (: k (memk g e @ k0 (cint? k0 ? k0 (kbits !(ilp32? g) e @ r (two? r && r 1 = 0 ? (r 0) k0))))
+    (: k (memk g e @ k0 (cint? k0 ? k0 (kbits (gtm g) e @ r (two? r && r 1 = 0 ? (r 0) k0))))
        ; a block-scope static is its data label
        (stat x) (? !(two? x) x
                    (<x = 'var) (assoc <>x env @ (_ . 'g . l . _) ['var l]   ; a lo env's
@@ -2910,9 +2919,9 @@
            (asmcty g env (e 2) @ ta
               (? !ta ()
                  (elem (e 1) '(== != < > <= >= && ||)) 'int
-                 (elem (e 1) '(<< >>)) (pprom ta)
-                 (asmcty g env (e 3) @ tb (tb ? (puac !(ilp32? g) ta tb)))))
-          (<e = 'un) (e 1 = 'not ? 'int (asmcty g env (e 2) @ ta (ta ? (pprom ta))))
+                 (elem (e 1) '(<< >>)) (pprom (gtm g) ta)
+                 (asmcty g env (e 3) @ tb (tb ? (puac (gtm g) ta tb)))))
+          (<e = 'un) (e 1 = 'not ? 'int (asmcty g env (e 2) @ ta (ta ? (pprom (gtm g) ta))))
           (elem <e '(land lor)) 'int
           (peekty g env e @ ty (nom? ty && elem ty '(bool char schar cchar uchar short ushort int uint long ulong llong ullong) || bitf? ty ? ty))))
    asmho holo-bytes-open                            ; bare: the cat leads with (borrow 'holo) (asbook.l), so this folds at compile
@@ -3051,7 +3060,7 @@
              (rotk g wide @ kb
                 (charm? kb && kb = w && sub = n && rotp? n)))
    (rotk g e)
-    (knum g e @ k (two? k ? <k (cfold !(ilp32? g) e)))
+    (knum g e @ k (two? k ? <k (cfold (gtm g) e)))
    ; the rotate idiom (x >> n) | (x << (W - n)), x an unsigned W-bit pure operand: one rotate.
    ; a rotl count rides negated (the count reads mod W)
    (rotp? e)                                        ; pure: safe to evaluate once for the source's twice
@@ -3062,7 +3071,7 @@
          ('un _ x) (rotp? x)
          ())
    (rotw g env e)                                   ; -> 32 | 64 | (): the unsigned rotate width; ilp32's long long is a pair
-    (rotty g env e @ 'uint 32 'ulong (ilp32? g ? 32 64) 'ullong (ilp32? g ? () 64))
+    (rotty g env e @ 'uint 32 'ulong (8 * tmlong (gtm g)) 'ullong (llp? g ? () 64))
    ; does the AST write anything? a face's base register must survive the rhs, so a
    ; store rides the face only past a write-free right side (calls clobber the pool too)
    (wrany? (a . u))
@@ -3420,7 +3429,7 @@
              ; dead arms pruned before any splice, a constant-returning call answered first, at any depth:
              ; a call types by its signature, a cast by its type
              (sty e) (e @ ('call ('var n) _) <(peep (g 'sigs) n [()]) ('cast t _) t ())
-             body (nofx (dprune !(ilp32? g) sty (kcall1 g <>(rf 3) 0)))
+             body (nofx (dprune (gtm g) sty (kcall1 g <>(rf 3) 0)))
              (dps x a) (? !(two? x) a
                           (<x = 'decl) (foldl (a2 \ p \ p . a2) a <>x)
                           (dps >x (dps <x a)))
@@ -3605,7 +3614,7 @@
                         (!(two? ps) ? pre
                            (: p <ps
                               ; a constant arg folded, and a sizeof the caller's names type (kcalloc's sizeof(*p))
-                              a (cfold !(ilp32? g) <as @ kc
+                              a (cfold (gtm g) <as @ kc
                                   (? (cint? kc) ['num kc]
                                      (<as @ ('szof e9) (ptype ps9 e9 @ t9 ((two? t9 ? elem <t9 '(ptr struct) (elem t9 '(char schar cchar uchar short ushort int uint long ulong llong ullong double))) ? ['num (tsz g t9)] <as)) <as)))
                               ty9 (two? a && <a = 'var ? (peep tys <>a 'no) 'no)
@@ -3922,7 +3931,7 @@
            (: at2 (<l @ ('loc . f . n . _) [f n] _ at)
               (here _) (pin st9 'l at2, hs <l d)
               (here 0 + hit >l d at2)))
-       [<rf <>rf <>>rf ['blk (hitems (dprune !(ilp32? g) ety <>(rf 3)) [<>rf])]])
+       [<rf <>rf <>>rf ['blk (hitems (dprune (gtm g) ety <>(rf 3)) [<>rf])]])
    ; a test that folds (in C's types) prunes its dead arm before anything splices in: gcc's
    ; `__builtin_constant_p(n) ? f(n) : g(n)` never lays f's "i"(n). an arm a jump may reach (a label,
    ; a case) stays; a ?: prunes only where ty types both arms alike, keeping that type by a cast. a
@@ -3966,7 +3975,7 @@
        (two? (f 3) && <(f 3) = 'blk ? ([<f <>f <>>f (rec (f 3))] + >>>>f) f))
    ; a __builtin_constant_p whose operand does not fold yet: an inline body's param, decided
    ; once the caller's constants have reached it
-   (bcpopen? w64 x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold w64 <>x)) (bcpopen? w64 <x || bcpopen? w64 >x))
+   (bcpopen? tm x) (? (atom? x) () (<x = 'bcp) !(cint? (cfold tm <>x)) (bcpopen? tm <x || bcpopen? tm >x))
    ; zfold: a test settled whatever its unknown parts hold (`e & 0`, `e * 0`, `e && 0`, `e || 1` over a
    ; pure e) -> its value | (). zpure?: a statement expression is pure when what it holds is
    (zpure? x) (? !(two? x) 1 (elem <x '(call callr sys asn rmw post clit asm)) () (zpure? <x && zpure? >x))
@@ -3979,42 +3988,42 @@
              ; the answer in the function's own return type: a bool's `return 5` is 1
              rt <(peep (g 'sigs) nm [()])
              k (? (!(two? e) || 4 < d || !(elem rt '(bool char schar cchar uchar short ushort int uint long ulong))) ()
-                  (zfold !(ilp32? g) (kcall1 g e (d + 1)) @ v (cint? v ? (cfold !(ilp32? g) ['cast rt ['num v]] @ c (cint? c ? c ())) ())))
+                  (zfold (gtm g) (kcall1 g e (d + 1)) @ v (cint? v ? (cfold (gtm g) ['cast rt ['num v]] @ c (cint? c ? c ())) ())))
              (pin (g 'kretm) nm k, k))))
    (kcall1 g x d) (? !(two? x) x
                      (x @ ('call . ('var nm) . as . _)
                            (kret g nm d @ k (cint? k && all zpure? as ? ['num k] (map (y \ kcall1 g y d) x)))
                           (map (y \ kcall1 g y d) x)))
    (kcall g f) ([<f <>f <>>f (kcall1 g (f 3) 0)] + >>>>f)
-   (zfold w64 x)
-    (cfold w64 x @ v
+   (zfold tm x)
+    (cfold tm x @ v
        (? (cint? v) v
           !(two? x) ()
           (x @ ('bin . op . a . b . _)
-                (elem op '(& *) ? (: va (zfold w64 a) vb (zfold w64 b) (? (va = 0 && zpure? b) 0 (vb = 0 && zpure? a) 0 ())) ())
+                (elem op '(& *) ? (: va (zfold tm a) vb (zfold tm b) (? (va = 0 && zpure? b) 0 (vb = 0 && zpure? a) 0 ())) ())
                ('land . a . b . _)
-                (: va (zfold w64 a) vb (zfold w64 b) (? (va = 0) 0 (vb = 0 && zpure? a) 0 (cint? va && cint? vb) 1 ()))
+                (: va (zfold tm a) vb (zfold tm b) (? (va = 0) 0 (vb = 0 && zpure? a) 0 (cint? va && cint? vb) 1 ()))
                ('lor . a . b . _)
-                (: va (zfold w64 a) vb (zfold w64 b)
+                (: va (zfold tm a) vb (zfold tm b)
                    (? (cint? va && va != 0) 1 (cint? vb && vb != 0 && zpure? a) 1 (va = 0 && vb = 0) 0 ()))
-               ('un . 'not . a . _) (zfold w64 a @ va (cint? va ? (va = 0 ? 1 0) ()))
-               ('cast . t . a . _) (zfold w64 a @ va (cint? va ? (cfold w64 ['cast t ['num va]]) ()))
+               ('un . 'not . a . _) (zfold tm a @ va (cint? va ? (va = 0 ? 1 0) ()))
+               ('cast . t . a . _) (zfold tm a @ va (cint? va ? (cfold tm ['cast t ['num va]]) ()))
                ())))
-   (dprune w64 ty x) (dprunel w64 ty lbl? x)
+   (dprune tm ty x) (dprunel tm ty lbl? x)
    ; lk: does a piece hold a label that something outside it may reach
-   (dprunel w64 ty lk x)
+   (dprunel tm ty lk x)
     (atom? x ? x
        (x @ ('cond c a b)
-             (: v (bcpopen? w64 c ? () (zfold w64 c)) t (? (!(cint? v) || lk a || lk b) () (ty a = ty b) (ty a) ())
-                (!t ? (map (dprunel w64 ty lk) x) ['cast t (dprunel w64 ty lk (v != 0 ? a b))]))
+             (: v (bcpopen? tm c ? () (zfold tm c)) t (? (!(cint? v) || lk a || lk b) () (ty a = ty b) (ty a) ())
+                (!t ? (map (dprunel tm ty lk) x) ['cast t (dprunel tm ty lk (v != 0 ? a b))]))
             ('if c th el)
-             ((bcpopen? w64 c ? () (zfold w64 c)) @ v
-                (!(cint? v) || lk th || lk el ? (map (dprunel w64 ty lk) x)
-                   (: s (v != 0 ? th el) (two? s ? (dprunel w64 ty lk s) '(nop)))))
+             ((bcpopen? tm c ? () (zfold tm c)) @ v
+                (!(cint? v) || lk th || lk el ? (map (dprunel tm ty lk) x)
+                   (: s (v != 0 ? th el) (two? s ? (dprunel tm ty lk s) '(nop)))))
             ; a switch on a constant starts at its case: no case reaches what lies ahead, unless a goto's
             ; label is there or a case stands deeper than the body's own list (Duff's device)
             ('switch c items)
-             ((bcpopen? w64 c ? () (zfold w64 c)) @ v
+             ((bcpopen? tm c ? () (zfold tm c)) @ v
                 (: (hit? it) (it @ ('case . lo . r) (two? r ? (lo <= v && v <= <r) (lo = v)) ())
                    (at p l i) (? !(two? l) -1 (p <l) i (at p >l (i + 1)))
                    ; a label converts to the control's type, which is not known here: every value small
@@ -4028,11 +4037,11 @@
                    (out? it) (it @ ('brk) 1 ('blk items) (two? items && out? (last items)) (exits? it))
                    ls (filter (it \ elem <it '(case dflt)) items)
                    one (all (it \ (it @ ('case _) 1 ('dflt) 1 ())) ls && #(uniq (map show ls)) = #ls)
-                   (? (k < 0 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel w64 ty lk) x)
+                   (? (k < 0 || glb? (take k items) || any (it \ !(elem <it '(case dflt)) && ncase? it) items) (map (dprunel tm ty lk) x)
                       (: d (drop k items) j (one ? (at out? d 0) -1)
                          d2 (j < 0 || glb? (drop (j + 1) d) ? d (take (j + 1) d))
-                         (k = 0 && #d2 = #d ? (map (dprunel w64 ty lk) x) ['switch c (map (dprunel w64 ty lk) d2)])))))
-            (map (dprunel w64 ty lk) x)))
+                         (k = 0 && #d2 = #d ? (map (dprunel tm ty lk) x) ['switch c (map (dprunel tm ty lk) d2)])))))
+            (map (dprunel tm ty lk) x)))
    (glbl? x) (? !(two? x) () (<x = 'lbl) 1 (glbl? <x || glbl? >x))
    (exits? x) (x @ ('ret . _) 1 ('goto . _) 1 ('blk items) (two? items && exits? (last items)) ())
    ; -- a block ends at an item that always leaves: what follows is unreachable unless a kept jump
@@ -4146,16 +4155,16 @@
        ; only a fn glay may lay counts (cgreach): a header's unused static inline is neither scanned
        ; nor substituted
        reach (g 'reach)
-       _ (map (f \ (<f = 'fn ? (reach <>f ? (respell f @ r (rel? r ? (scan (lprop g (dprune !(ilp32? g) (e \ ()) (lprop g r)))) (scan r))) 0)
+       _ (map (f \ (<f = 'fn ? (reach <>f ? (respell f @ r (rel? r ? (scan (lprop g (dprune (gtm g) (e \ ()) (lprop g r)))) (scan r))) 0)
                      (scan f))) fs)
        (spelt? nm) (any (t \ string? t && 1 < #(split nm t)) (asms 't))
-       w64 !(ilp32? g)
+       tm (gtm g)
        ; the substitution: a parameter the body writes, or one of a type no constant stands for, is left alone
        (one f)
         (: nm <>f ps <>>f body (f 3) cs (peep calls nm ())
            (? (!(peep sfns nm ()) || esc nm || spelt? nm || !(two? cs)) f
               (: ws (pwrites body () + pdecls body ())   ; ..or a name a block declares again
-                 (kof i) (: vs (map (as \ (i < #as ? (cfold w64 (as i)) ())) cs)
+                 (kof i) (: vs (map (as \ (i < #as ? (cfold tm (as i)) ())) cs)
                             (cint? <vs && all (v \ v = <vs) vs ? <vs ()))
                  (go l i acc) (? !(two? l) acc
                                  (: p <l k (kof i)
@@ -4205,7 +4214,7 @@
        k [(g 'statics) f]
        (peep m k 'none @ 'none (: r (lprop0 g f) _ (pin m k r) r) r9 r9))
    (lprop0 g f)
-    (: w64 !(ilp32? g)
+    (: tm (gtm g)
        tak {} tys {} sds {}                         ; sds: the block statics
        ; an asm's memory operand takes its name's address, as kprop reads it
        mc (a64? g ? '(81 109 111) '(109 111))       ; a64's Q is memory too
@@ -4310,9 +4319,9 @@
        ; x's value past `x = rhs`: one constant whatever x held, in x's own type. an rhs that
        ; reads x is one only through a & or * with a zero
        (val nm rhs) (: ty (tys nm)
-                       (at k) (cfold w64 ['cast ty (vsub nm k rhs)])
+                       (at k) (cfold tm ['cast ty (vsub nm k rhs)])
                        (rds? x) (? !(two? x) () (x = ['var nm]) 1 (rds? <x || rds? >x))
-                       (z? x) (cfold w64 x @ v (cint? v && v = 0))
+                       (z? x) (cfold tm x @ v (cint? v && v = 0))
                        ok (!(rds? rhs) || (rhs @ ('bin op p q && elem op '(& *)) (z? p || z? q) ()))
                        a (at 0)
                        (ok && cint? a && a = at 1 && a = at (0 - 1) ? (cnum g ['cast ty ['num a]] @ cv (two? cv ? ['cast ty ['num <cv]])) ()))
@@ -4365,8 +4374,8 @@
                          (map inner x)))
        ; `0 || e` and `1 && e` are e's truth, evaluated as surely as the test, where the inliner takes it
        (simp x) (? !(two? x) x
-                   (x @ ('lor . a . b . _) (zfold w64 a = 0 ? ['un 'not ['un 'not (simp b)]] (map simp x))
-                        ('land . a . b . _) (zfold w64 a @ v (cint? v && v != 0 ? ['un 'not ['un 'not (simp b)]] (map simp x)))
+                   (x @ ('lor . a . b . _) (zfold tm a = 0 ? ['un 'not ['un 'not (simp b)]] (map simp x))
+                        ('land . a . b . _) (zfold tm a @ v (cint? v && v != 0 ? ['un 'not ['un 'not (simp b)]] (map simp x)))
                         (map simp x)))
        (tw? (f 3) ? f ([<f <>f <>>f (simp ((rd (f 3)) @ ('blk items) ['blk (blk items () () 1)] (inner (rd (f 3)))))] + >>>>f)))
    ; a decl entry with nothing past its init but a mask, and that not volatile: no register,
@@ -4420,7 +4429,7 @@
                       (imaddr g init != 'no || onlys init) ?
                         ['cast ty init])
            !(elem ty '(bool char schar cchar uchar short ushort int uint long ulong)) ()
-           (: v (bcpopen? !(ilp32? g) init ? 'no (cfold !(ilp32? g) init @ cv (cint? cv ? cv 'no)))   ; any constant init, folded in C's types
+           (: v (bcpopen? (gtm g) init ? 'no (cfold (gtm g) init @ cv (cint? cv ? cv 'no)))   ; any constant init, folded in C's types
               (!(charm? v) ? ()
                  (cnum g ['cast ty ['num v]] @ cv
                     (two? cv ? ['cast ty ['num <cv]])))))
@@ -4449,8 +4458,8 @@
    ; with those params as their constants and pruned, judged again, and spliced by a second ainl
    ; that takes these copies alone; a site it declines calls the callee as written
    (kinl g f)
-    (: w64 !(ilp32? g) ks (g 'inlk) sp {} on {}
-       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+    (: tm (gtm g) ks (g 'inlk) sp {} on {}
+       (kv e) (cfold tm e @ v (cint? v ? v ()))
        ; a param the body writes, takes the address of or declares again keeps its arg
        (fixed? p b) (: (go x) (? (atom? x) ()
                                  (x @ (('asn || 'post) . ('var ^p) . _) 1
@@ -4470,7 +4479,7 @@
                        s "\(nm)`k\(n9)"
                        kp (filter (i \ !(two? (cs i))) (jot #ps))
                        b (foldl (b \ i \ (two? (cs i) ? (sub b <(ps i) (cs i)) b)) (fi 3) (jot #ps))
-                       f2 (nofx (do0 (ucut (dprune w64 (e \ ()) ([<fi s (map (i \ ps i) kp) b] + >>>>fi)))))
+                       f2 (nofx (do0 (ucut (dprune tm (e \ ()) ([<fi s (map (i \ ps i) kp) b] + >>>>fi)))))
                        sg [<sig (map (i \ (sig 1) i) kp) (sig 2)]
                        (inlok? g f2 sg () ?
                           (pin (g 'inl) s f2, pin (g 'sigs) s sg, pin on s 1, pin sp s [nm cs],
@@ -4496,7 +4505,7 @@
    ; its literal and spells its own locals apart. a body indexing a small local array by k may run
    ; larger: its copies are what lets sra seat the array --
    (unrl g f)
-    (: w64 !(ilp32? g)
+    (: tm (gtm g)
        (size x) (? (atom? x) 1 (<x = 'loc) 0 (foldl (a \ y \ a + size y) 0 x))   ; a line mark weighs nothing
        sm {}                                        ; the small local arrays sra may take
        (cen x) (? (atom? x) 0
@@ -4507,7 +4516,7 @@
        (akx? x k) (? (atom? x) ()
                      (x @ ('deref ('bin '+ ('var nm) e)) (sm nm && ment? e k) ()) 1
                      (akx? <x k || akx? >x k))
-       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+       (kv e) (cfold tm e @ v (cint? v ? v ()))
        (nogo? x k)                                  ; something a copy may not repeat, or k may not suffer
         (? (atom? x) ()
            (elem <x '(brk cont goto lbl case dflt switch asm sexpr sdecl)) 1
@@ -4558,38 +4567,71 @@
        (abl? g 'unroll ? f (walk f)))
    ; -- a small local array named only by constant-indexed elements becomes those elements as
    ; scalars, which the allocator may seat; a brace of plain items initializes them in order, the
-   ; rest zero. no decay, no &, no sizeof, no designator: any other mention leaves the array whole --
+   ; rest zero, and a constant memcpy of wide ones copies by element. no decay, no &, no sizeof, no
+   ; designator: any other mention leaves the array whole --
    (sra g f)
-    (: w64 !(ilp32? g)
-       (kv e) (cfold w64 e @ v (cint? v ? v ()))
+    (: tm (gtm g)
+       (kv e) (cfold tm e @ v (cint? v ? v ()))
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
        cand {}                                      ; name -> (elty n)
        dcl {}
+       tys {} ps9 {'locals tys 'lqs {} 'globals {} 'gqs {} 'sigs (g 'sigs) 'stag (g 'stag) 'tgt (g 'tgt)}
        (plain? p2 n) (p2 @ ('init is) (#is <= n && !(any (e \ two? e && elem <e '(dfield didx init)) is)) !(two? p2))
        (fit? x p) (<x = 'decl && dbare? p &&
                    (<>p @ ('arr et n) (scal? et && charm? n && 0 < n <= 16 && plain? (p 2) n) ()))
-       (one x p) (pin dcl <p (1 + peep dcl <p 0), fit? x p ? (pin cand <p >(<>p)) 0)
+       (one x p) (pin dcl <p (1 + peep dcl <p 0), pin tys <p <>p, fit? x p ? (pin cand <p >(<>p)) 0)
        (cen x) (? (atom? x) 0
                   (elem <x '(decl sdecl)) (map (one x) <>x)
                   (map cen x))
        _ (cen f)
-       bad {}
+       bad {} use {} cpd {} tmps {'k 0}
+       (bare e) (e @ ['cast ('ptr _) x] (bare x) _ e)
+       ; an integer or pointer element of a word's half or more: a copy of it is its bits
+       (wide? et) (ptr? et || elem et '(int uint long ulong llong ullong))
+       (arrn e) (bare e @ ['var nm] (cand nm @ c (two? c && wide? <c ? nm)) _ ())
+       ; what the other side must be: such an array too, or a pointer whose loads may go by element
+       (mate et e) (arrn e @ nm (nm ? (<(cand nm) = et)
+                                    (ptype ps9 (bare e) @ ((('ptr || 'arr) . t . _) && t = et) 1
+                                                          _ (!(sal? g) && (x64? g || a64? g)))))
+       (room e k) (arrn e @ nm (!nm || k <= cand nm 1))
+       ; a constant memcpy to or from the front of such arrays, as a statement -> [d s k et]
+       (mcp x)
+        (x @ (['expr ['call ['var m] [d s e]]] && string? m && memnm? g m "memcpy" && m != <>f && !(dcl m) && !(two? (assoc m <>>f)))
+              (: da (arrn d) sa (arrn s) nm (da ? da sa)
+                 (? (!nm || da = sa) ()
+                    (: et <(cand nm) w (tsz g et) n (memk g e)
+                       (charm? n && 0 < n && n % w = 0 && room d (n // w) && room s (n // w) && mate et d && mate et s ?
+                          [d s (n // w) et]))))
+              _ ())
        (elt x) (x @ ('deref ('bin '+ ('var nm) ix)) (cand nm @ c (two? c ? (kv ix @ k (charm? k && 0 <= k < c 1 ? [nm k]))))
                     ())
        ; an element's address is the array's: pointer arithmetic may walk from it
+       (side e) (arrn e @ nm (nm ? (pin cpd nm 1) (scan e)))
        (scan x) (? (atom? x) 0
+                   (mcp x @ [d s _ _] (side d, side s, 1) _ ()) 0
                    (x @ ('addr e) (two? (elt e)) ()) (elt <>x @ [nm _] (pin bad nm 1))
-                   (two? (elt x)) 0
+                   (elt x @ [nm _] (pin use nm 1) _ ()) 0
                    (<x = 'var) (two? (cand <>x) ? (pin bad <>x 1) 0)
                    (map scan x))
-       _ (two? (keys cand) ? (scan f))
-       ok (filter (nm \ !(bad nm) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
+       _ (two? (keys cand) ? (map (p \ pin tys <p <>p) <>>f, scan f))
+       ok (filter (nm \ !(bad nm) && (use nm || !(cpd nm)) && peep dcl nm 0 = 1 && !(two? (peep (g 'glob) nm 0)) && !(g 'fns nm)) (sort (keys cand)))
        (sn nm k) "\(nm)`s\(k)"
        (rd ps) (? !(two? ps) ()
                   (elem <<ps ok) (: is (<ps 2 @ ('init l) l ())
                                     (cand <<ps @ [et n] (map (k \ [(sn <<ps k) et (two? is ? (k < #is ? (rw (is k)) '(num 0)))]) ^n) + rd >ps))
                   (rw <ps . rd >ps))
+       (seat? e) (arrn e @ nm (nm && elem nm ok))
+       ; a copy by element: a side that is no seated array through a pointer taken once
+       (hold et e) (? (seat? e) [(arrn e) ()]
+                      (: k (tmps 'k) t "`a\(k)" _ (pin tmps 'k (k + 1)) [t [[t ['ptr et] ['cast ['ptr et] (rw e)]]]]))
+       (cpy d s k et)
+        (hold et d @ [dn dd] (hold et s @ [sn9 sd]
+           (: (at nm i) (rw ['deref ['bin '+ ['var nm] ['num i]]])
+              ds (dd + sd)
+              ['blk ((two? ds ? [['decl ds]] ()) + map (i \ ['expr ['asn (at dn i) (at sn9 i)]]) ^k)])))
        (rw x) (? (atom? x) x
+                 (mcp x @ [d s k et] (? (seat? d || seat? s) (cpy d s k et) (map rw x)) _ (rw1 x)))
+       (rw1 x)  (? (atom? x) x
                  (elt x @ e (? (two? e && elem <e ok) ['var (sn <e <>e)]
                                (<x = 'decl) ['decl (rd <>x)]
                                (map rw x))))
@@ -4609,7 +4651,7 @@
    ; reads its members there, through an address taken once. a volatile struct, member or
    ; source stays whole --
    (srs g f)
-    (: w64 !(ilp32? g)
+    (: tm (gtm g)
        (scal? t) (ptr? t || elem t '(char schar cchar uchar bool short ushort int uint long ulong llong ullong double float))
        (mems t) (t @ ('struct . _) (peep (g 'stag) <>t 0 @ e (two? e ? <e)) ())
        (over a b) (a 1 < b 1 + tsz g (b 2) && b 1 < a 1 + tsz g (a 2))
@@ -4704,7 +4746,7 @@
    ; writes, answered here: the local's decl takes the exact value at its width, the call whether it
    ; fit, so kprop carries the local on -> f | ()
    (ovfold g f)
-    (: w64 !(ilp32? g)
+    (: tm (gtm g)
        ity '(char schar cchar uchar short ushort int uint long ulong llong ullong)
        ovs '("__builtin_add_overflow" "__builtin_sub_overflow" "__builtin_mul_overflow")
        tys {} tak {} wrt {}
@@ -4719,7 +4761,7 @@
        val {}
        (ans x)
         (x @ ('call ('var b9) [a b ('addr ('var v))] && elem b9 ovs)
-              (: ka (cfty w64 a) kb (cfty w64 b) tt (peep tys v ())
+              (: ka (cfty tm a) kb (cfty tm b) tt (peep tys v ())
                  (? !(two? ka && two? kb && elem tt ity && tsz g tt <= 8 && peep tak v 0 = 1 && !(wrt v)) ()
                     (: va <ka vb <kb
                        r (? (b9 = "__builtin_add_overflow") (va + vb) (b9 = "__builtin_sub_overflow") (va - vb) (va * vb))
@@ -4741,9 +4783,9 @@
    ; every __builtin_constant_p decided on what inlining and kprop left: 1 where its operand folds,
    ; else 0; the arms that settles pruned, then propagated again
    (bcpfin g f)
-    (: w64 !(ilp32? g)
+    (: tm (gtm g)
        (has? x) (? (atom? x) () (<x = 'bcp) 1 (has? <x || has? >x))
-       (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold w64 <>x) ? 1 0)] (map res x))
+       (res x) (? (atom? x) x (<x = 'bcp) ['num (charm? (cfold tm <>x) ? 1 0)] (map res x))
        ; a spliced body's labels are reached from the splice alone: an arm holds one only when a jump
        ; outside it names it (or a case stands in it)
        (refs x t) (? !(two? x) t
@@ -4756,7 +4798,7 @@
                            (<y = 'lbl) (string? <>y && !(starts? <>y "`") && peep inn <>y 0 < peep all <>y 0)
                            (go <y || go >y))
                  (go x))
-       (ucut (has? f ? (kprop g (dprunel w64 (e \ ()) lk (res f))) (dprune w64 (e \ ()) f))))
+       (ucut (has? f ? (kprop g (dprunel tm (e \ ()) lk (res f))) (dprune tm (e \ ()) f))))
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
     ; ..and once more past the prune: an arm it dropped may have been a name's other value
     (: _ (pin g 'ainln {'k 0})
@@ -4764,7 +4806,7 @@
                       u0 (unrl g k0 @ u9 (u9 = k0 ? u9 (kinl g u9)))
                       k1 (srs g (sra g (u0 = k0 ? k0 (kprop g u0))))
                       (ovfold g k1 @ k2 (two? k2 ? (kprop g k2) k1)))
-                @ f1 (kprop g (ucut (dprune !(ilp32? g) (e \ ()) (lprop g f1)))))
+                @ f1 (kprop g (ucut (dprune (gtm g) (e \ ()) (lprop g f1)))))
        ; the tree passes probe addresses (kprop's, an asm operand's) before every constant has
        ; arrived; a name such a probe could not resolve is no refusal's cause
        _ (pin g 'undecl ())
@@ -5039,7 +5081,7 @@
                            nelem <>f weaks &&
                            nelem <>f noinls ?
                              ; judged as it would splice: dead arms pruned, a tail past a return cut, a do-while(0) unwrapped, a statement that does nothing dropped
-                             ((elem <>f ainls || !(sspbuf? g (f 3)) ? (sspcut f) f) @ f9 (nofx (do0 (ucut (dprune !(ilp32? g) (e \ ()) f9)))) @ fi
+                             ((elem <>f ainls || !(sspbuf? g (f 3)) ? (sspcut f) f) @ f9 (nofx (do0 (ucut (dprune (gtm g) (e \ ()) f9)))) @ fi
                                 (inlok? g fi (sigs <>f) (elem <>f ainls) ?
                                    ((asmneed? g <>>f <>>>f ? (pin (g 'ineed) <>f 1) 0),
                                     (elem <>f ainls ? (pin (g 'alw) <>f 1) 0),
@@ -5323,7 +5365,7 @@
              ; the pads' words, a fixup to each: what ftrace and the kernel's call padding walk
              ; ..only those whose label the text still lays, once each, one section per function
              ; section and ordered by it (shf_link_order), as a discarded .init.text takes its own
-             pfs (: w (ilp32? <r ? 4 8)
+             pfs (: w (wsize <r)
                     (lt fs) (foldl (t \ f \ (two? f && <f = 'label ? (pin t (<>f) 1) t)) {} fs)
                     (pfsec fs) (lt fs @ t (foldl (a \ L \ (t L && !(elem L a) ? (L . a) a)) () (<r 'pfel) @ ls
                                   (two? ls ? [["__patchable_function_entries"

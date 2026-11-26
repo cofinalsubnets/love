@@ -270,7 +270,7 @@ The command is **`sb`** — two letters, and antimony beside mercury's `hg`. Eve
 imported is `sb` (`src/apps/sb/`, `(borrow 'sb)`, `.sb/`, `make test_sb`); *svalbard* is the prose name,
 the way Mercurial is the project and `hg` is the thing you run.
 
-`hatch` is not a plant word, deliberately: egg / hatch / `born` is love's own bootstrap cluster,
+`hatch` is not a plant word, deliberately: egg / hatch is love's own bootstrap pair,
 and the installer *re-runs the hatch* on your machine. The vault half is `sync`; `hatch` is the
 bootstrap half; install is the two composed.
 

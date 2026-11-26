@@ -456,6 +456,17 @@
                              (charm? w && w != 0 ? (pin aopix w n) 0))))))
        (peep aopix x 0))
    (aopn x l) (atom? l ? (: n (opnom x) (? n n (charm? x) (aopw x) 0)) (x = <<l) <><l (aopn x >l))
+   ; the words a source lane reads by name, against their values as the glaze loads (filled past the walkers).
+   opwords '(+ - * / // % & | ^ << >> < <= > >= = == != !== . ! && || ? tally peep pin two? atom? nil? one? whole? long? ucar
+             cap cup caap caup cuap cuup mget mput list tablet hash twin re im conj net
+             \ abs negate max min elem snip string cat rev assoc last charm? nom? tablet? lit? string? gem?)
+   opwas {}  opmoved {}
+   opmiss (mint 0)
+   ; the analyzer's row (ev.l's rowpin) as a global read. a name it lacks is canon's, a word as the lanes know it
+   (rowgv row) (n \ d \ (peep row n opmiss @ v (? (v == opmiss) (peep opwas n d)  v)))
+   (spells? ws e) (? (two? e) (spells? ws <e || spells? ws >e) (nom? e) (elem e ws) 0)
+   ; does s spell a word the lanes read by name that has another value now?
+   (stale? gv s) (: ws (filter (n \ gv n opmiss !== peep opwas n opmiss) (keys opwas)) (two? ws && spells? ws s))
    ; gopword: a head as its canonical word; a compound or unmapped head passes through;
    ; shadowing is the caller's
    (gopword h) (? (nom? h) h  (two? h) h  (: w (aopn h aopv) (w ? w h)))
@@ -609,10 +620,10 @@
        ; a bake by a call profile (bake-calls, the bake's alone) keeps a leaf's native, or one the cost
        ; rule declines, only where the profile called it often; a counting image (bake-count,
        ; `bake --profile calls`) gives each a counting cell instead
-       cnt  (gv 'bake-count 0 && (!drv || cst))
-       kept (string? (gv 'bake-calls 0) && akeep? (show (: fz (gv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0))))
+       cnt  (aopgv 'bake-count 0 && (!drv || cst))
+       kept (string? (aopgv 'bake-calls 0) && akeep? (show (: fz (aopgv 'fires 0) (tablet? fz ? (peep fz 'ix 0) 0))))
        drok (lts != 'bad && (!cst || cnt || kept))          ; a declining body or refused lets skip the walks
-       dvok (? cnt 1 (string? (gv 'bake-calls 0)) (drv && !cst || kept) txok)
+       dvok (? cnt 1 (string? (aopgv 'bake-calls 0)) (drv && !cst || kept) txok)
        csx  (drok ? (map (f \ [f (farq f ?                   ; only a letrec-local can be a sibling, and farq is the cheap gate
                               (: lfd (assoc f lams)          ; the cell's box slot 0
                                  (two? lfd ? (peep >lfd 0 0) 0))
@@ -630,7 +641,7 @@
        gvals (map caup gps)
        qs   (drok ? (foldl (flip aq) (aq body ()) inits) ())   ; the quoted constants, ==-deduped source nodes
        nq   #qs
-       eqv  (gv '= 0)                                       ; aeq2's generic lane drives it off an extras slot
+       eqv  (=)                                     ; aeq2's generic lane drives it off an extras slot
        cx   (op \ (? (op = self) ni (elem op cn) #(cimp op) 0))
        ; fbk: a body with a call never restarts: its guards jump stubs that drive the op's own value
        ; (fb1/fb2/atruth), pulled off the extras chain past the inner entries into the one ovo slot
@@ -640,9 +651,9 @@
        fbk  (drok && (trm || ahascall? env go body || foldl (\ ac i (ac || ahascall? env go i)) 0 inits))
        ; the float lane on every arithmetic guard costs a run-time compile its size, so past the bake
        ; it rides only a body that spells a float
-       flk  (targets tgt 'float && (gv 'bake-count 0 || string? (gv 'bake-calls 0) || aflo? body || any aflo? inits))
+       flk  (targets tgt 'float && (aopgv 'bake-count 0 || string? (aopgv 'bake-calls 0) || aflo? body || any aflo? inits))
        ovs  (fbk ? '(bit + - < = cap cup . <= > >= * // % & | ^) ())   ; the most driven first: a stub walks to its own
-       ovals (map (o \ o = 'bit ? bit (gv o 0)) ovs)   ; the truth stub's bit is the glaze's own: the book's may be a module's namesake
+       ovals (map (o \ o = 'bit ? bit <<(filter (p \ o = <>p) aopv)) ovs)   ; the glaze's own values: the book's may be a module's namesake
        nd0  (drok ? (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
        nd   (nd0 + (fbk ? 1 0))                                  ; the stubs read the right operand off one spill past its op
        kn   (sfq ? (self . gn + cn) (gn + cn))
@@ -700,7 +711,7 @@
                       'restart)
                (say err ("why: " + show why + "  " + snip (show s) 0 (min 160 #(show s)) + "\n")))
             0)
-       (? (ok && cnt) (: fz (gv 'fires 0)  _ (peep probebox 0 0 ? 0 (pin fz 'cc (peep fz 'ix 0)))  0)
+       (? (ok && cnt) (: fz (aopgv 'fires 0)  _ (peep probebox 0 0 ? 0 (pin fz 'cc (peep fz 'ix 0)))  0)
           (ok && peep probebox 0 0) 1
           ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)
@@ -872,6 +883,12 @@
                  ['st SP (-2 * W) T] ['st SP -W X]
                  (reach tgt IP 8) ['sub SP SP (4 * W)] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  ['label bb] ['ld A SP 0] ['add SP SP W]])
+             ; adrivet: adrive in tail position. the arg lands where our last was, our frame is popped and the
+             ; callee runs in our place under our continuation, as lvm_tap; a charm is driven
+             (adrivet so t) (!t ? (adrive so) (: sw (mint 0)  o (fro + W * (a - 1))
+              ([['ld X SP so] ['test X 1] ['br 'ne sw]
+                ['st SP o A] ['mov IP X] ['add SP SP o] ['ld T IP 0] ['jmpr T]
+                ['label sw]] + adrive so)))
              ; ayl: a peer waits at the countdown. nothing rides a register, so the frame walks as at a
              ; call-out: [x, charm(bb - entry0), entry0] off the fair resume. no room, no yield this time
              (ayl _) (: bb (mint 0) sk (mint 0)
@@ -887,10 +904,10 @@
                  ['st SP (-2 * W) T] ['st SP -W X]
                  (reach tgt IP 8) ['sub SP SP (4 * W)] ['ld T IP 0] ['jmpr T]
                  ['label bb] ['ld A SP 0] ['add SP SP W]])
-             (achain as cso d) (atom? >as
-                                  ? (acg <as d + adrive cso)
+             (achain as cso d t) (atom? >as
+                                  ? (acg <as d + adrivet cso t)
                                     (acg <as d + adrive cso + [['st SP (spill d) A]]
-                                     + achain >as (spill d) (d + 1)))
+                                     + achain >as (spill d) (d + 1) t))
              ; asite: (amble-lam i n v..) lays lvm_cur's partial cells on the heap under one room guard:
              ; [cur n-1 unc arg cont tag] while curry remains, [unc arg cont tag] last; cont = callee+2, tag = cell|2
              (asite as d) (: so (ino + W * <as)  n <>as  vs >>as
@@ -905,7 +922,7 @@
                                 ([['lea X HP (W * (8 + 6 * #vs))] ['cmp SP X] ['br 'below 'deopt] ['ld T SP so]]
                                  + gov vs n + [['mov A T]])
                                 [['ld A SP so]]))
-             (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
+             (astr1 cso t) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the string fast lane at a 1-arg frame-callee site: (s i) on a text and an
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; in-range charm reads the byte; anything else drives, never deopts. one
                   ['ld X T 0] (reach tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; unsigned compare rejects negative and past-end alike
                   ['test A 1] ['br 'eq ld]
@@ -914,12 +931,12 @@
                   ['jmp ld]
                   ['label ok] ['ldxb A T X 1 (2 * W)] ['leax A A A 1 1]
                   ['jmp en] ['label ld]]
-               + adrive cso
+               + adrivet cso t
                + [['label en]]))
              ; the tablet fast lane at a 1-arg site keyed by a quoted nom, (t 'k): a map callee is probed
              ; inline off the nom's cached hash (dig, word 2) -- a hit its value, a gap () -- and anything
              ; else drives. a slot holding another nom of the same dig may be =, so that drives too
-             (amap1 cso d) (: lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) ld (mint 0) dr (mint 0) en (mint 0)
+             (amap1 cso d t) (: lp (mint 0) nx (mint 0) ht (mint 0) ms (mint 0) ld (mint 0) dr (mint 0) en (mint 0)
               ([['ld T SP cso] ['test T 1] ['br 'ne dr]
                  ['ld X T 0] (reach tgt SC 2) ['cmp X SC] ['br 'ne dr]                                   ; not a map: drive, the key still in A
                  ['st SP (spill d) A]
@@ -936,7 +953,7 @@
                  ['label ht] ['leax A SC SC 1 0] ['ldx A T A W W] ['jmp en]
                  ['label ms] ['ld A SP gbo] ['jmp en]
                  ['label ld] ['ld A SP (spill d)] ['label dr]]
-               + adrive cso
+               + adrivet cso t
                + [['label en]]))
              (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) on a text: A = tag([X+8]); anything else drives the tally global off its gn slot
               (acg sx d
@@ -969,7 +986,7 @@
                + [['label dn]]))
              ; atsat: asat in tail position. a callee cur cell of arity n, n no more than this frame's own a,
              ; takes its args where ours were, under our continuation, and runs in our place: no frame of
-             ; ours is left, so a loop through a sibling or a parent never grows. anything else, the chain
+             ; ours is left, so a loop through a sibling or a parent never grows. anything else, the chain, its last apply a tail one
              (atsat as cso d) (: sw (mint 0)  n #as  o (fro + W * (a - n))
               (n > a ? (asat as cso d)
                  (agous as 0 d
@@ -980,27 +997,27 @@
                   + [['lea IP X (2 * W)] ['add SP SP o] ['ld T IP 0] ['jmpr T]                         ; our frame popped, our continuation theirs
                      ['label sw]]
                   + (: (goj j so) (j < n ?
-                                     ([['ld A SP (spill (d + j))]] + adrive so
+                                     ([['ld A SP (spill (d + j))]] + adrivet so (j = n - 1)
                                       + (j < (n - 1) ? [['st SP (spill d) A]] ())
                                       + goj (j + 1) (spill d))
                                      ()) (goj 0 cso)))))
              ; the string fast lane rides looping bodies and frame callees only: a gn or sibling callee is never a string
              (acall f as d t)
               (? (acomp? f) (acg f d + [['st SP (spill d) A]]                                        ; the head at spill d, then a frame callee's lanes
-                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1))))
+                               + (two? >as ? ((t ? atsat asat) as (spill d) (d + 1)) (achain as (spill d) (d + 1) t)))
                  (f = self)                                                                               ; saturated -> the direct frame jump; partial or over-applied ->
                  (#as = (a - ni) ?                                                                  ; curry the own cell through its imports, then the args (a saturated
                     (aselfcall as d)                                                                        ; tail self-call took sgo instead)
-                    (achain (simp + as) soo d))
+                    (achain (simp + as) soo d t))
                  (elem f cn)                                                                             ; a sibling: its frozen entry takes the import names (all in the frame
                  (: sas (cimp f + as)  sso (gbo + W * (1 + #gn + posof f cn 0))            ; by fixcaps) then the args, saturated when it can be
-                    (two? >sas ? ((t ? atsat asat) sas sso d) (achain sas sso d)))
+                    (two? >sas ? ((t ? atsat asat) sas sso d) (achain sas sso d t)))
                  (: fr  (elem f vars || elem f ps || elem f lts)
                     cso (fr ? (voff f) (gbo + W * (1 + posof f gn 0)))
-                    (? (atom? >as && aqnom? <as) (acg <as d + amap1 cso d)
-                       ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso)
+                    (? (atom? >as && aqnom? <as) (acg <as d + amap1 cso d t)
+                       ((lp ? 1 sfq) && atom? >as && fr) (acg <as d + astr1 cso t)
                        (two? >as) ((t ? atsat asat) as cso d)
-                       (achain as cso d))))
+                       (achain as cso d t))))
              (agous us j d) (two? us ? (acg <us (d + j) + [['st SP (spill (d + j)) A]] + agous >us (j + 1) d))
              (agomv j d) (j >= 0 ? ([['ld A SP (spill (d + j))] ['st SP (W * j) A]] + agomv (j - 1) d))
              (ago as d) (agous as 0 d + (k > 0 ? ([['st SP (W * (k - 1)) A]] + agomv (k - 2) d) ()) + fairck tgt SC T (ayl 0) + [['jmp 'top]])   ; updates read the old vars (spilled first); the last is still in A
@@ -2312,7 +2329,7 @@
           hasbody (1 = #>form % 2)
           pairs2 (map (pr \ <pr . (two? <pr ? (delet-body >pr) >pr)) pairs)
           (': . (hasbody ? (unpair pairs2 body) (cbflat pairs2)))))
-   ; --- deabs: (abs x) = (? (x < 0) (0 - x) x), x dup-cheap, bottom-up: the int group's abs. a tray's abs is its norm, but
+   ; --- deabs: (abs x) = (? (x < 0) (0 - x) x), x dup-cheap, bottom-up: the int group's abs. a tray's abs is elementwise, but
    ;     a group is ints or it declines, and a decline drops the lowered form. a binary (min a b) is the tower, not lowered
    (deabs e) (? (atom? e) e  (dquote? e) e
                 (: y (map deabs e) (gopword <y = 'abs && 1 = #>y && dcheap? <>y ? ['? ['< <>y 0] ['- 0 <>y] <>y] y)))
@@ -2815,7 +2832,8 @@
                 (gv ? (: tab (ctable gv)
                          (cnom x bnd) (elem x bnd ? x
                                         (: c (: m (peep mt x gone)
-                                              (m = gone ? (: v (gv x gone) c (v = gone ? 0 (peep tab v 0)) _ (pin mt x c) c) m))
+                                              (m = gone ? (: v (gv x gone) c (v = gone ? 0 (peep tab v 0)) w (peep opwas x gone)
+                                                             _ (pin mt x c) _ (w !== gone && v !== w ? (pin opmoved 0 1) 0) c) m))
                                            (cword x c bnd)))
                          (cword x c bnd) (!(nom? c) || elem c bnd ? x c)                   ; c, x's canonical word, unless a binder took it
                          ; an op value a macro, opfix or cprop spliced reads as its word too
@@ -2840,11 +2858,12 @@
                    e))
    ; the integer leaf and the loops are the hook's, read off the thread base-ev writes
    (auto-ev e) (? (atom? e) (ev-run e)                                                 ; an atom has nothing to lower
-                  (targets arch 'float && qualfr e) (memo e (l \ jitfr l arch))
+                  (targets arch 'float && qualfr e) (stale? aopgv e ? (ev-run e) (memo e (l \ jitfr l arch)))
                   ; cask-build a string loop, lower a complex grid to real pairs, then a float-grid nest or an arith group, else interp.
                   ; with no float lane the pairs would only run interpreted, slower than the twins
-                  (: f (canon (ev-lower e))
-                     (ev-run (autogroup (autonat ((targets arch 'float ? twolow id) (castbuild f)))))))
+                  (: l (ev-lower e)  _ (pin opmoved 0 0)  f (canon l)
+                     (? (peep opmoved 0 0) (ev-run l)                               ; canon met a word the passes read by name with another value now
+                        (ev-run (autogroup (autonat ((targets arch 'float ? twolow id) (castbuild f))))))))
    ; `ev` is orth, which a module layer cannot write, so the boot installs (: ev (cite 'glaze 'ev)). a re-load hands the baked
    ; auto-ev back; a trampoline build (love-tco 0) stays the interpreter, since glazed code Continues by tail-jump, which only the threaded vm honors
    ev (? glaze-loaded? ev
@@ -2876,7 +2895,7 @@
        _ (pin ga 'at (cite 'holo 'assemble-at))
        (asm t ir) (ga 'f t ir)
        gvbox (G 'gvbox)                                                     ; canon reads globals through ala's gv, pinned here on the first closure
-       probebox (G 'probebox)
+       probebox (G 'probebox)  stale? (G 'stale?)  rowgv (G 'rowgv)
        (hit x) (pin fires () (1 + peep fires () 0), x)
        ; grp-ok?: autogroup's recognizer over the defs jitgroupirx compiles. jgir-ok? only says the ops exist -- a body past
        ; the grammar reaches cggir, whose ? chain ends in a silent () that emits no code
@@ -2893,7 +2912,7 @@
        ; lambda siblings ((name . cell)..; entry 0 declines), nm = the letrec name being bound (0 anonymous), ti/ta = the uninterned iop/apx markers, inl = the inner-closure record amble's site reads,
        ; rt = the top scope of the form being compiled, where a compile waiting on a sibling not yet built is deferred to (0: compile now or never).
        ; LOVE_LAZY_GLAZE, read per closure, waits for the closure's first call (hotcell), and the compile sees the siblings as they are then;
-       ; outside a bake, a closure made at run time waits for its call past hot-calls (LOVE_GLAZE_HOT=N; any other word compiles at once)
+       ; outside a bake, a closure made at run time waits for its call past hot-calls (LOVE_GLAZE_HOT=N; off never compiles, any other word at once)
        hot-calls 1024
        (natjit e s a gv farq lams nm ti ta inl rt)
         (: _ (pin fires 'ix (1 + peep fires 'ix 0))                          ; this closure's place in the bake, the call profile's key
@@ -2901,13 +2920,15 @@
            hn (? (getenv "LOVE_LAZY_GLAZE" @ v (string? v && 0 < #v)) 0
                  (gv 'cmdline 0 == 0) ()                                 ; a bake: main.c binds cmdline only past one
                  (getenv "LOVE_GLAZE_HOT" @ v (string? v && 0 < #v))
-                  (: v (getenv "LOVE_GLAZE_HOT") (dg i n) (i < #v ? (48 <= v i <= 57 ? (dg (i + 1) (n * 10 + v i - 48)) ()) n) (dg 0 0))
+                  (: v (getenv "LOVE_GLAZE_HOT") (dg i n) (i < #v ? (48 <= v i <= 57 ? (dg (i + 1) (n * 10 + v i - 48)) ()) n) (v = "off" ? 'off (dg 0 0)))
                  hot-calls)
-        (? (charm? hn)
+           gz (rowgv (peep rt 'row {}))                             ; the names as the twin folded them, whatever the book says by the compile
+        (? (hn = 'off) e
+           (charm? hn)
            (: lz (freeze-self lams nm)
-              L (hotcell e a (\ L (deferpatch L (natnow e s a gv farq lz nm ti ta inl 0))) hn)
-              (L == () ? (natnow e s a gv farq lams nm ti ta inl rt) L))
-           (: r (natnow e s a gv farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
+              L (hotcell e a (\ L (deferpatch L (natnow e s a gz farq lz nm ti ta inl 0))) hn)
+              (L == () ? (natnow e s a gz farq lams nm ti ta inl rt) L))
+           (: r (natnow e s a gz farq lams nm ti ta inl rt)  ix (peep fires 'ix 0)
               (r == e && peep fires 'cc 0 = ix ? (countcell e a ix) r))))
        ; the self cell as it is now: a later compile reads its own import row as this one would
        (freeze-self lams nm) (: sc (assoc nm lams) (map (p \ (two? sc && p == sc ? (<p . {0 (peep >p 0 0)}) p)) lams))
@@ -2922,6 +2943,7 @@
               (two? lf) (hit (nif (emit (peep (asm arch (coreir arch (init >lf) (last lf) (deoptir arch (a = 1 ? 0 1)))) 'bytes 0)) e a))
               (two? lp) (thcount lp @ [B I op cmp] (hit (njit-loop B I op cmp e))
                          (hit (njit-loop-n (lp 0) (lp 1) (lp 2) (lp 3) (lp 4) (lp 5) e)))
+              (stale? gv s) e                                               ; the source lanes read it by name, the thread's off the twin
               !(all nom? ps) e                                                        ; a pattern binder in the frame declines every source lane
               (flo && qualfr s) (hit (jitfrx s arch e))                                      ; deopt to e, never (ev s), which re-enters ala
                 (: ci (calloutinfo s)
@@ -2986,6 +3008,9 @@
            (last l) (? (two? (cup l)) (last (cup l)) (cap l))
            (ldel x l) (? (two? l) (? (= (cap l) x) (cup l) (. (cap l) (ldel x (cup l)))))))
    0)
+; the words as the lanes know them, from here on
+(: ow (cite 'glaze 'opwas) og (cite 'guts 'gv) om (cite 'glaze 'opmiss)
+   (og == () ? 0 (each (cite 'glaze 'opwords) (n \ og n om @ v (v == om ? 0 (pin ow n v))))))   ; a load before the mop has no gv yet
 ; jot's counted twins again under the live natjit, verbatim from prel, and each walker keyed to
 ; its twin (prel's jotfuse): the ones re-declared above, by their new values; jotin's rev too
 (0 < love-tco ?

@@ -36,7 +36,7 @@
           (: t (held 10)
              ['skip 0 k ("ID3" + string [v (s 4) (s 5 & 239)] + ss (t - 10) + snip s 10 t)])))
    ; a header -> [bytes ch rate] | (), bytes 0 for free format
-   (mp3-hd s o) (mp3-head s o @ v (? (charm? v && 0 < v) [(v & 4095) ((v >> 12) & 15) (v >> 16)] ()))
+   (mp3-hd s o) (mp3-head s o @ v (? (charm? v && 0 < v) [(v & 4095) ((v >> 12) & 15) ((v >> 16) * 25)] ()))
    ; the first frame at or past i whose successor is where its length says, so a stray 0xff in
    ; a tag or a cut is not taken for one -> its offset | -1 none in s | -2 none yet
    (mp3-find s i lim)

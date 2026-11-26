@@ -36,9 +36,10 @@
                  lanes-covers lanes-plan lanes-held lanes-lines)
 
 (: moon-lanes ["test_moon" "test_clay" "test_cca64" "test_cci386" "test_cci386m16" "test_ccarm" "test_ccrv64" "test_ccrv32" "test_ccxtensa" "test_ccmips" "test_ccwasm"
-               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_inle"]
+               "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_libc" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
+     ["" ["test/kore/*"] ["test_kore"] ", whose recipe names its scripts by a loop's variable"]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l" "src/apps/hosts.l"] ["test_hostnif"] ""]
      ["" ["test/host/*" "test/gate/lanes.sh"] ["test_hostnif"]
       "; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)"]
@@ -68,6 +69,9 @@
      ["what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`"
       ["src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/gas.l" "src/love/holo/dialect.l"
        "src/love/holo/text.l" "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l"] moon-lanes ""]
+     ["calls between compilers on x64, `src/apps/moon/*`, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`, `test/cc/abi/*`, `test/gate/abi.sh`"
+      ["src/apps/moon/*" "src/love/holo/x64.l" "src/love/holo/holo.l" "src/love/holo/gas.l" "src/love/holo/dialect.l" "src/love/holo/text.l"
+       "src/love/holo/obj.l" "src/love/holo/elf.l" "src/love/holo/link.l" "src/love/holo/lds.l" "test/cc/abi/*" "test/gate/abi.sh"] ["test_abi"] ""]
      ["" ["src/love/holo/a64.l"] ["test_moon" "test_cca64"] ""]
      ["" ["src/love/holo/rv64.l"] ["test_moon" "test_ccrv64" "test_ccrv32"] ""]
      ["" ["src/love/holo/i386.l"] ["test_moon" "test_cci386" "test_cci386m16"] ""]
@@ -75,6 +79,7 @@
      ["" ["src/love/holo/thumb2.l"] ["test_moon" "test_ccthumb2" "test_ccarm"] ""]
      ["" ["src/love/holo/wasm.l" "src/love/holo/wasmfn.l"] ["test_moon" "test_ccwasm"] ""]
      ["" ["src/love/holo/xtensa.l" "test/holo/xtrun.l" "test/holo/xtlink.l" "test/holo/xtdata.c"] ["test_xtensa" "test_ccxtensa"] ""]
+     ["" ["src/love/holo/avr.l" "src/love/holo/decode.l" "test/holo/avrrun.l" "test/holo/avrlaw.l" "test/holo/avrcodec.l" "test/holo/avrqemu.l" "test/holo/avrobj.l" "test/gate/avr.sh"] ["test_avr"] ""]
      ["" ["src/love/holo/mips.l" "src/love/holo/decode.l" "test/holo/mipsrun.l" "test/holo/mipscodec.l" "test/holo/mipslink.l" "test/holo/mipsrel.c" "test/holo/mipsrela.s" "test/holo/mipsrelg.s" "test/holo/mipsrelb.c" "test/holo/mipsrelm.c" "test/holo/mipstp.c" "test/gate/mips.sh"] ["test_mips" "test_ccmips"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
@@ -82,7 +87,7 @@
      ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
                 "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
-   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730
+   lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730 "test_libc" 190 "test_abi" 76
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains
     [["test_extract" "test_big" "test_encver"]
