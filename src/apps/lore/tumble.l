@@ -1,12 +1,13 @@
 ; tumble -- rigid bodies that fall, bounce, roll and come to rest: spheres and boxes, each with a
-; mass, a spin and how hard it is to turn, against brushes held still. a brush is a list of
+; mass, a spin and how hard it is to turn, against brushes. a brush is a list of
 ; planes [n d], n unit and outward, its inside where n . x <= d; one plane is a half space, a
 ; floor or a slope. a step solves the contacts by impulses: each pushes along its normal and
 ; no harder than it must, friction across it no more than mu times that, a bounce kept only
 ; from a real blow, and a body still a while sleeps until something wakes it.
 ; (tb-sphere p r m) (tb-box p h m) a body at p, radius r or half its sides h, of mass m; then
 ;   pins for 'e (bounce) 'mu (friction) 'roll (rolling drag) 'q 'v 'w
-; (tb-floor n d) a half-space brush; (tb-world bodies brushes) {'bodies 'brushes 'g}; (tb-faces W fs)
+; (tb-floor n d) a half-space brush; (tb-world bodies brushes) {'bodies 'brushes 'g}, and W's 'bv
+;   {i u} brush i moving at u, still where none; (tb-faces W fs)
 ;   the world's faces, each [ps n], a convex polygon facing n with solid behind it
 ; (tb-step W dt) on in substeps no longer than tb-h, by tumble-step in C (src/love/tumble.c), or
 ;   here where W's 'engine is 'love; (tb-energy W) kinetic plus height's
@@ -58,17 +59,20 @@
  (faces b) (: R (b 'R) p (b 'p) (catmap (k \ (: u (col R k) o (dot u p) [[u (o + b 'h k)] [(c* -1.0 u) (b 'h k - o)]])) ^3))
  ; ..at x, along n out of b into a, d deep, b () for a brush: the axes across it, how hard
  ; the two are to move apart each way there, and the bounce a real blow keeps
- (rel a ra b rb) (: va (vel a ra) (tablet? b ? (c- va (vel b rb)) va))
- (contact a b n x d) (: ra (c- x (a 'p)) rb (tablet? b ? (c- x (b 'p)) ()) t1 (side n) t2 (cross n t1)
+ (rel a ra b rb u) (: va (vel a ra) (tablet? b ? (c- va (vel b rb)) (c- va u)))
+ (contact a b n x d) (contactu a b n x d [0.0 0.0 0.0])
+ ; ..u how the brush under it moves
+ (contactu a b n x d u) (: ra (c- x (a 'p)) rb (tablet? b ? (c- x (b 'p)) ()) t1 (side n) t2 (cross n t1)
    (k1 o r u) (o 'im + dot u (cross (iw o (o 'R) (cross r u)) r))
    (eff u) (k1 a ra u + (tablet? b ? (k1 b rb u) 0.0))
-   vn (dot (rel a ra b rb) n) e (tablet? b ? (max (a 'e) (b 'e)) (a 'e))
-   {'a a 'b b 'n n 'ra ra 'rb rb 'd d 't1 t1 't2 t2 'kn (eff n) 'k1 (eff t1) 'k2 (eff t2) 'jn 0.0 'j1 0.0 'j2 0.0
+   vn (dot (rel a ra b rb u) n) e (tablet? b ? (max (a 'e) (b 'e)) (a 'e))
+   {'a a 'b b 'u u 'n n 'ra ra 'rb rb 'd d 't1 t1 't2 t2 'kn (eff n) 'k1 (eff t1) 'k2 (eff t2) 'jn 0.0 'j1 0.0 'j2 0.0
     'mu (tablet? b ? (sqrt (a 'mu * b 'mu)) (a 'mu)) 'bias (vn < 0.0 - bounce-min ? (0.0 - e * vn) 0.0)})
  ; ..a body against a brush
- (contacts b B) (? (b 'shape = 'sphere)
-                   (: c (b 'p) h (most B c) (h 0 < b 'r ? [(contact b () (h 1) (c- c (c* (b 'r) (h 1))) (b 'r - h 0))] ()))
-                   (catmap (x \ most B x @ h (h 0 < 0.0 ? [(contact b () (h 1) x (0.0 - h 0))] ())) (tb-corners b)))
+ (contacts b B u) (? (b 'shape = 'sphere)
+                     (: c (b 'p) h (most B c) (h 0 < b 'r ? [(contactu b () (h 1) (c- c (c* (b 'r) (h 1))) (b 'r - h 0) u)] ()))
+                     (catmap (x \ most B x @ h (h 0 < 0.0 ? [(contactu b () (h 1) x (0.0 - h 0) u)] ())) (tb-corners b)))
+ (bvel W i) (peep (peep W 'bv {}) i [0.0 0.0 0.0])
  ; ..two bodies, as [n x d] with n out of b into a
  (sph-sph a b) (: u (c- (a 'p) (b 'p)) l (mag3 u) d (a 'r + b 'r - l)
    (d > 0.0 && l > 1e-9 ? (c* (1.0 / l) u @ n [[n (c+ (b 'p) (c* (b 'r) n)) d]]) ()))
@@ -187,7 +191,7 @@
  (push! b r J) (pins b 'v (c+ (b 'v) (c* (b 'im) J)) 'w (c+ (b 'w) (iw b (b 'R) (cross r J))))
  (push2! c J) (push! (c 'a) (c 'ra) J, tablet? (c 'b) ? (push! (c 'b) (c 'rb) (c* -1.0 J)) 0)
  (vel b r) (c+ (b 'v) (cross (b 'w) r))
- (solve1 c) (: a (c 'a) b (c 'b) n (c 'n) (v _) (rel a (c 'ra) b (c 'rb))
+ (solve1 c) (: a (c 'a) b (c 'b) n (c 'n) (v _) (rel a (c 'ra) b (c 'rb) (c 'u))
    jn (max 0.0 (c 'jn + (c 'bias - dot (v ()) n) / c 'kn)) dn (jn - c 'jn)
    _ (pin c 'jn jn, push2! c (c* dn n))
    lim (c 'mu * jn)
@@ -206,7 +210,7 @@
  (sub W h) (: all (W 'bodies) _ (each all (b \ pin b 'R (tb-rot (b 'q)))) g (W 'g)
    bs (filter (b \ b 'still = 0) all)
    _ (each bs (b \ pin b 'v (c+ (b 'v) (c* h g))))
-   cs (catmap (b \ catmap (contacts b) (W 'brushes) + face-contacts b (peep W 'F ())) bs + pairs all)
+   cs (catmap (b \ catmap (i \ contacts b (W 'brushes i) (bvel W i)) ^#(W 'brushes) + face-contacts b (peep W 'F ())) bs + pairs all)
    _ (each ^tb-iters (_ \ each cs solve1))
    ; ..each body's contacts, counted once: its share of a sinking taken back, and touching at all
    _ (each all (b \ pin b 'nc 0))
@@ -230,8 +234,8 @@
  (row b) (: s (b 'shape = 'sphere ? [(b 'r) 0.0 0.0] (b 'h))
    (map (x \ 1.0 * x) ([(b 'shape = 'sphere ? 0 1) (b 'm) (b 'im)] + b 'ii + b 'p + b 'q + b 'v + b 'w
                        + [(b 'e) (b 'mu) (b 'roll)] + s + [(b 'idle) (b 'still) 0])))
- (planes W) (peep W 'P () @ () (: P (gem-tray [(5 * net (map (B \ #B) (W 'brushes)))]
-                                          (catmap (i \ catmap (pl \ map (x \ 1.0 * x) (pl 0 + [(pl 1) i])) (W 'brushes i)) ^#(W 'brushes)))
+ (planes W) (peep W 'P () @ () (: P (gem-tray [(8 * net (map (B \ #B) (W 'brushes)))]
+                                          (catmap (i \ catmap (pl \ map (x \ 1.0 * x) (pl 0 + [(pl 1) i] + bvel W i)) (W 'brushes i)) ^#(W 'brushes)))
                                   (pin W 'P P, P))
                          P P)
  ; ..the faces as one tray for C: their count, then each as tb_face lays it

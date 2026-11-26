@@ -4,7 +4,8 @@
 // (tumble-step B P O F) answers B a step on:
 //  B  tb-nb numbers a body: shape (0 sphere, 1 box) m im ii3 p3 q4 v3 w3 e mu roll size3 idle still
 //     (size a sphere's radius, else a box's half sides)
-//  P  5 numbers a plane, n3 d and its brush's number, a brush's planes together
+//  P  8 numbers a plane, n3 d, its brush's number and the brush's velocity u3, a brush's planes
+//     together; a contact on a brush is taken against how it moves
 //  O  gx gy gz dt
 //  F  the faces' count, then each face: np ne n3 d c3 rad, np corners, ne edges [a3 t3 l o3]
 // () when the trays are not so
@@ -22,7 +23,7 @@ enum { tb_nb = 28, tb_iters = 30 };
 
 typedef flo_t v3[3];
 struct tbody { flo_t shape, m, im, ii[3], p[3], q[4], v[3], w[3], e, mu, roll, s[3], idle, still, R[3][3]; };
-struct tcon { struct tbody *a, *b; v3 n, ra, rb, t1, t2; flo_t d, kn, k1, k2, jn, j1, j2, mu, bias; };
+struct tcon { struct tbody *a, *b; v3 n, ra, rb, t1, t2, u; flo_t d, kn, k1, k2, jn, j1, j2, mu, bias; };
 struct tpt { v3 n, x; flo_t d; };
 struct tset { struct tcon *c; uintptr_t n, cap; int bad; };
 
@@ -58,14 +59,16 @@ static void tb_iw(v3 o, struct tbody const *b, v3 const v) {
 static void tb_vel(v3 o, struct tbody const *b, v3 const r) { v3 c; tb_cross3(c, b->w, r); for (int k = 0; k < 3; k++) o[k] = b->v[k] + c[k]; }
 static void tb_rel(v3 o, struct tcon const *c) {
  tb_vel(o, c->a, c->ra);
- if (c->b) { v3 u; tb_vel(u, c->b, c->rb); for (int k = 0; k < 3; k++) o[k] -= u[k]; } }
+ if (c->b) { v3 u; tb_vel(u, c->b, c->rb); for (int k = 0; k < 3; k++) o[k] -= u[k]; }
+ else for (int k = 0; k < 3; k++) o[k] -= c->u[k]; }
 static flo_t tb_eff1(struct tbody const *o, v3 const r, v3 const u) {
  v3 a, b, c; tb_cross3(a, r, u), tb_iw(b, o, a), tb_cross3(c, b, r);
  return o->im + tb_dot3(u, c); }
 static flo_t tb_reach(struct tbody const *b) { return b->shape == 0 ? b->s[0] : tb_len3(b->s); }
 static flo_t tb_size(struct tbody const *b) { return b->shape == 0 ? b->s[0] : tb_fmax2(b->s[0], tb_fmax2(b->s[1], b->s[2])); }
 
-static void tb_add(struct tset *S, struct tbody *a, struct tbody *b, v3 const n, v3 const x, flo_t d) {
+// ..u the velocity of the brush a stands on, 0 for one standing still
+static void tb_addu(struct tset *S, struct tbody *a, struct tbody *b, v3 const n, v3 const x, flo_t d, flo_t const *u) {
  if (S->n == S->cap) {
   uintptr_t const m = S->cap ? 2 * S->cap : 64;
   struct tcon *c = realloc(S->c, m * sizeof *c);
@@ -73,7 +76,7 @@ static void tb_add(struct tset *S, struct tbody *a, struct tbody *b, v3 const n,
   S->c = c, S->cap = m; }
  struct tcon *c = S->c + S->n++;
  c->a = a, c->b = b, c->d = d, c->jn = c->j1 = c->j2 = 0;
- for (int k = 0; k < 3; k++) c->n[k] = n[k], c->ra[k] = x[k] - a->p[k], c->rb[k] = b ? x[k] - b->p[k] : 0;
+ for (int k = 0; k < 3; k++) c->n[k] = n[k], c->ra[k] = x[k] - a->p[k], c->rb[k] = b ? x[k] - b->p[k] : 0, c->u[k] = u ? u[k] : 0.0;
  tb_side3(c->t1, n), tb_cross3(c->t2, n, c->t1);
  c->kn = tb_eff1(a, c->ra, n) + (b ? tb_eff1(b, c->rb, n) : 0);
  c->k1 = tb_eff1(a, c->ra, c->t1) + (b ? tb_eff1(b, c->rb, c->t1) : 0);
@@ -82,6 +85,7 @@ static void tb_add(struct tset *S, struct tbody *a, struct tbody *b, v3 const n,
  flo_t const vn = tb_dot3(rv, n), e = b ? tb_fmax2(a->e, b->e) : a->e;
  c->mu = b ? love_sqrt(a->mu * b->mu) : a->mu;
  c->bias = vn < 0.0 - tb_bounce ? 0.0 - e * vn : 0.0; }
+static void tb_add(struct tset *S, struct tbody *a, struct tbody *b, v3 const n, v3 const x, flo_t d) { tb_addu(S, a, b, n, x, d, 0); }
 
 // ..the plane of the brush at planes P[0..n) a point stands furthest out of
 static flo_t tb_most(flo_t const *P, uintptr_t n, uintptr_t st, v3 const x, v3 on) {
@@ -107,15 +111,15 @@ static void tb_faces(flo_t F[24], struct tbody const *b) {
 static void tb_brush(struct tset *S, struct tbody *b, flo_t const *P, uintptr_t n) {
  v3 on;
  if (b->shape == 0) {
-  flo_t const s = tb_most(P, n, 5, b->p, on);
+  flo_t const s = tb_most(P, n, 8, b->p, on);
   if (s < b->s[0]) {
    v3 x; for (int k = 0; k < 3; k++) x[k] = b->p[k] - b->s[0] * on[k];
-   tb_add(S, b, 0, on, x, b->s[0] - s); }
+   tb_addu(S, b, 0, on, x, b->s[0] - s, P + 5); }
   return; }
  v3 cs[8]; tb_corners(cs, b);
  for (int i = 0; i < 8; i++) {
-  flo_t const s = tb_most(P, n, 5, cs[i], on);
-  if (s < 0.0) tb_add(S, b, 0, on, cs[i], 0.0 - s); } }
+  flo_t const s = tb_most(P, n, 8, cs[i], on);
+  if (s < 0.0) tb_addu(S, b, 0, on, cs[i], 0.0 - s, P + 5); } }
 
 // --- two bodies, as points with n out of b into a ---
 static int tb_sph_sph(struct tpt *o, struct tbody const *a, struct tbody const *b) {
@@ -437,8 +441,8 @@ static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, s
  for (uintptr_t i = 0; i < n; i++) if (awake[i]) for (int k = 0; k < 3; k++) bs[i].v[k] += h * g[k];
  for (uintptr_t i = 0; i < n; i++) if (awake[i]) {
   for (uintptr_t a = 0, z; a < np; a = z) {
-   for (z = a + 1; z < np && P[5 * z + 4] == P[5 * a + 4]; z++);
-   tb_brush(S, bs + i, P + 5 * a, z - a); }
+   for (z = a + 1; z < np && P[8 * z + 4] == P[8 * a + 4]; z++);
+   tb_brush(S, bs + i, P + 8 * a, z - a); }
   tb_facehits(S, bs + i, Fs, nf); }
  tb_pairs(S, G, bs, n);
  if (S->bad) return 0;
@@ -481,9 +485,9 @@ static void tb_keep(flo_t *r, struct tbody const *b) {
 static lvm(lvm_tumble_step) {
  word const B = Sp[0], P = Sp[1], O = Sp[2], Fw = Sp[3];
  if (!galaxyp(B) || !galaxyp(P) || !galaxyp(O) || !galaxyp(Fw) || tray_nelem(tray(O)) < 4 || tray_nelem(tray(B)) % tb_nb
-     || tray_nelem(tray(P)) % 5 || tray_nelem(tray(Fw)) < 1)
+     || tray_nelem(tray(P)) % 8 || tray_nelem(tray(Fw)) < 1)
   love_musttail return Answerp(3, ZeroPoint);
- uintptr_t const nb = tray_nelem(tray(B)), n = nb / tb_nb, np = tray_nelem(tray(P)) / 5,
+ uintptr_t const nb = tray_nelem(tray(B)), n = nb / tb_nb, np = tray_nelem(tray(P)) / 8,
                  w = b2w(tray_bytes(love_R, 1, nb));
  Have(w);
  struct tray *o = ini_tray((struct tray*) Hp, love_R, 1); Hp += w;
@@ -491,7 +495,7 @@ static lvm(lvm_tumble_step) {
  flo_t *d = tray_data(o);
  for (uintptr_t i = 0; i < nb; i++) d[i] = tray_get_flo(tray(Sp[0]), i);
  struct tbody *bs = malloc((n ? n : 1) * sizeof *bs);
- flo_t *pl = malloc((np ? np : 1) * 5 * sizeof *pl);
+ flo_t *pl = malloc((np ? np : 1) * 8 * sizeof *pl);
  char *aw = malloc(n ? n : 1);
  uintptr_t *cn = malloc((n ? n : 1) * sizeof *cn);
  uintptr_t const nfl = tray_nelem(tray(Sp[3]));
@@ -515,7 +519,7 @@ static lvm(lvm_tumble_step) {
    at += 10 + 3 * F->np + 10 * F->ne;
    if (at > nfl || F->np < 1) good = 0; } }
  if (good) {
-  for (uintptr_t i = 0; i < np * 5; i++) pl[i] = tray_get_flo(tray(Sp[1]), i);
+  for (uintptr_t i = 0; i < np * 8; i++) pl[i] = tray_get_flo(tray(Sp[1]), i);
   struct tray *const to = tray(Sp[2]);
   v3 const g = { tray_get_flo(to, 0), tray_get_flo(to, 1), tray_get_flo(to, 2) };
   flo_t const dt = tray_get_flo(to, 3);
