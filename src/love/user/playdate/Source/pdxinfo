@@ -1,5 +1,7 @@
-name=ll
-author=ll
-description=ll
-bundleID=pics.salt.pdx.ll
+name=stones
+author=love
+description=lore's stones, on love
+bundleID=pics.salt.love.stones
+version=0.4
+buildNumber=1
 imagePath=
