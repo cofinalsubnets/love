@@ -1235,4 +1235,4 @@ word kind_get(struct g *g, word kind, intptr_t i) {
  return tabp(kind) ? mapget(g, ZeroPoint, core_of(g)->nom[i], kind) : ZeroPoint; }
 uint8_t *cask_bytes(word x, uintptr_t *n) {
  struct str *s = cask_str(x);
- return s && !((uintptr_t) s->bytes & 7) ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }
+ return s ? (*n = s->len, (uint8_t*) s->bytes) : NULL; }

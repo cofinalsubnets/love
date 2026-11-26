@@ -12,7 +12,7 @@
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
   test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
-  test_kverb test_libc test_love0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
+  test_kverb test_libc test_love0 test_love0_tco0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
   test_objcopy test_playdate test_proof test_core test_raw test_raw_a64 test_raw_bake test_raw_rv64 test_love_a64 test_love_rv64 test_love_arm \
   test_refuzz test_reloc32 test_rtall test_root test_roster test_rp2040 test_rp2040_board test_rp2350 test_rp2350_board test_nucleo446_board test_microbit_board test_trinkey_board test_nrf52840_board test_teensy41_ram_board test_esp32 test_esp32_board test_esp32s3_board test_esp32c6 test_esp32c6_board test_ch32v203 test_ch32v203_board test_teensy41_board test_rvboot test_sat test_sb test_seat test_seed \
@@ -27,11 +27,11 @@
 export LOVE_GLAZE_HOT = eager
 
 # the three gates: test (fast), test_slow (merge), test_extra (qemu, cross-arch, boards)
-test_phases = test_host test_love0
+test_phases = test_host test_love0 test_love0_tco0
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
 
-test_slow: test_host test_love0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
+test_slow: test_host test_love0 test_love0_tco0 vmret test_bakerep test_stdinbuf test_stdincorpus test_seat test_cli test_nest test_spin test_cookdiff test_glazebench test_dist test_seed test_roster test_moon test_as test_links test_kernel_wasm test_harp
 
 # the core's gate: test_extra's local, unheavy lanes
 test_core: test_filemode test_lanesremote test_walkroom test_hashrun waits test_front test_proof test_gen test_uugen test_uulean test_uuwm test_uukind \
@@ -68,6 +68,12 @@ test_love0: $(love0) out/lib/corpus.list
 	@{ $(love0) </dev/null; echo $$? > out/.test_love0.rc; } | tee out/.test_love0.out; \
 	  s=$$(cat out/.test_love0.rc); \
 	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love0.out` -eq 2 ]
+# test_love0_tco0 -- the same of love0's trampoline twin
+test_love0_tco0: out/00/love0 out/lib/corpus.list
+	@echo TEST out/00/love0
+	@{ out/00/love0 </dev/null; echo $$? > out/.test_love00.rc; } | tee out/.test_love00.out; \
+	  s=$$(cat out/.test_love00.rc); \
+	  [ $$s -eq 0 ] && [ `grep -c "tests pass" out/.test_love00.out` -eq 2 ]
 # test_filemode -- file mode is terminal: a missing name errs and exits 1, and nothing after runs
 test_filemode: $(ho)/love
 	@echo TEST file mode is terminal
@@ -195,9 +201,11 @@ hostnif_tests += test/host/gcleak.l   # love0 under valgrind: the collector lose
 hostnif_tests += test/host/zimage.l   # the zero 2 w card from stand-in parts, read back by our fat and cpio
 hostnif_tests += test/host/seed.l   # love seed where a file it lays cannot be run
 hostnif_tests += test/host/spans.l   # libra's slow reader: offsets and notes, stripped equal to sound over the tree
+hostnif_tests += test/host/casks.l   # a state at any word, moved by majors: the sound nifs, in children
 hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-ignored directory packs as none
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
 hostnif_tests += test/host/wchisp.l   # wch's usb isp: a flash session's bulk requests to the byte, the key by hand
+hostnif_tests += test/host/edln.l   # lush's tab on a pty: keys typed, a quay screen's cells read
 hostnif_tests += test/host/avrprog.l   # the avr programmer against bootloaders played on a pty
 hostnif_tests += test/host/halfkay.l   # halfkay's reports to the byte, and its device argument
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins

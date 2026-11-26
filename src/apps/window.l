@@ -280,7 +280,7 @@
       _ (pin win 'blank cu) cu) c c)
    (window-hold win on)
     (? (win 'how = 'inle) (kgrab (on ? 1 0))
-       (win 'how != 'x) 0
+       (win 'how != 'x) (peep win 'holds 0)     ; a paper window holds if it says so, its warps kept
        (: k (win 's)
           _ (x-hold win)
           ok (? on (: cu (x-blank win)
@@ -292,7 +292,7 @@
           _ (x-let win)
           (ok ? 1 0)))
    (window-warp win x y) (? (win 'how = 'inle) (kgrab [x y])
-                            (win 'how != 'x) 0
+                            (win 'how != 'x) (peep win 'holds 0 ? (pin win 'warps (peep win 'warps () + [[x y]]), 1) 0)
                             (: k (win 's) _ (x-hold win) _ (x-warp k (win 'xw) x y) _ (x-flush k) _ (x-let win) 1))
 
    ; a size the paper already has is no news: X says one for every move

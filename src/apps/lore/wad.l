@@ -702,7 +702,7 @@
    (pin s2 'py (1.0 * S 0 + (s2 'hp > 0 ? eye-h 8))))
  (wad-tics st n) (relay (foldl (\ s _ (tic s)) st ^n))
  (wad-tick st) (: s (walk-dt st) a (peep s 'frac 0.0 + s 'dt * 35.0) n (min 4 (int a))
-   s2 (wad-tics (pin s 'frac (a - n)) n)
+   s2 (wad-tics (pin s 'frac (int a > 4 ? 0.0 (a - n))) n)   ; a frame owed more than four drops the rest
    (s2 'exit @ () s2 m (wad-map (s2 'wd) m @ () (pins s2 'exit () 'msg "the end") M (enter s2 (s2 'wd) M))))
  ; --- the walk: a body 16 round, up a step of 24, under 56 of headroom, in steps no longer than
  ;     half the body; the lines walked over set going ---
