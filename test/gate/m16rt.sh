@@ -68,16 +68,7 @@ RUN
   { echo 'int cc_main(int, char **);'
     echo 'static char *av[] = { "a.out", 0 };'
     echo 'int run(void){ return cc_main(1, av); }'
-    echo 'void *memset(void *p, int c, unsigned long n){'
-    echo ' unsigned char *q = p; while (n--) *q++ = (unsigned char) c; return p; }'
-    echo 'void *memcpy(void *a, const void *b, unsigned long n){'
-    echo ' unsigned char *x = a; const unsigned char *y = b; while (n--) *x++ = *y++; return a; }'
-    echo 'void *memmove(void *a, const void *b, unsigned long n){'
-    echo ' unsigned char *x = a; const unsigned char *y = b;'
-    echo ' if (x < y) { while (n--) *x++ = *y++; }'
-    echo ' else { x += n; y += n; while (n--) *--x = *--y; } return a; }'
-    echo 'int strcmp(const char *a, const char *b){'
-    echo ' while (*a && *a == *b) a++, b++; return (unsigned char) *a - (unsigned char) *b; }'
+    cc_floor
   } > "$1/run.c"
   gcc -m32 -c "$1/start.S" -o "$1/start.o" || fail "as start.S"
   gcc -m16 -ffreestanding -fno-pic -fno-stack-protector -fcf-protection=none -O1 -c "$1/run.c" -o "$1/run.o" || fail "gcc run.c"

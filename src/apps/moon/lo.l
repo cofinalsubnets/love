@@ -877,7 +877,7 @@
           va (lox g env b @ 'bad 'bad
              vb (: xa (loui g env a va vb) xb (loui g env b vb va) ta (vty xa) tb (vty xb)
                    (? (lofl? ta || lofl? tb || !(losc? ta && losc? tb)) 'no
-                      (: rt (? (ptr? ta) ta (ptr? tb) tb (rbin g ta tb)) (z v w) (loz g (lotr g v rt) w)
+                      (: rt (? (ptr? ta && ptr? tb) (ptrjoin ta tb) (ptr? ta) ta (ptr? tb) tb (rbin g ta tb)) (z v w) (loz g (lotr g v rt) w)
                          L (nlab g ".lo")
                          (lobr g env c 1 L @ 'bad 'bad
                             fc (rev fc @ (['br cc L2] . u)
@@ -1217,7 +1217,7 @@
                                   !(losv? (vty va) && losv? (vty vb)) (lono g ['cond (vty va) (vty vb)])
                                   (: xa (loui g env a va vb) xb (loui g env b vb va) ta (vty xa) tb (vty xb)
                                      fl (lofl? ta || lofl? tb)
-                                     rt (? (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
+                                     rt (? (ptr? ta && ptr? tb) (ptrjoin ta tb) (ptr? ta) ta (ptr? tb) tb fl (ta = 'double || tb = 'double ? 'double 'float) (rbin g ta tb))
                                      (z v w) (fl ? (lotr g v rt) (loz g (lotr g v rt) w))
                                      (z xa xb @ [_ x fx] (z xb xa @ [_ y fy] (lomkv g rt @ d
                                         [rt d (fc + fx + lomvs d x + [['jmp ld] ['label le]] + fy + lomvs d y + [['label ld]])]))))))))))))
@@ -1302,10 +1302,11 @@
                (locall1 g env rt ptys va (rest @ ('ms . _) 1 ()) as [['call (intern nm)]] ())
               (lono g ['call nm]))
           _ (lox g env fh @
-               ; a variadic prototype parks () as an unprototyped one does: al only then
-               [('ptr . ['fn rt ptys] . _) r fs] (locall1 g env rt ptys (two? ptys ? () 1) () as (locr g r) [r fs])
-               [('ptr . ['fn rt ptys 'ms] . _) r fs] (locall1 g env rt ptys () 1 as (locr g r) [r fs])
-               [('ptr . ['fn rt] . _) r fs] (locall1 g env rt () 1 () as (locr g r) [r fs])
+               ; va -1 is a callee with no prototype: placed as a fixed one, with al
+               [('ptr . ['fn rt ptys] . _) r fs] (locall1 g env rt ptys (two? ptys ? () -1) () as (locr g r) [r fs])
+               [('ptr . ['fn rt ptys k] . _) r fs]
+                (locall1 g env rt ptys (elem k '(va msva) ? 1 ()) (elem k '(ms msva)) as (locr g r) [r fs])
+               [('ptr . ['fn rt] . _) r fs] (locall1 g env rt () -1 () as (locr g r) [r fs])
                'bad 'bad
                (ty . _) (lono g ['callee ty])))
    ; a snippet over r0..r3 renamed onto fresh vregs, r0 the operand in and the answer out
@@ -1514,7 +1515,7 @@
     (? !(rt = 'void || losv? rt || d128? rt || loagg? g rt) (lono g ['ret rt])
        (ms && any d128? (rt . ptys)) (lono g 'msabi)
        (ms && any (t \ lofl? t || stru? t) (rt . ptys)) (lono g 'msabi)
-       (0 < #ptys && !va && #as != #ptys) (loarity g "this call" #ptys va #as)
+       (0 < #ptys && (va ? (#as < #ptys) (#as != #ptys))) (loarity g "this call" #ptys va #as)
        ; past SysV and AAPCS64 a pair has no lane
        (!(lo128? g) && (ms || d128? rt || any d128? ptys)) (lono g 'abi)
        (ilp32? g && !(lot32sig g (rt . ptys))) (lono g 'abi)
@@ -1550,7 +1551,7 @@
                    nf (pl 1) rg (pl 2 + (a64? g && sret ? [['r8 (vreg <hv)]])) sk (pl 3) pre (pl 4) rs (map lorgnm rg)
                    d (d128? rt ? (lomkw g) (lomkv g rt))
                    ; SysV's count of the vector registers in al, unless -mskip-rax-setup
-                   al (va && x64? g && !(x86k? g 'nal) ? [['li 'r0 nf]])
+                   al ((va || va = -1) && x64? g && !(x86k? g 'nal) ? [['li 'r0 nf]])
                    (stk x o) (x @ ['at v n _] (: ty (vty v)
                                               (? (stru? ty) (locopya g (vreg v) 'sp o n (tal g ty))
                                                  (pair? g ty) [['st 'sp (plo g o) <(vreg v)] ['st 'sp (phi g o) <>(vreg v)]]

@@ -491,6 +491,14 @@
              LUSHFLAGS=-g sh -c '$d/a 2>/dev/null || echo g=$?'; LUSHFLAGS=-p sh -c '$d/a 2>/dev/null || echo p=$?'; rm -r $d"])
    (test ("sh x\nenv\nawk\nsh y\nst=127\ng=127\np=127\n" = >r)))
 
+; a word that is there and can't be run is 126 and says why, through its redirects; one not there is 127
+(: r (hark ["out/love" "out/lush" "-g" "-c"
+            "d=$(mktemp -d); printf 'x' > $d/a; printf '\\0\\0' > $d/b; chmod 644 $d/a; chmod 755 $d/b; cd $d
+             ./a 2>&1; echo st=$?; ./a 2>/dev/null; echo st=$?; ./b 2>/dev/null; echo st=$?; ./nope 2>/dev/null; echo st=$?
+             ./a 2>/dev/null | cat; echo x | xargs ./a 2>/dev/null; echo xa=$?; echo x | xargs ./nope 2>/dev/null; echo xa=$?
+             env ./a 2>/dev/null; echo env=$?; timeout 5 ./a 2>/dev/null; echo to=$?; cd /; rm -r $d"])
+   (test ("./a: Permission denied\nst=126\nst=126\nst=126\nst=127\nxa=126\nxa=127\nenv=126\nto=126\n" = >r)))
+
 ; `which`, `type` and `command -v` name what would run, by sh-verdict
 (test (sh-bi? "which") (sh-bi? "where") (sh-bi? "type"))
 (t-lushes

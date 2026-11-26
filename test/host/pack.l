@@ -8,9 +8,8 @@
    home (cwd 0 + "/out/.packtest-" + show (getpid 0))
    dir (home + "/.love/pack")
    _ (hark ["rm" "-rf" home], hark ["mkdir" "-p" dir])
-   (put p s) (open p "w" @ q (say q s, close q))
    (mkpack n fs) (mkdir (dir + "/" + n) 448,
-                  each fs (f \ put (dir + "/" + n + "/" + <f) <>f))
+                  each fs (f \ uwrite (dir + "/" + n + "/" + <f) <>f))
    ; one line, stderr folded in, with home's nest as the nest
    (in-env e as) (hark ["sh" "-c" (e + " " + love + " " + as + " 2>&1")])
    (run as) (in-env ("LOVE_NEST=" + home + "/.love") as)
@@ -28,7 +27,7 @@
        [["wave.l" "(cite 'verbs 'enlist 'wave (as \\ (puts \"wave\\n\", flush out, 0)) ())\n(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
    ; a pack under a name the table answers is never read
    _ (mkpack "verbs" [["verbs.l" "(cite 'verbs 'enlist 'verbs (as \\ (puts \"pack's verbs\\n\", flush out, 0)) ())\n"]])
-   _ (put (dir + "/stray.l") "a file is no pack\n")
+   _ (uwrite (dir + "/stray.l") "a file is no pack\n")
 
    r1 (run "hello")
    r2 (run "hello you")
