@@ -115,8 +115,19 @@
  ; ..each pair near enough with one awake. a sleeper is held still against one barely moving,
  ; and woken by one moving faster than wake-v
  wake-v 0.3
- (pairs bs) (: n #bs
-   (catmap (i \ catmap (j \ (: a (bs i) b (bs j)
+ ; ..found by a grid of cells twice the widest reach: each body's reach cube marks the cells it
+ ; covers, and two sharing a cell are a pair, taken in the order i < j as a sweep of all would
+ lim 262144
+ (cell x c) (: f (x / c) (int (floor (f < 0.0 - lim ? (0.0 - lim) (f > lim ? lim f)))))
+ (near bs) (: n #bs c (foldl (\ m b (max m (reach b))) 0.0 bs) c2 (c > 0.0 ? (2.0 * c) 1.0)
+   G {} P {}
+   (from a z) (map (+ a) ^(z - a + 1))
+   _ (each ^n (i \ (: b (bs i) r (reach b) lo (map (k \ cell (b 'p k - r) c2) ^3) hi (map (k \ cell (b 'p k + r) c2) ^3)
+                     (each (from (lo 0) (hi 0)) (x \ each (from (lo 1) (hi 1)) (y \ each (from (lo 2) (hi 2)) (z \
+                       (: k ((x * 1048576 + y) * 1048576 + z) (pin G k (peep G k [] + [i]))))))))))
+   _ (each (keys G) (k \ (: is (G k) (each is (i \ each is (j \ (i < j ? (pin P (i * n + j) 1) 0)))))))
+   (map (k \ [(k // n) (k % n)]) (sort (keys P))))
+ (pairs bs) (catmap (ij \ (: i (ij 0) j (ij 1) (: a (bs i) b (bs j)
                              (? (a 'still = 1 && b 'still = 1) ()
                                 (: u (c- (a 'p) (b 'p)) r (reach a + reach b)
                                    (dot u u > r * r ? ()
@@ -126,9 +137,7 @@
                                             (b 'still = 1 && mag3 (a 'v) + mag3 (a 'w) * reach a > wake-v) (tb-wake b, ())
                                             (a 'still = 1) (map (t \ contact b () (c* -1.0 (t 0)) (t 1) (t 2)) ts)
                                             (b 'still = 1) (map (t \ contact a () (t 0) (t 1) (t 2)) ts)
-                                            (map (t \ contact a b (t 0) (t 1) (t 2)) ts))))))))
-                        (drop (i + 1) ^n))
-           ^n))
+                                            (map (t \ contact a b (t 0) (t 1) (t 2)) ts))))))))) (near bs))
  ; --- the solve: an impulse J at r, and its opposite on the other ---
  (push! b r J) (pins b 'v (c+ (b 'v) (c* (b 'im) J)) 'w (c+ (b 'w) (iw b (b 'R) (cross r J))))
  (push2! c J) (push! (c 'a) (c 'ra) J, tablet? (c 'b) ? (push! (c 'b) (c 'rb) (c* -1.0 J)) 0)
@@ -142,7 +151,7 @@
    (fr 'k1 'j1 (c 't1), fr 'k2 'j2 (c 't2)))
  ; ..and what is left sunk, taken back a part: shared between the two by how light each is,
  ; and among a body's contacts
- (unsink! cs) (: (k o) #(filter (q \ q 'a == o || q 'b == o) cs)
+ (unsink! cs) (: (k o) (o 'nc)
    (each cs (c \ (: a (c 'a) b (c 'b) d (c 'd)
                    (d > slop ? (: m (tablet? b ? (b 'im) 0.0) s (fix-k * (d - slop) / (a 'im + m))
                                   _ (pin a 'p (c+ (a 'p) (c* (s * a 'im / k a) (c 'n))))
@@ -154,9 +163,12 @@
    _ (each bs (b \ pin b 'v (c+ (b 'v) (c* h g))))
    cs (catmap (b \ catmap (contacts b) (W 'brushes)) bs + pairs all)
    _ (each ^tb-iters (_ \ each cs solve1))
+   ; ..each body's contacts, counted once: its share of a sinking taken back, and touching at all
+   _ (each all (b \ pin b 'nc 0))
+   _ (each cs (c \ (pin (c 'a) 'nc (peep (c 'a) 'nc 0 + 1), tablet? (c 'b) ? (pin (c 'b) 'nc (peep (c 'b) 'nc 0 + 1)) 0)))
    _ (unsink! cs)
    ; ..a sphere touching drags its roll, then all move and turn
-   _ (each bs (b \ (: touch (any (c \ c 'a == b || c 'b == b) cs)
+   _ (each bs (b \ (: touch (b 'nc > 0)
                     (touch && b 'roll > 0.0 ? (pin b 'w (c* (max 0.0 (1.0 - b 'roll * 9.81 * h / (b 'r))) (b 'w))) 0,
                      pins b 'p (c+ (b 'p) (c* h (b 'v)))
                             'q (qnorm (map (k \ b 'q k + 0.5 * h * qmul (0.0 . b 'w) (b 'q) k) ^4)),
