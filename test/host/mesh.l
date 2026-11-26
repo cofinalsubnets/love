@@ -197,7 +197,7 @@
    va (mesh-view 160 100 [0.0 0.0 0.0] 0.0 0.7 1.5 0.1 100.0) vb (mesh-view 160 100 [0.0 0.0 0.0] 0.35 0.7 1.5 0.1 100.0)
    fa (sky va) fb (sky vb) ix (iota (160 * 100)) d (mesh-dirs va ix) sp (mesh-spot vb (d 0) (d 1) (d 2))
    both (iota (sp >= 0)) a (peep fa (peep ix both 0) 0) b (peep fb (peep sp both 0) 0)
-   gap (+(map (k \ net (abs ((a >> k & 255) - (b >> k & 255)))) [0 8 16]) / (3.0 * #both))
+   gap (+(map (k \ norm ((a >> k & 255) - (b >> k & 255))) [0 8 16]) / (3.0 * #both))
  (test (#both > 8000) (gap < 0.04)))
 ;; ..and its mesh for a gpu names no corner it lacks, cut and fanned quads and all, or the
 ;; gpu's helper refuses it

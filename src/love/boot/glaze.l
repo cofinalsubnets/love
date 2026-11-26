@@ -2329,7 +2329,7 @@
           hasbody (1 = #>form % 2)
           pairs2 (map (pr \ <pr . (two? <pr ? (delet-body >pr) >pr)) pairs)
           (': . (hasbody ? (unpair pairs2 body) (cbflat pairs2)))))
-   ; --- deabs: (abs x) = (? (x < 0) (0 - x) x), x dup-cheap, bottom-up: the int group's abs. a tray's abs is its norm, but
+   ; --- deabs: (abs x) = (? (x < 0) (0 - x) x), x dup-cheap, bottom-up: the int group's abs. a tray's abs is elementwise, but
    ;     a group is ints or it declines, and a decline drops the lowered form. a binary (min a b) is the tower, not lowered
    (deabs e) (? (atom? e) e  (dquote? e) e
                 (: y (map deabs e) (gopword <y = 'abs && 1 = #>y && dcheap? <>y ? ['? ['< <>y 0] ['- 0 <>y] <>y] y)))
