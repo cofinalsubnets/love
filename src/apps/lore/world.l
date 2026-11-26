@@ -2320,10 +2320,43 @@
                                    [[0.0 -1.0 0.0] (0.0 - q 'lo 1)] [[0.0 0.0 1.0] (q 'hi 2)] [[0.0 0.0 -1.0] (0.0 - q 'lo 2)]])
                              (st 'lvl 'panes)))
          _ (tb-faces W (map (f \ [(f 0) (f 1)]) (brush-faces bs) + land-faces bs (p 0) (p 2)))
-         (pin b 'tw {'bs bs 'W W}, W))))
+         (pins W 'pb (W 'brushes) 'ws (), pin b 'tw {'bs bs 'W W}, W))))
+ ; ..a wall in the plan, a fence's run, a gate's leaf or a headstone, as a slab wall-t thick
+ ; from its foot to its top
+ wall-t 0.03
+ (wall-slab s) (: dx (s 2 - s 0) dz (s 3 - s 1) l (sqrt (2 dx + 2 dz)) t [(dx / l) 0.0 (dz / l)] n [(0.0 - dz / l) 0.0 (dx / l)]
+   a [(s 0) 0.0 (s 1)] b [(s 2) 0.0 (s 3)]
+   [[n (dot n a + wall-t)] [(c* -1.0 n) (wall-t - dot n a)] [t (dot t b + wall-t)] [(c* -1.0 t) (wall-t - dot t a)]
+    [[0.0 1.0 0.0] (s 4)] [[0.0 -1.0 0.0] (0.0 - s 5)]])
+ ; ..a box [lo hi] as a brush's planes
+ (box-planes lo hi) [[[1.0 0.0 0.0] (hi 0)] [[-1.0 0.0 0.0] (0.0 - lo 0)] [[0.0 1.0 0.0] (hi 1)]
+                     [[0.0 -1.0 0.0] (0.0 - lo 1)] [[0.0 0.0 1.0] (hi 2)] [[0.0 0.0 -1.0] (0.0 - lo 2)]]
+ ; ..a trunk's piece [a b r] as an eight-sided post along it, round it, capped at its ends; one
+ ; from the ground sunk a metre under it, so nothing on the ground is pushed down off its foot
+ (trunk-planes s ft) (: a (s 0) b (s 1) r (s 2) d (unit (c- b a)) e (unit (cross d (abs (d 1) < 0.9 ? [0.0 1.0 0.0] [1.0 0.0 0.0]))) f (cross d e)
+   (map (k \ (: t (k * tau / 8.0) n (c+ (c* (cos t) e) (c* (sin t) f)) [n (dot n a + r)])) ^8
+    + [[d (dot d b)] [(c* -1.0 d) (ft - dot d a)]]))
+ ; ..a lift's platform where it has got to, its posts, rails and pole, as boxes
+ (lift-boxes c s) (: p (c 'at) x (p 0) y (p 1 + s 'o) z (p 2) h (0.5 * c 'w) r lift-r H lift-h
+   (bx m e) [(c- m e) (c+ m e)]
+   ([(bx [x (y - 0.04) z] [h 0.04 h]) (bx [x (y + 0.5 * pole-h) z] [0.09 (0.5 * pole-h) 0.09])]
+    + map (q \ bx [(x + q 0 * (h - r)) (y + 0.5 * H) (z + q 1 * (h - r))] [r (0.5 * H) r]) [[-1 -1] [1 -1] [1 1] [-1 1]]
+    + catmap (u \ [(bx [x (y + u) (z - h + r)] [h r r]) (bx [x (y + u) (z + h - r)] [h r r])]) [0.55 (H - r)]))
+ ; ..what a body keeps a hand from near p but no brush is, among W's brushes: the walls in the
+ ; plan, the trees' trunks, the lifts; laid again only as they change, a gate swinging, a lift
+ ; rising
+ (ball-walls! st W p) (: lv (st 'lvl) x (p 0) z (p 2)
+   (near? lo hi) (lo 0 - 1.0 < x && x < hi 0 + 1.0 && lo 2 - 1.0 < z && z < hi 2 + 1.0)
+   ws (filter (s \ 2 (s 2 - s 0) + 2 (s 3 - s 1) > 1e-6) (walls-near st x z))
+   tk (filter (q \ (: s (q 0) near? (map (k \ min (s 0 k) (s 1 k) - s 2) ^3) (map (k \ max (s 0 k) (s 1 k) + s 2) ^3)))
+              (catmap (t \ (: l (peep t 'trunk ()) (map (i \ [(l i) (i = 0 ? 1.0 0.0)]) ^#l))) (peep lv 'trees ())))
+   lb (filter (q \ near? (q 0) (q 1)) (catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))
+   key [ws tk lb]
+   (key = W 'ws ? W (pins W 'ws key 'brushes (W 'pb + map wall-slab ws + map (q \ trunk-planes (q 0) (q 1)) tk + map (q \ box-planes (q 0) (q 1)) lb) 'P ())))
  (ball-tumble st b dt) (: W (ball-faces st b) p (b 'p) g (grav-at (st 'lvl) (p 1)) v0 (b 'v)
    o (peep b 'tb () @ () (: o (thing-of st b) (pin b 'tb o, o)) o o)
    _ (pins o 'p p 'v v0 'q (b 'q) 'w (peep b 'w [0.0 0.0 0.0]) 'still 0 'idle (peep o 'idle 0.0))
+   _ (ball-walls! st W p)
    _ (pins W 'bodies [o] 'g [0.0 (0.0 - g) 0.0])
    _ (tb-step W dt)
    ; ..how hard it was turned, past what the pull alone would have done

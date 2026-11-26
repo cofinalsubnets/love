@@ -1079,6 +1079,21 @@
        (k0 = 'move) (k1 0 = 'kneel) (k1 1 = 0) (mag (k1 2 - 1.12) < 0.05) (has? fr "Yuki") (has? fr "1  weep") (has? fr "2  leave")
        (k2 0 = 'move) (k2 1 = ()) (kt > 0) (k3 = 0) (k4 0 = 'walk) (mag (k4 1 - eye-h) < 0.05) (k5 > k4 2 + 0.3)
        (has? (lv ("(grave [0 0 0] 0 'x " + yi + ")")) "(grave [x y z] bearing NAME TEXTURE)")))
+; a ball thrown at the fence comes back off it, and off the gate while it is shut
+(: yi "(texture 8 8 1 '((fill 0.1)))"
+   (yb z) (: l (lv ("(void [0 -1 0] [10 4 10]) (solid (box [0 -1 0] [10 0 10])) (fence [[5 0 6] [5 0 9.5]] 1 " + yi + ") (fence [[5 0 0.5] [5 0 4]] 1 " + yi
+                    + ") (gate [5 0 6] [5 0 4] 1 90 " + yi + ") (ball [7 0 " + z + "]) (start [8 0 1] 270 0)"))
+            s (world-new 40 24 l "") b (s 'balls 0) _ (pins b 'p [6.0 0.4 (b 'p 2)] 'v [-5.0 0.5 0.0] 'rest 0)
+            _ (each ^30 (_ \ (pin s 'dt (1.0 / 30.0), world-move s))) (b 'p 0))
+   yf (yb "8") yh (yb "5")
+ (test (yf > 5.0) (yh > 5.0)))
+; a ball thrown at a tree comes back off its trunk, and one let fall on a lift stops on its
+; platform, not the floor under it
+(: tl (lv "(room [-9 0 -9] [9 4 9]) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (lift [5 0.3 5] 1.6 3 (texture 8 8 1 '((fill 0.5)))) (ball [3 0 0]) (ball [5 0 5]) (start [-6 0 -6] 0 0)")
+   ts (world-new 40 24 tl "") tb (ts 'balls 0) lb (ts 'balls 1)
+   _ (pins tb 'p [3.0 0.6 0.0] 'v [-5.0 0.5 0.0] 'rest 0) _ (pins lb 'p [5.3 1.5 5.3] 'v [0.0 0.0 0.0] 'rest 0)
+   _ (each ^120 (_ \ (pin ts 'dt (1.0 / 30.0), world-move ts)))
+ (test (tb 'p 0 > 1.0) (lb 'rest = 1) (mag (lb 'p 1 - 0.3 - lb 'r) < 0.02)))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
