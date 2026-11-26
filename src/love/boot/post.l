@@ -1956,7 +1956,7 @@
    ; tail within a beat) is 27, CSI keys the codes in the tables, alt-letter 256 + the letter;
    ; any other byte after an escape goes back. an unknown sequence is 0: test it with ==,
    ; since key codes are negative and truth cannot tell
-   arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6}    ; ESC [ F -- the plain finals
+   arrow    {68 -1 67 -2 65 -8 66 -9 72 -5 70 -6 90 -16}    ; ESC [ F -- the plain finals, Z shift-tab
    modarrow {68 -1 67 -2 65 -8 66 -9 72 -10 70 -11}  ; ESC [ 1 ; M F -- modified home/end jump the buffer
    ; an sgr mouse report (ESC [ < b ; col ; row M, m on release): a press is key -12, its
    ; cell waiting in edtap, 0-based
@@ -2065,10 +2065,30 @@
         s0 (two? u ? 0 pl)
         k (s0 + edw (rev l))
         [(above + k // w) (k % w) (above + rows s0 (edw (revcat l r)) + span d 0 - 1)])
+   ; the menu under the line: 'mc its choices [text suffix shown], 'mi the chosen one (-1 listed
+   ; alone, -2 the line has moved on), 'mn the bytes of the line the choice stands in
+   (edmenu? t) (two? (peep t 'mc ()))
+   ; its rows, at most h of w columns, filled downwards; where they are too few, the page
+   ; holding the chosen one and a row counting the rest
+   (edrows t w h)
+    (!(edmenu? t) || h < 1 ? ()
+     (: cs (map (c \ edcut (c 2) (w - 1)) (t 'mc)) n #cs mi (max 0 (t 'mi))
+        iw (2 + foldl (a \ s \ max a (edwide s)) 0 cs)
+        cols (max 1 ((w + 1) // iw))
+        full ((n + cols - 1) // cols)
+        v (h < full ? (h - 1) full)
+        cap (v * cols)
+        from (cap < 1 ? 0 (mi // cap * cap))
+        pg (take cap (drop from cs)) k #pg
+        deep (from + k = n ? ((k + cols - 1) // cols) v)
+        (pen c i) (i + from = t 'mi ? "\e[7m\(c)\e[27m" c)
+        (row r) (: (go i) (i + deep < k ? (pen (pg i) i + ((iw - edwide (pg i)) (s \ s + " ") "") + go (i + deep)) (pen (pg i) i))
+                   (go r))
+        (map row (jot deep) + (h < full ? [(edcut "and \(show (n - k)) more" (w - 1))] ()))))
    ; one line, cursor at its end, and l the drawn one with one byte pushed (an identity test)
    (edgrew t)
      (t 'l @ l
-        (!(t 'u) && !(t 'd) && !(t 'r) && two? l && >l == t 'was))
+        (!(edmenu? t) && !(t 'u) && !(t 'd) && !(t 'r) && two? l && >l == t 'was))
    ; a repaint puts the whole line out again, costing the line's length a keystroke --
    ; quadratic over a pasted run, and a seat painting that into a framebuffer looks hung -- so
    ; the one grown character is worth telling from the line. a character landing on the margin
@@ -2084,6 +2104,9 @@
         _ (pin t 'was l)
         lay (edlay w pl u l r d)
         crow <lay ccol <>lay erow (lay 2)
+        last (max crow erow)
+        rows (edrows t w (<(ttysize 1 19) - last - 1))
+        up (last - crow + #rows)
         (pins t 'row crow 'below (erow - crow),
          grew ? (prc <l, 0 = ccol ? (putc 10), flush out)
            ((0 < pra ? (csi pra 65),
@@ -2093,11 +2116,12 @@
              each (rev u) (ln \ (each ln prc, putc 10)),
              each (revcat l r) prc,
              each d (ln \ (putc 10, each ln prc)),
+             crow > erow ? (putc 10),
+             each rows (s \ (putc 10, puts s)),
              putc 13),
-            (crow > erow ? (putc 10, flush out)
-             (crow < erow ? (csi (erow - crow) 65),
-              0 < ccol ? (csi ccol 67),
-              flush out)))))
+            (0 < up ? (csi up 65),
+             0 < ccol ? (csi ccol 67),
+             flush out))))
 
    ; an sgr run at i -- ESC [ digits-and-semicolons m -- as its length, or 0 for no run
    (edsgr s i)
@@ -2342,7 +2366,10 @@
       puts pr, pins t 'row 0 'was 0,
       edwide pr)
 
-   ; the shell line reader: edraw + command history + tab completion + ^R search
+   ; the shell line reader: edraw + command history + tab completion + ^R search.
+   ; comp takes the bytes left of the cursor and answers () or
+   ; [n text choices]: the n bytes it replaces, what all the choices share (a lone one
+   ; whole), and each choice as [text suffix shown]
    (edlnc ip pr hist comp)
      (: pl (puts pr, edwide pr) hn #hist t (ednew ())
         (hnth k) <(drop k hist)                       ; hist[k], 0-based (k < hn)
@@ -2364,14 +2391,36 @@
              _ (edrender (edreprompt t (rlabel q (<fs 2))) t)
              c (edkey ip)
              (more q2 k) (hfrom q2 k @ m (hunt i draft sv ([q2 (m < 0 ? j m) (0 <= m)] . fs)))
-             (? (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
+             (? (c == 0) (hunt i draft sv fs)                  ; a terminal's report, no key
+                (32 <= c < 127 || 127 < c < 256) (more (q + string c) (max j 0))
                 (c = 18) (q = "" ? (hunt i draft sv fs) (more q (j + 1)))
                 (c = 127 || c = 8) (hunt i draft sv (two? >fs ? >fs fs))
                 (c = 7) (edload t sv, edreprompt t pr, loop i draft)
                 (edreprompt t pr,
                  key (j < 0 ? i (j + 1)) (j < 0 || 0 < i ? draft (revcat (sv 1) (sv 2))) c)))
         (loop i draft) (edrender pl t, key i draft (edkey ip))
+        (lay n s) (pin t 'l (revcat (map s ^#s) (drop n (t 'l))))   ; s over the n bytes left of the cursor
+        (shut _) (edmenu? t ? (pins t 'mc () 'mi -2, edrender pl t))
+        (turn by) (: m #(t 'mc) j (((t 'mi < 0 && by < 0 ? 0 (t 'mi)) + by + m) % m)
+                     s <(t 'mc j)
+                     (lay (t 'mn) s, pins t 'mi j 'mn #s))
+        (tab n s cs)
+          (: was (string (rev (take n (t 'l)))) up (edmenu? t)
+             (atom? cs || atom? >cs ? (shut (), lay n s)
+                (lay n s, up || was = s ? (pins t 'mc cs 'mi -1 'mn #s))))
+        ; a key with the menu up: tab and shift-tab choose, enter takes the choice, a letter
+        ; leaves the menu for the next tab to lay again, any other key shuts it first
         (key i draft c)
+          (: mi (peep t 'mi -2) on (0 <= mi)
+             (? (!(edmenu? t) || c == 0) (key1 i draft c)        ; 0: a terminal's report, no key
+                ((c = 9 || c = -16) && -1 <= mi) (turn (c = 9 ? 1 -1), loop i draft)
+                (c = 9) (key1 i draft c)
+                (c = -16) (loop i draft)
+                ((c = 13 || c = 10) && on) (lay 0 (t 'mc mi 1), shut (), loop i draft)
+                (c = 47 && on && two? (t 'l) && <(t 'l) = 47) (shut (), loop i draft)
+                (32 < c < 127 || 127 < c < 256) (pin t 'mi -2, key1 i draft c)
+                (shut (), key1 i draft c)))
+        (key1 i draft c)
           (edstep t c,
            (t 'ev @ 0 (loop i draft)
               (-7 || 4) 'eof
@@ -2381,14 +2430,7 @@
               3 (puts "^C\n", () . hist)   ; ^C: abandon the line, hist untouched
               9 (!comp ? (loop i draft)
                    (comp (revcat (t 'l) ()) @ cl
-                      (atom? cl ? (loop i draft)
-                         (: _ (pin t 'l (foldl (a \ ch \ ch . a) (t 'l) <cl))
-                            cs >cl
-                          (two? cs && two? >cs ?
-                            (edbelow t,
-                             puts $ "\n" + foldl (a \ s \ 0 = #a ? s "\(a)  \(s)") "" cs + "\n",
-                             pin t 'row 0, edreprompt t pr),   ; the list, then the prompt under it
-                           loop i draft)))))
+                      ((two? cl ? (tab <cl (cl 1) (cl 2)) (shut ())), loop i draft)))
               18 (hunt i draft (edframe t) [["" -1 1]])
               -8 (recall i (i >= hn ? i (i + 1)) draft)   ; up: older
               -9 (recall i (0 >= i  ? i (i - 1)) draft)    ; down: newer

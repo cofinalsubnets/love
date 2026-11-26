@@ -228,6 +228,18 @@
        (0.0 < e (v1 0)) (1e-4 < ratio) (ratio < 1e-2)                       ; 30 dB down in half a second
        (all (i \ aall (<(v1 i) = <(v2 i)) && aall (>(v1 i) = >(v2 i))) ^61)))
 
+; the memory is taken wherever its cask lies, a word's alignment enough: forty fresh casks after
+; forty lengths of garbage, the limiter's too, and a tail moved by majors plays the same frames
+(: K (cite 'dsp 'space) Lm (cite 'dsp 'limit) n 64 z (iota n * 0.0) imp ((iota n = 0) * 1.0)
+   PR (gem-tray [16] [44100.0 0.0 0.0 0.0 0.0 0.0 0.0 0.01 0.0 1.0 1.0 1.0 1.0 1.0 0.0 0.0]) PL (gem-tray [4] [44100.0 1.0 0.5 0.4])
+   sz (K z z () PR) lz (Lm z z () PL)
+   (took k) (: _ (map (j \ j) ^k) a (K z z (cask sz) PR) _ (map (j \ j) ^k) b (Lm z z (cask lz) PL) (two? a && two? b))
+   (tail move) (: m (cask sz) _ (K z z m PR) _ (K imp z m PR)
+                  (map (i \ (: _ (map (j \ j) ^(i % 3)) _ (move ? (please 1) 0) (K z z m PR))) ^60))
+   a (tail 0) b (tail 1))
+ (test (all took ^40) (all two? a) (all two? b)
+       (all (i \ aall (<(a i) = <(b i)) && aall (>(a i) = >(b i))) ^60) (0.0 < net (<(a 59) * <(a 59)) + net (<(a 40) * <(a 40))))
+
 ; the shimmer: the tail comes back an octave up, so it rings longer and brighter, and at its
 ; deepest over the longest reverb it still dies away
 (: K (cite 'dsp 'space) n 735 z (iota n * 0.0)

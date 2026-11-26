@@ -35,7 +35,8 @@ static int const sp_ramp[sp_ramps] = { 1, 2, 5, 6, 10, 11, 15 };
 static flo_t const sp_rhi[sp_ramps] = { 2, 2, 2, 2, 2, 2, 1 };
 #define sp_tiny ((flo_t) 1e-20)   // added and taken away: a decaying state flushed before it is subnormal
 
-struct sp_head { uint64_t w; flo_t lfo, shp, cur[sp_ramps], dlp[2], flp[sp_lines]; };
+// the frame count as two words, low then high
+struct sp_head { uint32_t w[2]; flo_t lfo, shp, cur[sp_ramps], dlp[2], flp[sp_lines]; };
 
 static uintptr_t sp_pow2(flo_t x) { uintptr_t n = 16; while ((flo_t) n < x) n <<= 1; return n; }
 // every buffer's length, a power of two, and the whole in bytes
@@ -111,7 +112,7 @@ love_noinline static struct g *host_space(struct g *g) {
  uint64_t const dn = (uint64_t) dd;
  flo_t tgt[sp_ramps], inc[sp_ramps];
  for (int i = 0; i < sp_ramps; i++) tgt[i] = sp_clamp(p[sp_ramp[i]], 0, sp_rhi[i]), inc[i] = (tgt[i] - h->cur[i]) / (flo_t) n;
- uint64_t w = h->w;
+ uint64_t w = (uint64_t) h->w[1] << 32 | h->w[0];
  flo_t lfo = h->lfo, shp = h->shp;
  for (uintptr_t i = 0; i < n; i++, w++) {
   flo_t *v = h->cur;
@@ -154,7 +155,7 @@ love_noinline static struct g *host_space(struct g *g) {
   shl[w & (c.sh - 1)] = (flo_t) 0.5 * sl, shr[w & (c.sh - 1)] = (flo_t) 0.5 * sr;
   L[i] = x + v[5] * (flo_t) 0.5 * sl, R[i] = y + v[5] * (flo_t) 0.5 * sr; }
  for (int j = 0; j < sp_ramps; j++) h->cur[j] = tgt[j];
- h->w = w, h->lfo = lfo, h->shp = shp;
+ h->w[0] = (uint32_t) w, h->w[1] = (uint32_t) (w >> 32), h->lfo = lfo, h->shp = shp;
  struct chain *r = ini_chain(bump(g, Width(struct chain)), (intptr_t) word(tl), (intptr_t) word(tr));
  a[0] = word(r);
  return g; }

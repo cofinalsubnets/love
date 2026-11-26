@@ -59,13 +59,16 @@
    ("echo hi" = ed-ln "\x12ls\e[A\r" ed-hist)           ; up from the match: the one older
    ("x" = ed-ln "x\x12mak\e[B\r" ed-hist)))             ; down from the newest: the draft
 
-; the search shows its query; a tab's candidate list is followed by the prompt, so the line
-; it redraws is not indented by a prompt that is not there
-(: _ (hosted ? (test
+; the search shows its query; a second tab lays the choices under the line, the prompt drawn once
+(: ch (_ \ [1 "fo" [["foo" " " "foo"] ["fob" " " "fob"]]])
+ (hosted ? (test
    (has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "\x12ls\r")) "P> " (map ed-bs ed-hist) ())) "(reverse-i-search)`ls': ")
    (has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "\x12lz\r")) "P> " (map ed-bs ed-hist) ())) "(failed reverse-i-search)`lz': ")
-   (: s (ed-said (_ \ ed-lnc (ed-keys (ed-bs "f\t\r")) "P> " () (_ \ [[111] "foo" "fob"])))
-      (has? (snip s (findsub s "foo  fob\n") #s) "P> ")))))
+   (: two (_ \ [2 "fo" [["foo" " " "foo"] ["fob" " " "fob"]]])
+      s (ed-said (_ \ ed-lnc (ed-keys (ed-bs "fo\t\r")) "P> " () two))
+      (has? s "\nfoo  fob\r\e[1A" && !(has? (snip s 3 #s) "P> ")))
+   ; the first only fills
+   (!(has? (ed-said (_ \ ed-lnc (ed-keys (ed-bs "f\t\r")) "P> " () ch)) "foo  fob")))))
 
 ; a bracketed paste is text: a break (crlf one) splits the line, submits nothing; a tab stays
 (: _ (test

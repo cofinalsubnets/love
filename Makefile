@@ -139,8 +139,8 @@ $(ho)/liblove.a: $(h_o)
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/noblob.c $(love_c))
-out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/user/main0.o out/00/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
+out/0/love/cb.o out/00/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 # love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
 # pinned to out/0 and shared, keeps the compiler it was built with (L0CC, cc unless given)
 ifeq ($(HCC),)
@@ -149,7 +149,12 @@ else
 L0CC ?= cc
 l0cc = $(L0CC)
 endif
-boot_cc = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+# tail-threaded where that cc has musttail, else the trampoline; the twins out/00/love0 and
+# out/gcs0/love0, for the gates, are the trampoline under any cc
+l0tco := $(shell printf 'int f(int);\nint g(int x) { __attribute__((musttail)) return f(x); }\n' | $(l0cc) -Werror -x c -c -o /dev/null - 2>/dev/null && echo 1 || echo 0)
+boot_as = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=$(1) -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+boot_cc = $(call boot_as,$(l0tco))
+boot_cc0 = $(call boot_as,0)
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -160,13 +165,23 @@ out/0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
+# love0 at tco=0, for test_love0_tco0: its objects beside out/0's and its link the same
+love00_o = $(patsubst out/0/%,out/00/%,$(love0_o))
+out/00/%.o: $(S)/%.c $(love_h) out/0/.love0cc
+	@echo '$(t_cc)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(boot_cc0) -c $< -o $@
+out/00/love0: $(love00_o)
+	@echo '$(t_ld)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love00_o)
 # love0 under LvGcStress, for test_gcstress: boot_cc carries no GCDBG, so the stress lane's
 # bootstrap is this twin, its objects beside out/0's and its link the same
 love0s_o = $(patsubst out/0/%,out/gcs0/%,$(love0_o))
 out/gcs0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_cc) -DLvGcStress -c $< -o $@
+	@LOVE_NO_IMAGE= $(boot_cc0) -DLvGcStress -c $< -o $@
 out/gcs0/love0: $(love0s_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
