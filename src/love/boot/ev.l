@@ -21,7 +21,7 @@
 ; value. pureset is keyed by value, and shared with cprop's inliner and the purity gates.
 (: pureset (: names ('(+ - * / % & | < <= = >= >) +
           '(// << >> ^
-            == gcd modpow abs
+            == gcd modpow abs norm
             . cap cup caap caup cuap cuup
             dig lidx assoc elem last rev cat
             max min != !== bit

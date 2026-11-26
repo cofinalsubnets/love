@@ -165,7 +165,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ; - cap/cup are total: <() = >() = (); (= a b) across types answers 0, never dies
 ; - trays (@(..), iota): every numeric word is elementwise with broadcast, = and != too;
 ;   a whole question is a reduction -- aall/aany of a mask, net/prod/amax/amin of a tray --
-;   and max/min are the binary pair. abs of a tray is its norm; floor and int take a float
+;   and max/min are the binary pair. abs is elementwise, norm a tray's L2 norm; floor and int take a float
 ;   tray to an int tray; peep by a tray of indices gathers, a miss the default
 
 ; booleans

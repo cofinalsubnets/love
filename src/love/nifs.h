@@ -89,77 +89,78 @@
  P(246, "im", lvm_im, 0) \
  P(248, "conj", lvm_conj, 0) \
  P(250, "abs", lvm_abs, 0) \
- P(252, "arg", lvm_carg, 0) \
- C(254, 3, "tray", lvm_trayctor, 0) \
- P(258, "iota", lvm_iota, 0) \
- C(260, 3, "nif", lvm_nif, 0) \
- C(264, 4, "nifx", lvm_nifx, 0) \
- P(268, "rank", lvm_rank, 0) \
- P(270, "alen", lvm_alen, 0) \
- P(272, "shape", lvm_shape, 0) \
- P(274, "atype", lvm_atype, 0) \
- P(276, "asum", lvm_asum, 0) \
- P(278, "aprod", lvm_aprod, 0) \
- P(280, "amax", lvm_max, 0) \
- P(282, "amin", lvm_min, 0) \
- C(284, 2, "max", lvm_max2, 0) \
- C(288, 2, "min", lvm_min2, 0) \
- P(292, "aall", lvm_aall, 0) \
- P(294, "aany", lvm_aany, 0) \
- P(296, "floor", lvm_floor, 0) \
- C(298, 2, "inner", lvm_inner, 0) \
- C(302, 2, "outer", lvm_outer, 0) \
- P(306, "numeric?", lvm_numericp, 0) \
- P(308, "sun?", lvm_sunp, 0) \
- P(310, "tray?", lvm_setp, 0) \
- P(312, "int", lvm_intf, 0) \
- P(314, "nom?", lvm_nomp, 0) \
- P(316, "name?", lvm_namep, 0) \
- P(318, "mint?", lvm_mintp, 0) \
- P(320, "tablet?", lvm_tabp, 0) \
- P(322, "charm?", lvm_charmp, 0) \
- P(324, "lit?", lvm_litp, 0) \
- P(326, "hot?", lvm_hotp, 0) \
- P(328, "nil?", lvm_nilp, 0) \
- P(330, "ev", lvm_eval, 0) \
- P(332, "call-cc", lvm_callk, 0) \
- C(334, 2, "scare", lvm_scare, 0) \
- P(338, "yield", lvm_yield_nif, 0) \
- C(340, 2, "twirl", lvm_twirl, 0) \
- P(344, "catch", lvm_wait, 0) \
- P(346, "rest", lvm_sleep, 0) \
- P(348, "landed?", lvm_donep, 0) \
- P(350, "scoop", lvm_scoop, 0) \
- P(352, "freeze", lvm_hush, 0) \
- P(354, "cue?", lvm_key, 0) \
- C(356, 3, "putbn", lvm_fputbn, 0) \
- P(360, "await", lvm_await, 0) \
- P(362, "see", lvm_fgetc, 0) \
- C(364, 2, "unsee", lvm_fungetc, 0) \
- P(368, "chug", lvm_chug, 0) \
- C(370, 2, "unchug", lvm_unchug, 0) \
- P(374, "inhand", lvm_inhand, 0) \
- C(376, 2, "put", lvm_fputc, 0) \
- C(380, 2, "say", lvm_fputs, 0) \
- P(384, "flush", lvm_fflush, 0) \
- P(386, "wheel", lvm_wheel, 0) \
- P(388, "turn", lvm_turn, 0) \
- P(390, "turnf", lvm_turnf, 0) \
- C(392, 2, "strike", lvm_coinmk, 0) \
- P(396, "load", lvm_load, 0) \
- P(398, "kind", lvm_kind, 0) \
- P(400, "coin?", lvm_coinp, 0) \
- P(402, "calloutdrive", lvm_calloutdrive, 0) \
- P(404, "reach-offset", lvm_reach_offset, 0) \
- P(406, "nat?", lvm_natp, 0) \
- P(408, "calloutresume", lvm_calloutresume, 0) \
- C(410, 3, "sits?", lvm_sitsp, 0) \
- C(414, 3, "subidx", lvm_subidx, 0) \
- P(418, "cats", lvm_cats, 0) \
- P(420, "bitlen", lvm_bitlen, 0) \
- P(422, "arena", lvm_arena, 0) \
- C(424, 2, "heed", lvm_heed, 0) \
- P(428, "end-offset", lvm_end_offset, 0)
+ P(252, "norm", lvm_norm, 0) \
+ P(254, "arg", lvm_carg, 0) \
+ C(256, 3, "tray", lvm_trayctor, 0) \
+ P(260, "iota", lvm_iota, 0) \
+ C(262, 3, "nif", lvm_nif, 0) \
+ C(266, 4, "nifx", lvm_nifx, 0) \
+ P(270, "rank", lvm_rank, 0) \
+ P(272, "alen", lvm_alen, 0) \
+ P(274, "shape", lvm_shape, 0) \
+ P(276, "atype", lvm_atype, 0) \
+ P(278, "asum", lvm_asum, 0) \
+ P(280, "aprod", lvm_aprod, 0) \
+ P(282, "amax", lvm_max, 0) \
+ P(284, "amin", lvm_min, 0) \
+ C(286, 2, "max", lvm_max2, 0) \
+ C(290, 2, "min", lvm_min2, 0) \
+ P(294, "aall", lvm_aall, 0) \
+ P(296, "aany", lvm_aany, 0) \
+ P(298, "floor", lvm_floor, 0) \
+ C(300, 2, "inner", lvm_inner, 0) \
+ C(304, 2, "outer", lvm_outer, 0) \
+ P(308, "numeric?", lvm_numericp, 0) \
+ P(310, "sun?", lvm_sunp, 0) \
+ P(312, "tray?", lvm_setp, 0) \
+ P(314, "int", lvm_intf, 0) \
+ P(316, "nom?", lvm_nomp, 0) \
+ P(318, "name?", lvm_namep, 0) \
+ P(320, "mint?", lvm_mintp, 0) \
+ P(322, "tablet?", lvm_tabp, 0) \
+ P(324, "charm?", lvm_charmp, 0) \
+ P(326, "lit?", lvm_litp, 0) \
+ P(328, "hot?", lvm_hotp, 0) \
+ P(330, "nil?", lvm_nilp, 0) \
+ P(332, "ev", lvm_eval, 0) \
+ P(334, "call-cc", lvm_callk, 0) \
+ C(336, 2, "scare", lvm_scare, 0) \
+ P(340, "yield", lvm_yield_nif, 0) \
+ C(342, 2, "twirl", lvm_twirl, 0) \
+ P(346, "catch", lvm_wait, 0) \
+ P(348, "rest", lvm_sleep, 0) \
+ P(350, "landed?", lvm_donep, 0) \
+ P(352, "scoop", lvm_scoop, 0) \
+ P(354, "freeze", lvm_hush, 0) \
+ P(356, "cue?", lvm_key, 0) \
+ C(358, 3, "putbn", lvm_fputbn, 0) \
+ P(362, "await", lvm_await, 0) \
+ P(364, "see", lvm_fgetc, 0) \
+ C(366, 2, "unsee", lvm_fungetc, 0) \
+ P(370, "chug", lvm_chug, 0) \
+ C(372, 2, "unchug", lvm_unchug, 0) \
+ P(376, "inhand", lvm_inhand, 0) \
+ C(378, 2, "put", lvm_fputc, 0) \
+ C(382, 2, "say", lvm_fputs, 0) \
+ P(386, "flush", lvm_fflush, 0) \
+ P(388, "wheel", lvm_wheel, 0) \
+ P(390, "turn", lvm_turn, 0) \
+ P(392, "turnf", lvm_turnf, 0) \
+ C(394, 2, "strike", lvm_coinmk, 0) \
+ P(398, "load", lvm_load, 0) \
+ P(400, "kind", lvm_kind, 0) \
+ P(402, "coin?", lvm_coinp, 0) \
+ P(404, "calloutdrive", lvm_calloutdrive, 0) \
+ P(406, "reach-offset", lvm_reach_offset, 0) \
+ P(408, "nat?", lvm_natp, 0) \
+ P(410, "calloutresume", lvm_calloutresume, 0) \
+ C(412, 3, "sits?", lvm_sitsp, 0) \
+ C(416, 3, "subidx", lvm_subidx, 0) \
+ P(420, "cats", lvm_cats, 0) \
+ P(422, "bitlen", lvm_bitlen, 0) \
+ P(424, "arena", lvm_arena, 0) \
+ C(426, 2, "heed", lvm_heed, 0) \
+ P(430, "end-offset", lvm_end_offset, 0)
 #define inst_rows(I) \
  I(lvm_unc) I(lvm_index) I(lvm_ret) I(lvm_ap) I(lvm_tap) I(lvm_apn) \
  I(lvm_tapn) I(lvm_jump) I(lvm_cond) I(lvm_arg) I(lvm_quote) I(lvm_defglob) \
