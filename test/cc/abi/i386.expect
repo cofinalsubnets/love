@@ -1,0 +1,25 @@
+# what mooncc is known to do otherwise on i386, by kind; every line is held both ways
+# varefuse KIND      a va_arg of it is refused: "no lane for this va_arg on i386"
+# pass, vapass KIND  refused by value: "no lane for" in the caller, and the callee where it takes one, fixed or variadic
+# wrong, vawrong     every pairing across compilers goes wrong, each with itself is right
+# split, vasplit     gcc and clang disagree, and ours is right both ways with the peer named
+# varight KIND       right as a va_arg, though not as a fixed argument
+# layout WORD OURS THEIRS
+pass empty
+pass al16
+pass al16m
+wrong ldouble
+wrong ea
+vawrong ldouble
+wrong pkm5
+vapass al16
+vapass al16m
+varight empty
+vawrong ea
+vawrong pkm5
+layout cdouble.align 8 4
+layout ea.sizeof 8 12
+layout ldouble.sizeof 8 12
+layout pkm5.align 4 1
+layout pkm5.b 4 1
+layout pkm5.sizeof 8 5

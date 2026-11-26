@@ -12,6 +12,7 @@ extern long m_narrow(signed char, unsigned char, short, unsigned short, _Bool);
 static int nbad;
 static void want(const char *nm, long g, long w) { if (g != w) nbad++, printf("seam %s got %ld want %ld\n", nm, g, w); }
 
+#ifdef __x86_64__
 /* wreck: ruin each caller-saved register. its answer is rdi plus the double */
 __asm__(".text\n.globl p_wreck\np_wreck:\n cvttsd2si %xmm0,%rax\n add %rdi,%rax\n mov $-1,%rcx\n mov %rcx,%rdx\n mov %rcx,%rsi\n mov %rcx,%rdi\n"
         " mov %rcx,%r8\n mov %rcx,%r9\n mov %rcx,%r10\n mov %rcx,%r11\n"
@@ -33,6 +34,25 @@ __asm__(".text\n.globl p_wreck\np_wreck:\n cvttsd2si %xmm0,%rax\n add %rdi,%rax\
         "1: fnstcw 12(%rsp)\n mov 12(%rsp),%cx\n cmp 4(%rsp),%cx\n je 1f\n or $256,%eax\n1: pushf\n pop %rcx\n test $0x400,%ecx\n je 1f\n or $512,%eax\n cld\n"
         "1: add $24,%rsp\n pop %r15\n pop %r14\n pop %r13\n pop %r12\n pop %rbp\n pop %rbx\n ret\n"
         ".bss\nmarks: .quad 0\n.globl saved_ans\nsaved_ans: .quad 0\n.text\n");
+#else
+/* the same on i386: arguments on the stack, ebx esi edi ebp saved, every xmm the caller's */
+__asm__(".text\n.globl p_wreck\np_wreck:\n cvttsd2si 8(%esp),%eax\n add 4(%esp),%eax\n mov $-1,%ecx\n mov %ecx,%edx\n"
+        " pcmpeqd %xmm0,%xmm0\n movaps %xmm0,%xmm1\n movaps %xmm0,%xmm2\n movaps %xmm0,%xmm3\n movaps %xmm0,%xmm4\n movaps %xmm0,%xmm5\n movaps %xmm0,%xmm6\n movaps %xmm0,%xmm7\n ret\n"
+/* aligned: 1 when esp is 16 aligned before the call, and the last stack argument is right */
+        ".globl p_aligned\np_aligned:\n lea 4(%esp),%eax\n and $15,%eax\n neg %eax\n add 28(%esp),%eax\n ret\n"
+/* saved: marks in ebx esi edi ebp, mxcsr, x87 cw and df; calls the first argument with the next two; eax a bit per loss */
+        ".globl saved\nsaved:\n push %ebx\n push %esi\n push %edi\n push %ebp\n sub $28,%esp\n"
+        " stmxcsr 8(%esp)\n fnstcw 12(%esp)\n mov %esp,marks\n"
+        " mov 52(%esp),%eax\n mov %eax,(%esp)\n mov 56(%esp),%eax\n mov %eax,4(%esp)\n mov 48(%esp),%eax\n"
+        " mov $0x11111111,%ebx\n mov $0x22222222,%esi\n mov $0x33333333,%edi\n mov $0x44444444,%ebp\n"
+        " call *%eax\n mov %eax,saved_ans\n xor %eax,%eax\n"
+        " cmp $0x11111111,%ebx\n je 1f\n or $1,%eax\n1: cmp $0x22222222,%esi\n je 1f\n or $2,%eax\n"
+        "1: cmp $0x33333333,%edi\n je 1f\n or $4,%eax\n1: cmp $0x44444444,%ebp\n je 1f\n or $8,%eax\n"
+        "1: cmp %esp,marks\n je 1f\n or $64,%eax\n mov marks,%esp\n1: stmxcsr 16(%esp)\n mov 16(%esp),%ecx\n xor 8(%esp),%ecx\n test $0xffc0,%ecx\n je 1f\n or $128,%eax\n"
+        "1: fnstcw 20(%esp)\n mov 20(%esp),%cx\n cmp 12(%esp),%cx\n je 1f\n or $256,%eax\n1: pushf\n pop %ecx\n test $0x400,%ecx\n je 1f\n or $512,%eax\n cld\n"
+        "1: add $28,%esp\n pop %ebp\n pop %edi\n pop %esi\n pop %ebx\n ret\n"
+        ".bss\nmarks: .long 0\n.globl saved_ans\nsaved_ans: .long 0\n.text\n");
+#endif
 extern long saved(void *, long, long), saved_ans;
 
 long p_down(long n, long (*f)(long)) { return f(n - 1); }
@@ -60,14 +80,16 @@ int main(void) {
   want("back", m_back(40), 820);
   want("big", m_big(5), 5 + 12 + 28);
   for (long n = 0; n < 40; n++) want("stack alignment", m_stack(n), 15);
+#ifdef __x86_64__
   for (int k = 0; k < 4; k++) want("al", m_al(k), 1);
+  want("saved over al", saved(m_al, 3, 0), 0);
+#endif
   want("tail", m_tail(40, 2), 44);
   want("saved over live", saved(live, 1, 2), 0); want("saved live answer", saved_ans, LIVE);
   want("saved over m_live", saved(m_live, 1, 2), 0);
   want("saved over back", saved(m_back, 30, 0), 0);
   want("saved over stack", saved(m_stack, 9, 0), 0);
   want("saved over tail", saved(m_tail, 4, 5), 0);
-  want("saved over al", saved(m_al, 3, 0), 0);
   want("saved over big", saved(m_big, 3, 0), 0);
 #ifdef HELD
   want("narrow", ((long (*)(long, long, long, long, long))m_narrow)(0x7fffff81, 0x7fffff82, 0x7fff8003, 0x7fff8004, 1), -127 + 0x82 * 2 + (0x8003 - 65536) * 3L + 0x8004 * 4L + 1);

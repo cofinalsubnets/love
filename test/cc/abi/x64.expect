@@ -1,6 +1,6 @@
 # what mooncc is known to do otherwise on x64, by kind; every line is held both ways
 # varefuse KIND      a va_arg of it is refused: "no lane for this va_arg on x64"
-# pass, vapass KIND  refused by value: "no lane for" in the caller and the callee, fixed or variadic
+# pass, vapass KIND  refused by value: "no lane for" in the caller, and the callee where it takes one, fixed or variadic
 # wrong, vawrong     every pairing across compilers goes wrong, each with itself is right
 # split, vasplit     gcc and clang disagree, and ours is right both ways with the peer named
 # varight KIND       right as a va_arg, though not as a fixed argument

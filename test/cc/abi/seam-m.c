@@ -18,7 +18,7 @@ long m_live(long a, long b, long c, long d, long e, long f, double x, double y, 
 }
 long m_back(long n) { return n < 1 ? 0 : n + p_down(n, m_back); }
 long m_tail(long a, long b) { return p_wreck(a + b, 2.0); }
-/* varying frames and pushed arguments: the stack is 16 aligned at every call */
+/* varying frames and pushed arguments: the stack is 16 aligned at every call, on i386 too */
 long m_stack(long n) {
   char pad[n % 37 + 1];
   pad[0] = (char)n;
@@ -31,9 +31,11 @@ long m_vcopy(int n, ...) {
   va_list a, b; va_start(a, n); va_copy(b, a);
   long r = p_vsum(n, a) - p_vsum(n, b); va_end(a); va_end(b); return r;
 }
+#ifdef __x86_64__
 int m_al(int k) {
   return k == 0 ? p_al(0, 1, 2) : k == 1 ? p_al(1, 1.0) : k == 2 ? p_al(2, 1.0, 5, 2.0) : p_al(8, 1., 2., 3., 4., 5., 6., 7., 8., 9., 10.);
 }
+#endif
 long m_big(long n) { struct s24 s = p_big(n); return s.a + s.b * 2 + s.c * 4; }
 /* held though the psABI leaves it open: a narrow argument's upper bits are not trusted */
 long m_narrow(signed char a, unsigned char b, short c, unsigned short d, _Bool e) { return a + b * 2L + c * 3L + d * 4L + e; }

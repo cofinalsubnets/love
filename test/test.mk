@@ -473,9 +473,11 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@LOVE_BUDGET_MB=400 timeout 600 $m -l test/gate/moonfuzz.l < /dev/null || { $(fuzzlate); exit 1; }
-# calls between mooncc and gcc, clang on x64, drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
+# calls between mooncc and gcc, clang on x64 and i386, drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
 test_abi: host
-	@$(gsh) test/gate/abi.sh $(ho) $m $${ABI_N:-200} $${ABI_SEED:-1}
+	@$(gsh) test/gate/abi.sh $(ho) $m x64 $${ABI_N:-200} $${ABI_SEED:-1}
+test_abi_i386: host
+	@$(gsh) test/gate/abi.sh $(ho) $m i386 $${ABI_N:-200} $${ABI_SEED:-1}
 # test_forge -- love-written nifs via holo agree with the C nif they deopt into; none fitted fails
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
