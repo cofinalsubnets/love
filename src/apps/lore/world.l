@@ -2062,7 +2062,7 @@
                 k (ball-kick + 1.3 * max 0.0 (peep st 'vx 0.0 * n 0 + peep st 'vz 0.0 * n 1))
                 (pins b 'v [(k * n 0) (1.0 + 0.3 * k) (k * n 1)] 'kt (st 'mt) 'rest 0,
                  (b 'kind @ 'ball (mix-cry st "bounce" [(p 0) (p 2)]) st))))
-   (b 'rest @ 1 st (b 'kind = 'ball ? (ball-tumble st b dt) (ball-fly st b dt))))
+   (b 'rest @ 1 st (ball-tumble st b dt)))
  ; ..a ball or a plush in hand: the left button takes the one looked at within reach; held, pressed it
  ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
  ; it fall where it is
@@ -2290,54 +2290,45 @@
    _ (pins b 'held 0 'rest 0 'kt (st 'mt) 'p p 'pk ()
            'v (c+ (c* v (look-way st)) [(peep st 'vx 0.0) 0.0 (peep st 'vz 0.0)]))
    (pin st 'wind ()))
- ; ..its flight in steps short beside its size: each way on its own, back off what it would
- ; meet; among only the brushes and panes near it
- ; ..a ball's next moment by tumble: a body of its own against the faces of the brushes near
- ; it, made again when it is in another cell's, and the panes; pulled as the level pulls at
- ; its height, and heard where it comes off something hard
+ ; ..a loose thing's next moment by tumble: a body of its own against the faces of the brushes
+ ; near it and their land, made again when it is in another cell's, and the panes; pulled as
+ ; the level pulls at its height, and heard where it comes off something hard. a ball is a
+ ; ball, a wisp one that hardly bounces and soon stops, a plush a box as wide as it reaches
+ ; and as high as it stands, soft and slow to slide, landing as it stands
  ball-m 0.6 ball-mu 0.6
+ (thing-of st b) (b 'kind @ 'plush (: w (st 'sc 'plushes (b 'i) 'w) o (tb-box (b 'p) [w (b 'r) w] 0.3)
+                                    (pins o 'e plush-e 'mu 0.9 'ii [(0.001 * o 'ii 0) (o 'ii 1) (0.001 * o 'ii 2)]))   ; ..hard to tip, so its corners share its weight
+                       'wisp (pins (tb-sphere (b 'p) (b 'r) 0.1) 'e plush-e 'mu 0.8 'roll 0.3)
+                       (pins (tb-sphere (b 'p) (b 'r) ball-m) 'e ball-e 'mu ball-mu))
+ ; ..the land's triangles over the cell's box, as faces: each solid under, none where a later
+ ; brush carves under it, so a well through the land is open
+ (land-faces bs x z) (: i (floor (x / near-g)) j (floor (z / near-g))
+   x0 (i * near-g - near-m) x1 ((i + 1) * near-g + near-m) z0 (j * near-g - near-m) z1 ((j + 1) * near-g + near-m)
+   (keys-of L) (: a (floor (x0 / 2.0)) b (floor (x1 / 2.0)) c (floor (z0 / 2.0)) d (floor (z1 / 2.0))
+     (catmap (u \ map (v \ (a + u + 4096) * 8192 + c + v + 4096) ^(d - c + 1)) ^(b - a + 1)))
+   (catmap (B \ (: L (B 'land) is (foldl (\ t k (foldl (\ t q (pin t q 1)) t (peep (L 'cells) k ()))) {} (keys-of L))
+                   (catmap (q \ (: t (L 'tris q) m (c* (1.0 / 3.0) (c+ (c+ (t 0) (t 1)) (t 2))) n (unit (cross (c- (t 2) (t 0)) (c- (t 1) (t 0))))
+                                  (brush-medium bs [(m 0) (m 1 - 0.05) (m 2)] = 1 ? () [[t (n 1 < 0.0 ? (c* -1.0 n) n)]])))
+                           (sort (keys is)))))
+           (filter (B \ tablet? (B 'land)) bs)))
  (ball-faces st b) (: p (b 'p) bs (near-bs st (p 0) (p 2)) w (peep b 'tw ())
    (? (tablet? w && w 'bs == bs) (w 'W)
       (: W (tb-world [] (map (q \ [[[1.0 0.0 0.0] (q 'hi 0)] [[-1.0 0.0 0.0] (0.0 - q 'lo 0)] [[0.0 1.0 0.0] (q 'hi 1)]
                                    [[0.0 -1.0 0.0] (0.0 - q 'lo 1)] [[0.0 0.0 1.0] (q 'hi 2)] [[0.0 0.0 -1.0] (0.0 - q 'lo 2)]])
                              (st 'lvl 'panes)))
-         _ (tb-faces W (map (f \ [(f 0) (f 1)]) (brush-faces bs)))
+         _ (tb-faces W (map (f \ [(f 0) (f 1)]) (brush-faces bs) + land-faces bs (p 0) (p 2)))
          (pin b 'tw {'bs bs 'W W}, W))))
  (ball-tumble st b dt) (: W (ball-faces st b) p (b 'p) g (grav-at (st 'lvl) (p 1)) v0 (b 'v)
-   o (peep b 'tb () @ () (: o (pins (tb-sphere p (b 'r) ball-m) 'e ball-e 'mu ball-mu) (pin b 'tb o, o)) o o)
+   o (peep b 'tb () @ () (: o (thing-of st b) (pin b 'tb o, o)) o o)
    _ (pins o 'p p 'v v0 'q (b 'q) 'w (peep b 'w [0.0 0.0 0.0]) 'still 0 'idle (peep o 'idle 0.0))
    _ (pins W 'bodies [o] 'g [0.0 (0.0 - g) 0.0])
    _ (tb-step W dt)
    ; ..how hard it was turned, past what the pull alone would have done
    dv (c- (o 'v) (c+ v0 [0.0 (0.0 - g * dt) 0.0]))
+   ; ..a plush set level again, turned about the up alone
+   _ (b 'kind = 'plush ? (: q (o 'q) m (sqrt (sq (q 0) + sq (q 2))) (pins o 'q [(q 0 / m) 0.0 (q 2 / m) 0.0] 'w [0.0 (o 'w 1) 0.0])) 0)
    _ (pins b 'p (o 'p) 'v (o 'v) 'q (o 'q) 'w (o 'w) 'rest (o 'still) 'pk ())
-   (mag3 dv > 1.2 ? (mix-cry st "bounce" [(o 'p 0) (o 'p 2)]) st))
- (ball-fly st b dt) (: r (b 'r) ball (b 'kind = 'ball) p0 (b 'p) lv (st 'lvl)
-   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (near-bs st (p0 0) (p0 2)))
-   (solid? q) (brush-medium bs q != 1
-               || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
-                            && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (st 'lvl 'panes))
-   n (max 1 (min 10 (int (mag3 (b 'v) * dt / (0.5 * r)) + 1))) h (dt / n)
-   (set3 p k x) (map (j \ j = k ? x (p j)) ^3)
-   (axis s k) (: p (s 0) v (s 1) vk (v k) q (set3 p k (p k + vk * h + (vk < 0.0 ? -r r)))
-     (? (solid? q) (: u -((ball ? ball-e plush-e) * vk) gr (k = 1 && vk < 0.0)
-                      [p (set3 v k (gr && mag u < 0.5 ? 0.0 u)) (max (s 2) (mag vk)) (s 3 || gr)])
-        [(set3 p k (p k + vk * h)) v (s 2) (s 3)]))
-   bg (grav-at lv (p0 1))
-   (sub1 s _) (: v (s 1) (foldl axis [(s 0) [(v 0) (v 1 - bg * h) (v 2)] (s 2) (s 3)] ^3))
-   e (foldl sub1 [p0 (b 'v) 0.0 0] ^n) p (e 0)
-   ; ..on the ground it rolls, slowing, turning as far as it goes, and stops once slow; a plush
-   ; drags to a stop
-   gnd (solid? [(p 0) (p 1 - r - 0.02) (p 2)]) f (gnd ? (max 0.0 (1.0 - (ball ? 0.7 6.0) * dt)) 1.0)
-   v (e 1 @ v [(f * v 0) (v 1) (f * v 2)])
-   still (gnd && mag3 v < 0.06)
-   _ (? (gnd && ball) (pin b 'w [(v 2 / r) 0.0 -(v 0 / r)]))
-   q (b 'q) w (peep b 'w [0.0 0.0 0.0])
-   dq [-(dot w (drop 1 q)) 0.0 0.0 0.0]
-   wq (c+ (c* (q 0) w) (cross w (drop 1 q)))
-   q2 (map (j \ q j + 0.5 * dt * (j @ 0 (dq 0) (wq (j - 1)))) ^4) ql (sqrt (net (map sq q2)))
-   _ (pins b 'p p 'v (still ? [0.0 0.0 0.0] v) 'q (map (x \ x / ql) q2) 'rest (still ? 1 0) 'pk ())
-   (ball && e 2 > 1.2 ? (mix-cry st "bounce" [(p 0) (p 2)]) st))
+   (b 'kind = 'ball && mag3 dv > 1.2 ? (mix-cry st "bounce" [(o 'p 0) (o 'p 2)]) st))
  ; ..its mesh about its middle: orange, its seams standing just proud, two round it crossing
  ; square and about either pole of the first a curved one: 52 degrees out where the second
  ; crosses it, pinched to 82 toward the first, every triangle's front outward
