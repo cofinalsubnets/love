@@ -758,7 +758,7 @@
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
   cur (pick 0 (+)) ret0 (pick 1 cap) unc (pick 0 (+ 1)) uncn lvm_uncn
   ; the float width is the seat's, never this file's: a 32-bit seat gets binary32 for
-  ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends norm's doubling loop past
+  ; flo_t. so ask the arithmetic -- a hard-coded 2^53 sends fnorm's doubling loop past
   ; every float32 there is and it never returns.
   p53 (: (go m) (m = 1.0 + m ? m (go (m * 2.0))) (go 1.0))   ; where +1 is lost = 2^mantissa
   p52 (p53 / 2.0)
@@ -787,8 +787,8 @@
   ; --- gems: the shortest roundtrip, exact steele & white: 4m and the midpoints 4m±2 as
   ; bignums at one scale.
   ; v = m*2^e, m an integer in [p52,p53), but never below the denormal floor
-  (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
-                (m < p52 && emin < e) (norm (m * 2.0) (e - 1))
+  (fnorm m e) (? (p53 <= m) (fnorm (m / 2.0) (1 + e))
+                (m < p52 && emin < e) (fnorm (m * 2.0) (e - 1))
                 (int m . e))
   ; inside the rounding interval? a midpoint counts only for an even mantissa (round-half-even)
   (fits c lo hi evn) ((lo < c ? 1 (evn && c = lo)) &&
@@ -803,7 +803,7 @@
   ; strip trailing zeros, keeping one digit
   (strip n) (n // 10 @ q (0 < q && (n - q * 10) = 0 ? (strip q) n))
   (zeros o n) (0 < n ? (put o 48, zeros o (n - 1)) 0)
-  (pgem2 o a) (: me (norm a 0) m <me e2 >me sh (e2 - 2)
+  (pgem2 o a) (: me (fnorm a 0) m <me e2 >me sh (e2 - 2)
     up (sh < 0 ? (5 ** -sh) (2 ** sh))   ; one shared scale: 2^sh, or 5^-sh with the point moved
     flo (m = p52 && emin < e2)                ; at a binade floor the gap below is already half
     dv (4 * m * up)

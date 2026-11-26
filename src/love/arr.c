@@ -1162,19 +1162,40 @@ lvm(lvm_abs) {
   Hp += b2w(bytes);
   memcpy(y, x, bytes); y->slen = -x->slen;
   love_musttail return Answer(word(y)); }
- if (trayp(a)) {                                       // the L2 norm; love_C sums 2n floats
-  struct tray *v = tray(a); uintptr_t i, n = tray_nelem(v);
-  flo_t s = 0;
-  if (v->type == love_C) { flo_t *fp = tray_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
-  else for (i = 0; i < n; i++) { flo_t e = tray_get_flo(v, i); s += e * e; }
-  Have(box_req);
-  emit_gem(_res, love_sqrt(s));
-  love_musttail return Answer(_res); }
+ if (trayp(a)) {                                       // elementwise: a complex tray its moduli
+  enum tray_type t = tray(a)->type;
+  if (t == love_O) love_musttail return Answer(ZeroPoint);
+  enum tray_type rt = t == love_C ? love_R : t;
+  struct tray *v = tray(a);
+  uintptr_t R = v->rank, n = tray_nelem(v), bytes = tray_bytes(rt, R, n);
+  Have(b2w(bytes));
+  v = tray(Sp[0]);
+  struct tray *r = ini_tray((struct tray*) Hp, rt, R); Hp += b2w(bytes);
+  for (uintptr_t i = 0; i < R; i++) r->shape[i] = v->shape[i];
+  if (t == love_C) { flo_t *rf = tray_data(r), *fp = tray_data(v);
+   for (uintptr_t p = 0; p < n; p++) rf[p] = love_sqrt(fp[2*p] * fp[2*p] + fp[2*p+1] * fp[2*p+1]); }
+  else if (t == love_R) { flo_t *rf = tray_data(r), *fp = tray_data(v);
+   for (uintptr_t p = 0; p < n; p++) rf[p] = fp[p] < 0 ? -fp[p] : fp[p]; }
+  else { intptr_t *ri = tray_data(r), *ip = tray_data(v);
+   for (uintptr_t p = 0; p < n; p++) ri[p] = ip[p] < 0 ? (intptr_t) (0 - (uintptr_t) ip[p]) : ip[p]; }
+  love_musttail return Answer(word(r)); }
  if (tabp(a)) {                                       // a tablet: its key count
   Have(box_req);
   emit_int(_res, (intptr_t) map_len(a));
   love_musttail return Answer(_res); }
  love_musttail return Answer(ZeroPoint); }
+
+// (norm z): a tray's L2 norm, anything else its abs
+lvm(lvm_norm) {
+ word a = Sp[0], _res;
+ if (!trayp(a) || tray(a)->type == love_O) love_musttail return Ap(lvm_abs, g);
+ struct tray *v = tray(a); uintptr_t i, n = tray_nelem(v);
+ flo_t s = 0;
+ if (v->type == love_C) { flo_t *fp = tray_data(v); for (i = 0; i < 2*n; i++) s += fp[i] * fp[i]; }
+ else for (i = 0; i < n; i++) { flo_t e = tray_get_flo(v, i); s += e * e; }
+ Have(box_req);
+ emit_gem(_res, love_sqrt(s));
+ love_musttail return Answer(_res); }
 
 static love_noinline void carg_fill(struct tray *r, struct tray *v) {
  uintptr_t n = tray_nelem(v);
