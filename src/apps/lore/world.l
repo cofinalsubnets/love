@@ -1598,8 +1598,11 @@
    (kept? c) (: pk (c 'pk) lv (peep pk 'live () @ () (: _ (relit pk (c 'lit)) (pk 'live)) l l)
                (atom? (lv 'r) || two? (mesh-lamp-slots pk)))
    can (filter (i \ !(hid && cks i 'deep) && !(cut? i)) ^#cks)
+   ; ..every chunk lit at the first frame, so none waits to be when it comes into view
+   _ (cam? || peep sc 'warm 0 ? 0 (each cks (c \ (sg ? (kept? c) (relit (c 'pk) (c 'lit)))), pin sc 'warm 1))
    ht (sg ? (peep sc 'held () @ () (: t {} (pin sc 'held t, t)) t t) {})
-   _ (sg ? (each (filter (i \ !(peep ht i 0) && kept? (cks i)) can) (i \ pin ht i 1)) 0)
+   ; ..every chunk the gpu can keep, held from the first frame, those out of sight marked down
+   _ (sg ? (each (filter (i \ !(peep ht i 0) && kept? (cks i)) ^#cks) (i \ pin ht i 1)) 0)
    held (sg ? (sort (keys ht)) ())
    vis (: z (iota #cks * 0.0) (atom? can ? z (pin z (int (gem-tray [#can] can)) 1.0)))
    (scene _) (: (ball c) (: m (c 'mid) [(m 0) (m 1) (m 2) (c 'rad)])
