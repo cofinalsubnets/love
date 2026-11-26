@@ -199,6 +199,7 @@ hostnif_tests += test/host/selfpack.l   # the source container: an empty or all-
 hostnif_tests += test/host/netlink.l   # netlink and packet sockets, and the wifi station's pmk, rsn and dhcp frames
 hostnif_tests += test/host/wchisp.l   # wch's usb isp: a flash session's bulk requests to the byte, the key by hand
 hostnif_tests += test/host/avrprog.l   # the avr programmer against bootloaders played on a pty
+hostnif_tests += test/host/halfkay.l   # halfkay's reports to the byte, and its device argument
 # hostnif_j gates at once, longest first, a log shown only on failure; a parent's jobserver wins
 hostnif_j = 4
 hostnif_first = test/host/sh.l test/host/bee.l test/host/cook.l test/host/beeq.l test/host/court.l
@@ -464,6 +465,9 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@LOVE_BUDGET_MB=400 timeout 600 $m -l test/gate/moonfuzz.l < /dev/null || { $(fuzzlate); exit 1; }
+# calls between mooncc and gcc, clang on x64, drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
+test_abi: host
+	@$(gsh) test/gate/abi.sh $(ho) $m $${ABI_N:-200} $${ABI_SEED:-1}
 # test_forge -- love-written nifs via holo agree with the C nif they deopt into; none fitted fails
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"

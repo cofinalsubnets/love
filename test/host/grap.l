@@ -8,7 +8,6 @@
    love (cwd 0 + "/out/love")
    dir (cwd 0 + "/out/.graptest-" + show (getpid 0))
    _ (hark ["rm" "-rf" dir], mkdir dir 448)
-   (put p s) (open p "w" @ q (say q s, close q))
 
    ; one graph: its system, frame, automatic ticks and marks
    g1 (grap "a\n.G1\n1 2\n2 4\n3 9\n.G2\nb\n")
@@ -37,12 +36,12 @@
            !(has? g5 "\"no\""))
 
    f (dir + "/g.ms")
-   _ (put f ".G1\nlabel bot \"x\"\n1 1\n2 3\n.G2\n")
+   _ (uwrite f ".G1\nlabel bot \"x\"\n1 1\n2 3\n.G2\n")
    r1 (hark [love "grap" f])
    r2 (hark [love "grap" (dir + "/none.g")])
    _ (test (<r1 = 0) (has? >r1 (".lf 1 " + f + "\n")) (has? >r1 "Label:\tbox invis")
            (<r2 = 1))
-   _ (put (dir + "/g.pic") >r1)
+   _ (uwrite (dir + "/g.pic") >r1)
    r3 (hark [love "pic" (dir + "/g.pic")])
    (test (<r3 = 0) (has? >r3 "\\D'l "),
     hark ["rm" "-rf" dir]))

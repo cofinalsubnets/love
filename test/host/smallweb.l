@@ -9,14 +9,13 @@
    home0 (getenv "HOME")
    n0 (getenv "LOVE_NEST")
    _ (setenv "HOME" dir) _ (setenv "LOVE_NEST" (dir + "/.love"))
-   (put p s) (: q (open p "w") _ (say q s) (close q))
    ; on a pipe www pours the page and its references; stderr rides along
    (www u) (: r (hark ["sh" "-c" (love + " www '" + u + "' 2>&1")]) [(? (two? r) >r "") <r])
 
    ; gopher
    gp (test-free 0)
    gs (show gp)
-   _ (put (dir + "/hole.l") ("(borrow 'posix)
+   _ (uwrite (dir + "/hole.l") ("(borrow 'posix)
 (: l (listen " + gs + ") _ (close (open \"" + dir + "/hole.up\" \"w\"))
    (ln x) (x + \"\\r\\n\")
    menu (ln \"iWelcome to the test hole\\tfake\\t(NULL)\\t0\" + ln \"i  ascii   art\\tfake\\t(NULL)\\t0\"
@@ -54,7 +53,7 @@
    base ("gemini://127.0.0.1:" + ms)
    (cert nm) (hark ["sh" "-c" ("openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -keyout " + dir + "/"
                                + nm + ".key -out " + dir + "/" + nm + ".pem -days 2 -subj /CN=127.0.0.1 2>/dev/null")])
-   _ (put (dir + "/gem.py") ("import socket, ssl, sys
+   _ (uwrite (dir + "/gem.py") ("import socket, ssl, sys
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.minimum_version = ssl.TLSVersion.TLSv1_3
 ctx.load_cert_chain(sys.argv[2] + '.pem', sys.argv[2] + '.key')
