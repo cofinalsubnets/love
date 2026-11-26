@@ -1396,7 +1396,7 @@
        wx? !(charm? org)
        ; netbsd's exec requires the ident note: 24 bytes in the header reserve, a pt_note plus
        ; an alloc section so strip keeps it, on the ISAs that can meet a BSD
-       bsd? (elem mach '(62 183 243 3) || target = 'arm)
+       bsd? (elem mach '(62 183 243 3) || thumb-hosted? target)
        nb? (wx? && bsd?)
        hdrsz (ld-ehsz w32 ((wx? ? 4 1) + ?img? + ?nb? + ?tls?) nb?)
        nrel (pie ? (ld-nabs objs) 0)
@@ -1866,7 +1866,7 @@
        _ (0 >= mach  ? (scare 'link-target target))
        _ (atom? runs ? (scare 'link-no-map target))
        ; the re-encoder is the arm32 family's (see ldarm), else the target's own
-       be (backends (arm32? target ? 'thumb2 target))
+       be (backends (thumb? target ? 'thumb2 target))
        objs (map (p \ ld-read <p <>p mach) srcs)
        _ (ld-tls? objs ? (scare 'link-tls target))   ; a thread template is ldlink's alone
        ; expand each run's lanes in place: every lane followed by the named lanes homed with

@@ -100,7 +100,6 @@
                 (foldl (\ _ i (pin t (name ("r" + show i)) (name ("r" + show i)))) 0 ^13,
                  pin t 'sp 'sp, pin t 'lr 'lr, pin t 'pc 'pc,
                  t))
-   (gthumb? tgt) (elem tgt '(thumb2 thumb2sp arm thumb1))
    (gx86? tgt) (elem tgt '(x64 i386 i386m16))   ; AT&T: the x64 lane, i386 through gx-w32
    ; a line `name = expr`: an identifier, one `=` (not `==`), something after it
    (gf-eqset? t) (: e (xa-idx t 61)
@@ -122,7 +121,7 @@
        (grv? tgt) (peep rv-back r () @ s (!s ? (scare 'gas-reg r) (show s)))
        (show r))
    (gas-imm tgt n mod) (: t (charm? n || sun? n ? (show n) n) ; n a number, or a "sym+k" text
-                          (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (gthumb? tgt) ("#" + t) t))
+                          (? (elem mod '(99 97 80)) t (gx86? tgt) ("$" + t) (thumb? tgt) ("#" + t) t))
    (gas-mem tgt r) (? (gx86? tgt) ("(" + gas-reg tgt r (g32? tgt ? 4 8) 0 + ")")
                       (grv? tgt) ("0(" + gas-reg tgt r 8 0 + ")")
                       ("[" + gas-reg tgt r 8 0 + "]"))
@@ -1818,11 +1817,11 @@
    (gf-word tgt w e rl)
     (: v (gf-val e rl) pc <v s <>v k <>>v
        (? !(string? s) (gf-le k w)
-          pc (? (w = 4 && !(gthumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]]
+          pc (? (w = 4 && !(thumb? tgt)) [['fix 4 'rel32 (name s) (k + 4)]]
                 (w = 8 && elem tgt '(x64 a64)) [['fix 8 'rel64 (name s) (k + 8)]]     ; the jump table's `key - .`
                 (scare 'gas-data-pcrel e))
           (w = 8) [['fix 8 'abs64 (name s) k]]
-          (w = 4 && (gx86? tgt || tgt = 'a64 || gthumb? tgt)) [['fix 4 'abs32 (name s) k]]
+          (w = 4 && (gx86? tgt || tgt = 'a64 || thumb? tgt)) [['fix 4 'abs32 (name s) k]]
           (w < 4 && gx86? tgt) [['fix w (w = 2 ? 'abs16 'abs8) (name s) k]]   ; the narrow fields: R_386_16 or R_X86_64_16, and _8
           (scare 'gas-data-width e)))
    ; GNU's numeric local labels in an instruction line -> the names gas-top laid them under
@@ -2494,7 +2493,7 @@
                              ['raw (gf-word tgt w (atom? >(f 1) && !(starts? <>k1 ".L") && string? (labs <<up) ? <>k1 (tspell (f 1))) rl)]
                             (!(#ns = 2 && #up = 1 && #dn = 1)) (scare a b)
                             (: s <<up l <<dn
-                               (? (w > 4 || (w < 4 && gthumb? tgt) || !(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; a width its target can name, l in the field's section
+                               (? (w > 4 || (w < 4 && thumb? tgt) || !(charm? (t l)) || t1 l - t1 (f 3) != t l - site) (scare a b)   ; a width its target can name, l in the field's section
                                   ['raw [(fix w (w @ 4 'pc32 2 'rel16 'pc8) (name s) (site + w - t l + <<r))]]))))))
        ; an .org may read back while the pads before it still grow: refused once they hold
        (settle n)
@@ -2646,7 +2645,7 @@
     (? (tgt = 'x64) (gx-text src)
        (g32? tgt) (gx-text32 tgt src)
        (: lc {}
-          f (? (tgt = 'a64) ga-line (grv? tgt) gr-line (gthumb? tgt) gt-line (scare 'gas-target tgt))
+          f (? (tgt = 'a64) ga-line (grv? tgt) gr-line (thumb? tgt) gt-line (scare 'gas-target tgt))
           fs (foldl (\ acc ln (acc + f (glocal (gtoks ln) lc))) () (glines src (grv? tgt)))
-          (gthumb? tgt ? (gt-asis tgt fs) fs))))
+          (thumb? tgt ? (gt-asis tgt fs) fs))))
 ) ; module 'holo

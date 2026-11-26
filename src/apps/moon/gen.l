@@ -96,7 +96,7 @@
        (pin g 'dlv ([nm (map ([k par bs in sp] \ [k par (map (b \ (<b . home b)) bs) in sp]) (g 'dlsc))
                   (map ([k st] \ [k (map ([v h] \ [v (h @ ['f o] ['f (at o)] _ h)]) st)]) (g 'dlst))] . g 'dlv)))
    ; the frame base's distance under the cfa, () where no cfa is described
-   (dlcfa g) (g 'tgt @ 'x64 16 ('a64 || 'rv64 || 'rv32 || 'mips) 32 ('thumb2 || 'thumb2sp) 8 'thumb1 12 _ ())
+   (dlcfa g) (g 'tgt @ 'x64 16 ('a64 || 'rv64 || 'rv32 || 'mips) 32 'thumb1 12 (t && thumb2? t && thumb-framed? t) 8 _ ())
    argregs '(r6 r5 r2 r1 r7 r8)                      ; the SysV integer/pointer arg registers
    argregs-a64 '(r0 r1 r2 r3 r4 r5 r6 r7)           ; AAPCS64: x0..x7
    argregs-t32 '(r0 r1 r2 r3)                        ; AAPCS32: r0..r3
@@ -171,12 +171,11 @@
    ; the target seam: g 'tgt picks the ABI shapes; the IR stays neutral. the arm family retargets
    ; the frame base to fp at the end of build (a4ize)
    (a64? {'tgt 'a64}) 1
-   (t32? g) (elem (g 'tgt) '(thumb2 thumb2sp arm thumb1))   ; AAPCS32: armv7e-m, linux's arm, armv6-M
    (sp64? {'tgt 'thumb2sp}) 1       ; armv7e-m with an sp-only fpu: f64 arithmetic softens
    (v6m? {'tgt 'thumb1}) 1          ; armv6-M: narrower immediates, no imm-mul, soft-divide, pop-pc epilogue
    (t32f? g) (t32? g && !(v6m? g))  ; with an fpu: the float file computes
-   (t2? g) (elem (g 'tgt) '(thumb2 thumb2sp))   ; armv7e-m itself, past linux's arm and v6-M
-   (t2c? g) (elem (g 'tgt) '(thumb2 thumb2sp arm))   ; thumb2's code, linux's arm with it: the list frame, q4, the literal's respill
+   (t2? g) (t2c? g && !(aprofile? (g 'tgt)))   ; armv7e-m itself, past linux's arm and v6-M
+   (t2c? g) (thumb2? (g 'tgt))   ; thumb2's code, linux's arm with it: the list frame, q4, the literal's respill
    (rv64? g) (elem (g 'tgt) '(rv64 wasm))   ; rv64imfd (LP64): 64-bit, 8 gp args, hard doubles, the lr/fp frame
    (rv32? {'tgt 'rv32}) 1          ; rv32imac (ILP32, soft-float): riscv's instructions at the 32-bit word
    (rv? g) (rv64? g || rv32? g)      ; the riscv instruction family

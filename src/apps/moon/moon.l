@@ -158,7 +158,7 @@
    ; gcc's atomic predefines: a width's lock-free answer as gen lays it, 2 or 0 (rv64 has no
    ; sub-word rmw, thumb2 no doubleword, thumb1 no exclusives)
    (atomdefs tgt sw)
-    (: ws (tgt @ ('thumb1 || 'xtensa || 'mips) () 'rv64 '(4 8) 'rv32 '(4) ('thumb2 || 'thumb2sp || 'arm || 'i386 || 'i386m16) '(1 2 4) '(1 2 4 8))
+    (: ws (tgt @ ('thumb1 || 'xtensa || 'mips) () 'rv64 '(4 8) 'rv32 '(4) ('i386 || 'i386m16) '(1 2 4) (_ && thumb2? tgt) '(1 2 4) '(1 2 4 8))
        tm (tmof tgt)
        (lf n) (elem n ws ? "2" "0")
        ('("__ATOMIC_RELAXED=0" "__ATOMIC_CONSUME=1" "__ATOMIC_ACQUIRE=2" "__ATOMIC_RELEASE=3"
@@ -313,7 +313,7 @@
                         "__WCHAR_WIDTH__=32" "__SIZEOF_WCHAR_T__=4"))
         + stdcommon)
        (tgt = 'mips) (stdmips + wchdefs tgt sw + map (d \ peep stdbe d d) stdcommon)
-       ((arm32? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)))
+       ((thumb? tgt || elem tgt '(rv32 xtensa) ? stdt32 stdlp64) + wchdefs tgt sw + stdcommon)))
    ; a gripe prints "cc: <file>:<line>:<col>: msg" (no file: the source; no line/col: elided);
    ; anything else prints plain. both exit 1
    (ccdie val src plain)
@@ -494,7 +494,7 @@
    ; the add's pc) and loaded, which the link makes a nop where it lays the name itself
    (picla tgt pc laid fs)
     (? !pc fs
-       (tgt = 'arm) (catall (map (f \ (? !(two? f && <f = 'la) [f]
+       (thumb-hosted? tgt) (catall (map (f \ (? !(two? f && <f = 'la) [f]
                                          (peep laid (lkey (f 2)) 0) [('lap . >f)]
                                          [['align 4] ['lapool (f 1)] ['raw [['fix 4 'gotprel (f 2) -8]]]
                                           ['addpc (f 1)] ['ld (f 1) (f 1) 0]]))
@@ -534,7 +534,7 @@
    ; its pools lay after each jmp too, so a vldr's 1020 bytes reach one. thumb2sp's la is (lalp Rd L
    ; P), whose far form loads P from the pc: its loader moves abs32 words, never a movw/movt pair
    (lpool tgt pc fs)
-    (? (pc || !(elem tgt '(thumb2 thumb2sp arm)) || elem 'lpool (ablenv 0)) (tgt = 'thumb2sp ? (t16la fs) fs)
+    (? (pc || !(thumb2? tgt) || elem 'lpool (ablenv 0)) (tgt = 'thumb2sp ? (t16la fs) fs)
        (: (onto a xs) (foldl (\ b x (x . b)) a xs)
           (word x) (charm? x ? (map (i \ (x >> 8 * i & 255)) ^4) [['fix 4 'abs32 x 0]])
           (flush ps a) (two? ps ? (onto a ('(align 4) . catall (map (e \ [['label <e] ['raw (word >e)]]) (rev ps)))) a)
@@ -554,7 +554,7 @@
                              (name ".lp\(n)" @ q
                                 (go >l (pin ix (f 2) q) ((q . f 2) . ps) (n + 1) ([k (f 1) (f 2) q] . a))))))
                     (two? f && <f = 'label && ends? (show (f 1)) " end") (go >l {} () n (f . flush ps a))
-                    (tgt != 'arm && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
+                    (!(thumb-hosted? tgt) && two? f && <f = 'jmp && two? ps) (go >l {} () n (flush ps (f . a)))
                     (go >l ix ps n (f . a)))))
           (go fs {} () 0 ())))
    ; -g's types for obj.l, the C left behind: (types vars sigs). types is a list each entry of
@@ -604,7 +604,7 @@
                  gns (gnames + filter (s \ !(elem s gnames)) (at 2))
                  wks (weaks + filter (s \ !(elem s weaks)) (at 3))   ; ..and those its .weak binds weak
                  wu (filter (s \ !(elem s fns || elem s gns)) wks)       ; weak and not laid here
-                 laid (tgt = 'arm && pc ? (laidin (fns + gns + lnames + hids + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
+                 laid (thumb-hosted? tgt && pc ? (laidin (fns + gns + lnames + hids + asmlocs <at) [tforms dforms rforms bforms nforms iforms (map (x \ x 1) xfns)]) {})
                  tforms (lpool tgt pc (picla tgt pc laid (wkla tgt wu tforms)))
                  xfns (map ([nm forms al] \ [nm (lpool tgt pc (picla tgt pc laid (wkla tgt wu forms))) al]) xfns)
                  xs (map ([nm forms ro] \ objsec-named nm forms ro) xsecs
@@ -907,7 +907,7 @@
    ; ..and atexit, weak: glibc keeps it out of libc.so (libc_nonshared's) and bionic in its crt,
    ; both as __cxa_atexit(f, 0, the exe's handle 0); the push keeps x64's stack aligned
    (crt-atexit tgt) (? (tgt = 'x64) '((label atexit) (push r3) (li r5 0) (li r2 0) (call __cxa_atexit) (pop r3) (ret))
-                       (tgt = 'arm) '((label atexit) (push lr) (push r4) (li r1 0) (li r2 0) (call __cxa_atexit) (pop r4) (pop lr) (ret))
+                       (thumb-hosted? tgt) '((label atexit) (push lr) (push r4) (li r1 0) (li r2 0) (call __cxa_atexit) (pop r4) (pop lr) (ret))
                        '((label atexit) (push lr) (li r1 0) (li r2 0) (call __cxa_atexit) (pop lr) (ret)))
    crt0-glibc-rv '((mov r5 r0)
                    (ld r1 sp 0)
@@ -1381,7 +1381,7 @@
        dx (string? ip)
        _ (dx && (so || static || mac? || arm?) && udie 2 "cc: -dynamic-linker lays a hosted executable: no -shared, -static or bare link")
        bionic (dx && starts? ip "/system/")
-       _ (dx && !(elem tgt '(x64 a64 rv64) || bionic && tgt = 'arm) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64, and arm under /system")
+       _ (dx && !(elem tgt '(x64 a64 rv64) || bionic && thumb-hosted? tgt) && udie 1 "cc: -dynamic-linker links on x64, a64 and rv64, and arm under /system")
        ; the two --emit-relocs cannot answer: 64-bit has its own table under -pie, and thumb2's
        ; `la` splits an address across MOVW/MOVT
        _ (relo && !arm? && udie 2 "cc: --emit-relocs is the arm32 lane's; a 64-bit link carries its own table under -pie")
@@ -1392,11 +1392,11 @@
        runs (? !(charm? dorg) [['at org 'text 'rodata 'data 'nifs 'bss]]
                (tgt = 'xtensa) [['at org 'text 'nifs] ['copy dorg 'rodata 'data 'bss]]
                [['at org 'text 'rodata 'nifs] ['copy dorg 'data 'bss]])
-       _ (bionic && !(elem tgt '(a64 arm)) && udie 1 "cc: -dynamic-linker under /system links on a64 and arm")
+       _ (bionic && !(tgt = 'a64 || thumb-hosted? tgt) && udie 1 "cc: -dynamic-linker under /system links on a64 and arm")
        ; moonlibc is laid hard-float: a softfp link takes its libc from the loader, or none
        _ (elem 'sfp xk && !(so || dx || nostd) && udie 2 "cc: -mfloat-abi=softfp links with -shared, -dynamic-linker or -nostdlib: moonlibc passes floats in the float file")
-       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'arm crt0-bionic-arm 'rv64 crt0-glibc-rv crt0-glibc-x64)
-             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 'arm crt0-arm crt0))   ; x64's serves every kernel
+       c9 (? dx (tgt @ 'a64 (bionic ? crt0-bionic-a64 crt0-glibc-a64) 'rv64 crt0-glibc-rv (_ && thumb-hosted? tgt) crt0-bionic-arm crt0-glibc-x64)
+             mac? (dyld? ? crt0 crt0-macos) (tgt @ 'a64 crt0-a64 'rv64 crt0-rv 'rv32 crt0-rv32 'mips crt0-mips ('i386 || 'i386m16) crt0-i386 (_ && thumb-hosted? tgt) crt0-arm crt0))   ; x64's serves every kernel
        ent (? dx ["_start" "atexit"] (tgt = 'x64 && !(mac? && !dyld?)) '("__love_start" "__love_main") '("__love_start"))
        all (arm? || so ? srcs
                    (["crt0" (elf-flat (objelf tgt (dx ? (['label '_start] . c9 + crt-atexit tgt) c9) () ent () (dx ? ["atexit"] ent) () () () () ()))] . srcs))
@@ -1786,11 +1786,11 @@
        _ (f 'rp && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mregparm lays on i386 only")
        _ (elem 'sa4 (f 'xk) && !(elem (f 'tgt) '(i386 i386m16)) && udie 2 "cc: -mstack-alignment=4 lays on i386 only")
        _ (f 'kfp && !(elem (f 'tgt) '(a64 x64 i386)) && udie 2 "cc: -fno-omit-frame-pointer -- mooncc keeps no frame pointer on \(f 'tgt)")
-       _ (f 'senum && (elem (f 'tgt) '(thumb1 thumb2 thumb2sp arm) @ a32 (f 'senum = 's ? !a32 a32)) &&
+       _ (f 'senum && (thumb? (f 'tgt) @ a32 (f 'senum = 's ? !a32 a32)) &&
           udie 2 "cc: \((f 'senum = 's ? "-fshort-enums" "-fno-short-enums")) -- an enum's width is the ABI's on \(f 'tgt)")
        _ (f 'cfb && !(elem (f 'tgt) '(x64 i386 i386m16)) && udie 2 "cc: -fcf-protection lays on x86 only")
        _ (f 'pfe && !(elem (f 'tgt) '(x64 i386 a64 rv64 rv32)) && udie 2 "cc: -fpatchable-function-entry -- no nop pad on \(f 'tgt)")
-       a32x (filter (a \ !(elem (f 'tgt) (a = "-mabi=aapcs-linux" ? '(arm) '(thumb1 thumb2 thumb2sp arm)))) (f 'a32))
+       a32x (filter (a \ !(? (a = "-mabi=aapcs-linux") (thumb-hosted? (f 'tgt)) (thumb? (f 'tgt)))) (f 'a32))
        _ (two? a32x && udie 2 "cc: \(<a32x) -- an arm ask; no lane on \(f 'tgt)")
        _ (f 'pic && !(elem (f 'tgt) '(x64 a64 rv64 wasm arm i386)) && udie 2 "cc: \(f 'pic) -- mooncc's code is absolute on \(f 'tgt)")
        _ (f 'ssp && pin f 'sspg (sspguard f))
@@ -1804,10 +1804,10 @@
        _ ((elem 'thk (f 'xk) || elem 'thki (f 'xk)) && pin f 'njt 1)   ; a table jump is an indirect one: a switch compares instead
        _ (f 'pic && f 'tgt = 'i386 && pin f 'njt 1)                       ; ..and i386's table holds absolute words
        ; an arm exe under a system loader is a pie: absolute movw/movt in its text could not slide
-       _ (string? (f 'ip) && f 'tgt = 'arm && !(f 'pic) &&
+       _ (string? (f 'ip) && thumb-hosted? (f 'tgt) && !(f 'pic) &&
           (f 'npic ? (udie 2 "cc: -dynamic-linker on arm lays a pie: drop -fno-pic") (pin f 'pic "-fpie")))
        ; ..and android's arm abi is softfp: its libraries take a float in the words
-       _ (string? (f 'ip) && starts? (f 'ip) "/system/" && f 'tgt = 'arm && !(f 'nofp) && xkon f 'sfp)
+       _ (string? (f 'ip) && starts? (f 'ip) "/system/" && thumb-hosted? (f 'tgt) && !(f 'nofp) && xkon f 'sfp)
        ; no nest on disk: the carried source, pinned once so every TU shares one inflate
        _ (!(string? (mhome ())) && pin f 'vb (mblob ()))
        c (f 'c) o (f 'o) ins (f 'ins)

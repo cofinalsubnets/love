@@ -334,7 +334,7 @@
    ; one `aligned` ask, the tokens after the word -> (N rest): bare is the target's widest,
    ; a constant expression folds, one that will not fold asks nothing
    (palask ps ts)
-    (!(peekp ts "(") ? [(elem (ps 'tgt) '(thumb2 thumb2sp arm thumb1) ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
+    (!(peekp ts "(") ? [(t32? ps ? 8 16) ts]   ; AAPCS32's 8; i386's SSE asks 16
        (thenw (pexpr ps >ts) ")" @ er
           (atom? er ? [0 ts]
              (cfold (ptm ps) <er @ v [(charm? v ? v 0) <>er]))))
@@ -475,11 +475,11 @@
    (tyat? ps ts) (tkbty? ps <(pquals ts))              ; a type begins at ts, past its qualifiers
    (ptyat? ps ts) (peekp ts "(" && tyat? ps >ts)       ; ..inside a `(`: a cast, a type-name operand
    ; -- the type floor (floor.l, shared with gen) takes the word and the tag table from ps --
-   (pvaby? ps) (ps 'tgt @ ('thumb1 || 'thumb2 || 'thumb2sp || 'arm) 'struct ('i386 || 'i386m16 || 'rv32 || 'rv64 || 'mips) 'ptr _ 0)
+   (pvaby? ps) (? (t32? ps) 'struct (elem (ps 'tgt) '(i386 i386m16 rv32 rv64 mips)) 'ptr 0)
    (pvap ps e) (pvaby? ps = 0 ? e ['addr e])          ; the list's address, as the va builtins take it
    ; char is three types (C11 6.2.5p15): 'schar, 'uchar, and plain char -- 'char where the ABI
    ; makes it signed, 'cchar where unsigned. each symbol's sign is its own
-   (paapcs? ps) (elem (ps 'tgt) '(a64 thumb1 thumb2 thumb2sp arm))   ; bit-fields laid by AAPCS
+   (paapcs? ps) (ps 'tgt = 'a64 || t32? ps)   ; bit-fields laid by AAPCS
    (pchar ps) (ps 'uch @ 1 'cchar 0 'char (elem (ps 'tgt) '(a64 rv64 rv32 xtensa thumb1 thumb2 thumb2sp arm) ? 'cchar 'char))   ; -f[un]signed-char's, else the ABI's
    (ptm ps) (tmof (ps 'tgt))                       ; the target's type model
    (psword ps) (tmptr (ptm ps))
@@ -996,7 +996,7 @@
                                (-32768 <= lo && hi <= 32767) 'short
                                'int)
                      ty0 (? wide wide
-                            (elem (ps 'tgt) '(thumb1 thumb2 thumb2sp arm) || pk) narrow   ; AAPCS32's short enums; the rest say int
+                            (t32? ps || pk) narrow   ; AAPCS32's short enums; the rest say int
                             pos 'uint 'int)
                      ; mode(M): M's width, signedness kept; refused if an enumerator won't fit
                      ty (? (m = ()) ty0
