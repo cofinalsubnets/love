@@ -36,6 +36,7 @@
 (borrow 'toys)                          ; the plushes, made
 (borrow 'decay)                         ; the loop a deck plays
 (borrow 'gesture)                       ; the eye kneeling at a grave, weeping, rising
+(borrow 'tumble)                        ; a ball's fall, bounce and roll
 (:
  fps 30
  eye-h 1.6 body-r 0.25
@@ -2061,7 +2062,7 @@
                 k (ball-kick + 1.3 * max 0.0 (peep st 'vx 0.0 * n 0 + peep st 'vz 0.0 * n 1))
                 (pins b 'v [(k * n 0) (1.0 + 0.3 * k) (k * n 1)] 'kt (st 'mt) 'rest 0,
                  (b 'kind @ 'ball (mix-cry st "bounce" [(p 0) (p 2)]) st))))
-   (b 'rest @ 1 st (ball-fly st b dt)))
+   (b 'rest @ 1 st (b 'kind = 'ball ? (ball-tumble st b dt) (ball-fly st b dt))))
  ; ..a ball or a plush in hand: the left button takes the one looked at within reach; held, pressed it
  ; winds a throw, half a second to the hardest, and let go it flies; the right button lets
  ; it fall where it is
@@ -2291,6 +2292,26 @@
    (pin st 'wind ()))
  ; ..its flight in steps short beside its size: each way on its own, back off what it would
  ; meet; among only the brushes and panes near it
+ ; ..a ball's next moment by tumble: a body of its own against the faces of the brushes near
+ ; it, made again when it is in another cell's, and the panes; pulled as the level pulls at
+ ; its height, and heard where it comes off something hard
+ ball-m 0.6 ball-mu 0.6
+ (ball-faces st b) (: p (b 'p) bs (near-bs st (p 0) (p 2)) w (peep b 'tw ())
+   (? (tablet? w && w 'bs == bs) (w 'W)
+      (: W (tb-world [] (map (q \ [[[1.0 0.0 0.0] (q 'hi 0)] [[-1.0 0.0 0.0] (0.0 - q 'lo 0)] [[0.0 1.0 0.0] (q 'hi 1)]
+                                   [[0.0 -1.0 0.0] (0.0 - q 'lo 1)] [[0.0 0.0 1.0] (q 'hi 2)] [[0.0 0.0 -1.0] (0.0 - q 'lo 2)]])
+                             (st 'lvl 'panes)))
+         _ (tb-faces W (map (f \ [(f 0) (f 1)]) (brush-faces bs)))
+         (pin b 'tw {'bs bs 'W W}, W))))
+ (ball-tumble st b dt) (: W (ball-faces st b) p (b 'p) g (grav-at (st 'lvl) (p 1)) v0 (b 'v)
+   o (peep b 'tb () @ () (: o (pins (tb-sphere p (b 'r) ball-m) 'e ball-e 'mu ball-mu) (pin b 'tb o, o)) o o)
+   _ (pins o 'p p 'v v0 'q (b 'q) 'w (peep b 'w [0.0 0.0 0.0]) 'still 0 'idle (peep o 'idle 0.0))
+   _ (pins W 'bodies [o] 'g [0.0 (0.0 - g) 0.0])
+   _ (tb-step W dt)
+   ; ..how hard it was turned, past what the pull alone would have done
+   dv (c- (o 'v) (c+ v0 [0.0 (0.0 - g * dt) 0.0]))
+   _ (pins b 'p (o 'p) 'v (o 'v) 'q (o 'q) 'w (o 'w) 'rest (o 'still) 'pk ())
+   (mag3 dv > 1.2 ? (mix-cry st "bounce" [(o 'p 0) (o 'p 2)]) st))
  (ball-fly st b dt) (: r (b 'r) ball (b 'kind = 'ball) p0 (b 'p) lv (st 'lvl)
    bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (near-bs st (p0 0) (p0 2)))
    (solid? q) (brush-medium bs q != 1

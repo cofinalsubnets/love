@@ -1,11 +1,12 @@
 // tumble -- the step of src/apps/lore/tumble.l in C, the same work in the same order, so the
 // two answer alike to rounding: bodies against brushes and each other, the contacts solved by
 // impulses, what is left sunk taken back, the awake moved and turned, the still a while asleep.
-// (tumble-step B P O) answers B a step on:
+// (tumble-step B P O F) answers B a step on:
 //  B  tb-nb numbers a body: shape (0 sphere, 1 box) m im ii3 p3 q4 v3 w3 e mu roll size3 idle still
 //     (size a sphere's radius, else a box's half sides)
 //  P  5 numbers a plane, n3 d and its brush's number, a brush's planes together
 //  O  gx gy gz dt
+//  F  the faces' count, then each face: np ne n3 d c3 rad, np corners, ne edges [a3 t3 l o3]
 // () when the trays are not so
 #include "love.h"
 #include <stdlib.h>
@@ -204,6 +205,90 @@ static int tb_box_box(struct tpt *o, struct tbody const *a, struct tbody const *
  for (int k = 0; k < 3; k++) o[0].n[k] = bn[k], o[0].x[k] = 0.5 * ((pa[k] + sa * A[bi][k]) + (pb[k] + tb * B[bj][k]));
  o[0].d = bo;
  return 1; }
+// --- the world's faces: convex polygons, solid behind, pushing a body only out of it.
+// a face as love lays it: np ne n d c rad, then np corners, then ne edges [a t l o] ---
+struct tface { uintptr_t np, ne; flo_t const *n, *c, *ps, *es; flo_t d, rad; };
+static int tb_inface(struct tface const *F, v3 const x, flo_t e) {
+ for (uintptr_t i = 0; i < F->ne; i++) {
+  flo_t const *q = F->es + 10 * i;
+  v3 u; for (int k = 0; k < 3; k++) u[k] = x[k] - q[k];
+  if (!(tb_dot3(q + 7, u) <= e)) return 0; }
+ return 1; }
+static void tb_segnear(v3 o, flo_t const *q, v3 const x) {
+ v3 u; for (int k = 0; k < 3; k++) u[k] = x[k] - q[k];
+ flo_t const s = tb_fmax2(0.0, tb_fmin2(q[6], tb_dot3(u, q + 3)));
+ for (int k = 0; k < 3; k++) o[k] = q[k] + s * q[3 + k]; }
+static void tb_sph_face(struct tset *S, struct tbody *b, struct tface const *F) {
+ flo_t const r = b->s[0], s = tb_dot3(F->n, b->p) - F->d;
+ if (s > r || s < 0.0) return;
+ v3 p0, q, u; for (int k = 0; k < 3; k++) p0[k] = b->p[k] - s * F->n[k];
+ if (tb_inface(F, p0, 0.0)) for (int k = 0; k < 3; k++) q[k] = p0[k];
+ else {
+  for (int k = 0; k < 3; k++) q[k] = F->ps[k];
+  for (uintptr_t i = 0; i < F->ne; i++) {
+   v3 y, a, c; tb_segnear(y, F->es + 10 * i, b->p);
+   for (int k = 0; k < 3; k++) a[k] = b->p[k] - y[k], c[k] = b->p[k] - q[k];
+   if (tb_len3(a) < tb_len3(c)) for (int k = 0; k < 3; k++) q[k] = y[k]; } }
+ for (int k = 0; k < 3; k++) u[k] = b->p[k] - q[k];
+ flo_t const l = tb_len3(u);
+ if (!(l < r)) return;
+ v3 n; for (int k = 0; k < 3; k++) n[k] = l > 1e-9 ? (1.0 / l) * u[k] : F->n[k];
+ tb_add(S, b, 0, n, q, r - l); }
+static void tb_box_face(struct tset *S, struct tbody *b, struct tface const *F) {
+ v3 A[3]; for (int k = 0; k < 3; k++) tb_col(A[k], b->R, k);
+ flo_t const sn = tb_span(b, F->n), s = tb_dot3(F->n, b->p) - F->d;
+ if (s < 0.0 - 0.5 * sn || s > sn) return;
+ v3 dc; for (int k = 0; k < 3; k++) dc[k] = b->p[k] - F->c[k];
+ int bk = -1, bi = 0, bj = 0; flo_t bo = 0, bw = 1; v3 bL = { 0, 0, 0 };
+ uintptr_t const nx = 4 + 3 * F->ne;
+ for (uintptr_t x = 0; x < nx; x++) {
+  v3 L; int kind, i = 0, j = 0;
+  if (x == 0) kind = 0, L[0] = F->n[0], L[1] = F->n[1], L[2] = F->n[2];
+  else if (x < 4) kind = 1, i = (int) x - 1, L[0] = A[i][0], L[1] = A[i][1], L[2] = A[i][2];
+  else {
+   kind = 2, i = (int) ((x - 4) / F->ne), j = (int) ((x - 4) % F->ne);
+   tb_cross3(L, A[i], F->es + 10 * j + 3);
+   flo_t const l = tb_len3(L);
+   if (l < 1e-5) continue;
+   for (int k = 0; k < 3; k++) L[k] = (1.0 / l) * L[k]; }
+  if (kind && tb_dot3(L, dc) < 0.0) for (int k = 0; k < 3; k++) L[k] = -1.0 * L[k];
+  flo_t m = -1e300;
+  for (uintptr_t v = 0; v < F->np; v++) m = tb_fmax2(m, tb_dot3(L, F->ps + 3 * v));
+  flo_t const ov = m - (tb_dot3(L, b->p) - tb_span(b, L)), w = kind == 2 ? 1.05 : 1.0;
+  if (ov < 0.0) return;
+  if (bk < 0 || w * ov + 0.001 * (w - 1.0) < bw * bo) {
+   bk = kind, bi = i, bj = j, bo = ov, bw = w;
+   for (int k = 0; k < 3; k++) bL[k] = L[k]; } }
+ if (!(tb_dot3(bL, F->n) > 0.0)) return;
+ flo_t const tol = 0.005;
+ if (bk == 0) {
+  v3 cs[8]; tb_corners(cs, b);
+  for (int i = 0; i < 8; i++) {
+   flo_t const e = F->d - tb_dot3(F->n, cs[i]);
+   if (e > 0.0 && tb_inface(F, cs[i], tol)) tb_add(S, b, 0, F->n, cs[i], e); } }
+ if (bk <= 1) {
+  for (uintptr_t v = 0; v < F->np; v++)
+   if (tb_inside(b, F->ps + 3 * v, tol, -1)) tb_add(S, b, 0, bk == 0 ? F->n : bL, F->ps + 3 * v, bo);
+  return; }
+ // ..edge bi of the box nearest the face, edge bj of the face, the middle of their nearest points
+ flo_t const *e = F->es + 10 * bj, hb = 0.5 * e[6];
+ v3 ca, cb, r;
+ for (int k = 0; k < 3; k++) ca[k] = b->p[k], cb[k] = e[k] + hb * e[3 + k];
+ for (int k = 0; k < 3; k++) if (k != bi) { flo_t const g = (0.0 - tb_dot3(A[k], bL) < 0.0 ? -1.0 : 1.0) * b->s[k]; for (int z = 0; z < 3; z++) ca[z] += g * A[k][z]; }
+ for (int k = 0; k < 3; k++) r[k] = ca[k] - cb[k];
+ flo_t const g = tb_dot3(A[bi], e + 3), dn = 1.0 - g * g,
+             sa = tb_fmax2(0.0 - b->s[bi], tb_fmin2(b->s[bi], dn < 1e-9 ? 0.0 : (g * tb_dot3(e + 3, r) - tb_dot3(A[bi], r)) / dn)),
+             tb = tb_fmax2(0.0 - hb, tb_fmin2(hb, g * sa + tb_dot3(e + 3, r)));
+ v3 x; for (int k = 0; k < 3; k++) x[k] = 0.5 * ((ca[k] + sa * A[bi][k]) + (cb[k] + tb * e[3 + k]));
+ tb_add(S, b, 0, bL, x, bo); }
+static void tb_facehits(struct tset *S, struct tbody *b, struct tface const *Fs, uintptr_t nf) {
+ flo_t const r = tb_reach(b);
+ for (uintptr_t i = 0; i < nf; i++) {
+  struct tface const *F = Fs + i;
+  v3 u; for (int k = 0; k < 3; k++) u[k] = b->p[k] - F->c[k];
+  flo_t const m = r + F->rad;
+  if (tb_dot3(u, u) > m * m) continue;
+  if (b->shape == 0) tb_sph_face(S, b, F); else tb_box_face(S, b, F); } }
 static int tb_touching(struct tpt *o, struct tbody const *a, struct tbody const *b) {
  if (a->shape == 0 && b->shape == 0) return tb_sph_sph(o, a, b);
  if (a->shape == 0) return tb_sph_box(o, a, b);
@@ -346,14 +431,15 @@ static void tb_unsink(struct tset *S, struct tbody const *bs, uintptr_t const *c
   if (b) { flo_t const fb = 0.0 - s * m / (flo_t) cn[b - bs]; for (int k = 0; k < 3; k++) b->p[k] += fb * c->n[k]; } } }
 
 // --- a substep of h ---
-static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, v3 const g, flo_t h, struct tset *S, struct tgrid *G, char *awake, uintptr_t *cn) {
+static int tb_sub(struct tbody *bs, uintptr_t n, flo_t const *P, uintptr_t np, struct tface const *Fs, uintptr_t nf, v3 const g, flo_t h, struct tset *S, struct tgrid *G, char *awake, uintptr_t *cn) {
  S->n = 0;
  for (uintptr_t i = 0; i < n; i++) tb_rot(bs + i), awake[i] = bs[i].still != 1;
  for (uintptr_t i = 0; i < n; i++) if (awake[i]) for (int k = 0; k < 3; k++) bs[i].v[k] += h * g[k];
- for (uintptr_t i = 0; i < n; i++) if (awake[i])
+ for (uintptr_t i = 0; i < n; i++) if (awake[i]) {
   for (uintptr_t a = 0, z; a < np; a = z) {
    for (z = a + 1; z < np && P[5 * z + 4] == P[5 * a + 4]; z++);
    tb_brush(S, bs + i, P + 5 * a, z - a); }
+  tb_facehits(S, bs + i, Fs, nf); }
  tb_pairs(S, G, bs, n);
  if (S->bad) return 0;
  // ..each body's contacts, counted once: the share of a sinking it takes back, and touching at all
@@ -393,9 +479,10 @@ static void tb_keep(flo_t *r, struct tbody const *b) {
  r[25] = b->idle, r[26] = b->still; }
 
 static lvm(lvm_tumble_step) {
- word const B = Sp[0], P = Sp[1], O = Sp[2];
- if (!galaxyp(B) || !galaxyp(P) || !galaxyp(O) || tray_nelem(tray(O)) < 4 || tray_nelem(tray(B)) % tb_nb || tray_nelem(tray(P)) % 5)
-  love_musttail return Answerp(2, ZeroPoint);
+ word const B = Sp[0], P = Sp[1], O = Sp[2], Fw = Sp[3];
+ if (!galaxyp(B) || !galaxyp(P) || !galaxyp(O) || !galaxyp(Fw) || tray_nelem(tray(O)) < 4 || tray_nelem(tray(B)) % tb_nb
+     || tray_nelem(tray(P)) % 5 || tray_nelem(tray(Fw)) < 1)
+  love_musttail return Answerp(3, ZeroPoint);
  uintptr_t const nb = tray_nelem(tray(B)), n = nb / tb_nb, np = tray_nelem(tray(P)) / 5,
                  w = b2w(tray_bytes(love_R, 1, nb));
  Have(w);
@@ -407,9 +494,26 @@ static lvm(lvm_tumble_step) {
  flo_t *pl = malloc((np ? np : 1) * 5 * sizeof *pl);
  char *aw = malloc(n ? n : 1);
  uintptr_t *cn = malloc((n ? n : 1) * sizeof *cn);
+ uintptr_t const nfl = tray_nelem(tray(Sp[3]));
+ flo_t *fl = malloc(nfl * sizeof *fl);
+ struct tface *Fs = 0;
+ uintptr_t nf = 0;
  struct tset S = { 0 };
  struct tgrid G = { 0 };
- int good = bs && pl && aw && cn && tb_ginit(&G, n);
+ int good = bs && pl && aw && cn && fl && tb_ginit(&G, n);
+ if (good) {
+  // ..the faces: their count, then each laid as tb_face reads it
+  for (uintptr_t i = 0; i < nfl; i++) fl[i] = tray_get_flo(tray(Sp[3]), i);
+  nf = fl[0] > 0.0 ? (uintptr_t) fl[0] : 0;
+  Fs = malloc((nf ? nf : 1) * sizeof *Fs);
+  good = Fs != 0;
+  for (uintptr_t i = 0, at = 1; good && i < nf; i++) {
+   struct tface *F = Fs + i;
+   if (at + 10 > nfl) { good = 0; break; }
+   F->np = (uintptr_t) fl[at], F->ne = (uintptr_t) fl[at + 1], F->n = fl + at + 2, F->d = fl[at + 5], F->c = fl + at + 6, F->rad = fl[at + 9];
+   F->ps = fl + at + 10, F->es = F->ps + 3 * F->np;
+   at += 10 + 3 * F->np + 10 * F->ne;
+   if (at > nfl || F->np < 1) good = 0; } }
  if (good) {
   for (uintptr_t i = 0; i < np * 5; i++) pl[i] = tray_get_flo(tray(Sp[1]), i);
   struct tray *const to = tray(Sp[2]);
@@ -418,9 +522,9 @@ static lvm(lvm_tumble_step) {
   intptr_t steps = (intptr_t) (dt / tb_h + 0.999);
   if (steps < 1) steps = 1;
   for (uintptr_t i = 0; i < n; i++) tb_load(bs + i, d + i * tb_nb);
-  for (intptr_t s = 0; s < steps && good; s++) good = tb_sub(bs, n, pl, np, g, dt / (flo_t) steps, &S, &G, aw, cn);
+  for (intptr_t s = 0; s < steps && good; s++) good = tb_sub(bs, n, pl, np, Fs, nf, g, dt / (flo_t) steps, &S, &G, aw, cn);
   for (uintptr_t i = 0; i < n; i++) tb_keep(d + i * tb_nb, bs + i); }
- tb_gfree(&G), free(S.c), free(cn), free(aw), free(pl), free(bs);
- love_musttail return Answerp(2, good ? word(o) : ZeroPoint); }
+ tb_gfree(&G), free(S.c), free(Fs), free(fl), free(cn), free(aw), free(pl), free(bs);
+ love_musttail return Answerp(3, good ? word(o) : ZeroPoint); }
 
-LvDef("tumble-step", tumble_step, 3, "lore");
+LvDef("tumble-step", tumble_step, 4, "lore");
