@@ -139,8 +139,8 @@ $(ho)/liblove.a: $(h_o)
 # love0 takes the whole hosted surface less the crew catalog, PLUS its own seat --
 # src/love/user/main0.c, which host_c holds back because only this link has a use for it.
 love0_o = $(patsubst $(S)/%.c,out/0/%.o,$(filter-out $(S)/love/cats.c,$(host_c)) $(S)/love/user/main0.c $(S)/love/noblob.c $(love_c))
-out/0/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
-out/0/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
+out/0/love/user/main0.o out/00/love/user/main0.o out/gcs0/love/user/main0.o: out/lib/boot0.h
+out/0/love/cb.o out/00/love/cb.o out/gcs0/love/cb.o: src/love/quay/quay.c src/love/quay/nif.c src/love/quay/quay.h src/love/quay/cp437.h src/love/quay/paint.c src/love/quay/cga_8x8.c src/love/quay/cleat_8x16.c
 # love0's cc: the plain build's. an HCC build is a differential over the hosted vm, and love0,
 # pinned to out/0 and shared, keeps the compiler it was built with (L0CC, cc unless given)
 ifeq ($(HCC),)
@@ -149,7 +149,12 @@ else
 L0CC ?= cc
 l0cc = $(L0CC)
 endif
-boot_cc = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=0 -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+# tail-threaded where that cc has musttail, else the trampoline; the twins out/00/love0 and
+# out/gcs0/love0, for the gates, are the trampoline under any cc
+l0tco := $(shell printf 'int f(int);\nint g(int x) { __attribute__((musttail)) return f(x); }\n' | $(l0cc) -Werror -x c -c -o /dev/null - 2>/dev/null && echo 1 || echo 0)
+boot_as = $(CCACHE) $(l0cc) $(cflags) -fPIE -DLove0 -Dtco=$(1) -Ddata_section=0 -DLvVersion='"$(love_base)+bootstrap"' -I. -Isrc/love -Isrc/inle -Iout/lib
+boot_cc = $(call boot_as,$(l0tco))
+boot_cc0 = $(call boot_as,0)
 .PHONY: force_love0cc
 force_love0cc: ;
 out/0/.love0cc: force_love0cc
@@ -160,13 +165,23 @@ out/0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
 	@LOVE_NO_IMAGE= $(boot_cc) -c $< -o $@
+# love0 at tco=0, for test_love0_tco0: its objects beside out/0's and its link the same
+love00_o = $(patsubst out/0/%,out/00/%,$(love0_o))
+out/00/%.o: $(S)/%.c $(love_h) out/0/.love0cc
+	@echo '$(t_cc)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(boot_cc0) -c $< -o $@
+out/00/love0: $(love00_o)
+	@echo '$(t_ld)	'$@
+	@mkdir -p $(dir $@)
+	@LOVE_NO_IMAGE= $(l0cc) $(cflags) -pie -o $@ $(love00_o)
 # love0 under LvGcStress, for test_gcstress: boot_cc carries no GCDBG, so the stress lane's
 # bootstrap is this twin, its objects beside out/0's and its link the same
 love0s_o = $(patsubst out/0/%,out/gcs0/%,$(love0_o))
 out/gcs0/%.o: $(S)/%.c $(love_h) out/0/.love0cc
 	@echo '$(t_cc)	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_cc) -DLvGcStress -c $< -o $@
+	@LOVE_NO_IMAGE= $(boot_cc0) -DLvGcStress -c $< -o $@
 out/gcs0/love0: $(love0s_o)
 	@echo '$(t_ld)	'$@
 	@mkdir -p $(dir $@)
@@ -357,7 +372,7 @@ crewfiles ?= src/apps/json.l src/apps/sb/merge.l src/apps/sb/http.l src/apps/sb/
   src/apps/libra/salt.l src/apps/libra/spans.l src/apps/libra/libra.l src/apps/vi/hueweb.l src/apps/kiosko/site.l \
   src/apps/harp/harp.l src/apps/harp/ops.l src/apps/harp/play.l src/apps/harp/opl.l src/apps/harp/mus.l src/apps/harp/score.l \
   src/apps/harp/just.l src/apps/harp/drift.l src/apps/harp/tonnetz.l src/apps/harp/phrases.l src/apps/harp/horn.l \
-  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/mitty/wharf.l src/apps/mitty/slip.l src/apps/lore/rove.l src/apps/lore/console.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/stow.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/toys.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
+  src/apps/x11.l src/apps/lux/wire.l src/apps/window.l src/apps/lore/lore.l src/apps/mitty/wharf.l src/apps/mitty/slip.l src/apps/lore/rove.l src/apps/lore/console.l src/apps/lore/view.l src/apps/lore/flicker.l src/apps/lore/walk.l src/apps/lore/mixer.l src/apps/lore/gamelan.l src/apps/lore/vec.l src/apps/lore/gesture.l src/apps/lore/starmap.l src/apps/lore/sky.l src/apps/lore/said.l src/apps/lore/gpu.l src/apps/lore/mesh.l src/apps/lore/swatch.l src/apps/lore/neon.l src/apps/lore/brush.l src/apps/lore/grove.l src/apps/lore/meadow.l src/apps/lore/tower.l src/apps/lore/story.l src/apps/lore/design.l src/apps/lore/slop.l src/apps/lore/grass.l src/apps/lore/grass99.l src/apps/lore/wade.l src/apps/lore/apartment.l src/apps/lore/dusk.l src/apps/lore/garage.l src/apps/lore/shaft.l src/apps/lore/court.l src/apps/lore/bough.l src/apps/lore/decay.l src/apps/stow.l src/apps/lore/scenery.l src/apps/lore/stones.l src/apps/lore/toys.l src/apps/lore/world.l src/apps/lore/wad.l src/apps/harp/synth.l src/apps/wav.l src/apps/flac.l src/apps/icy.l src/apps/ogg.l src/apps/mp3.l src/apps/av.l src/apps/player/bus.l src/apps/player/core.l \
   src/apps/seek.l src/apps/player/tui.l src/apps/mitty/limn.l src/apps/mitty/mooring.l src/apps/font.l src/apps/mitty/mitty.l src/apps/mitty/pier.l src/apps/doom.l src/apps/droid/droid.l src/apps/open.l src/apps/hexedit.l src/apps/mc.l src/apps/help.l \
   src/apps/torrent/benc.l src/apps/torrent/metainfo.l src/apps/torrent/tracker.l src/apps/torrent/peerwire.l src/apps/torrent/swarm.l src/apps/torrent/torrent.l src/apps/pom.l src/apps/crypt.l src/apps/login.l src/apps/lore/saver.l src/apps/greet.l src/apps/opens.l src/apps/tuner.l src/apps/mitty/hud.l src/apps/locks.l src/apps/hosts.l src/apps/lanemap.l src/apps/hive.l src/apps/bee.l src/apps/roster.l
 korefiles = $(kore_head) $(holo_obj) src/love/holo/copy.l $(holo_ld) $(kore_arc) $(kore_net)

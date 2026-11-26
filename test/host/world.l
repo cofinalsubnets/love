@@ -2,7 +2,7 @@
 ; doors, walls, reload on change, the car, the sign, the shots.
 ; not in the corpus: a crew module. run: cat test/00-init.l test/host/world.l | out/love
 
-(borrow '(world mesh neon posix bough gesture))
+(borrow '(world mesh neon posix bough gesture sky))
 ; a nest that is not there, so no scene is kept in the user's or read from it
 (setenv "LOVE_NEST" (cwd 0 + "/out/.world-nest-" + show (getpid 0)))
 (borrow 'view)     ; pi
@@ -118,6 +118,25 @@
    _ (unlink p)
  (test (a = "a") (got = "b") (nl = 2) (where = [2.5 1.5]) (has? said "again") (e0 = 0)
        (c 'lvl 'name = "b") (c 'err = 1) (string? (c 'msg)) (has? (world-frame c) "not finished")))
+; ..a file written again while it is being read is read at the next watch: this one writes itself
+(: p ("/tmp/worldtest-w-" + show (getpid 0) + ".l")
+   room "(room [0 0 0] [4 3 4]) (strip-light [2 3 2]))"
+   _ (put p ("(level \"a\" " + room))
+   st (world-watch (pins (world-new 40 24 (world-load p) "/tmp/") 'path p))
+   _ (put p ("(: q (open " + show p + " \"w\") (say q " + show ("(level \"later\" " + room) + ", close q)) (level \"b\" " + room))
+   b (world-watch st) nb (b 'lvl 'name)
+   c (world-watch b)
+   _ (unlink p)
+ (test (nb = "b") (c 'lvl 'name = "later")))
+; a jump's height by the frame's length: the same arc at any, to the few millimetres a step can miss its top by
+(: lv0 (lv "(room [0 0 0] [8 6 8]) (strip-light [4 6 4])")
+   (arc dt) (: st (pins (world-new 40 24 lv0 "/tmp/") 'px 4.0 'pz 4.0)
+               _ (each ^20 (_ \ (pin st 'dt dt, world-move st)))
+               y0 (st 'py) _ (world-step st 'jump)
+               (go n top) (: _ (pin st 'dt dt) _ (world-move st)
+                             (? (n > 400) -1.0 (n > 1 && peep st 'fv 0.0 = 0.0) (top - y0) (go (n + 1) (max top (st 'py)))))
+               (go 0 y0))
+ (test (all (dt \ mag (arc dt - 0.916) < 0.005) [0.0166 0.025 0.0333 0.034 0.04 0.041 0.05])))
 ; repeat and mirror: twenty pilasters of two brushes each; a pilaster stops a walk, under a
 ; buttress's slope is air; the start's height and pitch; p shows where the player stands
 (: ribs (lv """(room [-5 0 0] [5 5 32])
@@ -251,6 +270,37 @@
  (test (bhk = 1) (mag (bhp 2 - 1.95) < 1e-9) (bwp 1 < bhp 1 + 1.0) (bb 'held = 0)
        (mag (bv 2 - 11.0 * cos 0.6) < 1e-6) (mag (bv 1 - 11.0 * sin 0.6) < 1e-6) (bvp 2 > 4.0)
        (db 'held = 0) (mag (dq 0 - dp 0) < 0.05) (mag (dq 2 - dp 2) < 0.05) (mag (dq 1 - 0.12) < 0.02)))
+; a tap, with no button to it: nothing in reach, nothing; a ball in reach taken; tapped again
+; let fall; a door by hand opens and the thing stays in hand; in a dialogue it moves nothing
+(: (tw d x) (: st (world-new 160 100 (world-read ("(level \"t\" (room [0 0 0] [10 5 14]) (ball [5 0 3]) " + x + " (start [5 0 " + d + "] 0 0))")) "")
+              _ (pin st 'dt 0.05) _ (world-move st) (pin st 'ph (-44.6 * pi / 180.0)))
+   (go st n) (each ^n (_ \ (pin st 'dt 0.05, world-move st)))
+   far (tw "0.4" "") _ (world-step far 'tap) fb (far 'balls 0)
+   a (tw "1.5" "") b (a 'balls 0) w0 (world-winds? a) _ (world-step a 'tap) h1 (b 'held) w1 (world-winds? a) wd (a 'wind) _ (go a 2) p1 (b 'p)
+   _ (pin a 'dlg 0) w2 (world-winds? a) _ (pin a 'dlg ()) _ (world-step a 'tap) h2 (b 'held) _ (go a 60) p2 (b 'p)
+   d (tw "1.5" "") db (d 'balls 0) _ (world-step d 'tap) _ (pin d 'lvl (pin (foldl (\ u k (pin u k (d 'lvl k))) {} (keys (d 'lvl))) 'decks [[[4.0 0.0 1.8] [6.0 4.0 2.2]]]))
+   _ (pin d 'ph 0.0) _ (world-step d 'tap) dm (d 'music)
+ (test (peep fb 'held 0 = 0) (w0 = 0) (h1 = 1) (w1 = 1) (wd = ()) (w2 = 0) (h2 = 0)
+       (mag (p2 0 - p1 0) < 0.05) (mag (p2 2 - p1 2) < 0.05) (mag (p2 1 - 0.12) < 0.02) (db 'held = 1) (tablet? dm)))
+; the brushes by the plan's cells: what is over and under a place, and near it, as the whole list
+; filtered says, in its order, at the cells' edges too; and another list begins again
+(: gs (world-new 160 100 (world-read ("(level \"t\" (room [-40 0 -40] [40 9 40]) (void [-12 -4 -9] [3 2 5]) (solid (box [1.9 0 -3] [4.1 2 3.3])) (solid (box [-4 0 -4] [-2 1 -2])) "
+            + "(solid (box [6 0 6] [6.05 3 20])) (air (box [-30 2 -30] [30 3 -29])) (start [5 0 5] 0 0))")) "")
+   bs (gs 'sc 'brushes) (lin l x z) (filter (b \ b 'lo 0 <= x && x <= b 'hi 0 && b 'lo 2 <= z && z <= b 'hi 2) l)
+   (box l x z r) (filter (b \ b 'lo 0 - r <= x && x <= b 'hi 0 + r && b 'lo 2 - r <= z && z <= b 'hi 2 + r) l)
+   xs [-41.0 -40.0 -30.0 -12.0 -9.001 -4.0 -2.0 -0.001 0.0 1.9 2.0 3.0 4.0 4.1 5.5 6.0 6.05 8.0 8.5 9.0 30.0 40.0 47.0] (eqs a b) (#a = #b && all (i \ a i == b i) ^#a)
+   same (all (x \ all (z \ eqs (column-at gs x z) (lin bs x z) && eqs (box (near-bs gs x z) x z 1.0) (box bs x z 1.0)) xs) xs)
+   n0 #(column-at gs 2.5 0.0) _ (pin (gs 'sc) 'brushes (take 1 bs)) n1 #(column-at gs 2.5 0.0)
+ (test same (n0 > 1) (n1 <= 1)))
+; the stick: at a full lean the key's walk to the digit, past the rim the sprint's, half way less, in
+; its dead middle nothing
+(: (wk n f) (: st (world-new 160 100 (world-read "(level \"t\" (room [0 0 0] [40 5 40]) (start [5 0 5] 0 0))") "")
+      _ (each ^n (_ \ (f st, pin st 'dt 0.05, world-move st))) [(st 'px) (st 'pz) (peep st 'vx 0.0) (peep st 'vz 0.0)])
+   (ln dx dy) (: v (view-lean dx dy 720) (\ st (v 0 != 0.0 || v 1 != 0.0 ? (world-lean st (v 0) (v 1) (v 2)) st)))
+   key (a \ st \ world-step st a) still (wk 1 (key 'none)) full (wk 20 (ln 0 -120)) run (wk 20 (ln 0 -200)) half (wk 20 (ln 0 -58)) slow (wk 20 (ln 0 -16)) creep (wk 20 (ln 10 -8))
+ (test (full = wk 20 (key 'forward)) (run = wk 20 (key 'sprint)) (wk 20 (ln 120 0) = wk 20 (key 'strafe-right)) (wk 20 (ln 0 200) = wk 20 (key 'sprint-back))
+       (creep 0 = still 0) (creep 1 = still 1) (still 1 < slow 1) (slow 1 < half 1) (half 1 < full 1) (full 1 < run 1)
+       (mag (half 3 - 0.5 * full 3) < 0.05 * full 3)))
 ; a plush lies where it is put facing its bearing, a turn swinging that on, its model made
 ; by name and set on the floor, the ball it is taken for half its height; one whose file
 ; will not read is a ball. a click takes it like a ball, held it looks back at the player,
@@ -288,7 +338,7 @@
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (gravity [[1]]))"))
        ((world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight (rgb 0.3 0.3 0.4)))") 'skylight = [0.3 0.3 0.4])
        (string? (world-read "(level \"t\" (void [0 0 0] [1 1 1]) (skylight 3))"))
-       (mag (vlo - 4.4 * 4.4 / 19.6) < 0.1) (mag (vhi - 4.4 * 4.4 / 4.0) < 0.3)
+       (mag (vlo - 4.237 * 4.237 / 19.6) < 0.02) (mag (vhi - 4.237 * 4.237 / 4.0) < 0.06)
        (vw0 = ()) (vw1 != ()) (vbx > 9.6) (vax < 8.5) (vay1 > vay) (vw2 > vw1) (vw2 - vw1 > 0.7) (peep rst 'ward-at () = ())))
 ; a stair shallower than a body is walked at a walk, floating steps too, at a slow frame's
 ; strides too, and one too tall is not
@@ -330,7 +380,7 @@
    _ (lput 1.5 0.0 8.5) _ (lgo 2) _ (world-step ls 'jump) (lhead i) (? (i > 30 || ls 'fv = 0.0) i (: _ (lgo 1) (lhead (i + 1))))
    lh (lhead 0) lhy (ls 'py - eye-h) _ (world-step ls 'jump) lh2 (ls 'fv)
  (test (lc0 = ["land hard 0"]) (ld0 > 0.02) (lc1 = ["land soft 1"]) (string? (world-read "(level \"t\" (feel 'squish (texture 8 8 1 '((fill 0.5)))))"))
-       (lk1 = 4.4) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
+       (lk1 = 4.237) (lk6 < 0.0) (lq > 0.0) (lqy > 0.0) (lh < 30) (lhy > 0.2) (lh2 = 0.0)))
 ; a body caught under something, as a landing may leave it, walks out away from it and not
 ; further in, nor along it
 (: cw (world-new 80 50 (world-read "(level \"t\" (room [0 0 0] [6 5 6]) (solid (box [0 1.2 0] [2 5 6])) (start [2.1 0 3] 90 0))") "test/lore/")
@@ -693,7 +743,12 @@
               cs (map (i \ [(t (i + 3)) (v 7 (t i))]) (map (j \ I j) ^#I)) (filter (q \ q 0 <= -3) cs))
    (lensed q) (q 0 <= -3 - 16777216) (near s l) (all (q \ lensed q = (s * q 1 > 0.5)) l)
    a (tx dl) b (tx df) c (tx dn)
- (test (two? a && two? b && two? c) (near -1.0 a) (near 1.0 b) (!(any lensed c)) (any lensed a && any (! * lensed) a)
+   ; ..a sliding glass door's track: a thin band on each inner face of its opening, across the wall's
+   ; middle, within it and no deeper than the leaf, its middle clear
+   ps (world-new 8 8 dl "" 'sc 'fences) pt (ps 0 'pk 'cols) lo (map (amin * pt) ^3) hi (map (amax * pt) ^3)
+   mid (any (i \ 1.2 < pt 0 i && pt 0 i < 2.8 && 0.1 < pt 1 i && pt 1 i < 2.1) ^#(pt 0))
+   nd (world-new 8 8 (world-read (dw + "(door [2 0 4] 1.8 2.2))")) "" 'sc 'fences)
+ (test (#ps = 1) (nd = ()) (mag (lo 0 - 1.1) < 0.001) (mag (hi 0 - 2.9) < 0.001) (mag (hi 1 - 2.2) < 0.001) (mag (lo 1) < 0.001) (hi 2 - lo 2 < 0.1) (mag (0.5 * (hi 2 + lo 2) - 4.0) < 0.001) !mid (two? a && two? b && two? c) (near -1.0 a) (near 1.0 b) (!(any lensed c)) (any lensed a && any (! * lensed) a)
        (has? (world-read (dw + "(lens [2 1 2] (door [2 0 4] 1.8 2.2)))")) "(lens [x y z] (window ..))")))
 ;; ..an opening with no skin takes the skin of what it cuts, so shows no plain texture; seams
 ;; finds one with nothing to take
@@ -761,6 +816,26 @@
  (test (0.0 < far) (far < near) (0.0 < edge) (edge < far) (hb 7 4.6 7 = 0.0)
        (hum-bus (world-new 8 8 (lv "(room [0 0 0] [8 3 8])") "") 480 = ())
        (has? (world-read "(level \"t\" (hum 'bees [0 0 0] [1 1 1]))") "(hum SOUND [x y z] [x y z])")))
+; a level's clouds move by the frame in single precision too: from any time of theirs a frame on
+; they go a thirtieth of what a second does, and their clock comes round with no step
+(: sk (world-new 8 8 (lv "(void [-20 -2 -20] [40 20 40]) (sky 12 'partly)") "" 'sc 'sky) wx (sk 'wx) sim (sk 'sim)
+   ux (iota 2000 * 0.0137 - 13.0) uz (iota 2000 * 0.0071 + 3.0) uy (ux * 0.0 + 0.6)
+   (of w t) (sky-cloud w ux uy uz 0.0 0.0 t) (cl t) (of wx t)
+   next (pin (foldl (\ t k (pin t k (wx k))) {} (keys wx)) 'base (wx 'base - sky-round)) (gone a b) (net (max (a - b) (b - a)))
+   dm (map (t \ [(gone (cl t) (cl (t + 1.0 / 30.0))) (gone (cl t) (cl (t + 1.0)))]) [sim 100.0 (sky-round - 30.0)])
+ (test (0.0 <= sim < sky-round) (sky-rest 20716 43200.0 = 81600.0) (sky-rest 40 0.0 = 0.0) (sky-rest 41 0.0 = 86400.0)
+       (all (d \ 0.0 < d 0 && d 0 < 0.08 * d 1 && 0.015 * d 1 < d 0) dm)
+       (gone (cl 10.0) (of next (10.0 + sky-round)) < 0.5) (gone (cl 10.0) (of next (10.0 + sky-round + 400.0)) > 5.0)))
+; the desert's wind under a roof: whole out on it, dulled at once, but along a lull dying away
+; evenly from its first x to its second, and dulled past it
+(: src "(void [-20 -2 -20] [40 20 40]) (sky 12 'clear) (room [0 0 0] [8 3 8]) (hum 'wind [-20 -2 -20] [40 20 40]) "
+   (at l x) (: st (world-new 8 8 l "") _ (pins st 'px x 'py 1.6 'pz 4.0) _ (hum-bus st 480) (amax (abs <(hum-bus st 480))))
+   lu (lv (src + "(lull [8 -1 0] [0 4 8])")) no (lv src) o (at no 20.0)
+   near? (a \ b \ a - b < 0.01 * o && b - a < 0.01 * o)
+   rs (map (x \ at lu x / o) [7.9 6.0 4.0 2.0 0.1])
+ (test (0.0 < o) (near? (at lu 20.0) o) (near? (at no 4.0) (0.15 * o)) (near? (at lu 4.0) (0.575 * o))
+       (rs 0 > rs 1 > rs 2 > rs 3 > rs 4) (near? (at lu 7.9) (0.99 * o)) (near? (at lu 0.1) (0.16 * o))
+       (has? (world-read "(level \"t\" (lull [1 0 0] [1 4 8]))") "(lull [x y z] [x y z])")))
 ; the street's traffic and a music box: each heard, under the clip, keeping its memory from
 ; one chunk to the next; the box's reverb left from right
 (: (sw nm) (: st (world-new 8 8 (lv ("(room [0 0 0] [8 3 8]) (hum '" + nm + " [0 0 0] [8 3 8])")) "") _ (pins st 'px 4 'py 1.6 'pz 4)
@@ -961,8 +1036,11 @@
    (rset is) (: _ (each ws (b \ pins b 'in () 'p [(b 'p 0) 0.13 (b 'p 2 + 5.0)])) _ (each ^#is (k \ (: c (bs (is k)) (pins (ws k) 'in (is k) 'p [(c 0) (c 1 + 1.13) (c 2)]))))
                 (rgo 60, [(world-whole? rst) (rst 'lifts 0 'g)]))
    _ (pins <ws 'p [7.0 2.0 2.0] 'v [0.0 0.0 0.0] 'rest 0) _ (rgo 30) kept (peep <ws 'in ())
+   ; ..one taken and set in brazier 1 by taps alone
+   tst (world-new 8 8 rsl "") tw0 (<(filter (b \ b 'kind = 'wisp) (tst 'balls))) _ (pins tst 'cut () 'px 20.0 'pz 2.0 'py 1.6 'th 0.0 'ph (atan -1.47))
+   _ (world-step tst 'tap) th1 (peep tw0 'held 0) _ (pins tst 'px 7.0 'pz 0.5 'th 0.0 'ph (atan (-0.5 / 1.5))) _ (world-step tst 'tap) th2 [(peep tw0 'held 0) (peep tw0 'in ())]
    r0 (rset []) r67 (rset [0 1]) r64 (rset [0 2]) r146 (rset [3 0])
- (test (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
+ (test (th1 = 1) (th2 = [0 1]) (kept = 1) (r0 0 = 0) (r0 1 > 0.5) (r67 0 = 1) (r67 1 < 0.5) (r64 0 = 0) (r146 0 = 1)
        (has? (lv "(resonance [0 0 0] 1)") "(resonance [x y z] steps)")
        (has? (lv "(sealed (ball [0 0 0]))") "(sealed LIFT)")))
 ; a camera's feed: shot from where the camera stands while its monitor is in view; with
@@ -1224,10 +1302,17 @@
  (test (#kf = 1) (os h1 = ["o3.scene" "o4.scene" "o5.scene"]) (#h1 = 10) (os h2 = ["o5.scene"]) (h3 = ["z0.scene"]) (scene-bound () 5 = 1073741824) (scene-bound 5000000000 1000 = 500000100) (scene-bound 50000000000 0 = 1073741824) (scene-bound 0 0 = 0) (tablet? (ka 'memo 'v)) (kb 'memo 'v = ()) (sort (keys kb) = sort (keys ka))
        (all (k \ show (canon (ka k)) = show (canon (kb k))) ks)
        (two? (trunk ta)) (show (trunk tb) = show (trunk ta)) (#(tb 'lvl 'brushes) = #(ta 'lvl 'brushes))))
-; a phone's tap: the bottom's middle third jumps, its sides and the scene act, a top corner leaves
+; a phone's tap acts wherever it is, its corners and its bottom too
 (: t (world-tap {'win {'w 900 'h 400}})
- (test (t 450 390 = [32]) (t 310 390 = [32]) (t 290 390 = [101]) (t 610 390 = [101]) (t 450 340 = [101]) (t 450 200 = [101])
-       (t 10 10 = [113]) (t 890 10 = [113])))
+ (test (all (q \ t (q 0) (q 1) = [101]) [[450 390] [10 10] [890 10] [450 200]])))
+; a jump by a touch: what it could be as the touch came down holds though a ledge was run off since, but
+; not once jumped since, and one come down in the air is kept for the landing
+(: (lvl _) (: s (world-new 160 100 (world-read "(level \"t\" (room [0 0 0] [10 9 14]) (start [5 0 1.5] 0 0))") "") _ (each ^3 (_ \ (pin s 'dt 0.05, world-move s))) s)
+   a (lvl 0) p (world-poised a) _ (world-hop a p) v (a 'fv)
+   b (lvl 0) p2 (world-poised b) _ (pins b 'mt (b 'mt + 1.0) 'fv -1.0) q (world-poised b) _ (world-hop b p2) v2 (b 'fv)
+   c (lvl 0) p3 (world-poised c) _ (world-hop c p3) _ (pin c 'fv 1.0) _ (world-hop c p3) v3 (c 'fv)
+   d (lvl 0) _ (pins d 'mt (d 'mt + 1.0) 'fv -1.0) _ (world-hop d 0) v4 (d 'fv)
+ (test p p2 p3 (v > 4.0) !q (v2 > 4.0) (v3 = 1.0) (v4 = -1.0) (d 'jq = d 'mt)))
 ; a scene's key: the same for the same level whatever the order its tablets keep or where it is
 ; come to, but on a surface; another level's, another file's and another maker's are others
 (: kd (cwd 0 + "/out/.world-key-" + show (getpid 0) + "/") _ (mkdir kd 448)

@@ -121,9 +121,15 @@ $(lib_hs): FORCE
 $(m): FORCE
 	@$(MAKE) -C $(R) out/love
 
-$(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so $(o)/Source/love-pd.img
+$(o)/$n.pdx: $(o)/Source/pdex.elf $(o)/Source/pdex.so $(o)/Source/love-pd.img $(o)/Source/pdxinfo
 	@echo PDC	$@
 	@$(pd_sdk)/bin/pdc -sdkpath $(pd_sdk) $(o)/Source $@
+
+# the launcher reads its card from here: a pdx without one carries pdc's bare two lines
+$(o)/Source/pdxinfo: Source/pdxinfo
+	@echo CP	$@
+	@mkdir -p $(dir $@)
+	@cp $< $@
 
 # the stones: the host modules the lore libraries borrow stubbed, then the libraries in the
 # order they borrow each other, then the glue, as one text (a 0-byte header would drop the

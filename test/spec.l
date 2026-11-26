@@ -407,7 +407,7 @@
  ((mint 0) < 0)                                                                     ; every symbol sits below the numbers
  (: a (mint 0) b (mint 0) t {} (pin t a 1, pin t b 2,
                                         1 = t a && 2 = t b && 2 = #t)) ; distinct mints are distinct map keys
- (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (5.0 = (abs @(3 4)))
+ (97 = ("abc" 0)) (294 = $"abc") (3 = #"abc") (4 = $3.9) (0 = $-3.9) (aall (abs @(-3 4) = @(3 4))) (5.0 = (norm @(3 4)))
  !(string 0) !!(string 1) (1 = #(string 0))          ; a NUL nets nothing, but (string 0) holds one byte
  !(snip ("a" + 0) 1 2) (97 = $("a" + 0))        ; ..an all-NUL text is nothing
  ("bidden" = (snip "forbidden planet" 3 9)) !("hi" 9)

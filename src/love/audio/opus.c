@@ -13,6 +13,7 @@
 
 // the state: its channels and gain, the decoder, then room for a packet's samples
 #define OP_MAGIC 0x6f707573
+// its bytes may lie at 4 mod 8 on 32-bit: copied out and in
 struct op_head { double gain; int64_t ch, magic; };
 static uintptr_t op_dec(void) { return ((uintptr_t) op_size() + 15) & ~(uintptr_t) 15; }
 static uintptr_t op_width(int ch) { return sizeof(struct op_head) + op_dec() + 5760 * (uintptr_t) ch * sizeof(float); }
@@ -25,30 +26,30 @@ love_noinline static struct g *host_opus_new(struct g *g) {
  union u *k = new_state(&g, n, n);
  if (!k) return g;
  unsigned char *b = (unsigned char*) ((struct state*) k)->str->bytes;
- struct op_head *h = (struct op_head*) b;
- h->ch = ch, h->gain = lm_exp(gain * (2.302585092994046 / 5120)), h->magic = OP_MAGIC;
- int e = op_init(b + sizeof *h, (int) ch);
+ struct op_head h = { lm_exp(gain * (2.302585092994046 / 5120)), ch, OP_MAGIC };
+ memcpy(b, &h, sizeof h);
+ int e = op_init(b + sizeof h, (int) ch);
  return g->sp[1] = e ? putcharm(-e) : word(k), g->sp += 1, g; }
 static lvm(lvm_opus_new) { LvmCall(g, host_opus_new) }
 
 love_noinline static struct g *host_opus_packet(struct g *g) {
  uintptr_t n = 0;
  unsigned char *b = state_bytes(g->sp[0], &n);
- struct op_head *h = (struct op_head*) b;
- if (!b || n <= sizeof *h || !strp(g->sp[1]) || !oddp(g->sp[2]) || h->magic != OP_MAGIC)
+ struct op_head h;
+ if (b && n > sizeof h) memcpy(&h, b, sizeof h);
+ if (!b || n <= sizeof h || !strp(g->sp[1]) || !oddp(g->sp[2]) || h.magic != OP_MAGIC)
   return g->sp[2] = putcharm(1), g->sp += 2, g;
- int ch = (int) h->ch;
+ int ch = (int) h.ch;
  struct str *p = str(g->sp[1]);
  intptr_t f = getcharm(g->sp[2]);
- float *pcm = (float*) (b + sizeof *h + op_dec());
- int k = op_decode(b + sizeof *h, p->len ? (const uint8_t*) p->bytes : 0, (int) p->len, pcm, 5760);
+ float *pcm = (float*) (b + sizeof h + op_dec());
+ int k = op_decode(b + sizeof h, p->len ? (const uint8_t*) p->bytes : 0, (int) p->len, pcm, 5760);
  if (k < 0) return g->sp[2] = putcharm(-k), g->sp += 2, g;
  uintptr_t m = (uintptr_t) k * (uintptr_t) ch, on = m * (f ? 4u : 2u);
  if (!ok(g = have(g, str_width(on)))) return g;
  struct str *out = ini_str(bump(g, str_width(on)), on);
  b = state_bytes(g->sp[0], &n);                   // re-read: have may move it
- h = (struct op_head*) b;
- pcm_lay((uint8_t*) out->bytes, (float*) (b + sizeof *h + op_dec()), m, f, h->gain);
+ pcm_lay((uint8_t*) out->bytes, (float*) (b + sizeof h + op_dec()), m, f, h.gain);
  return g->sp[2] = word(out), g->sp += 2, g; }
 static lvm(lvm_opus_packet) { LvmCall(g, host_opus_packet) }
 

@@ -9,7 +9,7 @@
 ; met or a bed slept in, and world-run walks on there in the same window.
 (module (world scene-key scene-sweep scene-bound scene-made scene-by world-run world-walk world-main world-new world-at world-size world-step world-tap world-binds world-pick world-span world-scene
          edit-new edit-events edit-paint edit-lay edit-main edit-outline world-ray world-cast
-         world-move world-mouse world-frame world-whole? world-pens world-opts world-read world-reading world-load
+         world-move near-bs column-at world-mouse world-winds? world-walks? world-lean world-hop world-poised world-frame world-whole? world-pens world-opts world-read world-reading world-load
          world-watch world-free? world-ks world-loop world-console world-sound hum-bus deep-hid? cells-seen motes-at fps eye-h body-r grav-n)
 (borrow '(rove quay cli))
 (borrow 'spans)                         ; the level's text read with where each form sits
@@ -209,11 +209,11 @@
  ; ..a window's opening or a doorway with no skin of its own takes the skin of what it cuts:
  ; of the last brush before it its box overlaps more than a hair, a solid before an air
  (brushes-of lv) (: (over a b) (all (k \ a 'lo k + 1e-4 < b 'hi k && b 'lo k + 1e-4 < a 'hi k) ^3)
-   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b
+   (skinned bs b) (? (peep b 'opening 0 = 0 || two? (b 'skin)) b     ; bs the last first
                      (: os (filter (q \ two? (q 'skin) && q 'land = () && over q b) bs) s (filter (q \ q 'air = 0) os)
-                        (two? os ? (pins b 'skin (<(rev (two? s ? s os)) 'skin)) b)))
-   ws (rev (foldl (\ a b (skinned (rev a) b . a)) () (map brush-of (lv 'brushes))))
-   (ws + map (d \ skinned ws (pins (doorway d) 'opening 1)) (lv 'doors)))
+                        (two? os ? (pins b 'skin (<(two? s ? s os) 'skin)) b)))
+   sw (foldl (\ a b (skinned a b . a)) () (map brush-of (lv 'brushes)))
+   (rev sw + map (d \ skinned sw (pins (doorway d) 'opening 1)) (lv 'doors)))
  ; ..the texture on a face of brush b facing n, by its skin, and its texels as [tex U V]: tt the
  ; textures, each [name w h metres lay]; a floor's and ceiling's laid from x 0 z 0, a wall's
  ; along it and its foot on the brush's; then turned and shifted as the skin's entry, else
@@ -249,6 +249,15 @@
  ; ..its frame door-fr wide in the door's texture, a sheet of glass each way across the middle,
  ; the one facing its lens's point a lens
  door-fr 0.05
+ ; ..a glazed sliding door's track: a black band across the middle of each of its opening's four inner
+ ; faces, as deep as the leaf's frame, which shut hides it; it stays as the door slides
+ casing-in 0.006 casing-slip 0.002
+ (casing-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) t (door-t - casing-slip) l0 (d 'c - 0.5 * d 'w) l1 (l0 + d 'w) y0 (d 'y) y1 (y0 + d 'h)
+   e casing-in i (tix tt 'door)
+   (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - t)) q (P ax a1 b1 (m + t))
+                        (slab (map (k \ min (p k) (q k)) ^3) (map (k \ max (p k) (q k)) ^3) (_ \ [0.0 0.0]) i [0.05 0.05 0.055]))
+   (mesh-join [(bar l0 (l0 + e) y0 y1) (bar (l1 - e) l1 y0 y1) (bar l0 l1 (y1 - e) y1) (bar l0 l1 y0 (y0 + e))]))
+ (cased? d) (d 'glass != () && d 'hand != 1)
  (glazed-mesh d tt) (: ax (d 'ax) m (0.5 * (d 'a + d 'b)) l0 (d 'c - 0.5 * d 'w) w (d 'w) h (d 'h) y0 (d 'y) e door-fr
    i (tix tt 'door) (bar a0 a1 b0 b1) (: p (P ax a0 b0 (m - door-t)) q (P ax a1 b1 (m + door-t))
                         (slab (map (k \ min (p k) (q k)) ^3) (map (k \ max (p k) (q k)) ^3) (_ \ [0.0 0.0]) i white))
@@ -870,9 +879,9 @@
  ; ..a level's sky: its time, weather, light and stars, and k what scales its light to the
  ; world's gain; () when it has none
  (sky-of lv) (lv 'sky @ () ()
-   s (: sim (sky-day * 86400.0 + 3600.0 * s 'hour) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0))
-        lt (sky-light (sky-sun sim 0.0 lat) wx sim)
-        {'sim sim 'wx wx 'lt lt 'ss (sky-stars sim 0.0 lat) 'k (0.75 * lt 'expo)}))
+   s (: at (sky-day * 86400.0 + 3600.0 * s 'hour) sim (sky-rest (int sky-day) (3600.0 * s 'hour)) wx (pins (sky-weather (foldl (\ a i (sky-covers i = s 'cover ? i a)) 0 ^4)) 'smog (peep s 'smog 0.0) 'smog-hue (peep s 'smog-hue ()) 'dye (peep s 'dye ()) 'air (peep s 'air ()) 'sky (peep s 'sky ()) 'twinkle (peep s 'twinkle 1.0) 'base (at - sim))
+        lt (sky-light (sky-sun at 0.0 lat) wx sim)
+        {'sim sim 'wx wx 'lt lt 'ss (sky-stars at 0.0 lat) 'k (0.75 * lt 'expo)}))
  ; ..a sheared tree's plane about its foot, and its trunk kept to it; a tree's shadow under
  ; the level's sun a hole where it stands, each piece of its wood cast down along the sun: a
  ; thick one's to a slot hole-d deep, over a dark shaft deep enough to fall through, a thin
@@ -1258,9 +1267,11 @@
                      (pins (pack 'body lift-mesh) 'leaves (map (q \ pack ['leaf q] (\ c tt (lift-leaf c tt q))) lift-leaves) 'fix (pack 'fix lift-tether))))
               (lv 'lifts))
    gates (map (g \ (: k ['gate (vals g) tt] pk (kept k (_ \ mesh-pack (gate-mesh g tt))) {'pk pk 'lit (lit-of k pk)})) (lv 'gates))
-   fences (catmap (f \ map (i \ (: k ['fence (vals f) i tt] pk (kept k (_ \ mesh-pack (fence-mesh f i tt))) (balled {'pk pk 'lit (lit-of k pk)})))
+   fences ((catmap (f \ map (i \ (: k ['fence (vals f) i tt] pk (kept k (_ \ mesh-pack (fence-mesh f i tt))) (balled {'pk pk 'lit (lit-of k pk)})))
                              ^(#(f 'pts) - 1))
                      (lv 'fences))
+           + map (d \ (: k ['casing (vals d) tt] pk (kept k (_ \ mesh-pack (casing-mesh d tt))) (balled {'pk pk 'lit (lit-of k pk)})))
+                 (filter cased? (lv 'doors)))
    vines (filter tablet? (map (i \ (: t (lv 'trees i)
                                       (t 'vine = 1 ? (: k ['vine (vals t)] q (kept k (_ \ (: m (vine-mesh t) [(mesh-pack (m 0)) (gem-tray [#(m 1)] (m 1))])))
                                                        (balled {'pk (q 0) 'ts (q 1) 'end (amax (q 1)) 'tree i 'lit (lit-of k (q 0))}))
@@ -1323,10 +1334,14 @@
    es (kept ".scene")
    (old es (scene-bound fr (foldl (+) 0 (map (e \ e 1) es))) (n \ n), old (kept ".cid") 64 (_ \ 1)))
  ; ..read back, its light made again of what it keeps and its memo spent, so the next scene
- ; begins one
+ ; begins one; else the stage it failed at, a string
  (scene-got f lv) (: r (uread f) u (two? r ? (zstd-unpack <>r)) sc (two? u ? (unstow <>u))
-   (tablet? sc ? (: sf (surf-of lv) (utime f (clock ()),
-                    pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+   (? (!(two? r)) "none kept" (!(two? u)) "unpacking" (!(tablet? sc)) "unstowing"
+      (: sf (surf-of lv) (utime f (clock ()),
+         pins sc 'surf sf 'memo {'n 0 'made 1 'size 0} 'lit (scene-light lv sf (sc 'sky) (sc 'brushes) (sc 'lights) 'lit)))))
+ ; ..which level came, kept or made, and why not kept, in a phone's log
+ (scene-said lv k got hit) (string? (getenv "LOVE_DROID")
+   ? (cite 'said 'said "lore: the scene of \(lv 'name): \(hit ? "kept" "made, \(!(string? k) ? "no nest" (string? got) ? got "no burnt")")") ())
  ; ..and what growing the trees pinned into the level, kept beside it and pinned back on a hit:
  ; the brushes it added, the pits and embers, each tree's plane, trunk and shade
  (burnt lv n0) {'bs (drop n0 (lv 'brushes)) 'pits (lv 'pits) 'embers (lv 'embers)
@@ -1338,7 +1353,7 @@
  (arted lv sc) (: txs (textures lv) ts (sc 'texs) (art? t) (any (q \ two? q && <q = 'art) (t 'layers))
    (pin sc 'texs (map (i \ i < #txs && art? (txs i) ? (swatch (txs i 'w) (txs i 'h) (txs i 'layers)) (ts i)) ^#ts)))
  (scene-kept lv dir tk) (: d (scene-dir ()) k (string? d && scene-key d lv dir) f "\(d)\(k).scene" got (string? k && scene-got f lv)
-   n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got)
+   n0 #(lv 'brushes) hit (tablet? got && tablet? (got 'burnt) && got) _ (scene-said lv k got (tablet? hit))
    (tablet? hit ? (: _ (peep lv 'grown 0 || unburn lv (hit 'burnt)) (arted lv hit))
       (scene lv dir () tk @ sc
         (: _ (pin sc 'burnt (burnt lv n0))
@@ -1739,7 +1754,7 @@
                             (n < <h || n = <h && (x - st 'px) * h 1 + (z - st 'pz) * h 2 < 0.0)))))
  ; ..how much of a body at x z is in the way: its points, 50 more for its middle, 99 a shut door;
  ; and the way to those caught, summed
- (caught st x z) (: r body-r lv (st 'lvl) bs (st 'sc 'brushes) cs (lv 'cars)
+ (caught st x z) (: r body-r lv (st 'lvl) bs (near-bs st x z) cs (lv 'cars)
    pts ([x z] . body-ring x z r)
    (shut? i) (: d (lv 'doors i) al (d 'ax @ 'z x z) ac (d 'ax @ 'z z x)
      (st 'doors i < 0.85 && mag (al - d 'c) < 0.5 * d 'w + r && d 'a - r < ac && ac < d 'b + r))
@@ -1777,7 +1792,7 @@
  ; ..how far q [x z] is from the line s, between its ends
  (seg-gap s q) (: dx (s 2 - s 0) dz (s 3 - s 1) k (max 0.0 (min 1.0 (((q 0 - s 0) * dx + (q 1 - s 1) * dz) / max 1e-9 (2 dx + 2 dz))))
    (sqrt (sq (q 0 - s 0 - k * dx) + sq (q 1 - s 1 - k * dz))))
- jump-v 4.4                               ; up near a metre
+ jump-v 4.237                             ; up 0.92 of a metre
  ; ..a jump from the ground, or a moment after leaving it; one pressed a moment before
  ; landing is kept for the landing
  coyote-t 0.12 jq-t 0.15
@@ -1789,7 +1804,7 @@
  ; ..in the air against a ledge no more than mantle-h over the feet, a pull up onto it where
  ; a body fits: the ledge looked for a body's breadth on the way, and stood on as far in
  (hoist! st x z) (: fl (st 'py - eye-h) dx (x - st 'px) dz (z - st 'pz) d (max 1e-9 (sqrt (2 dx + 2 dz)))
-   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (column (st 'sc 'brushes) cx cz) cx cz (fl + mantle-h)) y0 (st 'py)
+   cx (x + body-r * dx / d) cz (z + body-r * dz / d) t (floor-at (column-at st cx cz) cx cz (fl + mantle-h)) y0 (st 'py)
    (? (!(charm? t || gem? t) || t <= fl + 0.001 || t > fl + mantle-h + 0.001) 0
       (: _ (pin st 'py (t + eye-h)) ok (world-free? st cx cz) _ (pin st 'py y0)
          (ok ? (: _ (pins st 'fv 0.0 'hoist {'y0 y0 'y1 (t + eye-h) 'x0 (st 'px) 'z0 (st 'pz) 'x1 cx 'z1 cz 'k 0.0}) 1) 0))))
@@ -1815,7 +1830,7 @@
            'sprint-back (pin (go -1 0) 'run-at (st 'mt)) 'sprint-left (pin (go 0 -1) 'run-at (st 'mt)) 'sprint-right (pin (go 0 1) 'run-at (st 'mt))
       'jump (? fly (up 1) (can-jump? st) (jump! st) (pin st 'jq (st 'mt)))
       'sink (fly ? (up -1) st)
-      'tap (touch st @ () st t t)
+      'tap (tap! st)
       x (walk-key st a {'turn (turn-v * dt) 'walk (walk-v * dt) 'tilt (tilt-v * dt) 'up 1.3 'down -1.2} put!
          @ () (a @ 'where (pin st 'pos (1 - peep st 'pos 0)) st)
            s s))))
@@ -1873,7 +1888,7 @@
    face (two? c && (sin th * c 0 + cos th * c 1) / max 1e-9 (c 2) > 0.4)
    (? (!(two? c) || peep st 'fv 0.0 > 0.0 || (f != 0 && !face)) (pin st 'cling 0)
       (face && f != 0)
-      (: ny (min (c 3 - 1.0) (fl + f * ladder-v * dt)) g (floor-at (column (st 'sc 'brushes) (st 'px) (st 'pz)) (st 'px) (st 'pz) ny)
+      (: ny (min (c 3 - 1.0) (fl + f * ladder-v * dt)) g (floor-at (column-at st (st 'px) (st 'pz)) (st 'px) (st 'pz) ny)
          down (f < 0 && (charm? g || gem? g) && ny <= g)
          (pins st 'py ((down ? g ny) + eye-h) 'fv 0.0 'gt (st 'mt) 'cling (down ? 0 1) 'mf 0))
       (peep st 'cling 0 = 1) (pins st 'fv 0.0 'gt (st 'mt))
@@ -1892,9 +1907,9 @@
  (world-move st) (: cut (st 'cut) dt (peep st 'dt (1.0 / fps)) ct (peep st 'ct 0.0 + dt)
    (? (atom? cut) (falls! (heralds! (play-steps st))) (ct < <cut 'secs) (pin st 'ct ct)
       (atom? >cut) (play-steps (cue st)) (pins st 'cut >cut 'ct 0.0)))
- ; ..a slow frame moved in steps no longer than a thirtieth, each the frame's ways, so a long
- ; one strides no further at once than a quick one
- step-dt (1.0 / 30.0)
+ ; ..a slow frame moved in steps no longer than a twenty-fifth, each the frame's ways, so a long
+ ; one strides little further at once than a quick one, and a frame a hair late is still one step
+ step-dt 0.04
  (play-steps st) (: dt (peep st 'dt (1.0 / fps)) m (max 1 (int (ceil (dt / step-dt - 1e-6))))
    f (peep st 'mf 0) s (peep st 'ms 0) u (peep st 'mu 0)
    (? (m = 1) (play-move st)
@@ -1952,6 +1967,18 @@
  ; ..the top of the floor within a few steps of fl, by halves to a hair, or () for none; up
  ; from feet in a solid, down from feet in the air
  ; ..the brushes whose plan holds x z, in their order: all a point there can be in
+ ; ..the brushes by the plan's cells, each cell's found the first time something is in it, in
+ ; their order and near-m wider than the cell: (near-bs st x z) holds all a box about x z
+ ; reaching near-m could meet. begun again for another list of them
+ near-g 2.0 near-m 1.05
+ (near-bs st x z) (: sc (st 'sc) bs (sc 'brushes) n (peep sc 'near ())
+   t (tablet? n && n 'bs == bs ? n (: n {'bs bs 'cells {}} (pin sc 'near n, n)))
+   i (int (floor (x / near-g))) j (int (floor (z / near-g))) k ((i + 8192) * 16384 + j + 8192) c (t 'cells)
+   (peep c k 0 @ 0 (: x0 (i * near-g - near-m) x1 ((i + 1) * near-g + near-m) z0 (j * near-g - near-m) z1 ((j + 1) * near-g + near-m)
+                      l (filter (b \ b 'lo 0 <= x1 && x0 <= b 'hi 0 && b 'lo 2 <= z1 && z0 <= b 'hi 2) bs)
+                    (pin c k l, l))
+             l l))
+ (column-at st x z) (column (near-bs st x z) x z)
  (column bs x z) (filter (b \ b 'lo 0 <= x && x <= b 'hi 0 && b 'lo 2 <= z && z <= b 'hi 2) bs)
  (floor-at bs x z fl) (: (air? y) (brush-medium bs [x y z] = 1)
    (top a b) (foldl (\ q _ (: m (0.5 * (q 0 + q 1)) (air? m ? [(q 0) m] [m (q 1)]))) [a b] ^7 @ q (q 1))
@@ -1961,7 +1988,7 @@
  (floor-step st dt) (: x (st 'px) z (st 'pz) fl (st 'py - eye-h) lv (st 'lvl)
    shaft (any (g \ g 'lo 0 < x && x < g 'hi 0 && g 'lo 2 < z && z < g 'hi 2) (lv 'gravs))
    (? (shaft || any (c \ car-track? c x z) (lv 'cars)) (pins st 'fv 0.0 'gt (st 'mt))
-      (: bss (map (q \ [(column (st 'sc 'brushes) (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z (tread st 'feet))) bs (bss 0 0)
+      (: bss (map (q \ [(column-at st (q 0) (q 1)) (q 0) (q 1)]) ([x z] . body-ring x z (tread st 'feet))) bs (bss 0 0)
          ; ..the floor under the middle, or under the feet's edge where that is a step higher
          (num? y) (charm? y || gem? y)
          (top l) (: m <l r (foldl (\ a y (num? y && !(num? a && a >= y) ? y a)) () >l)
@@ -1969,7 +1996,7 @@
          f (top (map (c \ floor-at (c 0) (c 1) (c 2) fl) bss)) v (peep st 'fv 0.0) got (num? f)
          (? (got && v <= 0.0 && f > fl + 0.001) (pins st 'py (min f (fl + climb-v * dt) + eye-h) 'fv 0.0 'gt (st 'mt))
             (got && v <= 0.0 && f >= fl - 0.001) (pins st 'fv 0.0 'gt (st 'mt))
-            (: v2 (max -fall-max (v - grav-at lv fl * dt)) n (fl + v2 * dt)
+            (: v2 (max -fall-max (v - grav-at lv fl * dt)) n (fl + 0.5 * (v + v2) * dt)   ; the step's mean speed: the arc the same at any step
                ; ..rising, the head stops at what is over it; falling, the feet at the first
                ; floor on the way
                g (v2 < 0.0 && !(got && n <= f) ? (top (map (c \ landing (c 0) (c 1) (c 2) fl n) bss)) ())
@@ -1986,7 +2013,7 @@
  ; ..how far the eye is sunk: down to the dip's depth at dip-t, and eased back
  (dip st) (st 'dip @ () 0.0 d (: u ((st 'mt - d 1) / dip-t) (u > 8.0 ? 0.0 -(d 0 * u * exp (1.0 - u)))))
  ; ..what the floor under the feet is: the brush the way down meets, its floor's texture's feel
- (feel-under st) (: bs (column (st 'sc 'brushes) (st 'px) (st 'pz)) fl (st 'py - eye-h) h (brush-ray bs [(st 'px) (fl + 0.05) (st 'pz)] [0.0 -1.0 0.0])
+ (feel-under st) (: bs (column-at st (st 'px) (st 'pz)) fl (st 'py - eye-h) h (brush-ray bs [(st 'px) (fl + 0.05) (st 'pz)] [0.0 -1.0 0.0])
    e (tablet? h ? (foldl (\ a e (e 0 @ 'floor e a)) () (bs (h 'b) 'skin)) ()) nm (two? e ? (e 1) 'floor)
    (foldl (\ a t (t 'name = nm ? (peep t 'feel 'hard) a)) 'hard (st 'lvl 'textures)))
  (land-cry st s) ("land " + show (feel-under st) + " " + show (? (s < 5.5) 0 (s < 10.0) 1 2))
@@ -2226,8 +2253,25 @@
       (ev = 'press && bt = 1 && <h 'kind = 'wisp && brazier-at st != ()) (seat! st <h (brazier-at st))
       (ev = 'press && bt = 1) (pin st 'wind (st 'mt))
       (ev = 'release && bt = 1 && two? h && st 'wind != ()) (ball-go st <h (throw-lo + (throw-hi - throw-lo) * wind-k st))
+      (ev = 'cancel) (pin st 'wind ())
       (ev = 'press && bt = 3 && two? h) (ball-go st <h 0.0)
       st))
+ ; ..a tap, or its key, with no button to it: what is looked at used, else taken; with a
+ ; thing in hand, a wisp set in the brazier looked at, else what is looked at used, else let fall
+ (tap! st) (: h (filter (b \ peep b 'held 0 = 1) (st 'balls)) i (two? h && <h 'kind = 'wisp ? (brazier-at st) ())
+   (? (charm? i) (seat! st <h i)
+      (touch st @ () (two? h ? (ball-go st <h 0.0) (ball-take st)) t t)))
+ ; ..on foot, the stick as it leans: x right and y ahead, 1 a key's; past its rim a sprint
+ (world-walks? st) (!(two? (st 'cut)) && !(charm? (st 'dlg)) && peep st 'eye 'walk = 'walk)
+ (world-lean st x y run) (pins st 'mf (peep st 'mf 0 + y) 'ms (peep st 'ms 0 + x), run ? (pin st 'run-at (st 'mt)) st)
+ ; ..whether a jump may be had now, and a touch's: p what that said as it came down, good yet though a ledge
+ ; was run off since, but for a jump made since
+ (world-poised st) (can-jump? st)
+ (world-hop st p) (? (two? (st 'cut) || flying? st || !(world-walks? st)) (world-step st 'jump)
+                     (p && !(hoisting? st) && peep st 'gv 0.0 = 0.0 && peep st 'gt -9.0 > -9.0) (jump! st)
+                     (world-step st 'jump))
+ ; ..whether a held touch is the button: a thing in hand, and the walk's
+ (world-winds? st) (any (b \ peep b 'held 0 = 1) (st 'balls) && world-walks? st)
  ; ..the nearest ball the eye's line passes within a hand of, no further than reach; a wisp
  ; within a wider hand and hold-reach
  (ball-take st) (: e (eye-at st) d (look-way st)
@@ -2248,7 +2292,7 @@
  ; ..its flight in steps short beside its size: each way on its own, back off what it would
  ; meet; among only the brushes and panes near it
  (ball-fly st b dt) (: r (b 'r) ball (b 'kind = 'ball) p0 (b 'p) lv (st 'lvl)
-   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (st 'sc 'brushes))
+   bs (filter (c \ all (k \ c 'lo k - 1.0 <= p0 k && p0 k <= c 'hi k + 1.0) ^3) (near-bs st (p0 0) (p0 2)))
    (solid? q) (brush-medium bs q != 1
                || any (w \ w 'lo 0 - 0.05 < q 0 && q 0 < w 'hi 0 + 0.05 && w 'lo 1 < q 1 && q 1 < w 'hi 1
                             && w 'lo 2 - 0.05 < q 2 && q 2 < w 'hi 2 + 0.05) (st 'lvl 'panes))
@@ -2576,11 +2620,12 @@
    ns (filter (q \ q 0 <= i1 && i0 < q 0 + int (q 2 * tune-ring * song-rate) + 2) (notes (k0 - 1) + notes k0))
    vs (two? mem ? (mem 1) {}) was (foldl (\ a q (pin a (q 0) (peep vs (q 0) () @ () (mk (q 0) {'s "box" 'note (q 1) 'gain (q 3) 'legato (q 2 * tune-ring)} song-rate) v v))) {} ns)
    y (foldl (\ a q (was (q 0) @ v (two? v ? (a + v 1 ix) a))) (t * 0.0) ns)
-   (wet m) (sp y y m tune-space @ r (? (charm? r) (wet (cask r)) (two? r) [r m] [(y . y) m]))
-   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
+   (wet m k) (sp y y m tune-space @ r (? (charm? r && k) (wet (cask r) 0) (two? r) [r m] [(y . y) m]))   ; asked twice, then dry
+   (? !sp ((tune-k * y) . [() was]) (wet (two? mem ? (mem 0) ()) 1 @ w ((tune-k * <(w 0) . tune-k * >(w 0)) . [(w 1) was]))))
  ; ..where the ear is out under the sky: in an open box and under no roof, a closed room a
  ; body could stand in, not a window's slot. the desert's sounds whole there and behind no
- ; glass, dulled under a roof or sealed in glass (a lens's panes, the box they span)
+ ; glass, dulled under a roof, by its lull where it has one, or sealed in glass (a lens's panes,
+ ; the box they span)
  (open-at sc e) (: sk (sky-here (sc 'surf) (sc 'sky) e) (in? lo hi) !(any (k \ e k <= lo k || hi k + 0.1 <= e k) ^3)
    (roomy b) (b 'hi 0 - b 'lo 0 > 2.0 * body-r && b 'hi 2 - b 'lo 2 > 2.0 * body-r && b 'hi 1 - b 'lo 1 > eye-h)
    (tablet? sk && any (b \ in? (b 0) (b 1)) (sc 'open)
@@ -2589,8 +2634,14 @@
    (in L) (: qs (filter (p \ p 'lens = L) ps)
             (all (k \ foldl (\ a p (min a (p 'lo k))) 1e9 qs < e k && e k < foldl (\ a p (max a (p 'hi k))) -1e9 qs) ^3))
    (any (p \ in (p 'lens)) ps))
+ desert-dull 0.15
+ ; ..a lull's loudness at e, dying away along it
+ (lulled l e) (? (any (k \ e k < l 'lo k || l 'hi k < e k) ^3) 0.0
+   (1.0 + (desert-dull - 1.0) * (e 0 - l 'from) / (l 'to - l 'from)))
  (desert-near st xz) (: e [(st 'px) (st 'py) (st 'pz)]   ; 'py is the eye's height already
-   (open-at (st 'sc) e && !(glassed (st 'lvl) e) ? 1.0 0.15))
+   (? (glassed (st 'lvl) e) desert-dull
+      (open-at (st 'sc) e) 1.0
+      (foldl (\ g l (max g (lulled l e))) desert-dull (peep (st 'lvl) 'lulls ()))))
  ; ..each [at near], at a sound's samples at the times t; or [at near 'kept], at answering its
  ; samples, or a pair of them left and right, and what it keeps for the next chunk, given it
  hum-voices {'fluorescent [buzz-at buzz-near] 'wind [wind-at desert-near] 'bells [bells-at desert-near]
@@ -2671,12 +2722,16 @@
  (stamp p) (stat p @ s (two? s ? [(s 0) (s 3) (s 8)] ()))
  (files st) (: p (st 'path)
    (string? p ? (p . filter string? (map (q \ file-of (st 'dir) q) (st 'lvl 'posters + st 'lvl 'plushes))) ()))
- (seen! st) (pin st 'stamps (map (p \ [p (stamp p)]) (files st)))
+ (stamps st) (map (p \ [p (stamp p)]) (files st))
+ (seen! st) (pin st 'stamps (stamps st))
+ ; ..stamped before the read, so a file written while the scene is made is read at the next watch;
+ ; a file the new level alone names is stamped after
+ (seen-by st now) (pin st 'stamps (map (p \ (filter (q \ q 0 = p) now @ (q . _) q _ [p (stamp p)])) (files st)))
  (world-watch st) (: was (st 'stamps)
    (? (atom? was) (seen! st)
       (all (q \ stamp (q 0) = q 1) was) st
-      (: lv (world-load (st 'path))
-         (? (string? lv) (pins (seen! st) 'msg lv 'err 1 'msg-t (st 'mt))
+      (: now (stamps st) lv (world-load (st 'path))
+         (? (string? lv) (pins (pin st 'stamps now) 'msg lv 'err 1 'msg-t (st 'mt))
             (: ds (#(lv 'doors) = #(st 'lvl 'doors) ? (st 'doors) (map (_ \ 0.0) (lv 'doors)))
                cs (#(lv 'cars) = #(st 'cars) ? (st 'cars) (cars-new lv))
                ls (#(lv 'lifts) = #(st 'lifts) ? (st 'lifts) (lifts-new lv))
@@ -2684,13 +2739,13 @@
                sc (loader st @ tk (view-busy tk (_ \ scene lv (st 'dir) (st 'sc) tk)))
                bl (#(lv 'balls) + #(lv 'wisps) + #(lv 'plushes) = #(st 'balls) ? (st 'balls) (balls-new lv sc))
                _ (each bl (b \ pins b 'pk () 'r (b 'kind @ 'plush (sc 'plushes (b 'i) 'r) (b 'r))))
-               (seen! (pins st 'hum () 'lvl lv 'sc sc 'doors ds 'cars cs 'lifts ls 'gates gs 'balls bl 'msg ("read " + st 'path + " again")
-                               'err 0 'msg-t (st 'mt))))))))
+               (seen-by (pins st 'hum () 'lvl lv 'sc sc 'doors ds 'cars cs 'lifts ls 'gates gs 'balls bl 'msg ("read " + st 'path + " again")
+                               'err 0 'msg-t (st 'mt)) now))))))
  (dir-of p) (: (go i) (i < 0 ? "" (p i @ 47 (snip p 0 (i + 1)) (go (i - 1)))) (go (#p - 1)))
  ; --- the walk, on view's loop; world-run raises the stage. o 'loading draws the loading
  ;     screen, as view-loading calls it; view-spin unless said ---
  (phone? st) (st 'win && string? (getenv "LOVE_FACE"))
- thumb-text "left thumb walks  ·  right thumb looks  ·  tap to act, the bottom's middle to jump  ·  a top corner leaves, the top's middle the console"
+ thumb-text "left thumb walks, further runs  ·  right thumb looks  ·  a right tap or a second finger jumps, a left tap acts  ·  Back twice leaves, the top's middle the console"
  ; the console's words here: those of any walk, and the loop's where the level has a deck
  (world-words st) ([["tp" "tp x y z: stand there" (\ x y z (pins st 'px (1.0 * x) 'py (y + eye-h) 'pz (1.0 * z) 'vy 0.0, where st))]
                     ["at" "where you stand" (where st)]
@@ -2700,11 +2755,7 @@
    + (two? (st 'lvl 'decks) ? [["loop-end" "loop-end (): the loop worn all away, begun if it is not" (con-loop st)]] ()))
  (world-console st ln) (con-eval world-words st ln)
  (con-loop st _) (: _ (tablet? (st 'music) ? 0 (play! st)) m (st 'music) _ (pin m 'n (int (song-rate * m 'd 'gone) + 1)) (world-loop st))
- (world-tap st x y) (? (view-corner? st x y) [113]
-                       (world-foot? st x y) [32]
-                       [101])
- ; ..along the bottom, its middle third, a jump
- (world-foot? st x y) (: s (window-size (st 'win)) u (x / (s 0)) (0.88 * (s 1) < y && 1 / 3 < u && u < 2 / 3))
+ (world-tap st x y) [101]
  (world-walk o lv)
    (view-walk {'new (w \ h \ (: p (o 'level) win (o 'win)
                                ; ..the reading's tick going on for the first making, so its screen runs on
@@ -2715,7 +2766,7 @@
                                _ (phone? st ? (pins st 'msg thumb-text 'msg-t 0.0))
                                _ (mesh-gpu st)         ; its helper built while loading, not in a frame
                                (world-watch (world-size st w (h // 2)))))
-               'stick [119 115 97 100 87] 'tap world-tap
+               'stick [119 115 97 100 87] 'tap world-tap 'winds world-winds? 'leans world-walks? 'lean world-lean 'hop world-hop 'poised world-poised
                'size world-size 'frame world-frame 'key world-step 'look world-look 'mouse world-mouse
                'binds (view-bind view-binds world-binds) 'listed (view-listed ['sprint 'sprint-back 'sprint-left 'sprint-right 'strafe-left 'strafe-right 'jump 'tap 'where 'finer 'coarser 'auto 'console])
                'words world-words
