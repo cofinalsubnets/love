@@ -43,6 +43,19 @@
    mr-hi16  5                                       ; R_MIPS_HI16       S + A's high half, carried for lo16's sign
    mr-lo16  6                                       ; R_MIPS_LO16       S + A's low half
    mr-pc16  10                                      ; R_MIPS_PC16       (S + A - P) >> 2 into a branch's offset
+   ; ... avr: a fixup's kind and R_AVR_'s number. a branch counts from P + 2, which the linker
+   ; takes off; pm is a word address, neg the negated one
+   avr-rels {'av7 2 'av13 3 'av16pm 5 'avcall 18
+             'avlo8 6 'avhi8 7 'avlo8neg 9 'avhi8neg 10 'avlo8pm 12 'avhi8pm 13}
+   ; every R_AVR_ by number
+   avr-rnames ["NONE" "32" "7_PCREL" "13_PCREL" "16" "16_PM" "LO8_LDI" "HI8_LDI" "HH8_LDI" "LO8_LDI_NEG" "HI8_LDI_NEG"
+               "HH8_LDI_NEG" "LO8_LDI_PM" "HI8_LDI_PM" "HH8_LDI_PM" "LO8_LDI_PM_NEG" "HI8_LDI_PM_NEG" "HH8_LDI_PM_NEG" "CALL"
+               "LDI" "6" "6_ADIW" "MS8_LDI" "MS8_LDI_NEG" "LO8_LDI_GS" "HI8_LDI_GS" "8" "8_LO8" "8_HI8" "8_HLO8"
+               "DIFF8" "DIFF16" "DIFF32" "LDS_STS_16" "PORT6" "PORT5"]
+   (avr-rname n) ("R_AVR_" + peep avr-rnames n (show n))
+   ; what a reader does with one: () for a kind it may apply, else a scare naming it. 32, 16 and 8 are
+   ; plain words; a gs wants a stub past 128k and a diff a relaxing linker
+   (avr-rtake n) (elem n [1 2 3 4 5 6 7 9 10 12 13 18 26] ? () (scare 'avr-reloc (avr-rname n)))
 
    (o-has? tab k) (peep tab k 'no !== 'no)
    ; a lane's file size; an item may be a blob of many bytes
@@ -89,6 +102,8 @@
                                (k == 'j18) [6 0 0]  (k == 'call0) [5 0 0]
                                ; mips: the instruction's word, its field zero
                                (elem k '(mb16 mj26 mhi16 mlo16)) (be32 (fix-a x))
+                               ; avr: the instruction's word, or the two of a call or jmp
+                               (o-has? avr-rels k) (afix-w (fix-a x) @ v (w = 4 ? (le16 (v >> 16) + le16 (v & 0xffff)) (le16 v)))
                                ; riscv 'pcrel: aux packs both base words, auipc low, the I-insn high
                                (k == 'pcrel) (le32 (fix-a x % 4294967296) + le32 (fix-a x // 4294967296))
                                ; arm is REL: a thumb branch holds its encoding with the -4 addend
@@ -1353,16 +1368,18 @@
        adata (o-names <ax) abss (filter (p \ #p = 2) <>ax) labss (filter (p \ #p = 3) <>ax)
        szt (foldl (\ t p (pin t (name <p) <>p)) {} (2 < #ax ? (ax 2) ()))   ; a .size its text gave outright
        a64 (target = 'a64)
-       ; rv32, xtensa and mips lay this same RELA shape in the ELF32 class
+       ; rv32, xtensa, mips and avr lay this same RELA shape in the ELF32 class
        xt (target = 'xtensa)
        mp (target = 'mips)
-       w32 (target = 'rv32 || xt || mp)
+       av (target = 'avr)
+       w32 (target = 'rv32 || xt || mp || av)
        rv (target = 'rv64 || target = 'rv32)
-       _ (target = 'x64 || a64 || rv || xt || mp ? 0 (scare 'obj-target target))
+       _ (target = 'x64 || a64 || rv || xt || mp || av ? 0 (scare 'obj-target target))
        esym (w32 ? elf-sym32 elf-sym)  eshdr (w32 ? elf-shdr32 elf-shdr)  erela (w32 ? o-rela32 o-rela)
        symz (w32 ? 16 24)  rlz (w32 ? 12 24)  shz (w32 ? 40 64)  wa (w32 ? 4 8)
        ; the in-place-resolvable kinds; riscv's auipc is byte pc-relative, no page math
        rset (? a64 '(b26 b19 b14 ld19 adr21) rv '(j21 pcrel b13 cj cb) xt '(j18 call0 l32r) mp '(mb16)
+                av ()                                    ; every avr reach stays a relocation
                 '(rel32 pc32 rel8 rel16 pc8))
        drset (a64 || target = 'x64 ? rset ())    ; a pc-relative reach inside one section moves with it
        machine (peep elf-machines target 0)
@@ -1481,10 +1498,10 @@
                  ['elf n] (erela off si n (sa + aux))                     ; a relocation by number, as `.reloc` gives it
                  ; aux is the constant byte offset of a &arr[i] / &s.field
                  'abs64 (erela off si rabs (sa + aux))
-                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 r-32) (sa + aux))
+                 'abs32 (erela off si (? a64 ra-abs32 rv rr-32 xt xr-32 mp mr-32 av 1 r-32) (sa + aux))
                  ('abs32s || 'abs32d) (erela off si r-32s (sa + aux))      ; abs32d: a based displacement outside 64
-                 'abs16 (erela off si r-16 (sa + aux))
-                 'abs8 (erela off si r-8 (sa + aux))
+                 'abs16 (erela off si (av ? 4 r-16) (sa + aux))
+                 'abs8 (erela off si (av ? 26 r-8) (sa + aux))
                  ; an 8-byte word measured from its own start
                  'rel64 (erela off si (a64 ? ra-prel64 r-pc64) ((sa + aux) - 8))
                  ; an FDE's pc_begin: the section symbol, so a weak function's is its own
@@ -1516,6 +1533,7 @@
                  ; a branch's field counts from its delay slot, P + 4
                  'mb16 (erela off si mr-pc16 (sa - 4))
                  'mj26 (erela off si mr-26 sa) 'mhi16 (erela off si mr-hi16 sa) 'mlo16 (erela off si mr-lo16 sa)
+                 (k && o-has? avr-rels k) (erela off si (avr-rels k) (sa + afix-ad aux))
                  (scare 'obj-fix k))))
            rs))
        relas (map (o-rels * ln-rl) lanes)
@@ -1567,7 +1585,7 @@
              (le16 1) (le16 machine) (le32 1)                             ; et_rel, e_machine, version
              (w32 ? (le32 0 + le32 0 + le32 sht-off)                      ; e_entry=0, e_phoff=0, e_shoff
                  (le64 0 + le64 0 + le64 sht-off))
-             (le32 (? xt 768 mp 0x70001001 w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit; mips32r2 o32 noreorder), e_ehsize, e_phentsize=0
+             (le32 (? xt 768 mp 0x70001001 av (be 'eflags) w32 1 (machine = 243) 5 0)) (le16 h-sz) (le16 0)  ; e_flags (riscv: RVC | FLOAT_ABI_DOUBLE, rv32 soft; xtensa xt_insn | xt_lit; mips32r2 o32 noreorder; avr its backend's family number, the relaxable 0x80 clear), e_ehsize, e_phentsize=0
              (le16 0) (le16 shz) (le16 nsh)                               ; e_phnum=0, e_shentsize, e_shnum
              (le16 i-shs)])                                               ; e_shstrndx
        (elf-order machine
