@@ -1937,6 +1937,7 @@
    _ (fly || kn ? st (lift-ride st))
    _ (fly || kn || hoisting? st || peep st 'cling 0 = 1 || riding? st ? st (floor-step st dt))
    _ (gait! st dt !(fly || kn || hoisting? st || peep st 'cling 0 = 1 || peep st 'fv 0.0 != 0.0 || peep st 'aloft 0 = 1))
+   _ (wake-moved! st)
    _ (each (st 'balls) (b \ ball-step st b dt))
    (foldl (\ st i (car-step st (lv 'cars i) (st 'cars i) dt)) st ^#(lv 'cars)))
  ; ..the body's frame, on foot or not: a foot down sounds as the floor does
@@ -2292,6 +2293,19 @@
    _ (pins b 'held 0 'rest 0 'kt (st 'mt) 'p p 'pk ()
            'v (c+ (c* v (look-way st)) [(peep st 'vx 0.0) 0.0 (peep st 'vz 0.0)]))
    (pin st 'wind ()))
+ ; ..what in the level moves, each a box [lo hi] in the same order frame to frame: the gates'
+ ; leaves and the lifts' parts. one that moved since the last frame wakes what rests where it
+ ; was or is, so the rest falls or is pushed as anywhere; a new kind of thing that moves lists
+ ; its boxes here and nothing else
+ (moving-boxes st) (: lv (st 'lvl)
+   (seg-box q) [[(min (q 0) (q 2)) (q 5) (min (q 1) (q 3))] [(max (q 0) (q 2)) (q 4) (max (q 1) (q 3))]]
+   (map (i \ seg-box (gate-seg (lv 'gates i) (st 'gates i))) ^#(lv 'gates)
+    + catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))
+ (wake-moved! st) (: now (moving-boxes st) was (peep st 'mvb ()) _ (pin st 'mvb now)
+   ch (? (#now != #was) () (filter two? (map (i \ (now i = was i ? () [(map (k \ min (now i 0 k) (was i 0 k)) ^3) (map (k \ max (now i 1 k) (was i 1 k)) ^3)])) ^#now)))
+   (by? b q) (: p (b 'p) m (b 'r + 0.05) (all (k \ q 0 k - m < p k && p k < q 1 k + m) ^3))
+   (each (filter (b \ b 'rest = 1 && peep b 'held 0 = 0 && peep b 'in () = () && any (by? b) ch) (st 'balls))
+         (b \ (pin b 'rest 0, tablet? (peep b 'tb ()) ? (tb-wake (b 'tb)) 0))))
  ; ..a loose thing's next moment by tumble: a body of its own against the faces of the brushes
  ; near it and their land, made again when it is in another cell's, and the panes; pulled as
  ; the level pulls at its height, and heard where it comes off something hard. a ball is a
