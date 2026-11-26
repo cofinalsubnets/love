@@ -691,6 +691,8 @@
    lp-x (lp-of "src/love/holo/x64.l")
    lp-t2 (lp-of "src/love/holo/thumb2.l")
    lp-dec (lp-of "src/love/holo/decode.l")
+   ; a kore smoke owes the kore lane, though its recipe spells no path, and not the host laws'
+   lp-ks (lp-of "test/kore/procfs.sh")
    lp-cli (hark [cr-love cr-app "--lanes" "HEAD" "HEAD"])
    _ (test
       (all (l \ elem l lp-x) ["test_moon" "test_clay" "test_cca64" "test_ccwasm" "test_ccport" "test_moonfuzz" "test_holo"])
@@ -718,6 +720,7 @@
       (lp-cov "src/tools/pp.sh" = ["test_p"])
       !(two? (peep lp-cov "src/love/gen.h" ())) !(two? (peep lp-cov "$(ho)/src/x.l" ())) !(two? (peep lp-cov "src/x.l" ()))
       (elem "test_g" lp-test) (elem "test_hostnif" lp-test)
+      (elem "test_kore" lp-ks) !(elem "test_hostnif" lp-ks)
       (elem "test_ccport" lp-names) (elem "test_fixpoint" lp-names)
       (elem "test_fixpoint" lp-gl) (elem "test_bakerep" lp-gl) (elem "test_gcstress_bake" lp-gl)
       !(elem "test_clay" lp-names)

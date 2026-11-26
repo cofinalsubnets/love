@@ -39,6 +39,7 @@
                "test_ccthumb1" "test_ccthumb2" "test_ccport" "test_fixpoint" "test_moonfuzz" "test_libc" "test_inle"]
    lanes-rules
     [["" ["src/apps/kore/*"] ["test_kore" "test_hostnif"] ""]
+     ["" ["test/kore/*"] ["test_kore"] ", whose recipe names its scripts by a loop's variable"]
      ["" ["src/apps/lush.l" "src/apps/cook.l" "src/apps/bee.l" "src/apps/lanemap.l" "src/apps/hosts.l"] ["test_hostnif"] ""]
      ["" ["test/host/*" "test/gate/lanes.sh"] ["test_hostnif"]
       "; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)"]

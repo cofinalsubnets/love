@@ -191,6 +191,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 <!-- lanes: laid by `love bee --lanes-doc` from src/apps/lanemap.l; edit there -->
 - `src/apps/kore/*` -> `test_kore` `test_hostnif`
+- `test/kore/*` -> `test_kore`, whose recipe names its scripts by a loop's variable
 - `src/apps/lush.l`, `src/apps/cook.l`, `src/apps/bee.l`, `src/apps/lanemap.l`, `src/apps/hosts.l` -> `test_hostnif`
 - `test/host/*`, `test/gate/lanes.sh` -> `test_hostnif`; a path a lane's recipe in `test/test.mk` names owes that lane, a source as well as a test (`test/gate/gcshard.sh` -> `test_gcstress` `test_gcstress_bake`, `src/apps/vi/core.l` -> `test_vi`)
 - `test/gate/lanes.sh` -> `test_lanesremote`
