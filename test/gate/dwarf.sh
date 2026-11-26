@@ -66,6 +66,28 @@ for t in x64 a64 rv64 rv32 thumb2 thumb2sp arm; do
     [ -s "$d/r.fns" ] && [ "$n" = 0 ] || { echo "FAIL $name: $t raster.c: $n of `wc -l < "$d/r.fns"` functions without an fde"; exit 1; }
   fi
 done
+# under -Os paths that restored and paths that need not share a tail: each function still has an fde
+cat > "$d/e.c" <<'EOF'
+long opq(long);
+long rec(long n) {
+  if (n < 2) return n;
+  long a = rec(n - 1);
+  if (a > 40) return a;
+  return a + rec(n - 2); }
+long many(long a, long b, long c, long d, long e) {
+  long x = opq(a), y = opq(b), z = opq(c);
+  if (x > y) return opq(x + z) + d + x;
+  if (y > z) return y + e + a;
+  if (x == 7) return z;
+  return opq(x * y + z) + b + c + d + e + x; }
+EOF
+for t in x64 a64 i386; do
+  mc -t $t -os linux -Os -g -c "$d/e.c" -o "$d/e.$t.o"
+  if [ -n "$dd" ]; then
+    n=`"$dd" --debug-frame "$d/e.$t.o" | grep -c ' FDE '`
+    [ "$n" = 2 ] || { echo "FAIL $name: $t -Os has $n of 2 fdes"; exit 1; }
+  fi
+done
 
 # types and globals: a struct that points at itself and a pair that point at each other, each
 # compile held to 1 GB and a minute, so a walk that never ends fails here and takes no more
@@ -286,9 +308,9 @@ regs() {
   [ `wc -l < "$b/ra"` = `echo $r | wc -w` ] && cmp -s "$b/ra" "$b/rb" && grep -q '^top + ' "$b/gdbd" \
     || { cat "$b/gdbd"; fail "$t's callee-saved registers through mid's frame"; }
 }
-# the same on a64, rv64, rv32, mips and arm, under qemu's user stub
-for t in a64 rv64 rv32 mips arm; do
-  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; rv32) q=qemu-riscv32;; arm) q=qemu-arm;; *) q=qemu-mips;; esac
+# the same on a64, rv64, rv32, mips, arm and i386, under qemu's user stub
+for t in a64 rv64 rv32 mips arm i386; do
+  case $t in a64) q=qemu-aarch64;; rv64) q=qemu-riscv64;; rv32) q=qemu-riscv32;; arm) q=qemu-arm;; i386) q=qemu-i386;; *) q=qemu-mips;; esac
   [ -f "$d/two.$t" ] || mc -t $t -os linux -g "$d/t.c" "$d/u.c" -o "$d/two.$t"
   if [ -z "$gdb" ] || ! command -v $q > /dev/null 2>&1 || ! "$gdb" -q -batch -nx -ex "file $d/two.$t" -ex 'info line main' 2>/dev/null | grep -q 'Line 9'; then
     gate_partly "$name: no gdb or $q for $t, its session skipped"; continue
@@ -310,10 +332,10 @@ for t in a64 rv64 rv32 mips arm; do
       -ex 'break *al' -ex 'break l.c:19' -ex continue -ex 'echo D\n' -ex 'print b' -ex continue -ex 'echo E\n' -ex 'print p' -ex kill
   l=`sed -n 's/^\([A-E]\)$/\1/p; s/^\$[0-9]* = //p' "$d/gdbl.$t" | tr '\n' ' '`
   [ "$l" = 'A 200 "abc" 22 5 100 0 B 9 41 5 C 5 77 22 D 7 E 42 ' ] || { cat "$d/gdbl.$t"; echo "FAIL $name: $t's gdb's locals: $l"; exit 1; }
-  [ $t = arm ] || continue
+  case $t in arm) r='r4 r5 r6 r7 r8 r9 r10 d8 d9 d10 d11 d12 d13 d14 d15';; i386) r='ebx ebp esi edi';; *) continue;; esac
   mc -t $t -os linux -g "$d/fd.c" -o "$d/fd.$t"; mkdir -p "$d/$t"
-  arm() { sp=$1; so=$2; shift 2; ses $sp.arm arm/$so "$@" -ex kill; }
-  regs arm "$d/arm" arm r4 r5 r6 r7 r8 r9 r10 d8 d9 d10 d11 d12 d13 d14 d15
+  user() { sp=$1; so=$2; shift 2; ses $sp.$t $t/$so "$@" -ex kill; }
+  regs user "$d/$t" $t $r
 done
 # the thumbs, on a board under qemu-system-arm: by line, bt, finish and the locals, and d8-d15 given back to the caller
 have() { command -v $1 > /dev/null 2>&1; }
@@ -351,4 +373,4 @@ if [ -n "$gdb" ] && have arm-none-eabi-gcc && have arm-none-eabi-ld && have qemu
 else
   gate_partly "$name: no gdb for arm, arm-none-eabi toolchain or qemu-system-arm, the thumbs' sessions skipped"
 fi
-echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; on mips, arm and the thumbs' boards too, less the copies; every function of raster.c has an fde"
+echo "dwarf: two units on x64 a64 rv64 rv32 verified, gdb breaks by line in each and unwinds, reads types, globals, locals and inlined copies; on mips, arm, i386 and the thumbs' boards too, less the copies; every function of raster.c has an fde"
