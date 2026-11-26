@@ -1094,6 +1094,15 @@
    _ (pins tb 'p [3.0 0.6 0.0] 'v [-5.0 0.5 0.0] 'rest 0) _ (pins lb 'p [5.3 1.5 5.3] 'v [0.0 0.0 0.0] 'rest 0)
    _ (each ^120 (_ \ (pin ts 'dt (1.0 / 30.0), world-move ts)))
  (test (tb 'p 0 > 1.0) (lb 'rest = 1) (mag (lb 'p 1 - 0.3 - lb 'r) < 0.02)))
+; one at rest on a lift is woken as the lift moves, carried up on its platform and let down
+; with it, at rest again each time
+(: ll (lv "(room [-9 0 -9] [9 6 9]) (lift [5 0.3 5] 1.6 3 (texture 8 8 1 '((fill 0.5)))) (ball [5 0 5]) (start [-6 0 -6] 0 0)")
+   ls (world-new 40 24 ll "") lc (ls 'balls 0) _ (pins lc 'p [5.3 1.5 5.3] 'v [0.0 0.0 0.0] 'rest 0)
+   (lgo n) (each ^n (_ \ (pin ls 'dt (1.0 / 30.0), world-move ls)))
+   _ (lgo 120) l0 [(lc 'p 1) (lc 'rest)]
+   _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (k / 30.0), lgo 1))) _ (lgo 30) l1 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
+   _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (1.0 - k / 60.0), lgo 1))) _ (lgo 60) l2 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
+ (test (l0 1 = 1) (mag (l0 0 - 0.3 - lc 'r) < 0.02) (l1 1 = 1) (mag (l1 0 - 0.3 - lc 'r) < 0.02) (l2 1 = 1) (mag (l2 0 - 0.3 - lc 'r) < 0.02)))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
