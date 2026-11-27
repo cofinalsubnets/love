@@ -2302,15 +2302,38 @@
                      (: o (t * (w - 0.05)) [(xz (l0 + o) m) (xz (l0 + o + w) m)]))
                [(ab 0 0) (ab 0 1) (ab 1 0) (ab 1 1) (d 'y + d 'h) (d 'y)]))
         ^#(lv 'doors)))
+ ; ..a flat face of corners ps as a slab t either side of it, walled along each edge
+ (face-slab ps t) (: n (unit (cross (c- (ps 2) (ps 0)) (c- (ps 1) (ps 0)))) k #ps
+   m (c* (1.0 / k) (foldl c+ [0.0 0.0 0.0] ps))
+   (edge i) (: a (ps i) b (ps ((i + 1) % k)) o (unit (cross (c- b a) n)) o2 (dot o (c- m a) > 0.0 ? (c* -1.0 o) o) [o2 (dot o2 a)])
+   ([[n (dot n m + t)] [(c* -1.0 n) (t - dot n m)]] + map edge ^k))
+ ; ..a car's walls, floor, roof, glass and door leaves where it has got to on its track, each a
+ ; face [corners]; none once it is gone
+ (car-faces c s) (: A (c 'ax) h (peep c 'hull () @ () (: h (car-hull c) (pin c 'hull h, h)) h h)
+   u (along A) (at p d) (c+ p (c* d u))
+   m (h 'cd) dc (c 'dc) w (c 'dw) y0 (c 'y0) y1 (y0 + c 'dh)
+   (leaf e) (: l0 (e < 0.0 ? (dc - 0.5 * w) dc) l1 (e < 0.0 ? dc (dc + 0.5 * w)) d (s 'o + e * s 'door * (0.5 * w - 0.05))
+     (map (q \ at q d) [(P A l0 y0 m) (P A l1 y0 m) (P A l1 y1 m) (P A l0 y1 m)]))
+   (s 'ph = 'gone ? () (map (f \ map (q \ at q (s 'o)) (take 4 f)) (h 'solid + h 'glass) + map leaf [-1.0 1.0])))
+ ; ..how fast it goes along its track
+ (car-vel c s) (s 'ph = 'go ? (c* ((c 'leave < 0.0 ? -1.0 1.0) * s 'v) (along (c 'ax))) [0.0 0.0 0.0])
+ ; ..its span where it has got to, [lo hi], with a hand's room
+ (car-box c s) (: u (along (c 'ax)) d (s 'o) (P2 a y ac) (c+ (P (c 'ax) a y ac) (c* d u))
+   lo (P2 (c 'a0) (c 'y0) (c 'c0)) hi (P2 (c 'a1) (c 'y1) (c 'c1))
+   [(map (k \ min (lo k) (hi k) - 0.3) ^3) (map (k \ max (lo k) (hi k) + 0.3) ^3)])
  ; ..what in the level moves, each a box [lo hi] in the same order frame to frame: the gates'
- ; and doors' leaves and the lifts' parts. one that moved since the last frame wakes what rests where it
+ ; and doors' leaves, the lifts' parts and the cars. one that moved since the last frame wakes what rests where it
  ; was or is, so the rest falls or is pushed as anywhere; a new kind of thing that moves lists
  ; its boxes here and nothing else
  (moving-boxes st) (: lv (st 'lvl)
    (seg-box q) [[(min (q 0) (q 2)) (q 5) (min (q 1) (q 3))] [(max (q 0) (q 2)) (q 4) (max (q 1) (q 3))]]
    (map (i \ seg-box (gate-seg (lv 'gates i) (st 'gates i))) ^#(lv 'gates) + map seg-box (door-segs st)
-    + catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))
+    + catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())
+    + map (i \ car-box (lv 'cars i) (st 'cars i)) ^#(peep lv 'cars ())))
  (wake-moved! st) (: now (moving-boxes st) was (peep st 'mvb ()) _ (pin st 'mvb now)
+   ; ..and how fast each lift rises, from where it was
+   lo0 (peep st 'lift-o ()) los (map (s \ s 'o) (st 'lifts)) dt (peep st 'dt (1.0 / fps))
+   _ (pins st 'lift-o los 'lift-v (#lo0 = #los ? (map (i \ (los i - lo0 i) / dt) ^#los) (map (_ \ 0.0) los)))
    ch (? (#now != #was) () (filter two? (map (i \ (now i = was i ? () [(map (k \ min (now i 0 k) (was i 0 k)) ^3) (map (k \ max (now i 1 k) (was i 1 k)) ^3)])) ^#now)))
    (by? b q) (: p (b 'p) m (b 'r + 0.05) (all (k \ q 0 k - m < p k && p k < q 1 k + m) ^3))
    (each (filter (b \ b 'rest = 1 && peep b 'held 0 = 0 && peep b 'in () = () && any (by? b) ch) (st 'balls))
@@ -2365,7 +2388,7 @@
     + map (q \ bx [(x + q 0 * (h - r)) (y + 0.5 * H) (z + q 1 * (h - r))] [r (0.5 * H) r]) [[-1 -1] [1 -1] [1 1] [-1 1]]
     + catmap (u \ [(bx [x (y + u) (z - h + r)] [h r r]) (bx [x (y + u) (z + h - r)] [h r r])]) [0.55 (H - r)]))
  ; ..what a body keeps a hand from near p but no brush is, among W's brushes: the walls in the
- ; plan, the doors' leaves, the trees' trunks, the lifts; laid again only as they change, a gate swinging, a lift
+ ; plan, the doors' leaves, the trees' trunks, the lifts, the cars; laid again only as they change, a gate swinging, a lift
  ; rising
  (ball-walls! st W p) (: lv (st 'lvl) x (p 0) z (p 2)
    (near? lo hi) (lo 0 - 1.0 < x && x < hi 0 + 1.0 && lo 2 - 1.0 < z && z < hi 2 + 1.0)
@@ -2373,9 +2396,16 @@
               (walls-near st x z + door-segs st))
    tk (filter (q \ (: s (q 0) near? (map (k \ min (s 0 k) (s 1 k) - s 2) ^3) (map (k \ max (s 0 k) (s 1 k) + s 2) ^3)))
               (catmap (t \ (: l (peep t 'trunk ()) (map (i \ [(l i) (i = 0 ? 1.0 0.0)]) ^#l))) (peep lv 'trees ())))
-   lb (filter (q \ near? (q 0) (q 1)) (catmap (i \ lift-boxes (lv 'lifts i) (st 'lifts i)) ^#(peep lv 'lifts ())))
-   key [ws tk lb]
-   (key = W 'ws ? W (pins W 'ws key 'brushes (W 'pb + map wall-slab ws + map (q \ trunk-planes (q 0) (q 1)) tk + map (q \ box-planes (q 0) (q 1)) lb) 'P ())))
+   lvs (peep st 'lift-v ())
+   lb (filter (q \ near? (q 0) (q 1)) (catmap (i \ (: u [0.0 (i < #lvs ? (lvs i) 0.0) 0.0] (map (b \ b + [u]) (lift-boxes (lv 'lifts i) (st 'lifts i))))) ^#(peep lv 'lifts ())))
+   cf (catmap (i \ (: c (lv 'cars i) q (st 'cars i) b (car-box c q) u (car-vel c q)
+                      (near? (b 0) (b 1) && b 0 1 - 1.0 < p 1 && p 1 < b 1 1 + 1.0 ? (map (f \ [f u]) (car-faces c q)) ())))
+              ^#(peep lv 'cars ()))
+   key [ws tk lb cf]
+   ; ..each moving brush's velocity, by its place among them
+   n0 (#(W 'pb) + #ws + #tk)
+   bv (foldl (\ t j (: q (j < #lb ? (lb j 2) (cf (j - #lb) 1)) (pin t (n0 + j) q))) {} ^(#lb + #cf))
+   (key = W 'ws ? W (pins W 'ws key 'brushes (W 'pb + map wall-slab ws + map (q \ trunk-planes (q 0) (q 1)) tk + map (q \ box-planes (q 0) (q 1)) lb + map (f \ face-slab (f 0) (0.5 * car-t)) cf) 'bv bv 'P ())))
  (ball-tumble st b dt) (: W (ball-faces st b) p (b 'p) g (grav-at (st 'lvl) (p 1)) v0 (b 'v)
    o (peep b 'tb () @ () (: o (thing-of st b) (pin b 'tb o, o)) o o)
    _ (pins o 'p p 'v v0 'q (b 'q) 'w (peep b 'w [0.0 0.0 0.0]) 'still 0 'idle (peep o 'idle 0.0))

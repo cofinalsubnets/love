@@ -141,5 +141,18 @@
        (f 0 'v 0 > 0.5)
        (gap < 1e-9) (map (b \ b 'still) L = map (b \ b 'still) C) (C 0 'p 0 > 0.0)))
 
+; --- a moving brush: a floor sliding under a box carries it to its speed; a wall moving into
+; a ball on a still floor pushes it off rolling, slower than the wall, no blow; and C answers as
+; love does ---
+(: (run e bs brs bv t) (: W (pins (tb-world bs brs) 'engine e 'bv bv) (tb-step W t, bs))
+   fl [[[0.0 1.0 0.0] 0.0]] wl [[[-1.0 0.0 0.0] 1.0] [[1.0 0.0 0.0] -0.2]]
+   (box _) [(tb-box [0.0 0.15 0.0] [0.2 0.15 0.2] 1.0)]
+   (ball _) [(pins (tb-sphere [-0.01 0.2 0.0] 0.2 1.0) 'e 0.8)]
+   bL (run 'love (box ()) [fl] {0 [1.0 0.0 0.0]} 0.5) bC (run 'c (box ()) [fl] {0 [1.0 0.0 0.0]} 0.5)
+   wL (run 'love (ball ()) [fl wl] {1 [0.5 0.0 0.0]} 0.5) wC (run 'c (ball ()) [fl wl] {1 [0.5 0.0 0.0]} 0.5)
+   (gap L C) (foldl max 0.0 (catmap (i \ catmap (k \ map (j \ mag (L i k j - C i k j)) ^(k = 'q ? 4 3)) ['p 'q 'v 'w]) ^#L))
+ (test (mag (bC 0 'v 0 - 1.0) < 0.02) (bC 0 'p 0 > 0.3) (0.25 < wC 0 'v 0) (wC 0 'v 0 < 0.5) (wC 0 'p 0 > 0.1)
+       (gap bL bC < 1e-9) (gap wL wC < 1e-9)))
+
 (test_fin ())
 (puts "tumble: ok\n")

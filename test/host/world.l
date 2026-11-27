@@ -1112,6 +1112,15 @@
       _ (go 40) b (s 'balls 0) _ (pins b 'p [1.0 0.5 1.2] 'v [0.0 1.0 4.0] 'rest 0) _ (go 30) (b 'p 2))
    dr "(door [1 0 2.1] 0.9 2)" dh "(by-hand (door [1 0 2.1] 0.9 2))"
  (test (dshot dr "[5.5 0 0.5]" 0 < 2.0) (dshot dr "[1.5 0 1.0]" 0 > 2.3) (dshot dh "[5.5 0 0.5]" 0 < 2.0) (dshot dh "[5.5 0 0.5]" 1 > 2.3)))
+; a ball let fall in a car lands on its floor, not the track's bed under it, comes back off its
+; end, and rides out on its floor as the car leaves, held in it, not thrown about
+(: cr (lv "(room [-30 -1 -3.2] [30 3 6]) (solid (box [-30 -1 -0.2] [30 0 6])) (start [0 0 3] 0 0) (train [-5 0 -2.8] [5 2.3 -0.2] (door [0 0 -0.2] 1.2 2) -40) (ball [2 0 -1.5])")
+   cs (world-new 40 24 cr "") cb (cs 'balls 0) _ (pins cb 'p [2.0 1.0 -1.5] 'v [3.0 0.0 0.0] 'rest 0)
+   (cgo n) (each ^n (_ \ (pin cs 'dt (1.0 / 30.0), world-move cs)))
+   _ (cgo 100) c0 [(cb 'p 0) (cb 'p 1) (cs 'cars 0 'ph)]
+   hs (map (_ \ (cgo 3, [(cb 'p 0 - cs 'cars 0 'o) (cb 'p 1)])) ^30) c1 [(cs 'cars 0 'ph) (cs 'cars 0 'o)]
+ (test (c0 2 = 'hold) (c0 0 < 5.0) (mag (c0 1 - 0.16) < 0.02) (c1 0 = 'go) (c1 1 < -2.0)
+       (all (h \ mag (h 1 - 0.16) < 0.03 && h 0 < 5.0 && h 0 > -5.0) hs)))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
