@@ -46,3 +46,13 @@ extern long host_va(int n, ...);
 long peer_calls_back(void) { struct big b = host_make(9); return b.a + b.b + b.c + b.d + b.e; }
 int peer_calls_char(void) { return host_char((char) 233); }
 long peer_calls_va(void) { struct big x = { 1, 0, 0, 0, 2 }, y = { 3, 0, 0, 0, 4 }; return host_va(2, x, y); }
+/* an int composite past the x registers goes to the stack and closes them; the v file stays
+ * open, so a later HFA and double still take v registers (AAPCS64 C.13) */
+struct s8 { int a, b; };
+struct d2 { double a, b; };
+long peer_stk(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct s8 s, struct d2 d, double e)
+{ return a0 + a7 * 10 + s.a * 100 + s.b * 1000 + (long) d.a * 10000 + (long) d.b * 100000 + (long) e * 1000000; }
+extern long host_stk(long, long, long, long, long, long, long, long, struct s8, struct d2, double);
+extern long host_vstk(long, long, long, long, long, long, long, long, struct s8, ...);
+long peer_calls_stk(void) { struct s8 s = { 3, 4 }; struct d2 d = { 5, 6 }; return host_stk(1, 0, 0, 0, 0, 0, 0, 2, s, d, 7.0); }
+long peer_calls_vstk(void) { struct s8 s = { 3, 4 }; return host_vstk(1, 0, 0, 0, 0, 0, 0, 2, s, 5L, 6L); }
