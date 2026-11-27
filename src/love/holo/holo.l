@@ -225,7 +225,6 @@
    (thumb2? t) (elem t '(thumb2 thumb2sp arm))         ; ..in thumb-2
    (thumb-hosted? t) (t = 'arm)                        ; ..with a kernel under it
    (aprofile? t) (t = 'arm)                            ; ..on an A-profile core
-   (thumb-framed? t) (thumb? t && !(thumb-hosted? t))  ; ..whose frames -g describes: the hosted lays none
    (lower-with be ins)         (peep be 'lower 0 ins)
    (patch-with be k t s w aux) (peep be 'patch 0 k t s w aux)
    ;; the linker's door onto the same encoders: a rel relocation keeps its addend (and a

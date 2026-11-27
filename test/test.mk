@@ -10,7 +10,7 @@
   test_cts_rv64 test_cts_wasm test_disk test_dist test_distboot test_doc test_drat test_drv test_dtb test_ffalloc \
   test_elf32 test_encver test_extra test_extract test_fat test_fat32 test_filemode test_fixpoint \
   test_forge test_freebsd test_freebsd_a64 test_freebsd_rv64 test_front test_gc test_gcheck test_gcstress test_gcstress_full \
-  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
+  test_gates test_gen test_glaze test_glazebench test_glazefuzz test_gz test_standalone test_harp test_hearts test_hearts_boot test_hearts_objtool test_hearts_x64 test_sqfs test_ext4 test_hdiff test_ccwarn test_holo test_holofuzz test_holowasm test_hook \
   test_envimage test_host test_hostegg test_hostnif test_inle test_kboot test_kpier test_kernel_a64 test_kernel_rpi3 test_kernel_rv64 test_kernel_vmx test_kernel_wasm test_kore \
   test_kverb test_libc test_love0 test_love0_tco0 test_lux test_moon test_moonfuzz test_mps2 test_mps2_t1 \
   test_mps2_build test_mps2_wake test_mx test_netbsd test_netbsd_a64 test_netbsd_rv64 test_microbit test_nrf52840 test_nucleo446 test_nucleo446_smoke \
@@ -186,6 +186,7 @@ hostnif_tests += test/host/thumbkeys.l   # the arm family's questions, by a hand
 hostnif_tests += test/host/chucho.l   # the mail reader, headless, likewise
 hostnif_tests += test/host/pack.l   # directory packs: a verb runs, the table wins, a bad manifest refused
 hostnif_tests += test/host/grap.l test/host/chem.l   # grap and chem without plan 9 or groff
+hostnif_tests += test/host/tumble.l   # rigid bodies: rest, roll, friction, energy
 # test/host/sh.l drives out/lush via out/love, not PATH's love
 hostnif_tests += test/host/deflate.l   # deflate streams off the format's description, through every decoder
 hostnif_tests += test/host/xz.l test/host/bz2.l test/host/zstd.l   # the xz, bzip2 and zstd pulls against their whole-string reads
@@ -474,9 +475,13 @@ test_clay: host
 test_moonfuzz: host
 	@echo TEST test/gate/moonfuzz.l "(moon refusal fuzz: 8 mutants per file over test/cc)"
 	@LOVE_BUDGET_MB=400 timeout 600 $m -l test/gate/moonfuzz.l < /dev/null || { $(fuzzlate); exit 1; }
-# calls between mooncc and gcc, clang on x64, drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
+# calls between mooncc and gcc, clang on x64, i386 and a64 (an a64 host, else qemu), drawn from a seed. ABI_N=2000 ABI_SEED=7 for more
 test_abi: host
-	@$(gsh) test/gate/abi.sh $(ho) $m $${ABI_N:-200} $${ABI_SEED:-1}
+	@$(gsh) test/gate/abi.sh $(ho) $m x64 $${ABI_N:-200} $${ABI_SEED:-1}
+test_abi_i386: host
+	@$(gsh) test/gate/abi.sh $(ho) $m i386 $${ABI_N:-200} $${ABI_SEED:-1}
+test_abi_a64: host
+	@$(gsh) test/gate/abi.sh $(ho) $m a64 $${ABI_N:-200} $${ABI_SEED:-1}
 # test_forge -- love-written nifs via holo agree with the C nif they deopt into; none fitted fails
 test_forge: host
 	@echo TEST test/gate/forge.l "(forge: love IR -> holo -> nif -> differential)"
@@ -808,6 +813,11 @@ test_hearts_boot: host $(hb_love) $(ho)/.dist-cat.l
 	@$(MAKE) -s a=a64 $(ko)/love-a64.elf
 	@echo TEST test/gate/hearts-boot.sh
 	@DL=$(dl) $(gsh) test/gate/hearts-boot.sh $(ho)/love $(hb_love) $(ho)/.dist-cat.l $(ko)/love-a64.elf
+# test_hearts_x64 -- the x86_64 defconfig bzImage by mooncc, started by OVMF as its own EFI program and
+# booted to init under q35; heavy, opt-in
+test_hearts_x64: host
+	@echo TEST test/gate/hearts-x64.sh
+	@DL=$(dl) $(gsh) test/gate/hearts-x64.sh $(ho)/love
 # test_hearts_objtool -- x86's objtool by mooncc on elfutils' libelf, its vmlinux.o pass the host's; opt-in
 test_hearts_objtool: host
 	@echo TEST test/gate/hearts-objtool.sh
