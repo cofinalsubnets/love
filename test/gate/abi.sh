@@ -22,7 +22,7 @@ if [ $t = a64 ]; then
   a64_how "$m"
   [ -n "$a64_via" ] || gate_skip "$name: no a64 host and no qemu-aarch64, skipped"
 fi
-rm -rf "$d"; mkdir -p "$d/b" "$d/res"
+rm -rf "$d"; mkdir -p "$d/b" "$d/res"; d=`cd "$d" && pwd`
 echo "ABI $d${a64_via:+ (run by $a64_via)}"
 fl="-w -Wno-psabi -O2 -fno-pie -fno-stack-protector"
 die() { echo "FAIL $name: $*"; exit 1; }
