@@ -1,0 +1,39 @@
+# what mooncc is known to do otherwise on a64, by kind; every line is held both ways
+# varefuse KIND      a va_arg of it is refused: "no lane for this va_arg on a64"
+# pass, vapass KIND  refused by value: "no lane for" in the caller, and the callee where it takes one, fixed or variadic
+# wrong, vawrong     every pairing across compilers goes wrong, each with itself is right
+# split, vasplit     gcc and clang disagree, and ours is right both ways with the peer named
+# varight KIND       right as a va_arg, though not as a fixed argument
+# layout WORD OURS THEIRS
+pass w1
+pass empty
+pass al16
+pass al16m
+varefuse i128
+varefuse cfloat
+varefuse cdouble
+varefuse f1
+varefuse f2
+varefuse f3
+varefuse f4
+varefuse d1
+varefuse d2
+varefuse d3
+varefuse ea
+varefuse cfs
+wrong ldouble
+vawrong ldouble
+vapass al16
+vapass al16m
+vapass w1
+varight empty
+layout ea.align 8 16
+layout ea.sizeof 8 16
+layout ldouble.align 8 16
+layout ldouble.sizeof 8 16
+layout pkm5.align 4 1
+layout pkm5.b 4 1
+layout pkm5.sizeof 8 5
+wrong ea
+wrong pkm5
+vawrong pkm5

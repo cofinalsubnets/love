@@ -1,5 +1,5 @@
 ; test/cc/abi/gen.l -- calls between two compilers, drawn from a seed: a caller and a callee.
-;   love gen.l TARGET EXPECT SEED N DIR   TARGET x64 or i386; EXPECT names the kinds mooncc refuses or lays otherwise
+;   love gen.l TARGET EXPECT SEED N DIR   TARGET x64, i386 or a64; EXPECT names the kinds mooncc refuses or lays otherwise
 ; every kind is swept through each place first, so coverage does not rest on the seed.
 ; DIR/GROUP-caller.c GROUP-callee.c, layout.c, report.c (the names) and kinds
 (borrow 'posix)
@@ -20,7 +20,7 @@
    (un nm cls lv body) (k nm ("union " + nm) cls lv ("union " + nm + " " + body + ";"))
    (arr a n t) (map (i \ [(a + "[" + show i + "]") t]) ^n)
    (fs names t) (map (a \ [("." + a) t]) names)
-   kinds [(sc "bool" "_Bool" "I" "b") (sc "char" "char" "I" "c") (sc "schar" "signed char" "I" "c")
+   kinds [(sc "bool" "_Bool" "I" "b") (sc "char" "char" "I" "ch") (sc "schar" "signed char" "I" "c")
           (sc "uchar" "unsigned char" "I" "uc") (sc "short" "short" "I" "s") (sc "ushort" "unsigned short" "I" "us")
           (sc "int" "int" "I" "i") (sc "uint" "unsigned" "I" "ui") (sc "long" "long" "I" "l")
           (sc "ulong" "unsigned long" "I" "ul") (sc "llong" "long long" "I" "ll")
@@ -66,10 +66,10 @@
    ; a leaf drawn: the words it holds as C text, signs and high halves set, no nan
    (digit s) (string (s (rand #s)))
    (hex n) (glue (times n (_ \ digit "0123456789abcdef")))
-   cty {"c" "signed char" "uc" "unsigned char" "s" "short" "us" "unsigned short" "i" "int" "ui" "unsigned"
+   cty {"c" "signed char" "ch" "char" "uc" "unsigned char" "s" "short" "us" "unsigned short" "i" "int" "ui" "unsigned"
         "l" "long" "ul" "unsigned long" "ll" "long long"}
    ; hex digits by type; a long's are the target's, pinned in main
-   wid {"c" 2 "uc" 2 "s" 4 "us" 4 "i" 8 "ui" 8 "l" 16 "ul" 16 "ll" 16}
+   wid {"c" 2 "ch" 2 "uc" 2 "s" 4 "us" 4 "i" 8 "ui" 8 "l" 16 "ul" 16 "ll" 16}
    (fb _) ("0x" + digit "4c" + digit "1234" + hex 6 + "ull")
    (db _) ("0x" + digit "4c" + digit "01" + digit "159" + hex 13 + "ull")
    (word _) ("0x" + hex 16 + "ull")
@@ -109,16 +109,18 @@
    (zapk kd x) (glue (map (l \ (elem (l 1) ["cf" "cd"]) ? "" (x + l 0 + "=0;")) (kd 'lv)))
 
    ; where the psABI puts each: reg, last (its file's last register), spill (too few left,
-   ; one still free), stack; i386 passes all on the stack. a name for the report and the floor, nothing is laid by it
+   ; one still free), stack; i386 passes all on the stack, a64 counts x64's classes on eight integer registers.
+   ; a name for the report and the floor, nothing is laid by it
    tgt {}
    (count c s) (tally (filter (x \ x = c) (bytes s)))
    (bytes s) (map (i \ s i) ^(#s))
-   (placed ks) (: (go l ni ns) (? (nil? l) ()
+   (placed ks) (: gi (tgt 0 = "a64" ? 8 6)
+                  (go l ni ns) (? (nil? l) ()
                      (: cl (<l 'cls) i (count 73 cl) f (count 83 cl)
                         (? (cl = "") ("none" . go >l ni ns)
-                           (cl = "M" || (i = 0 || ni = 6) && (f = 0 || ns = 8)) ("stack" . go >l ni ns)
-                           (6 < ni + i || 8 < ns + f) ("spill" . go >l ni ns)
-                           (((0 < i && ni + i = 6) || (0 < f && ns + f = 8) ? "last" "reg") . go >l (ni + i) (ns + f)))))
+                           (cl = "M" || (i = 0 || ni = gi) && (f = 0 || ns = 8)) ("stack" . go >l ni ns)
+                           (gi < ni + i || 8 < ns + f) ("spill" . go >l ni ns)
+                           (((0 < i && ni + i = gi) || (0 < f && ns + f = 8) ? "last" "reg") . go >l (ni + i) (ns + f)))))
                   (tgt 0 = "i386" ? (map (x \ x 'cls = "" ? "none" "stack") ks) (go ks 0 0)))
 
    ; one signature: rt and ks kinds, nn named (the rest after `...`)
@@ -177,7 +179,7 @@
               + map (l \ [(l 0) ("(long)&((" + kd 'ty + " *)0)->" + snip (l 0) 1 #(l 0))]) (filter (l \ member? (l 0) && !(l 1 0 = 35)) (kd 'lv)))
    (main a)
     (: t (a 1) _ (pin tgt 0 t)
-       _ (elem t ["x64" "i386"] || (say out ("abi: no target " + t + nl), quit 1))
+       _ (elem t ["x64" "i386" "a64"] || (say out ("abi: no target " + t + nl), quit 1))
        _ (t = "i386" ? (pin wid "l" 8, pin wid "ul" 8) 0)
        ex (map (l \ split " " l) (filter (l \ !(l 0 = 35)) (lines (slurpf (a 2)))))
        (exp w) (map (l \ l 1) (filter (l \ <l = w) ex))
@@ -198,9 +200,11 @@
        odd? (x \ elem (x 'nm) differ)
        plain (filter (x \ !(odd? x)) kt)
        (fsig rt ks) (sig rt ks #ks)
-       (sweep x) [(fsig x (reps 4 lng + [x lng lng x ch x]))
+       ; the integer registers less two, and less one, so a pair lands last and straddles
+       gi (t = "a64" ? 8 6)
+       (sweep x) [(fsig x (reps (gi - 2) lng + [x lng lng x ch x]))
                   (fsig x (reps 7 dbl + [x dbl x ch x]))
-                  (fsig x (reps 5 lng + reps 6 dbl + [x lng dbl ch x int x]))]
+                  (fsig x (reps (gi - 1) lng + reps 6 dbl + [x lng dbl ch x int x]))]
        narrow? (x \ elem (x 'nm) ["bool" "char" "schar" "uchar" "short" "ushort" "float"])
        (vsweep x) [(sig int ([int x] + reps 3 lng + [x dbl x] + reps 7 dbl + [x int x]) 1)]
        vok (filter (x \ !(narrow? x)) plain)
