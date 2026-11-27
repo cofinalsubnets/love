@@ -564,8 +564,8 @@
    (lobfst g bt b off u a)
     (bfpk? bt || a ? (lostu g b off (tsz g bt) (lobfal g a) u)
        [[(stop <>bt) b off u]])
-   ; what a packed unit's chunks may assume: v6-M and xtensa take no word off its alignment
-   (lobfal g a) (a ? a (v6m? g || xt? g || mp? g ? 1 8))
+   ; what a packed unit's chunks may assume: v6-M, xtensa, mips and riscv take no word off its alignment
+   (lobfal g a) (a ? a (v6m? g || xt? g || mp? g || rvm? g && mal? g ? 1 8))
    ; a unit past the word, as two: 8 bytes as its type says, or a packed one's chunks
    (lobfwld g bt b off)
     (bfpk? bt
@@ -592,11 +592,11 @@
    (loma g ty o) (lowb o @ 0 (tal g ty) lb (min (tal g ty) lb))
    ; an lvalue at an a-aligned address: a struct short of it keeps a on its type, the rest ride 'u
    (loal g av ty off a)
-    (? !(sal? g && a < salk g (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
+    (? !(mal? g && a < salk g (stru? ty || arr? ty ? (tal g ty) (tsz g ty))) ['a av ty off]
        (stru? ty) ['a av [<ty <>ty a] off]
        ['u av ty off a])
    ; ..a bitfield's unit its alignment where that falls short, else ()
-   (lobfa g bt a) (sal? g && a < salk g (tsz g bt) ? a)
+   (lobfa g bt a) (mal? g && a < salk g (tsz g bt) ? a)
    ; ..an initializer's slot in the frame, its offset all it knows
    (loelv g ty off) (loal g ['long 'r4 ()] ty off (lowb off @ 0 16 b b))
    ; n bytes at b+off by the chunks a carries, and back
@@ -675,10 +675,10 @@
           'bad)
    ; sz bytes from address s to d + doff, widest first
    (locopy g s d doff sz) (locopya g s d doff sz (wsize g))
-   ; ..no wider than an alignment a, which -mstrict-align holds it to
+   ; ..no wider than an alignment a, where a member's load keeps to its own
    (locopya g s d doff sz a)
     (lomk g @ t (catmap ([p k] \ [[(uldop k) t s p] [(stw k) d (doff + p) t]]) (alchunks sz (loch g a))))
-   (loch g a) (sal? g ? (salk g a) (wsize g))
+   (loch g a) (mal? g ? (salk g a) (wsize g))
    ; an aggregate in the frame: zeroed, then filled from its braces (cgzero and cgfill's arms)
    ; a span of 16 words or more zeroes four words a turn of a loop, from the top down, the
    ; words past the last four and the bytes past the last word straight after
@@ -1627,7 +1627,7 @@
                                       (loeb g 'int x 8 ((pcs 1) 2) @ [w1 f1]
                                          [(ngp g) fi (rg + [[(argr g gi) w0]]) (sk + [['w ['long w1 ()] 8]]) (pre + f0 + f1)]))
                                   ; whole to the block; AAPCS64 then closes the file it wanted
-                                  [(a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
+                                  [(a64? g && 0 < ng ? (ngp g) gi) (a64? g && 0 < nx ? 8 fi) rg (sk + [['s v (8 * aslots g ty)]]) pre])))
                     (lofr? x) (fi < 8 ? [gi (fi + 1) (rg + [[(xmmreg fi) x]]) sk pre] [gi fi rg (sk + [['w v 8]]) pre])
                     (gi < ngp g) [(gi + 1) fi (rg + [[(argr g gi) x]]) sk pre]
                     [gi fi rg (sk + [['w v (wsize g)]]) pre]))))
@@ -2317,7 +2317,7 @@
                                       (ntmp g ty @ off (lomk g @ t
                                          (go u (ngp g) fi (ov + 1) ([nm 'm off ty] . env)
                                              (acc + [['st 'r4 off (argr g gi)] ['ld t 'r4 (ovo + 8 * ov)] ['st 'r4 (off + 8) t]]) post)))
-                                     (go u (a64? g && 0 < ng ? ngp g gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
+                                     (go u (a64? g && 0 < ng ? (ngp g) gi) (a64? g && 0 < nx ? 8 fi) (ov + aslots g ty)
                                          ((nm . ovm ty ov) . env) acc post)))))
                     (lofl? ty ? (8 <= fi) (ngp g <= gi)) (go u gi fi (ov + 1) ((nm . ovm ty ov) . env) acc post)
                     (: fl (lofl? ty) A (fl ? (xmmreg fi) (argr g gi)) g2 (fl ? gi (gi + 1)) f2 (fl ? (fi + 1) fi)

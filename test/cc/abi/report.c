@@ -1,6 +1,6 @@
 /* names what moved: built by the side that links, never by the pair under test */
 #include <stdio.h>
-typedef unsigned long ul;
+typedef unsigned long long ul;
 typedef union { ul u; float f; double d; } cell;
 #include "report.h"
 static int nbad, nck;
@@ -16,7 +16,7 @@ void ck(int q, int side, int n) {
     printf("sig %d ", q);
     if (w[0] == 99) printf("answer");
     else printf(side ? "arg %d, the caller's after the call," : "arg %d", w[0]);
-    printf(" word %d got %016lx want %016lx: %s\n", w[1], got, want, sigs[q]);
+    printf(" word %d got %016llx want %016llx: %s\n", w[1], got, want, sigs[q]);
   }
   for (int i = 0; i < n; i++) G[i].u = 0;
 }

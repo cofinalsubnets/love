@@ -44,6 +44,17 @@ struct f4 peer_mk4(struct f4 r);
 double peer_fdeep(struct f3 q, struct f3 q2, struct f4 r, double d);
 float peer_calls_f2(void);
 struct f2 host_f2(struct f2 p) { struct f2 o = { p.b + 1, p.a * 2 }; return o; }
+struct s8 { int a, b; };
+struct d2 { double a, b; };
+long peer_stk(long, long, long, long, long, long, long, long, struct s8, struct d2, double);
+long peer_calls_stk(void);
+long peer_calls_vstk(void);
+long host_stk(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct s8 s, struct d2 d, double e)
+{ return a0 + a7 * 10 + s.a * 100 + s.b * 1000 + (long) d.a * 10000 + (long) d.b * 100000 + (long) e * 1000000; }
+/* va_start past a named composite on the stack */
+long host_vstk(long a0, long a1, long a2, long a3, long a4, long a5, long a6, long a7, struct s8 s, ...)
+{ va_list ap; va_start(ap, s); long x = va_arg(ap, long), y = va_arg(ap, long); va_end(ap);
+  return a0 + a7 * 10 + s.a * 100 + s.b * 1000 + x * 10000 + y * 100000; }
 static void ck(long got, long want)
 {
 	n_++;
@@ -77,6 +88,9 @@ int main(void)
 	  struct f4 b = peer_mk4(r); ck((long) b.a, 4); ck((long) b.b, 3); ck((long) b.c, 2); ck((long) b.d, 1);
 	  ck((long) peer_fdeep(q, q2, r, 2.0), 1 + 60 + 100 + 4000 + 20000);
 	  ck((long) peer_calls_f2(), 50 + 6); }
+	{ struct s8 s = { 3, 4 }; struct d2 d = { 5, 6 }; long w = 1 + 20 + 300 + 4000 + 50000 + 600000 + 7000000;
+	  ck(peer_stk(1, 0, 0, 0, 0, 0, 0, 2, s, d, 7.0), w); ck(peer_calls_stk(), w);
+	  ck(peer_calls_vstk(), 1 + 20 + 300 + 4000 + 50000 + 600000); }
 	ck(in.a, 1);
 	printf("abi64: %d checks, %d wrong\n", n_, bad_);
 	return bad_;

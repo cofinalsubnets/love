@@ -210,10 +210,10 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/*` -> `test_holo` `test_as` `test_holofuzz` `test_inle`
 - what `-g` lays, `src/apps/moon/{gen,lo,nm,ra,moon}.l`, `src/love/holo/{obj,link}.l`, `test/gate/dwarf.sh`, `test/gate/dwarfcode.sh` -> `test_dwarf` `test_dwarfcode`
 - what moon emits through, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l` -> `test_moon` `test_clay` `test_cca64` `test_cci386` `test_cci386m16` `test_ccarm` `test_ccrv64` `test_ccrv32` `test_ccxtensa` `test_ccmips` `test_ccwasm` `test_ccthumb1` `test_ccthumb2` `test_ccport` `test_fixpoint` `test_moonfuzz` `test_libc` `test_inle`
-- calls between compilers on x64, `src/apps/moon/*`, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`, `test/cc/abi/*`, `test/gate/abi.sh` -> `test_abi`
+- calls between compilers on x64 and i386, `src/apps/moon/*`, `src/love/holo/{x64,holo,gas,dialect,text,obj,elf,link,lds}.l`, `test/cc/abi/*`, `test/gate/abi.sh` -> `test_abi` `test_abi_i386`
 - `src/love/holo/a64.l` -> `test_moon` `test_cca64`
 - `src/love/holo/rv64.l` -> `test_moon` `test_ccrv64` `test_ccrv32`
-- `src/love/holo/i386.l` -> `test_moon` `test_cci386` `test_cci386m16`
+- `src/love/holo/i386.l` -> `test_moon` `test_cci386` `test_cci386m16` `test_abi_i386`
 - `src/love/holo/thumb1.l` -> `test_moon` `test_ccthumb1`
 - `src/love/holo/thumb2.l` -> `test_moon` `test_ccthumb2` `test_ccarm`
 - `src/love/holo/wasm.l`, `src/love/holo/wasmfn.l` -> `test_moon` `test_ccwasm`
@@ -222,7 +222,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 - `src/love/holo/mips.l`, `src/love/holo/decode.l`, `test/holo/mipsrun.l`, `test/holo/mipscodec.l`, `test/holo/mipslink.l`, `test/holo/mipsrel.c`, `test/holo/mipsrela.s`, `test/holo/mipsrelg.s`, `test/holo/mipsrelb.c`, `test/holo/mipsrelm.c`, `test/holo/mipstp.c`, `test/gate/mips.sh` -> `test_mips` `test_ccmips`
 - `src/apps/sb/*` -> `test_sb`
 - `src/apps/roster.l` -> `test_roster`
-- `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool`
+- `src/apps/hearts/*`, `test/gate/hearts-objtool.sh` -> `test_hearts` `test_hearts_boot` `test_hearts_objtool` `test_hearts_x64`
 - `src/inle/a64/*`, `src/inle/mkboot.l`, `src/tools/kflat.l` -> `test_kernel_rpi3`
 - `test_teensy41_board` `test_ch32v203_board` `test_mips_router` run by name only, when a gate's list names one: each writes a board's flash or wants a person by it, and no path owes them
 <!-- /lanes -->
@@ -233,7 +233,7 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 
 Several sessions gate on one box. Two makes in one `out/` race, and a box short of memory reaps gates. A heavy lane waits its turn through `src/apps/locks.l` (`locks-run`; bee's `lock_*` tools):
 
-- heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_gcstress_bake` `test_gcstress_full` `test_boards` `test_hearts` `test_hearts_boot` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
+- heavy: `test_slow` `test_extra` `test_inle` `test_kernel_%` `test_gcstress` `test_gcstress_bake` `test_gcstress_full` `test_boards` `test_hearts` `test_hearts_boot` `test_hearts_x64` `moon-flex` `moon-bison`, and a `make out/love` from a clean `out/`
 - one make at a time in an `out/`: an exclusive lock named by its path
 - a lane that runs on another box takes that box's slot, not a heavy one. the boxes are bee's host registry, the nest's `etc/bee/hosts` (`love bee --hosts`; doc/bee.md, HOSTS): each host's reach, caps, slots and facts, each slot an exclusive lock `host-NAME-N`. the a64 kernel lane boots under kvm on a `kvm-a64` host; the a64 lanes' binaries (`test_cca64` `test_cts_a64` `test_raw_a64` `test_softfp`'s a64 leg, the BSD lanes' local half, `test_love_a64`) are built here, run one batch per ssh by `love bee --on a64-exec`, and compared here; `test_kernel_vmx` boots on a `vt-x` host, in `test_extra` only; the BSD lanes find their boxes by `freebsd-x64` and its kin. with no host the kernel lane runs tcg here, and is heavy, and the binaries run under qemu-aarch64
 
