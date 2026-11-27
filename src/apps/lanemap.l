@@ -84,10 +84,10 @@
      ["" ["src/love/holo/mips.l" "src/love/holo/decode.l" "test/holo/mipsrun.l" "test/holo/mipscodec.l" "test/holo/mipslink.l" "test/holo/mipsrel.c" "test/holo/mipsrela.s" "test/holo/mipsrelg.s" "test/holo/mipsrelb.c" "test/holo/mipsrelm.c" "test/holo/mipstp.c" "test/gate/mips.sh"] ["test_mips" "test_ccmips"] ""]
      ["" ["src/apps/sb/*"] ["test_sb"] ""]
      ["" ["src/apps/roster.l"] ["test_roster"] ""]
-     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool"] ""]
+     ["" ["src/apps/hearts/*" "test/gate/hearts-objtool.sh"] ["test_hearts" "test_hearts_boot" "test_hearts_objtool" "test_hearts_x64"] ""]
      ["" ["src/inle/a64/*" "src/inle/mkboot.l" "src/tools/kflat.l"] ["test_kernel_rpi3"] ""]]
    lanes-heavy ["test_slow" "test_extra" "test_inle" "test_kernel_%" "test_gcstress" "test_gcstress_bake" "test_gcstress_full" "test_boards"
-                "test_hearts" "test_hearts_boot" "moon-flex" "moon-bison"]
+                "test_hearts" "test_hearts_boot" "test_hearts_x64" "moon-flex" "moon-bison"]
    lanes-cost {"test" 195 "test_core" 409 "test_hostnif" 380 "test_ccwarn" 165 "test_fixpoint" 266 "test_bakerep" 730 "test_libc" 190 "test_abi" 76 "test_abi_i386" 124 "test_abi_a64" 70
                "test_hdiff" 1421 "test_vec" 1679 "test_xfixpoint" 2365}
    lanes-chains

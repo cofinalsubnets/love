@@ -19,6 +19,8 @@
    tm-ilp32 '(4 4 8 8 4)
    (tmof tgt) (? (tgt = 'x64) tm-lp64 (elem tgt '(thumb2 thumb2sp arm thumb1 i386 i386m16 rv32 xtensa mips)) tm-ilp32 tm-lp64)
    (wchu? tgt) (elem tgt '(a64 thumb2 thumb2sp arm thumb1))   ; wchar_t is unsigned int
+   thumbt? (cite 'holo 'thumb?)
+   (t32? g) (thumbt? (g 'tgt))            ; AAPCS32: armv7e-m, linux's arm, armv6-M; g a parse or a gen state
    (tmint tm) <tm
    (tmlong tm) (tm 1)
    (tmll tm) (tm 2)

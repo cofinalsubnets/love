@@ -269,10 +269,9 @@
    (g 'over = 'west && next ? (next ()),
     g))
  ; ..and the verb around it: the screen raised here and put back here
- (garage-run _) (: _ (ttytake rove-modes)
-   g (garage-walk ())
-   (ttygive rove-modes,
-    0))
+ (garage-run _) (ttytake rove-modes,
+                  mind garage-walk () (_ \ ttygive rove-modes),   ; put back whatever ends it, a scare too
+                  0)
  garage-usage "usage: love play garage   (h j k l or the arrows walk, y u b n slant, a tap steers; q or esc leaves)"
  (garage-main as) (as @ () (garage-run ())
                         (say err ("garage: " + garage-usage + "\n"), flush err, 2))
