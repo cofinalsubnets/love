@@ -204,18 +204,21 @@
  (hwm hb k) (wharf-wm (hb 'plan) (hb 'lay) (hb 'focus) k @ () 0
                q (: p (hb 'plan) _ (pins hb 'plan (q 0) 'focus (q 1)) (p = q 0 ? (hsoil hb) (hrelay hb))))
 
- ; shutting twice is safe: a child may hang up on a pane the user already shut. a pane on
- ; a hidden face leaves that face's plan; the shown face emptied hands over to the first left
- (hshut hb id) (: p (hpane hb id)
-                  _ (two? p && hpty? p ? (close (hmas p)) 0)
-                  _ (two? p && !(hpty? p) && hstage p 'shut ? (hstage p 'shut ()) 0)   ; a stage's own leavings
-                  _ (pin (hb 'panes) id ())
-                  (elem id (wharf-panes (hb 'plan)) ?
-                     (: pl (wharf-shut (hb 'plan) id)
-                        (pin hb 'plan pl,
-                         ? (id = hb 'focus) (wharf-panes pl @ bs (pin hb 'focus (two? bs ? <bs ()))) 0,
-                         (() = pl && two? (hfaces hb) ? (hgo hb <(hfaces hb)) (hrelay hb))))
-                     (hstow hb id)))
+ ; shutting twice is safe: a child may hang up on a pane the user already shut. the pane
+ ; leaves before its master closes, so the moor that wakes on the close finds nothing to
+ ; shut. a pane on a hidden face leaves that face's plan; the shown face emptied hands over
+ ; to the first left
+ (hshut hb id) (hpane hb id @ p
+                  (atom? p ? 0
+                   (: _ (pin (hb 'panes) id ())
+                      _ (hpty? p ? (close (hmas p)) 0)
+                      _ (!(hpty? p) && hstage p 'shut ? (hstage p 'shut ()) 0)   ; a stage's own leavings
+                      (elem id (wharf-panes (hb 'plan)) ?
+                         (: pl (wharf-shut (hb 'plan) id)
+                            (pin hb 'plan pl,
+                             ? (id = hb 'focus) (wharf-panes pl @ bs (pin hb 'focus (two? bs ? <bs ()))) 0,
+                             (() = pl && two? (hfaces hb) ? (hgo hb <(hfaces hb)) (hrelay hb))))
+                         (hstow hb id)))))
  (hstow hb id) (map (d \ (hb 'faces d @ v
                             (two? v && elem id (wharf-panes <v) ?
                                (: pl (wharf-shut <v id)

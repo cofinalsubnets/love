@@ -503,7 +503,9 @@
  (test (#(gl 'gravs) = 2) (gl 'gravs 0 'dir = 'up) (has? (lv "(room [0 0 0] [1 1 1]) (grav [0 0 0] [1 1 1] 'sideways)") "(grav [x y z] [x y z] DIR)")
        (0.5 < fu < 6.0) (mag (ft - 6.0) < 1e-6) (fo = ft) (oz > 6.6)
        (mag (feet dn) < 1e-6) (#ms = 2)
-       (#(m0 0) = 8 * 12 * grav-n) (#(m0 1) = 4 * 4 * 3 * grav-n) (peep (m0 1) 3 0 = -2)
+       (#(m0 0) = 8 * 4 * grav-n) (#(m0 1) = 4 * 2 * grav-n) (all (t \ peep (m0 1) (4 * t + 3) 0 = 4194364) ^(2 * grav-n))
+       ; ..each a square round its middle, as wide as the round glow it is
+       (: (g k) (peep (m0 0) (iota (4 * grav-n) * 8 + k) 0.0) (all (k \ amax (g k) = 0.06 && amin (g k) = -0.06 && net (g k > 0.0) = 2 * grav-n) [3 4]))
        (net (ys m1 > ys m0) > grav-n // 2) (net (ys m2 < ys (motes-at (ms 1) 0.0)) > grav-n // 2)))
 ;; a street: no face over it, the sky drawn there and none under a ceiling; its walls lit by
 ; the sun on the side it shines on; the sky's hour and cover, a wrong cover refused
@@ -1079,6 +1081,37 @@
        (k0 = 'move) (k1 0 = 'kneel) (k1 1 = 0) (mag (k1 2 - 1.12) < 0.05) (has? fr "Yuki") (has? fr "1  weep") (has? fr "2  leave")
        (k2 0 = 'move) (k2 1 = ()) (kt > 0) (k3 = 0) (k4 0 = 'walk) (mag (k4 1 - eye-h) < 0.05) (k5 > k4 2 + 0.3)
        (has? (lv ("(grave [0 0 0] 0 'x " + yi + ")")) "(grave [x y z] bearing NAME TEXTURE)")))
+; a ball thrown at the fence comes back off it, and off the gate while it is shut
+(: yi "(texture 8 8 1 '((fill 0.1)))"
+   (yb z) (: l (lv ("(void [0 -1 0] [10 4 10]) (solid (box [0 -1 0] [10 0 10])) (fence [[5 0 6] [5 0 9.5]] 1 " + yi + ") (fence [[5 0 0.5] [5 0 4]] 1 " + yi
+                    + ") (gate [5 0 6] [5 0 4] 1 90 " + yi + ") (ball [7 0 " + z + "]) (start [8 0 1] 270 0)"))
+            s (world-new 40 24 l "") b (s 'balls 0) _ (pins b 'p [6.0 0.4 (b 'p 2)] 'v [-5.0 0.5 0.0] 'rest 0)
+            _ (each ^30 (_ \ (pin s 'dt (1.0 / 30.0), world-move s))) (b 'p 0))
+   yf (yb "8") yh (yb "5")
+ (test (yf > 5.0) (yh > 5.0)))
+; a ball thrown at a tree comes back off its trunk, and one let fall on a lift stops on its
+; platform, not the floor under it
+(: tl (lv "(room [-9 0 -9] [9 4 9]) (tree [0 0 0] 7 (texture 8 8 1 '((fill (grey 0.4))))) (lift [5 0.3 5] 1.6 3 (texture 8 8 1 '((fill 0.5)))) (ball [3 0 0]) (ball [5 0 5]) (start [-6 0 -6] 0 0)")
+   ts (world-new 40 24 tl "") tb (ts 'balls 0) lb (ts 'balls 1)
+   _ (pins tb 'p [3.0 0.6 0.0] 'v [-5.0 0.5 0.0] 'rest 0) _ (pins lb 'p [5.3 1.5 5.3] 'v [0.0 0.0 0.0] 'rest 0)
+   _ (each ^120 (_ \ (pin ts 'dt (1.0 / 30.0), world-move ts)))
+ (test (tb 'p 0 > 1.0) (lb 'rest = 1) (mag (lb 'p 1 - 0.3 - lb 'r) < 0.02)))
+; one at rest on a lift is woken as the lift moves, carried up on its platform and let down
+; with it, at rest again each time
+(: ll (lv "(room [-9 0 -9] [9 6 9]) (lift [5 0.3 5] 1.6 3 (texture 8 8 1 '((fill 0.5)))) (ball [5 0 5]) (start [-6 0 -6] 0 0)")
+   ls (world-new 40 24 ll "") lc (ls 'balls 0) _ (pins lc 'p [5.3 1.5 5.3] 'v [0.0 0.0 0.0] 'rest 0)
+   (lgo n) (each ^n (_ \ (pin ls 'dt (1.0 / 30.0), world-move ls)))
+   _ (lgo 120) l0 [(lc 'p 1) (lc 'rest)]
+   _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (k / 30.0), lgo 1))) _ (lgo 30) l1 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
+   _ (each ^30 (k \ (pin (ls 'lifts 0) 'o (1.0 - k / 60.0), lgo 1))) _ (lgo 60) l2 [(lc 'p 1 - ls 'lifts 0 'o) (lc 'rest)]
+ (test (l0 1 = 1) (mag (l0 0 - 0.3 - lc 'r) < 0.02) (l1 1 = 1) (mag (l1 0 - 0.3 - lc 'r) < 0.02) (l2 1 = 1) (mag (l2 0 - 0.3 - lc 'r) < 0.02)))
+; a ball thrown at a door comes back off its leaf while it is shut, and goes through once it
+; is open: slid into its wall as the body comes near, or one opened by hand swung on its hinge
+(: (dshot d at op) (: l (lv ("(room [0 0 0] [6 2 2]) (room [0 0 2.2] [6 2 4]) " + d + " (ball [1 0 1.2]) (start " + at + " 0 0)"))
+      s (world-new 40 24 l "") _ (op ? (pins s 'opened {0 1} 'swing {0 1.0}) 0) (go n) (each ^n (_ \ (pin s 'dt (1.0 / 30.0), world-move s)))
+      _ (go 40) b (s 'balls 0) _ (pins b 'p [1.0 0.5 1.2] 'v [0.0 1.0 4.0] 'rest 0) _ (go 30) (b 'p 2))
+   dr "(door [1 0 2.1] 0.9 2)" dh "(by-hand (door [1 0 2.1] 0.9 2))"
+ (test (dshot dr "[5.5 0 0.5]" 0 < 2.0) (dshot dr "[1.5 0 1.0]" 0 > 2.3) (dshot dh "[5.5 0 0.5]" 0 < 2.0) (dshot dh "[5.5 0 0.5]" 1 > 2.3)))
 ; the loop: the same from the same seed, loud at first and worn nearly away a hundred and
 ; fifty times round
 (: dc0 (decay-new 0.25) dcl (dc0 'len) dct (iota 4000 * (dcl / 4000.0))
@@ -1326,7 +1359,7 @@
    (src f) (uread f)
    m0 (scene-made src) m1 (scene-made (f \ f = "src/apps/lore/brush.l" ? [0 "x"] (src f))) m2 (scene-made (_ \ ()))
    ; ..and no level's maker borrows a library of lore's that is neither listed nor known not to make
-   exempt ['lore 'rove 'console 'gpu 'walk 'mixer 'gesture 'decay 'flicker]
+   exempt ['lore 'rove 'console 'gpu 'walk 'mixer 'gesture 'decay 'flicker 'tumble]
    (names l) (: (go i w a) ((i = #l || l i = 41) ? (w = "" ? a (w . a)) (: c (l i) ((96 < c && c < 123) || c = 45 ? (go (i + 1) (w + snip l i (i + 1)) a) (go (i + 1) "" (w = "" ? a (w . a)))))) (go 0 "" ()))
    (bors f) (catmap (l \ (#l > 9 && snip l 0 8 = "(borrow " ? (names (snip l 8 #l)) ())) (lines <>(src f)))
    bad (catmap (f \ filter (n \ two? (src "src/apps/lore/\(n).l") && !(elem n (map string exempt)) && !(elem "src/apps/lore/\(n).l" scene-by)) (bors f)) (filter (f \ snip f 0 13 = "src/apps/lore") scene-by))

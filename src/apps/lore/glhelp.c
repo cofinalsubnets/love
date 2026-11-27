@@ -10,7 +10,7 @@
 //   buf ID NV NT OFF [S]  NV vertices of S floats, 8 or 11 (x y z, u v in texels, r g b; 1.0 the
 //                     texel as it is; then the sun's r g b, as much as it reaches) from OFF,
 //                     then NT triangles of 4 ints (three vertices and facets's
-//                     texture: -1 none, -2 a glow, -3 - t a glass of t, a pane's class or a
+//                     texture: -1 none, -2 a glow, 2^22 + n a round one n mm across its middle out, -3 - t a glass of t, a pane's class or a
 //                     lens as facets has them), drawn in their order
 //   drop ID           a buf forgotten
 //   place N OFF        N floats from OFF, ID X Y Z U V ..: each buf ID drawn moved by X Y Z, its
@@ -197,6 +197,9 @@ static void *(*map64) (void *, size_t, int, int, int, long long);
 // a texture: its gl name and size; a buf: its vertices and, per texture, a run of indices
 struct run { int tex; GLsizei at, n; };
 struct tex { int id; GLuint gl; int w, h; };
+// a round glow's code: rgl and its radius in mm
+enum { rgl = 1 << 22 };
+static int roundg(int t) { return t > rgl && t < rgl + 1000000; }
 struct buf { int id, nv, S, glow; GLuint vao, vb, ib, lb, sb; int nrun; struct run *runs; int li[8]; float off[5]; };   // glow: its runs all glow; lb its lamps', sb its sun's; off where it is moved
 struct seen { float w, k; int id; };
 // a frame's time by what it went on, in us, while timed: the ms asked plus 1
@@ -211,7 +214,7 @@ struct helper {
  unsigned char *gx;   // ..read back; rb and gr textures, which the sky asks
  GLuint mk; int sky, spend; float stone, soff[3]; GLint u_fg;   // the sky drawn under the bare, over a copy of the frame's marks
  GLuint lf, lz; GLint u_cls;   // seen: the lenses' nearest depths
- GLuint zf, zt; GLint u_bb, u_br, u_bu, u_gz; float eye[10]; int epend;   // the glows' eye, and the depths they fade by
+ GLuint zf, zt; GLint u_bb, u_br, u_bu, u_gz, u_rq; float eye[10]; int epend;   // the glows' eye, and the depths they fade by
  GLuint sm; GLint u_lm, u_sun, u_bias, u_ss; float lm[16], bias; int sw, sh;   // the sun's view
  GLint u_m, u_tx, u_ts, u_has, u_fog, u_fz, u_tone, u_mode, u_vp, u_off, u_uvo, u_li, u_ks;
  GLuint uprog, uc, ud, bc; int uw, uh, upend, bpend;   // the smaller frame laid first, the ground
@@ -297,7 +300,7 @@ static char const fsrc[] =
  "uniform sampler2D tx; uniform vec2 ts; uniform int has; uniform vec3 fog; uniform vec2 fz; uniform float tone; uniform int mode;\n"
  "uniform highp sampler2D fbt; uniform highp sampler2D gbt; uniform int fg;\n"
  "uniform highp sampler2D lz; uniform int cls; uniform highp sampler2D sm; uniform int sun; uniform float bias; uniform ivec2 ss;\n"
- "uniform highp sampler2D dz; uniform vec4 gz; uniform highp sampler2D ov5; uniform int sp;\n"
+ "uniform highp sampler2D dz; uniform vec4 gz; uniform float rq; uniform highp sampler2D ov5; uniform int sp;\n"
  "uniform highp sampler2D cm; uniform highp sampler2D am; uniform float kp[51]; uniform int skm;\n"
  // ..the sky down ray d, sky.l's sky-colour-at step for step: the cloud map bilinear and
  // wrapping, the deck where d crosses it, two layers and a swell, the light on them
@@ -361,6 +364,7 @@ static char const fsrc[] =
  " if (has != 0) { vec4 k = texture(tx, uv / ts); if (k.a < 0.5) discard; if (gl) t = k.rgb; else c *= k.rgb; }\n"
  " if (fz.y > 0.0) { float f = clamp((w - fz.x) * fz.y, 0.0, 1.0); if (gl) c -= c * f, t += (1.0 - t) * f; else c += (fog - c) * f; }\n"
  " if (tone > 0.0) c = 255.0 * (1.0 - exp(-tone * c / 255.0));\n"
+ " if (mode == 1 && rq > 0.0) { float q = max(1.0 - dot(uv, uv) * rq, 0.0); c *= q * q * q * q; }\n"
  " if (mode == 1 && gz.w > 0.0) { float d = texelFetch(dz, ivec2(gl_FragCoord.xy), 0).r * 2.0 - 1.0;\n"
  "  if (d > -1.0 && d < 1.0) c *= clamp((2.0 * gz.x * gz.y / (gz.y + gz.x - d * (gz.y - gz.x)) - w + gz.z) / gz.w, 0.0, 1.0); }\n"
  " if (mode == 5) { ivec2 p = ivec2(gl_FragCoord.xy); vec4 k = texelFetch(fbt, p, 0); float A = floor(k.a * 255.0 + 0.5);\n"
@@ -531,7 +535,7 @@ static int setup(struct helper *H, int x) {
  H->u_lm = glGetUniformLocation(H->prog, "lm"); H->u_sun = glGetUniformLocation(H->prog, "sun");
  H->u_bias = glGetUniformLocation(H->prog, "bias"); H->u_ss = glGetUniformLocation(H->prog, "ss");
  H->u_bb = glGetUniformLocation(H->prog, "bb"); H->u_br = glGetUniformLocation(H->prog, "br");
- H->u_bu = glGetUniformLocation(H->prog, "bu"); H->u_gz = glGetUniformLocation(H->prog, "gz");
+ H->u_bu = glGetUniformLocation(H->prog, "bu"); H->u_gz = glGetUniformLocation(H->prog, "gz"); H->u_rq = glGetUniformLocation(H->prog, "rq");
  glUniform1i(glGetUniformLocation(H->prog, "dz"), 6);
  glUniform1i(glGetUniformLocation(H->prog, "ov5"), 7); H->u_sp = glGetUniformLocation(H->prog, "sp");
  glUniform1i(glGetUniformLocation(H->prog, "cm"), 8); glUniform1i(glGetUniformLocation(H->prog, "am"), 9);
@@ -641,7 +645,7 @@ static void cmd_buf(struct helper *H, int id, int nv, int nt, size_t off, int S)
  glBindVertexArray(0);
  free(tr); free(ix);
  b->runs = runs, b->nrun = nrun, b->nv = nv, b->S = S, b->glow = nrun > 0;
- for (int r = 0; r < nrun; r++) b->glow &= runs[r].tex == -2;
+ for (int r = 0; r < nrun; r++) b->glow &= runs[r].tex == -2 || roundg(runs[r].tex);
  dprintf(H->out, "ok\n"); }
 
 // a buf's vertices laid again, its triangles kept: as many, as wide
@@ -1174,10 +1178,11 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
    glBindVertexArray(b->vao);
    glUniform1i(H->u_bb, ey && b->glow); glUniform1iv(H->u_li, 8, b->li); glUniform1f(H->u_sh, mul[k]); glUniform3f(H->u_off, b->off[0], b->off[1], b->off[2]); glUniform2f(H->u_uvo, b->off[3], b->off[4]);
    for (int r = 0; r < b->nrun; r++) {
-    int const tx = code(b->runs[r].tex), m = tx >= -1 ? 0 : tx == -2 ? 1 : 2;
+    int const tx = code(b->runs[r].tex), rg = roundg(tx), m = rg || tx == -2 ? 1 : tx >= -1 ? 0 : 2;
+    glUniform1f(H->u_rq, rg ? 1e6f / (float) ((tx - rgl) * (tx - rgl)) : 0);
     if ((m != 0) != pass) continue;
     glUniform1i(H->u_cls, class(b->runs[r].tex));
-    struct tex *t = tx >= 0 ? tex_of(H, tx) : tx <= -3 ? tex_of(H, -3 - tx) : NULL;
+    struct tex *t = rg ? NULL : tx >= 0 ? tex_of(H, tx) : tx <= -3 ? tex_of(H, -3 - tx) : NULL;
     glUniform1i(H->u_has, t != NULL);
     if (t) glBindTexture(GL_TEXTURE_2D, t->gl), glUniform2f(H->u_ts, (float) t->w, (float) t->h);
     uintptr_t const at = (uintptr_t) b->runs[r].at;
@@ -1186,7 +1191,7 @@ static void cmd_frame(struct helper *H, int fw, int fh, size_t foff, int fn, siz
     glBindFramebuffer(GL_FRAMEBUFFER, H->gb);   // ..and on what is bare, its tint and sheen
     glass(H, 3, b->runs[r].n, at);
     glBindFramebuffer(GL_FRAMEBUFFER, H->fb); glassy = 1; } } }
- glUniform1i(H->u_bb, 0); glUniform4f(H->u_gz, 0, 0, 0, 0);
+ glUniform1i(H->u_bb, 0); glUniform4f(H->u_gz, 0, 0, 0, 0); glUniform1f(H->u_rq, 0);
  // ..last, where any glass fell on the bare: in any order, a glow there is what it shows
  glUniform1i(H->u_cls, 0);
  for (int k = 0; glassy && k < ni; k++) {

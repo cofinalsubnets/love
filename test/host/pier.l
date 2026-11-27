@@ -164,6 +164,12 @@
         hrelay hb,
         hb))
    hb (mkhb 10 21 sg ["sh" "-c" "sleep 30"])
+   (nfd _) #(readdir "/proc/self/fd")
+   (landing t n) (landed? t || n < 1 ? (landed? t) (do (rest 10) (landing t (n - 1))))
+   ; a stage whose leavings shut it again, as a pty's moor does when its master closes
+   shuts {0}
+   sg3 (pier-stage (w \ h \ "three") (_ \ 0) (_ \ 0))
+   _ (pin sg3 'shut (_ \ (pin shuts () (1 + peep shuts () 0), 1 = peep shuts () 0 ? (hshut hb 3) 0)))
    _ (test
       !(hpty? (hpane hb 1))
       (has? (rowtx (scrof hb 1) 0) "21x10 k0 t0")
@@ -174,21 +180,33 @@
       (97 = peep keys () 0)
       (has? (rowtx (scrof hb 1) 0) "21x10 k97")
       (1 = peep (hb 'dirt) () 0))
+   fd0 (nfd ())
    _ (hsplit hb 'beside)
    p2 (hpid (hpane hb 2))
+   moor2 <(hb 'jobs)
    (test (2 = #(hb 'lay))
          (hpty? (hpane hb 2))
          (10 = gaze (scrof hb 1) 2)
          (has? (rowtx (scrof hb 1) 0) "10x10 k97"),
     hshut hb 2,
     waitfor p2,
-    test (has? (rowtx (scrof hb 1) 0) "21x10 k97"),
+    test (has? (rowtx (scrof hb 1) 0) "21x10 k97")
+         (landing moor2 500)                      ; the moor ends on the close, and its shut finds nothing
+         (fd0 = nfd ())                           ; the master closed, and nothing else
+         (1 = hb 'plan),
     pin sg 'tick (_ \ (1 + peep ticks () 0 @ n (pin ticks () n, (0 = n % 2)))),
     pin (hb 'dirt) () 0,
     htick hb,
     test (1 = peep ticks () 0) (0 = peep (hb 'dirt) () 0) (has? (rowtx (scrof hb 1) 0) " t0"),
     htick hb,
     test (2 = peep ticks () 0) (1 = peep (hb 'dirt) () 0) (has? (rowtx (scrof hb 1) 0) " t2"),
+    ; a second shut while the first is under way finds the pane gone
+    pin hb 'more (_ \ hopen-stage sg3 1 1),
+    hsplit hb 'beside,
+    test (3 = hb 'focus) (2 = #(hb 'lay)),
+    hshut hb 3,
+    test (1 = peep shuts () 0) (1 = hb 'plan) (1 = hb 'focus) (() = hpane hb 3)
+         (has? (rowtx (scrof hb 1) 0) "21x10 k97"),
     hfeed hb 113,
     test (() = hb 'plan)
          (() = hpane hb 1)
