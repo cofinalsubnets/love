@@ -953,6 +953,30 @@ EOF
   # kernel maps every read as exec too, for it and all it execs (selinux then refuses a gpu)
   case $(arm-none-eabi-readelf -lW "$d/got") in *"GNU_STACK"*" RW  "*) ;; *) fail "static: no PT_GNU_STACK rw" ;; esac
   echo "arm: a trapped call answers ENOSYS, -shared lays a REL object, -fpic loads through the got, -dynamic-linker lays a pie, softfp is gcc's, the stack is not exec"
+  # the hosted profile's other spelling: -t thumb2 -os linux lays -t arm's bytes, object and
+  # link; with no kernel named, or -os none, thumb2 stays a board's
+  ns=0
+  for b in 150-alloc 160-rangeinit 348-libcmore; do
+    f=test/cc/$b.c
+    for o in -O0 -O2 -g "-fpic -Os"; do
+      moonrun -t arm $o -c -o "$d/sp.a.o" "$f" || fail "spelling: $b -t arm $o"
+      moonrun -t thumb2 -os linux $o -c -o "$d/sp.t.o" "$f" || fail "spelling: $b -t thumb2 -os linux $o"
+      cmp -s "$d/sp.a.o" "$d/sp.t.o" || fail "spelling: $b $o: -t thumb2 -os linux is not -t arm's object"
+      ns=$((ns + 1))
+    done
+    moonrun -t arm -o "$d/sp.a" "$f" || fail "spelling: $b links by -t arm"
+    moonrun -t thumb2 -os linux -o "$d/sp.t" "$f" || fail "spelling: $b links by -t thumb2 -os linux"
+    cmp -s "$d/sp.a" "$d/sp.t" || fail "spelling: $b: the links differ"
+    timeout 60 qemu-arm "$d/sp.t" > /dev/null 2>&1; [ $? -lt 124 ] || fail "spelling: $b by -t thumb2 -os linux does not run"
+  done
+  moonrun -t thumb2 -os none -c -o "$d/sp.n.o" test/cc/150-alloc.c || fail "spelling: -t thumb2 -os none"
+  moonrun -t thumb2 -c -o "$d/sp.b.o" test/cc/150-alloc.c || fail "spelling: -t thumb2"
+  for o in sp.n.o sp.b.o; do
+    case $(arm-none-eabi-readelf -A "$d/$o") in *Microcontroller*) ;; *) fail "spelling: $o is not an M-profile object" ;; esac
+  done
+  moonrun -t thumb2 -o "$d/sp.b" test/cc/150-alloc.c > "$d/sp.b.log" 2>&1 && fail "spelling: -t thumb2 linked with no -Ttext"
+  grep -q "bare link needs -Ttext" "$d/sp.b.log" || fail "spelling: the bare refusal: $(cat "$d/sp.b.log")"
+  echo "arm: -t thumb2 -os linux lays -t arm's bytes ($ns objects, 3 links that run); thumb2 with no kernel named stays bare"
 fi
 
 [ $n -gt 0 ] || fail "no programs ran from test/cc/"
