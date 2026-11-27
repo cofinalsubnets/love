@@ -1780,6 +1780,8 @@
        _ (f 'tgt = 'wasm && !(f 'os) && pin f 'os 'linux)
        ; on macos an x64 link is a mach-o unless -os names another kernel: it meets no ELF
        _ (f 'tgt = 'x64 && !(f 'os) && elem 'love-os (names ()) && host-os 0 = 'macos && pin f 'os 'macos)
+       ; thumb2 with linux named is the hosted profile, -t arm's; unnamed or -os none it stays a board's
+       _ (f 'tgt = 'thumb2 && f 'os = 'linux && pin f 'tgt 'arm)
        _ (f 'sal = 1 && !(elem (f 'tgt) '(a64 rv64 rv32)) &&
           udie 2 "cc: -mstrict-align lays on a64, rv64 and rv32 only")
        _ (two? (f 'bp) && f 'tgt != 'a64 && udie 2 "cc: -mbranch-protection lays on a64 only")
